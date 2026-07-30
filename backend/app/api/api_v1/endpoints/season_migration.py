@@ -300,8 +300,7 @@ def get_top_high5_by_country(
                 al = not relax_contestant_season_active
 
                 if season.level == SeasonLevel.GLOBAL:
-                    # Global: no country filter, no grouping. Take all qualified contestants
-                    # in the season for this contest and rank them together.
+                    # Global: rank only nominees from this cohort round (March ≠ April).
                     all_contestants = (
                         db.query(Contestant)
                         .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
@@ -316,6 +315,7 @@ def get_top_high5_by_country(
                                 Contestant.is_active == True,
                                 Contestant.is_deleted == False,
                                 Contestant.season_id == contest.id,
+                                Contestant.round_id == rnd.id,
                             )
                         )
                         .all()
@@ -399,6 +399,7 @@ def get_top_high5_by_country(
                         qualified_only=False,
                         strict_season_scope=True,
                         active_links_only=al,
+                        cohort_round_id=rnd.id,
                     )
                     regional_vote_backed_members: list[Contestant] = []
                     selected_regional_pool_id = None
@@ -692,9 +693,12 @@ def get_top_high5_by_country(
             raise HTTPException(status_code=404, detail="No available rounds")
 
         # Prioritize rounds by requested level active window.
-        # This keeps month separation explicit:
-        # - country view -> rounds active in country season (e.g. April round in May)
-        # - regional view -> rounds active in regional season (e.g. March round in May)
+        # Nomination pooled levels use M+1…M+4 calendar, not Round.global_start_date (M+5/M+6).
+        nomination_pooled_levels = {
+            SeasonLevel.REGIONAL,
+            SeasonLevel.CONTINENT,
+            SeasonLevel.GLOBAL,
+        }
         level_window_map = {
             SeasonLevel.CITY: ("city_season_start_date", "city_season_end_date"),
             SeasonLevel.COUNTRY: ("country_season_start_date", "country_season_end_date"),
@@ -707,6 +711,14 @@ def get_top_high5_by_country(
         in_level_window = []
         outside_level_window = []
         for r in candidate_rounds:
+            if requested_level in nomination_pooled_levels:
+                if SeasonMigrationService.nomination_stage_voting_open(
+                    r, requested_level, today
+                ):
+                    in_level_window.append(r)
+                else:
+                    outside_level_window.append(r)
+                continue
             if not start_attr or not end_attr:
                 outside_level_window.append(r)
                 continue

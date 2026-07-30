@@ -596,6 +596,7 @@ class SeasonMigrationService:
         *,
         active_only: bool = True,
         qualified_only: bool = False,
+        cohort_round_id: Optional[int] = None,
     ) -> List[Contestant]:
         """
         Return contestants for one contest inside a shared ContestSeason.
@@ -615,6 +616,8 @@ class SeasonMigrationService:
             filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        if cohort_round_id is not None:
+            filters.append(Contestant.round_id == cohort_round_id)
 
         scoped = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
@@ -635,6 +638,8 @@ class SeasonMigrationService:
             ]
             if qualified_only:
                 vote_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+            if cohort_round_id is not None:
+                vote_filters.append(Contestant.round_id == cohort_round_id)
             return db.query(Contestant).filter(and_(*vote_filters)).all()
 
         fallback_filters = [
@@ -646,6 +651,8 @@ class SeasonMigrationService:
             fallback_filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        if cohort_round_id is not None:
+            fallback_filters.append(Contestant.round_id == cohort_round_id)
 
         # Last resort for legacy data: keep the contest scope. Never return the
         # whole shared season because that mixes categories in TopHigh5/migration.
@@ -990,6 +997,7 @@ class SeasonMigrationService:
                 contest_id,
                 active_only=False,
                 qualified_only=False,
+                cohort_round_id=int(season.round_id) if season.round_id else None,
             )
             ordered = SeasonMigrationService.rank_contestant_ids_like_top_high5(
                 db, contest, prior_season, members
@@ -1014,6 +1022,7 @@ class SeasonMigrationService:
                 qualified_only=False,
                 strict_season_scope=True,
                 active_links_only=False,
+                cohort_round_id=int(season.round_id) if season.round_id else None,
             )
             for _group_key, members in grouped.items():
                 ordered = SeasonMigrationService.rank_contestant_ids_like_top_high5(
@@ -1239,6 +1248,7 @@ class SeasonMigrationService:
         qualified_only: bool = True,
         strict_season_scope: bool = False,
         uncapped: bool = False,
+        cohort_round_id: Optional[int] = None,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -1274,6 +1284,8 @@ class SeasonMigrationService:
             season_filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             season_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        if cohort_round_id is not None:
+            season_filters.append(Contestant.round_id == cohort_round_id)
         contestants_query = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).filter(and_(*season_filters))

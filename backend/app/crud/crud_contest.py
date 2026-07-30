@@ -2344,23 +2344,29 @@ class CRUDContest:
                     "[get_contest_with_enriched_contestants] Global nomination roster "
                     f"constrained to canonical prior-stage winners: {canonical_global_ids}"
                 )
+            if (
+                contest_mode == "nomination"
+                and target_round_id is not None
+                and season is not None
+            ):
+                active_season_member_ids = nomination_cohort_member_ids_subquery(
+                    db,
+                    contest_id=contest_id,
+                    cohort_round_id=int(target_round_id),
+                    season_id=season.id,
+                )
+                contestants_query = contestants_query.filter(
+                    Contestant.id.in_(active_season_member_ids)
+                )
+                logger.info(
+                    "[get_contest_with_enriched_contestants] Global/pooled nomination roster "
+                    f"scoped to cohort round_id={target_round_id} season_id={season.id}"
+                )
             else:
-                if (
-                    contest_mode == "nomination"
-                    and target_round_id is not None
-                    and season is not None
-                ):
-                    active_season_member_ids = nomination_cohort_member_ids_subquery(
-                        db,
-                        contest_id=contest_id,
-                        cohort_round_id=int(target_round_id),
-                        season_id=season.id,
-                    )
-                else:
-                    active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
-                        ContestantSeason.season_id == season.id,
-                        ContestantSeason.is_active == True,
-                    )
+                active_season_member_ids = db.query(ContestantSeason.contestant_id).filter(
+                    ContestantSeason.season_id == season.id,
+                    ContestantSeason.is_active == True,
+                )
                 contestants_query = contestants_query.filter(
                     Contestant.id.in_(active_season_member_ids)
                 )

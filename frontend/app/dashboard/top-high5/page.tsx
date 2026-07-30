@@ -95,6 +95,11 @@ function resolveTopHigh5RoundId(level: TopHigh5Level, rounds: Round[]): number |
       })
       if (byMonth?.id) return Number(byMonth.id)
     }
+    // Pooled nomination levels must not fall back to the live vote round — that
+    // shows the wrong cohort month (e.g. April on Global when March is expected).
+    if (geo === "regional" || geo === "continental" || geo === "global") {
+      return undefined
+    }
   }
   const live = rounds.find((r) => isRoundVotingLive(r, rounds))
   return live?.id ? Number(live.id) : Number(rounds[0]?.id)
