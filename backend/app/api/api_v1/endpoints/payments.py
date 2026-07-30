@@ -333,147 +333,18 @@ async def get_invoice(
     if deposit.status != DepositStatus.VALIDATED:
         raise HTTPException(status_code=400, detail="Invoice only available for validated payments")
 
+    from app.services.invoice_renderer import render_invoice_html
+
     user_lang = lang or getattr(current_user, "preferred_language", "fr") or "fr"
     product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
     product_name = product.name if product else "Service"
+    billed_user = deposit.user or current_user
 
-    translations = {
-        "fr": {
-            "invoice": "FACTURE",
-            "invoice_number": "N°",
-            "date": "Date",
-            "paid": "PAYÉ",
-            "billed_to": "Facturé à",
-            "issuer": "Émetteur",
-            "description": "Description",
-            "quantity": "Quantité",
-            "unit_price": "Prix unitaire",
-            "total": "Total",
-            "subtotal": "Sous-total",
-            "vat": "TVA (0%)",
-            "thank_you": "Merci pour votre confiance!",
-            "payment_method": "Paiement effectué par cryptomonnaie (NOWPayments)",
-            "reference": "Référence",
-            "online_services": "Services en ligne",
-        },
-        "en": {
-            "invoice": "INVOICE",
-            "invoice_number": "No.",
-            "date": "Date",
-            "paid": "PAID",
-            "billed_to": "Billed to",
-            "issuer": "Issuer",
-            "description": "Description",
-            "quantity": "Quantity",
-            "unit_price": "Unit price",
-            "total": "Total",
-            "subtotal": "Subtotal",
-            "vat": "VAT (0%)",
-            "thank_you": "Thank you for your trust!",
-            "payment_method": "Payment made by cryptocurrency (NOWPayments)",
-            "reference": "Reference",
-            "online_services": "Online services",
-        },
-    }
-
-    t = translations.get(user_lang, translations["fr"])
-
-    invoice_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{t["invoice"]} #{deposit.id}</title>
-        <style>
-            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; }}
-            .invoice {{ max-width: 800px; margin: 0 auto; }}
-            .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #1e40af; }}
-            .logo {{ font-size: 28px; font-weight: bold; color: #1e40af; }}
-            .invoice-info {{ text-align: right; }}
-            .invoice-info h2 {{ font-size: 24px; color: #1e40af; margin-bottom: 5px; }}
-            .invoice-info p {{ color: #666; font-size: 14px; }}
-            .parties {{ display: flex; justify-content: space-between; margin-bottom: 40px; }}
-            .party {{ width: 45%; }}
-            .party h3 {{ font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 10px; }}
-            .party p {{ font-size: 14px; line-height: 1.6; }}
-            .items {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; }}
-            .items th {{ background: #f8f9fa; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; border-bottom: 2px solid #e9ecef; }}
-            .items td {{ padding: 15px 12px; border-bottom: 1px solid #e9ecef; }}
-            .items .amount {{ text-align: right; }}
-            .total {{ text-align: right; margin-top: 20px; }}
-            .total-row {{ display: flex; justify-content: flex-end; gap: 40px; padding: 10px 0; }}
-            .total-row.final {{ font-size: 18px; font-weight: bold; color: #1e40af; border-top: 2px solid #1e40af; padding-top: 15px; }}
-            .footer {{ margin-top: 60px; padding-top: 20px; border-top: 1px solid #e9ecef; text-align: center; color: #666; font-size: 12px; }}
-            .status {{ display: inline-block; padding: 5px 15px; background: #d4edda; color: #155724; border-radius: 20px; font-size: 12px; font-weight: 600; }}
-            @media print {{ body {{ padding: 20px; }} }}
-        </style>
-    </head>
-    <body>
-        <div class="invoice">
-            <div class="header">
-                <div class="logo">MyHigh5</div>
-                <div class="invoice-info">
-                    <h2>{t["invoice"]}</h2>
-                    <p>{t["invoice_number"]} {deposit.id:06d}</p>
-                    <p>{t["date"]}: {deposit.validated_at.strftime('%d/%m/%Y') if deposit.validated_at else deposit.created_at.strftime('%d/%m/%Y')}</p>
-                    <span class="status">{t["paid"]}</span>
-                </div>
-            </div>
-            <div class="parties">
-                <div class="party">
-                    <h3>{t["billed_to"]}</h3>
-                    <p><strong>{current_user.full_name or current_user.username}</strong></p>
-                    <p>{current_user.email}</p>
-                </div>
-                <div class="party">
-                    <h3>{t["issuer"]}</h3>
-                    <p><strong>MyHigh5</strong></p>
-                    <p>{t["online_services"]}</p>
-                    <p>infos@myhigh5.com</p>
-                </div>
-            </div>
-            <table class="items">
-                <thead>
-                    <tr>
-                        <th>{t["description"]}</th>
-                        <th>{t["quantity"]}</th>
-                        <th class="amount">{t["unit_price"]}</th>
-                        <th class="amount">{t["total"]}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{product_name}</td>
-                        <td>1</td>
-                        <td class="amount">${float(deposit.amount):.2f}</td>
-                        <td class="amount">${float(deposit.amount):.2f}</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div class="total">
-                <div class="total-row">
-                    <span>{t["subtotal"]}:</span>
-                    <span>${float(deposit.amount):.2f}</span>
-                </div>
-                <div class="total-row">
-                    <span>{t["vat"]}:</span>
-                    <span>$0.00</span>
-                </div>
-                <div class="total-row final">
-                    <span>{t["total"]}:</span>
-                    <span>${float(deposit.amount):.2f} USD</span>
-                </div>
-            </div>
-            <div class="footer">
-                <p>{t["thank_you"]}</p>
-                <p style="margin-top: 10px;">{t["payment_method"]}</p>
-                <p style="margin-top: 5px;">{t["reference"]}: {deposit.external_payment_id or deposit.id}</p>
-            </div>
-        </div>
-        <script>window.print();</script>
-    </body>
-    </html>
-    """
-
+    invoice_html = render_invoice_html(
+        deposit,
+        billed_user=billed_user,
+        product_name=product_name,
+        lang=user_lang,
+        include_print_script=True,
+    )
     return HTMLResponse(content=invoice_html)

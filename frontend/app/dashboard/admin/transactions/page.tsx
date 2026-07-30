@@ -61,6 +61,7 @@ export default function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportingInvoices, setExportingInvoices] = useState(false)
 
   useEffect(() => {
     fetchTransactions()
@@ -142,6 +143,45 @@ export default function TransactionsPage() {
     }
   }
 
+  const downloadExportBlob = async (
+    url: string,
+    fallbackFilename: string,
+    successMessage: string,
+  ) => {
+    const token = localStorage.getItem('access_token')
+    const apiUrl = getEffectiveApiUrl()
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+
+    if (!response.ok) {
+      let detail = 'Export failed'
+      try {
+        const err = await response.json()
+        detail = err.detail || detail
+      } catch {
+        // ignore
+      }
+      throw new Error(detail)
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?([^";]+)"?/)
+    const filename = match?.[1] || fallbackFilename
+
+    const objectUrl = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    window.URL.revokeObjectURL(objectUrl)
+    document.body.removeChild(anchor)
+
+    addToast(successMessage, 'success')
+  }
+
   const handleExportAll = async () => {
     try {
       setExporting(true)
@@ -156,44 +196,11 @@ export default function TransactionsPage() {
         urlParams.append('search', searchTerm.trim())
       }
 
-      const token = localStorage.getItem('access_token')
       const apiUrl = getEffectiveApiUrl()
-      const response = await fetch(
+      await downloadExportBlob(
         `${apiUrl}/api/v1/admin/transactions/export?${urlParams.toString()}`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        },
-      )
-
-      if (!response.ok) {
-        let detail = 'Export failed'
-        try {
-          const err = await response.json()
-          detail = err.detail || detail
-        } catch {
-          // ignore
-        }
-        throw new Error(detail)
-      }
-
-      const blob = await response.blob()
-      const disposition = response.headers.get('Content-Disposition') || ''
-      const match = disposition.match(/filename="?([^";]+)"?/)
-      const filename =
-        match?.[1] || `myhigh5-transactions-${new Date().toISOString().split('T')[0]}.csv`
-
-      const objectUrl = window.URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = objectUrl
-      anchor.download = filename
-      document.body.appendChild(anchor)
-      anchor.click()
-      window.URL.revokeObjectURL(objectUrl)
-      document.body.removeChild(anchor)
-
-      addToast(
+        `myhigh5-transactions-${new Date().toISOString().split('T')[0]}.csv`,
         t('admin.transactions.export_success') || 'All transactions exported to CSV',
-        'success',
       )
     } catch (error: any) {
       console.error('Export error:', error)
@@ -203,6 +210,35 @@ export default function TransactionsPage() {
       )
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleExportInvoices = async () => {
+    try {
+      setExportingInvoices(true)
+      const urlParams = new URLSearchParams()
+      if (searchTerm.trim()) {
+        urlParams.append('search', searchTerm.trim())
+      }
+      urlParams.append('lang', 'en')
+
+      const apiUrl = getEffectiveApiUrl()
+      await downloadExportBlob(
+        `${apiUrl}/api/v1/admin/invoices/export?${urlParams.toString()}`,
+        `myhigh5-invoices-${new Date().toISOString().split('T')[0]}.pdf`,
+        t('admin.transactions.export_invoices_success') ||
+          'All paid invoices exported to PDF',
+      )
+    } catch (error: any) {
+      console.error('Invoice export error:', error)
+      addToast(
+        error.message ||
+          t('admin.transactions.export_invoices_error') ||
+          'Invoice export failed',
+        'error',
+      )
+    } finally {
+      setExportingInvoices(false)
     }
   }
 
@@ -373,12 +409,22 @@ export default function TransactionsPage() {
               <Button
                 variant="outline"
                 onClick={handleExportAll}
-                disabled={exporting}
+                disabled={exporting || exportingInvoices}
               >
                 <Download className="h-4 w-4 mr-2" />
                 {exporting
                   ? (t('admin.transactions.exporting') || 'Exporting…')
                   : (t('admin.transactions.export_all') || 'Export all (CSV)')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportInvoices}
+                disabled={exporting || exportingInvoices}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {exportingInvoices
+                  ? (t('admin.transactions.exporting_invoices') || 'Exporting invoices…')
+                  : (t('admin.transactions.export_invoices') || 'Export invoices (PDF)')}
               </Button>
             </div>
           </div>

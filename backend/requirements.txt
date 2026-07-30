@@ -70,6 +70,7 @@ urllib3==2.0.7
 uvicorn==0.38.0
 vine==5.1.0
 wcwidth==0.2.14
+xhtml2pdf==0.2.16
 
 # GraphQL Dependencies
 # Using latest version - upgrade if Python 3.13 compatibility issues occur

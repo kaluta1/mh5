@@ -3865,6 +3865,85 @@ class TransactionEnriched(BaseModel):
     validated_by: Optional[int] = None
 
 
+@router.get("/invoices/export")
+async def export_all_invoices_pdf(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
+    search: Optional[str] = Query(
+        None, description="Rechercher par référence, email, produit…"
+    ),
+    date_from: Optional[date] = Query(None, description="Date de début (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Date de fin (YYYY-MM-DD)"),
+    lang: Optional[str] = Query("en", description="Langue des factures: en ou fr"),
+):
+    """
+    Exporte toutes les factures payées (dépôts validés) en un seul PDF.
+    Même mise en page que GET /payments/invoice/{id}, avec origine client et origine du paiement.
+    """
+    from fastapi.responses import StreamingResponse
+
+    from app.services.admin_invoices import (
+        deposit_product_name,
+        fetch_validated_deposits_for_export,
+    )
+    from app.services.invoice_pdf import html_to_pdf_bytes, invoices_export_filename
+    from app.services.invoice_renderer import render_invoices_bulk_html
+
+    check_admin(current_user)
+    try:
+        deposits = fetch_validated_deposits_for_export(
+            db,
+            user_id=user_id,
+            search=search,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        if not deposits:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No validated invoices found for export",
+            )
+
+        items = []
+        for deposit in deposits:
+            billed = deposit.user
+            if not billed:
+                continue
+            items.append((deposit, billed, deposit_product_name(deposit)))
+
+        if not items:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No invoice data available for export",
+            )
+
+        html_doc = render_invoices_bulk_html(items, lang=lang)
+        pdf_bytes = html_to_pdf_bytes(html_doc)
+        filename = invoices_export_filename()
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Invoice PDF export failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'export des factures: {exc}",
+        ) from exc
+
+
 @router.get("/transactions/export")
 async def export_all_transactions_csv(
     db: Session = Depends(get_db),
