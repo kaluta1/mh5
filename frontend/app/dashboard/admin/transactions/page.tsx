@@ -1,9 +1,10 @@
 'use client'
 
 import { useLanguage } from '@/contexts/language-context'
-import { CreditCard, Search, User, Calendar, CheckCircle2, Clock, XCircle, Eye, ArrowDownCircle, ArrowUpCircle, DollarSign, FileText } from 'lucide-react'
+import { CreditCard, Search, User, Calendar, CheckCircle2, Clock, XCircle, Eye, ArrowDownCircle, ArrowUpCircle, DollarSign, FileText, Download } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
+import { getEffectiveApiUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +60,7 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     fetchTransactions()
@@ -137,6 +139,70 @@ export default function TransactionsPage() {
       addToast(error.response?.data?.detail || t('admin.transactions.load_error') || 'Erreur lors du chargement des transactions', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleExportAll = async () => {
+    try {
+      setExporting(true)
+      const urlParams = new URLSearchParams()
+      if (typeFilter !== 'all') {
+        urlParams.append('transaction_type', typeFilter)
+      }
+      if (statusFilter !== 'all') {
+        urlParams.append('status', statusFilter)
+      }
+      if (searchTerm.trim()) {
+        urlParams.append('search', searchTerm.trim())
+      }
+
+      const token = localStorage.getItem('access_token')
+      const apiUrl = getEffectiveApiUrl()
+      const response = await fetch(
+        `${apiUrl}/api/v1/admin/transactions/export?${urlParams.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+
+      if (!response.ok) {
+        let detail = 'Export failed'
+        try {
+          const err = await response.json()
+          detail = err.detail || detail
+        } catch {
+          // ignore
+        }
+        throw new Error(detail)
+      }
+
+      const blob = await response.blob()
+      const disposition = response.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="?([^";]+)"?/)
+      const filename =
+        match?.[1] || `myhigh5-transactions-${new Date().toISOString().split('T')[0]}.csv`
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = filename
+      document.body.appendChild(anchor)
+      anchor.click()
+      window.URL.revokeObjectURL(objectUrl)
+      document.body.removeChild(anchor)
+
+      addToast(
+        t('admin.transactions.export_success') || 'All transactions exported to CSV',
+        'success',
+      )
+    } catch (error: any) {
+      console.error('Export error:', error)
+      addToast(
+        error.message || t('admin.transactions.export_error') || 'Export failed',
+        'error',
+      )
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -303,6 +369,16 @@ export default function TransactionsPage() {
               </select>
               <Button onClick={handleSearch}>
                 {t('admin.transactions.search') || 'Rechercher'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportAll}
+                disabled={exporting}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {exporting
+                  ? (t('admin.transactions.exporting') || 'Exporting…')
+                  : (t('admin.transactions.export_all') || 'Export all (CSV)')}
               </Button>
             </div>
           </div>

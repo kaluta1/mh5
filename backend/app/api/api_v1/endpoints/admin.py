@@ -3865,6 +3865,62 @@ class TransactionEnriched(BaseModel):
     validated_by: Optional[int] = None
 
 
+@router.get("/transactions/export")
+async def export_all_transactions_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    transaction_type: Optional[str] = Query(
+        None, description="Filtrer par type (deposit, withdrawal, entry_fee, …)"
+    ),
+    status: Optional[str] = Query(None, description="Filtrer par statut"),
+    user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
+    search: Optional[str] = Query(
+        None, description="Rechercher par référence, description, email ou username"
+    ),
+    date_from: Optional[date] = Query(None, description="Date de début (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Date de fin (YYYY-MM-DD)"),
+):
+    """
+    Exporte toutes les transactions (dépôts + ledger) en un seul fichier CSV (admin).
+    """
+    from fastapi.responses import StreamingResponse
+
+    from app.services.admin_transactions import (
+        admin_transactions_to_csv,
+        export_filename,
+        fetch_admin_transactions,
+    )
+
+    check_admin(current_user)
+    try:
+        rows = fetch_admin_transactions(
+            db,
+            transaction_type=transaction_type,
+            status=status,
+            user_id=user_id,
+            search=search,
+            date_from=date_from,
+            date_to=date_to,
+            skip=0,
+            limit=None,
+        )
+        csv_text = admin_transactions_to_csv(rows)
+        filename = export_filename()
+        return StreamingResponse(
+            iter([csv_text.encode("utf-8")]),
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'export des transactions: {str(e)}",
+        )
+
+
 @router.get("/transactions", response_model=List[TransactionEnriched])
 async def get_all_transactions(
     db: Session = Depends(get_db),
@@ -3879,158 +3935,25 @@ async def get_all_transactions(
     """
     Récupère toutes les transactions (dépôts, retraits, et autres transactions) avec des informations enrichies (admin uniquement).
     """
+    from app.services.admin_transactions import fetch_admin_transactions, _row_for_api
+
     check_admin(current_user)
-    
+
     try:
-        from sqlalchemy import or_, func
-        from app.models.payment import Deposit, DepositStatus, ProductType
-        from app.models.transaction import UserTransaction, TransactionType, TransactionStatus
-        
-        all_transactions = []
-        
-        # Récupérer les dépôts
-        deposits_query = db.query(Deposit).options(
-            joinedload(Deposit.user),
-            joinedload(Deposit.product_type),
-            joinedload(Deposit.payment_method)
+        rows = fetch_admin_transactions(
+            db,
+            transaction_type=transaction_type,
+            status=status,
+            user_id=user_id,
+            search=search,
+            skip=skip,
+            limit=limit,
         )
-        
-        if transaction_type and transaction_type != "deposit":
-            pass  # Ne pas inclure les dépôts
-        elif transaction_type is None or transaction_type == "deposit":
-            if status:
-                try:
-                    deposit_status = DepositStatus(status)
-                    deposits_query = deposits_query.filter(Deposit.status == deposit_status)
-                except ValueError:
-                    pass
-            
-            if user_id:
-                deposits_query = deposits_query.filter(Deposit.user_id == user_id)
-            
-            if search:
-                search_term = f"%{search.lower()}%"
-                from app.models.user import User as UserModel
-                deposits_query = deposits_query.join(UserModel).filter(
-                    or_(
-                        func.lower(Deposit.order_id).like(search_term),
-                        func.lower(Deposit.external_payment_id).like(search_term),
-                        func.lower(UserModel.email).like(search_term),
-                        func.lower(UserModel.username).like(search_term)
-                    )
-                )
-            
-            deposits = deposits_query.order_by(Deposit.created_at.desc()).offset(skip).limit(limit).all()
-            
-            for deposit in deposits:
-                all_transactions.append({
-                    "id": deposit.id,
-                    "type": "deposit",
-                    "amount": float(deposit.amount),
-                    "currency": deposit.currency,
-                    "status": deposit.status.value,
-                    "description": f"Dépôt - {deposit.product_type.name if deposit.product_type else 'N/A'}",
-                    "reference": deposit.order_id,
-                    "created_at": deposit.created_at.isoformat() if deposit.created_at else None,
-                    "processed_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
-                    "user": {
-                        "id": deposit.user.id,
-                        "username": deposit.user.username,
-                        "email": deposit.user.email,
-                        "full_name": deposit.user.full_name,
-                        "avatar_url": deposit.user.avatar_url
-                    } if deposit.user else None,
-                    "contest": None,
-                    "payment_method": deposit.payment_method.name if deposit.payment_method else None,
-                    "product_type": deposit.product_type.name if deposit.product_type else None,
-                    "order_id": deposit.order_id,
-                    "external_payment_id": deposit.external_payment_id,
-                    "tx_hash": deposit.tx_hash,
-                    "validated_at": deposit.validated_at.isoformat() if deposit.validated_at else None,
-                    "validated_by": deposit.validated_by
-                })
-        
-        # Récupérer les transactions utilisateur (retraits, frais d'entrée, etc.)
-        transactions_query = db.query(UserTransaction).options(
-            joinedload(UserTransaction.user),
-            joinedload(UserTransaction.contest)
-        )
-        
-        if transaction_type and transaction_type != "deposit":
-            try:
-                trans_type = TransactionType(transaction_type)
-                transactions_query = transactions_query.filter(UserTransaction.transaction_type == trans_type)
-            except ValueError:
-                pass
-        elif transaction_type is None:
-            # Inclure tous les types sauf deposit (déjà géré)
-            transactions_query = transactions_query.filter(UserTransaction.transaction_type != TransactionType.DEPOSIT)
-        
-        if status:
-            try:
-                trans_status = TransactionStatus(status)
-                transactions_query = transactions_query.filter(UserTransaction.status == trans_status)
-            except ValueError:
-                pass
-        
-        if user_id:
-            transactions_query = transactions_query.filter(UserTransaction.user_id == user_id)
-        
-        if search:
-            search_term = f"%{search.lower()}%"
-            from app.models.user import User as UserModel
-            transactions_query = transactions_query.join(UserModel).filter(
-                or_(
-                    func.lower(UserTransaction.reference).like(search_term),
-                    func.lower(UserTransaction.description).like(search_term),
-                    func.lower(UserModel.email).like(search_term),
-                    func.lower(UserModel.username).like(search_term)
-                )
-            )
-        
-        transactions = transactions_query.order_by(UserTransaction.created_at.desc()).offset(skip).limit(limit).all()
-        
-        for transaction in transactions:
-            all_transactions.append({
-                "id": transaction.id,
-                "type": transaction.transaction_type.value,
-                "amount": float(transaction.amount),
-                "currency": transaction.currency,
-                "status": transaction.status.value,
-                "description": transaction.description,
-                "reference": transaction.reference,
-                "created_at": transaction.created_at.isoformat() if transaction.created_at else None,
-                "processed_at": transaction.processed_at.isoformat() if transaction.processed_at else None,
-                "user": {
-                    "id": transaction.user.id,
-                    "username": transaction.user.username,
-                    "email": transaction.user.email,
-                    "full_name": transaction.user.full_name,
-                    "avatar_url": transaction.user.avatar_url
-                } if transaction.user else None,
-                "contest": {
-                    "id": transaction.contest.id,
-                    "name": transaction.contest.name
-                } if transaction.contest else None,
-                "payment_method": transaction.payment_method,
-                "product_type": None,
-                "order_id": None,
-                "external_payment_id": transaction.payment_reference,
-                "tx_hash": None,
-                "validated_at": None,
-                "validated_by": None
-            })
-        
-        # Trier toutes les transactions par date de création (plus récentes en premier)
-        all_transactions.sort(key=lambda x: x.get("created_at") or "1970-01-01T00:00:00", reverse=True)
-        
-        # Appliquer skip et limit sur le résultat final
-        return all_transactions[skip:skip + limit]
-        
+        return [_row_for_api(row) for row in rows]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des transactions: {str(e)}"
+            detail=f"Erreur lors de la récupération des transactions: {str(e)}",
         )
 
 
