@@ -1,6 +1,7 @@
 """Nomination calendar constants — official launch and cohort rules."""
 from __future__ import annotations
 
+import calendar
 from datetime import date
 
 from sqlalchemy import func
@@ -20,6 +21,32 @@ def round_month_start_from_name(round_name: str) -> date | None:
         return date(parsed.year, parsed.month, 1)
     except ValueError:
         return None
+
+
+def cohort_submission_bounds(cohort_round) -> tuple[date | None, date | None]:
+    """
+    Inclusive calendar bounds for nomination cohort month M (submission month only).
+
+    Does not extend into the next month via voting_start_date — April nominees must
+    never match the March cohort even when Contestant.round_id was stored incorrectly.
+    """
+    if cohort_round is None:
+        return None, None
+
+    start = getattr(cohort_round, "submission_start_date", None)
+    end = getattr(cohort_round, "submission_end_date", None)
+
+    if start is None:
+        start = round_month_start_from_name(getattr(cohort_round, "name", "") or "")
+
+    if start is not None and end is None:
+        last_day = calendar.monthrange(start.year, start.month)[1]
+        end = date(start.year, start.month, last_day)
+
+    if start is not None and end is not None and end < start:
+        return None, None
+
+    return start, end
 
 
 def is_official_nomination_cohort_round(round_obj) -> bool:
@@ -77,29 +104,20 @@ def nomination_vote_list_blocked(
 
 def nomination_cohort_created_at_filters(cohort_round):
     """
-    SQLAlchemy clauses: nominee was submitted during this round's nomination window.
+    SQLAlchemy clauses: nominee belongs to this cohort submission month.
 
-    Blocks April registrations from appearing in March global even when a stale URL
-    stored Contestant.round_id on the March round row.
+    Uses ``registration_date`` (shown in UI) with ``created_at`` fallback.
+    Strict submission month bounds — no grace extension into the next month.
     """
     from app.models.contests import Contestant
 
-    start = getattr(cohort_round, "submission_start_date", None)
-    end = getattr(cohort_round, "submission_end_date", None)
+    start, end = cohort_submission_bounds(cohort_round)
     if not start or not end:
         return []
 
-    try:
-        from app.services.contest_status import ContestStatusService
-
-        close_dt = ContestStatusService.round_nomination_closes_at(cohort_round)
-        if close_dt is not None:
-            end = close_dt.date()
-    except Exception:
-        pass
-
+    submitted_on = func.coalesce(Contestant.registration_date, Contestant.created_at)
     return [
-        Contestant.created_at.isnot(None),
-        func.date(Contestant.created_at) >= start,
-        func.date(Contestant.created_at) <= end,
+        submitted_on.isnot(None),
+        func.date(submitted_on) >= start,
+        func.date(submitted_on) <= end,
     ]

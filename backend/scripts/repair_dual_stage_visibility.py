@@ -112,7 +112,7 @@ def main(apply: bool = False) -> int:
             fixed_memberships += 1
 
         # Wrong submission month: e.g. registered 2026-04-04 but active on March GLOBAL season.
-        from sqlalchemy import func, or_
+        from app.core.nomination_calendar import cohort_submission_bounds
 
         wrong_submission_month = (
             db.query(ContestantSeason, ContestSeason, Contestant, Round)
@@ -125,13 +125,6 @@ def main(apply: bool = False) -> int:
                     [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
                 ),
                 ContestSeason.is_deleted == False,
-                Contestant.created_at.isnot(None),
-                Round.submission_start_date.isnot(None),
-                Round.submission_end_date.isnot(None),
-                or_(
-                    func.date(Contestant.created_at) < Round.submission_start_date,
-                    func.date(Contestant.created_at) > Round.submission_end_date,
-                ),
             )
             .all()
         )
@@ -139,11 +132,19 @@ def main(apply: bool = False) -> int:
             c_obj = db.query(Contest).filter(Contest.id == cont.season_id).first()
             if not c_obj or (getattr(c_obj, "contest_mode", "") or "").lower() != "nomination":
                 continue
+            start, end = cohort_submission_bounds(rnd)
+            if not start or not end:
+                continue
+            submitted = cont.registration_date or cont.created_at
+            if submitted is None:
+                continue
+            sub_day = submitted.date() if hasattr(submitted, "date") else submitted
+            if start <= sub_day <= end:
+                continue
             print(
                 f"wrong submission month contestant={cs_row.contestant_id} "
-                f"created={cont.created_at} round={rnd.name} "
-                f"window={rnd.submission_start_date}..{rnd.submission_end_date} "
-                f"level={seas.level}"
+                f"registered={submitted} round={rnd.name} "
+                f"window={start}..{end} level={seas.level} round_id={cont.round_id}"
             )
             if apply:
                 cs_row.is_active = False
