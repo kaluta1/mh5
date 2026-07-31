@@ -410,11 +410,53 @@ class CRUDContestant:
                     
                     can_vote = geo_ok
 
-                    # Fenêtre de vote du round (incl. grâce de soumission : pas de vote tant qu'elle n'est pas finie)
+                    # Fenêtre de vote du round (incl. phases de migration nomination)
                     if can_vote:
                         from app.services.contest_status import contest_status_service
+                        from app.services.season_migration import SeasonMigrationService
+                        from app.models.contests import SeasonLevel
                         from app.models.round import Round as RoundForVote
                         from app.models.contest import Contest as ContestForVoteGate
+                        from datetime import date as date_type
+
+                        def _season_level_enum(level_lower: str):
+                            return {
+                                "country": SeasonLevel.COUNTRY,
+                                "regional": SeasonLevel.REGIONAL,
+                                "region": SeasonLevel.REGIONAL,
+                                "continent": SeasonLevel.CONTINENT,
+                                "continental": SeasonLevel.CONTINENT,
+                                "global": SeasonLevel.GLOBAL,
+                            }.get((level_lower or "").lower())
+
+                        def _nomination_calendar_vote_open(round_obj, level_lower: str, when) -> bool:
+                            sl = _season_level_enum(level_lower)
+                            if not round_obj or not sl:
+                                return False
+                            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
+                            if not vote_open:
+                                return False
+                            today = when.date() if hasattr(when, "date") else date_type.today()
+                            return today >= vote_open
+
+                        def _is_vote_window_open(round_obj, level_lower: str, when) -> bool:
+                            if not round_obj:
+                                return False
+                            stage_open, _ = contest_status_service.season_stage_voting_status(
+                                round_obj, level_lower, when
+                            )
+                            if stage_open is True:
+                                return True
+                            if _nomination_calendar_vote_open(round_obj, level_lower, when):
+                                return True
+                            if stage_open is False:
+                                return False
+                            if (
+                                getattr(round_obj, "voting_start_date", None)
+                                and getattr(round_obj, "voting_end_date", None)
+                            ):
+                                return contest_status_service.round_voting_open_at(round_obj, when)
+                            return False
 
                         if contestant.round_id:
                             cr = (
@@ -424,7 +466,8 @@ class CRUDContestant:
                             )
                             if cr:
                                 now_vote = contest_status_service._utc_now()
-                                if not contest_status_service.round_voting_open_at(cr, now_vote):
+                                level_for_vote = str(season_level or "").lower()
+                                if not _is_vote_window_open(cr, level_for_vote, now_vote):
                                     can_vote = False
                                     vote_restriction_reason = "voting_not_open"
                             else:
@@ -459,7 +502,10 @@ class CRUDContestant:
                         if contest_mode == "nomination":
                             round_obj = getattr(season, "round", None)
                             now_vote = contest_status_service._utc_now()
-                            if not round_obj or not contest_status_service.round_voting_open_at(round_obj, now_vote):
+                            level_for_vote = str(season_level or "").lower()
+                            if not round_obj or not _is_vote_window_open(
+                                round_obj, level_for_vote, now_vote
+                            ):
                                 can_vote = False
                                 vote_restriction_reason = "voting_not_open"
                     
