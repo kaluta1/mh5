@@ -301,23 +301,25 @@ def get_top_high5_by_country(
 
                 if season.level == SeasonLevel.GLOBAL:
                     # Global: rank only nominees from this cohort round (March ≠ April).
+                    from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                    global_filters = [
+                        ContestantSeason.season_id == season.id,
+                        *(
+                            (ContestantSeason.is_active == True,)
+                            if al
+                            else ()
+                        ),
+                        Contestant.is_active == True,
+                        Contestant.is_deleted == False,
+                        Contestant.season_id == contest.id,
+                        Contestant.round_id == rnd.id,
+                        *nomination_cohort_created_at_filters(rnd),
+                    ]
                     all_contestants = (
                         db.query(Contestant)
                         .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
-                        .filter(
-                            and_(
-                                ContestantSeason.season_id == season.id,
-                                *(
-                                    (ContestantSeason.is_active == True,)
-                                    if al
-                                    else ()
-                                ),
-                                Contestant.is_active == True,
-                                Contestant.is_deleted == False,
-                                Contestant.season_id == contest.id,
-                                Contestant.round_id == rnd.id,
-                            )
-                        )
+                        .filter(and_(*global_filters))
                         .all()
                     )
                     if all_contestants:

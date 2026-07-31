@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from sqlalchemy import func
+
 # First month users could nominate (Round March 2026). Earlier rounds are ignored for Vote UI.
 OFFICIAL_NOMINATION_START = date(2026, 3, 1)
 
@@ -71,3 +73,33 @@ def nomination_vote_list_blocked(
             if vote_open and date.today() < vote_open:
                 return True
     return False
+
+
+def nomination_cohort_created_at_filters(cohort_round):
+    """
+    SQLAlchemy clauses: nominee was submitted during this round's nomination window.
+
+    Blocks April registrations from appearing in March global even when a stale URL
+    stored Contestant.round_id on the March round row.
+    """
+    from app.models.contests import Contestant
+
+    start = getattr(cohort_round, "submission_start_date", None)
+    end = getattr(cohort_round, "submission_end_date", None)
+    if not start or not end:
+        return []
+
+    try:
+        from app.services.contest_status import ContestStatusService
+
+        close_dt = ContestStatusService.round_nomination_closes_at(cohort_round)
+        if close_dt is not None:
+            end = close_dt.date()
+    except Exception:
+        pass
+
+    return [
+        Contestant.created_at.isnot(None),
+        func.date(Contestant.created_at) >= start,
+        func.date(Contestant.created_at) <= end,
+    ]

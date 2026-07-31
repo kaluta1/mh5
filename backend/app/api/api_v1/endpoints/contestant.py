@@ -2405,6 +2405,35 @@ def create_contestant(
             detail="No active round found for this contest. Participation requires an active round."
         )
 
+    # Nomination: ignore stale roundId from cached URLs — bind to the open submission month.
+    round_obj = db.query(Round).filter(Round.id == target_round_id).first()
+    if round_obj and real_contest_id:
+        from app.models.contest import Contest as ContestModelForRoundFix
+
+        contest_for_round_fix = db.query(ContestModelForRoundFix).filter(
+            ContestModelForRoundFix.id == real_contest_id,
+            ContestModelForRoundFix.is_deleted == False,
+        ).first()
+        if (
+            contest_for_round_fix
+            and _normalize_contest_mode(getattr(contest_for_round_fix, "contest_mode", ""))
+            == "nomination"
+        ):
+            from datetime import date as date_cls
+            from app import crud
+
+            today = date_cls.today()
+            start = round_obj.submission_start_date
+            end = round_obj.submission_end_date
+            in_window = bool(start and end and start <= today <= end)
+            if not in_window:
+                pref = crud.round.get_preferred_nomination_round_for_contest(
+                    db, real_contest_id
+                )
+                if pref is not None:
+                    target_round_id = pref.id
+                    round_obj = pref
+
     # Déterminer le type d'entrée (nomination ou participation)
     # Le contest_mode du concours détermine toujours le type d'entrée (source de vérité).
     # IMPORTANT: si l'ID URL correspond d'abord à ContestSeason, `contest` peut rester None.

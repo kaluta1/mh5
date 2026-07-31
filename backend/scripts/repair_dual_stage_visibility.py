@@ -43,6 +43,7 @@ def main(apply: bool = False) -> int:
     fixed_memberships = 0
     fixed_premature_regional = 0
     fixed_mismatched_cohort = 0
+    fixed_wrong_submission_month = 0
     try:
         today = date.today()
 
@@ -108,6 +109,45 @@ def main(apply: bool = False) -> int:
             if apply:
                 cs_row.is_active = False
             fixed_mismatched_cohort += 1
+            fixed_memberships += 1
+
+        # Wrong submission month: e.g. registered 2026-04-04 but active on March GLOBAL season.
+        from sqlalchemy import func, or_
+
+        wrong_submission_month = (
+            db.query(ContestantSeason, ContestSeason, Contestant, Round)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+            .join(Round, Round.id == ContestSeason.round_id)
+            .filter(
+                ContestantSeason.is_active == True,
+                ContestSeason.level.in_(
+                    [SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL]
+                ),
+                ContestSeason.is_deleted == False,
+                Contestant.created_at.isnot(None),
+                Round.submission_start_date.isnot(None),
+                Round.submission_end_date.isnot(None),
+                or_(
+                    func.date(Contestant.created_at) < Round.submission_start_date,
+                    func.date(Contestant.created_at) > Round.submission_end_date,
+                ),
+            )
+            .all()
+        )
+        for cs_row, seas, cont, rnd in wrong_submission_month:
+            c_obj = db.query(Contest).filter(Contest.id == cont.season_id).first()
+            if not c_obj or (getattr(c_obj, "contest_mode", "") or "").lower() != "nomination":
+                continue
+            print(
+                f"wrong submission month contestant={cs_row.contestant_id} "
+                f"created={cont.created_at} round={rnd.name} "
+                f"window={rnd.submission_start_date}..{rnd.submission_end_date} "
+                f"level={seas.level}"
+            )
+            if apply:
+                cs_row.is_active = False
+            fixed_wrong_submission_month += 1
             fixed_memberships += 1
 
         premature_links = (
@@ -259,13 +299,15 @@ def main(apply: bool = False) -> int:
             db.commit()
             print(
                 f"Applied: links={fixed_links}, memberships_touched={fixed_memberships}, "
-                f"premature_regional={fixed_premature_regional}, mismatched_cohort={fixed_mismatched_cohort}"
+                f"premature_regional={fixed_premature_regional}, mismatched_cohort={fixed_mismatched_cohort}, "
+                f"wrong_submission_month={fixed_wrong_submission_month}"
             )
         else:
             print(
                 f"Dry-run: would deactivate {fixed_links} links "
                 f"(premature_regional={fixed_premature_regional}, "
-                f"mismatched_cohort={fixed_mismatched_cohort})"
+                f"mismatched_cohort={fixed_mismatched_cohort}, "
+                f"wrong_submission_month={fixed_wrong_submission_month})"
             )
         return 0
     except Exception as exc:

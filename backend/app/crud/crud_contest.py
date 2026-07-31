@@ -171,8 +171,13 @@ def nomination_cohort_member_ids_subquery(
     appear in regional Vote for round 21.
     """
     from app.models.contests import Contestant, ContestantSeason, ContestSeason, ContestSeasonLink
+    from app.models.round import Round
+    from app.core.nomination_calendar import nomination_cohort_created_at_filters
 
-    return (
+    cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
+    created_at_filters = nomination_cohort_created_at_filters(cohort_round)
+
+    q = (
         db.query(ContestantSeason.contestant_id)
         .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
         .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
@@ -188,8 +193,10 @@ def nomination_cohort_member_ids_subquery(
             ContestantSeason.is_active == True,
             Contestant.is_deleted == False,
             Contestant.round_id == cohort_round_id,
+            *created_at_filters,
         )
     )
+    return q
 
 
 def _nomination_row_entry_type_clause(effective_entry_type: str, contest_mode: str):

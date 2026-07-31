@@ -618,6 +618,11 @@ class SeasonMigrationService:
             filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
         if cohort_round_id is not None:
             filters.append(Contestant.round_id == cohort_round_id)
+            cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
+            if cohort_round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                filters.extend(nomination_cohort_created_at_filters(cohort_round))
 
         scoped = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
@@ -640,6 +645,11 @@ class SeasonMigrationService:
                 vote_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
             if cohort_round_id is not None:
                 vote_filters.append(Contestant.round_id == cohort_round_id)
+                cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
+                if cohort_round is not None:
+                    from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                    vote_filters.extend(nomination_cohort_created_at_filters(cohort_round))
             return db.query(Contestant).filter(and_(*vote_filters)).all()
 
         fallback_filters = [
@@ -653,6 +663,11 @@ class SeasonMigrationService:
             fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
         if cohort_round_id is not None:
             fallback_filters.append(Contestant.round_id == cohort_round_id)
+            cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
+            if cohort_round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                fallback_filters.extend(nomination_cohort_created_at_filters(cohort_round))
 
         # Last resort for legacy data: keep the contest scope. Never return the
         # whole shared season because that mixes categories in TopHigh5/migration.
@@ -1286,6 +1301,11 @@ class SeasonMigrationService:
             season_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
         if cohort_round_id is not None:
             season_filters.append(Contestant.round_id == cohort_round_id)
+            cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
+            if cohort_round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                season_filters.extend(nomination_cohort_created_at_filters(cohort_round))
         contestants_query = db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).filter(and_(*season_filters))
@@ -2198,17 +2218,24 @@ class SeasonMigrationService:
             # GLOBAL must preserve the canonical Past/Top High5 winner order from
             # the continental season. Reuse the same ranking helper so promotion
             # and display stay aligned.
+            global_filters = [
+                ContestantSeason.season_id == from_season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.season_id == contest_id,
+                Contestant.round_id == from_season.round_id,
+                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
+            ]
+            if from_season.round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                global_filters.extend(
+                    nomination_cohort_created_at_filters(from_season.round)
+                )
             season_contestants = db.query(Contestant).join(
                 ContestantSeason
-            ).filter(
-                and_(
-                    ContestantSeason.season_id == from_season.id,
-                    ContestantSeason.is_active == True,
-                    Contestant.is_active == True,
-                    Contestant.is_deleted == False,
-                    or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None))
-                )
-            ).all()
+            ).filter(and_(*global_filters)).all()
 
             contestant_ids = [c.id for c in season_contestants]
             if contestant_ids:

@@ -149,6 +149,11 @@ def _cheap_round_entry_count(
                     | (Contestant.entry_type.is_(None)),
                     Contestant.round_id == round_obj.id,
                 )
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                member_q = member_q.filter(
+                    *nomination_cohort_created_at_filters(round_obj)
+                )
             else:
                 member_q = member_q.filter(Contestant.entry_type == "participation")
             return int(member_q.scalar() or 0)

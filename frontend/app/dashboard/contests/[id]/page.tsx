@@ -1195,6 +1195,7 @@ export default function ContestDetailPage() {
                   onViewDetails={(contestantId) => {
                     const params = new URLSearchParams()
                     if (roundIdFromUrl) params.set('roundId', roundIdFromUrl)
+                    if (contestLevelFromUrl) params.set('contestLevel', contestLevelFromUrl)
                     if (entryType) params.set('entryType', entryType)
                     if (!isPooledNominationLevel && filterCountry && filterCountry !== 'all') params.set('country', filterCountry)
                     if (filterContinent && filterContinent !== 'all') params.set('continent', filterContinent)
