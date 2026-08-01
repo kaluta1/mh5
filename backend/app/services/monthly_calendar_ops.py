@@ -36,9 +36,17 @@ def run_season_migrations(db: Session, *, today: date | None = None) -> Dict[str
     combined: Dict[str, Any] = {"processed": 0, "results": [], "passes": 0}
 
     for pass_num in range(max_passes):
-        out = season_migration_service.check_and_process_migrations(
-            db, allow_multi_hop=True
-        )
+        try:
+            out = season_migration_service.check_and_process_migrations(
+                db, allow_multi_hop=True
+            )
+        except Exception as exc:
+            logger.exception("Season migration pass %s failed: %s", pass_num + 1, exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            break
         if not isinstance(out, dict):
             break
         results = out.get("results") or []

@@ -1139,7 +1139,7 @@ class SeasonMigrationService:
                 ContestantVoting.season_id == season_id,
             )
         ).distinct().all()
-        candidate_ids = [row[0] for row in voted_ids_rows]
+        candidate_ids = [row[0] for row in voted_ids_rows if row[0] is not None]
 
         # Fallback to active contest contestants from legacy linkage.
         if not candidate_ids:
@@ -1152,10 +1152,33 @@ class SeasonMigrationService:
                         Contestant.is_deleted == False,
                     )
                 ).all()
+                if c.id is not None
             ]
 
+        # Deduplicate — vote rows / joins can surface the same contestant twice and
+        # INSERT … VALUES would violate uq_contestant_season in one flush.
+        candidate_ids = list(dict.fromkeys(candidate_ids))
         if not candidate_ids:
             return 0
+
+        already_linked = {
+            row[0]
+            for row in db.query(ContestantSeason.contestant_id)
+            .filter(
+                ContestantSeason.season_id == season_id,
+                ContestantSeason.contestant_id.in_(candidate_ids),
+            )
+            .all()
+            if row[0] is not None
+        }
+        # Pending inserts from a prior _sync_contestants_to_season in this session.
+        for obj in list(db.new):
+            if (
+                isinstance(obj, ContestantSeason)
+                and obj.season_id == season_id
+                and obj.contestant_id is not None
+            ):
+                already_linked.add(obj.contestant_id)
 
         repaired = 0
         for cid in candidate_ids:
@@ -1163,28 +1186,34 @@ class SeasonMigrationService:
             if not contestant:
                 continue
             contestant.is_qualified = True
-            existing = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == cid,
-                    ContestantSeason.season_id == season_id,
-                )
-            ).first()
-            if existing:
-                if not existing.is_active:
+            if cid in already_linked:
+                existing = db.query(ContestantSeason).filter(
+                    and_(
+                        ContestantSeason.contestant_id == cid,
+                        ContestantSeason.season_id == season_id,
+                    )
+                ).first()
+                if existing and not existing.is_active:
                     existing.is_active = True
                     existing.joined_at = datetime.utcnow()
                     repaired += 1
-            else:
-                db.add(
-                    ContestantSeason(
-                        contestant_id=cid,
-                        season_id=season_id,
-                        joined_at=datetime.utcnow(),
-                        is_active=True,
-                    )
+                continue
+
+            db.add(
+                ContestantSeason(
+                    contestant_id=cid,
+                    season_id=season_id,
+                    joined_at=datetime.utcnow(),
+                    is_active=True,
                 )
-                repaired += 1
-        db.flush()
+            )
+            already_linked.add(cid)
+            repaired += 1
+        try:
+            db.flush()
+        except Exception:
+            db.rollback()
+            raise
         return repaired
     
     @staticmethod
@@ -1896,6 +1925,16 @@ class SeasonMigrationService:
                 )
             ).first()
             if not existing_contestant_season:
+                # Skip if already pending in this session (avoid uq_contestant_season).
+                pending = any(
+                    isinstance(obj, ContestantSeason)
+                    and obj.contestant_id == contestant.id
+                    and obj.season_id == target_season_id
+                    for obj in db.new
+                )
+                if pending:
+                    synced.append(contestant.id)
+                    continue
                 db.add(
                     ContestantSeason(
                         contestant_id=contestant.id,
@@ -2891,13 +2930,24 @@ class SeasonMigrationService:
                     if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
                         promoted_contests_this_run.add(promotion_key)
                 except Exception as e:
-                    logger.error(f"Error promoting contest {contest_id}: {e}")
+                    logger.error(
+                        f"Error promoting contest {contest_id} "
+                        f"{season.level.value}->{next_level.value}: {e}",
+                        exc_info=True,
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
                     results.append({
                         "contest_id": contest_id,
-                        "round_id": round_obj.id,
+                        "round_id": getattr(round_obj, "id", None),
                         "action": f"promote_{season.level.value}_to_{next_level.value}",
                         "result": {"error": str(e)}
                     })
+                    # Continue with remaining contests — one UniqueViolation must not
+                    # abort June regional / May continental / April global in the same run.
+                    continue
 
         processed = len(results)
         if processed > 0:
