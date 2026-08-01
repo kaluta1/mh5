@@ -475,7 +475,8 @@ function ContestsPageContent() {
       try {
         setRoundsLoading(true)
         // Fetch rounds with minimal data for faster response
-        const data = await ApiService.getRounds({ contestLimit: 1, limit: 12 }) // Minimal data for round selector
+        // Need enough history for Vote chips (Global = M-4, e.g. April when today is August).
+        const data = await ApiService.getRounds({ contestLimit: 1, limit: 36 })
         
         // Check if aborted
         if (abortController.signal.aborted) return

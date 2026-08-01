@@ -25,29 +25,44 @@ logger = logging.getLogger(__name__)
 
 
 def run_season_migrations(db: Session, *, today: date | None = None) -> Dict[str, Any]:
-    """Run season migration pipeline (multi-pass on the 1st of the month)."""
+    """
+    Run season migration pipeline with multi-pass hops.
+
+    Always allow multi-hop + up to 4 passes so backlog clears even after the 1st
+    (e.g. June COUNTRY→REGIONAL then May REGIONAL→CONTINENT on the same run).
+    """
     today = today or date.today()
-    max_passes = 4 if today.day == 1 else 1
+    max_passes = 4
     combined: Dict[str, Any] = {"processed": 0, "results": [], "passes": 0}
 
     for pass_num in range(max_passes):
         out = season_migration_service.check_and_process_migrations(
-            db, allow_multi_hop=(today.day == 1)
+            db, allow_multi_hop=True
         )
         if not isinstance(out, dict):
             break
-        n = int(out.get("processed") or 0)
+        results = out.get("results") or []
+        # Count only real promotions so empty skips do not burn all passes.
+        real = [
+            r
+            for r in results
+            if isinstance(r.get("result"), dict)
+            and not r["result"].get("skipped")
+            and not r["result"].get("error")
+        ]
+        n = len(real)
         combined["passes"] = pass_num + 1
         combined["processed"] = int(combined["processed"]) + n
-        combined["results"].extend(out.get("results") or [])
-        if n == 0:
-            break
+        combined["results"].extend(results)
         logger.info(
-            "Season migration pass %s/%s: processed=%s",
+            "Season migration pass %s/%s: real_promotions=%s total_actions=%s",
             pass_num + 1,
             max_passes,
             n,
+            len(results),
         )
+        if n == 0:
+            break
 
     return combined
 
@@ -56,9 +71,10 @@ def run_monthly_calendar_ops(db: Session | None = None) -> Dict[str, Any]:
     """
     Full calendar pipeline:
     1. Dedupe / close stale vote flags
-    2. Ensure current-month round + link contests
-    3. Sync contest open/close flags
-    4. Run all due season migrations (multi-pass on day 1)
+    2. Ensure all official nomination cohort rounds (March…current) exist
+    3. Ensure current-month round + link contests
+    4. Sync contest open/close flags
+    5. Run all due season migrations (multi-pass backlog)
     """
     own_session = db is None
     if own_session:
@@ -73,6 +89,13 @@ def run_monthly_calendar_ops(db: Session | None = None) -> Dict[str, Any]:
     try:
         dedupe_submission_month_rounds(db, today)
         close_stale_voting_rounds(db, today)
+
+        from app.services.monthly_round_scheduler import ensure_nomination_cohort_rounds
+
+        cohort_rounds = ensure_nomination_cohort_rounds(db, today)
+        summary["cohort_rounds"] = [
+            {"id": r.id, "name": r.name} for r in cohort_rounds if r is not None
+        ]
 
         rnd = monthly_round_scheduler.ensure_current_month_round()
         summary["round"] = (

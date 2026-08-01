@@ -72,6 +72,58 @@ def sync_round_calendar_flags(db: Session, round_obj: Round) -> bool:
     return changed
 
 
+def ensure_nomination_cohort_rounds(db: Session, today: Optional[date] = None) -> list:
+    """
+    Ensure Round rows exist for every official nomination cohort month up to ``today``.
+
+    Vote chips resolve Regional=M-2, Continental=M-3, Global=M-4. If June is missing
+    in August, Regional Vote shows "No regional migration" even when Country works.
+    """
+    from app.core.nomination_calendar import OFFICIAL_NOMINATION_START
+
+    today = today or date.today()
+    created_or_fixed: list = []
+    y, m = OFFICIAL_NOMINATION_START.year, OFFICIAL_NOMINATION_START.month
+    while date(y, m, 1) <= date(today.year, today.month, 1):
+        target = date(y, m, 1)
+        month_name = target.strftime("%B %Y")
+        existing = (
+            db.query(Round)
+            .filter(
+                Round.status != RoundStatus.CANCELLED,
+                Round.submission_start_date == target,
+            )
+            .order_by(Round.id.desc())
+            .first()
+        )
+        if not existing:
+            existing = (
+                db.query(Round)
+                .filter(
+                    Round.name == f"Round {month_name}",
+                    Round.status != RoundStatus.CANCELLED,
+                )
+                .order_by(Round.id.desc())
+                .first()
+            )
+        if existing:
+            sync_round_calendar_flags(db, existing)
+            link_active_contests_to_round(db, existing.id)
+            created_or_fixed.append(existing)
+        else:
+            logger.info("Creating missing nomination cohort round for %s", month_name)
+            rnd = generate_monthly_round(db, target_date=target)
+            if rnd:
+                sync_round_calendar_flags(db, rnd)
+                link_active_contests_to_round(db, rnd.id)
+                created_or_fixed.append(rnd)
+        if m == 12:
+            y, m = y + 1, 1
+        else:
+            m += 1
+    return created_or_fixed
+
+
 def resolve_live_nomination_vote_round(db: Session, today: Optional[date] = None) -> Optional[Round]:
     """
     The round users vote in this calendar month: latest round whose submission month has ended.

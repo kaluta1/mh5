@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "global-cohort-registration-date-v7-20260731"
+BACKEND_BUILD_ID = "nomination-aug1-migration-force-v8-20260801"

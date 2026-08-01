@@ -2319,7 +2319,77 @@ class SeasonMigrationService:
         
         logger.info(f"  - Total contestants selected: {len(selected_contestants)}")
         print(f"[Migration]   Contestants selected: {len(selected_contestants)}")
-        
+
+        # Nomination: if season membership was never synced, pull cohort rows by round_id
+        # and retry once so COUNTRY→REGIONAL is not skipped on the 1st with empty pools.
+        if (
+            len(selected_contestants) == 0
+            and contest_mode == "nomination"
+            and from_season.round_id is not None
+        ):
+            SeasonMigrationService._sync_contestants_to_season(
+                db,
+                contest_id,
+                int(from_season.round_id),
+                from_season.id,
+            )
+            SeasonMigrationService._ensure_source_season_links(
+                db=db,
+                contest_id=contest_id,
+                season_id=from_season.id,
+            )
+            if to_level == SeasonLevel.GLOBAL:
+                retry = SeasonMigrationService._contestants_for_contest_in_season(
+                    db,
+                    from_season.id,
+                    contest_id,
+                    active_only=True,
+                    qualified_only=False,
+                    cohort_round_id=int(from_season.round_id),
+                )
+                selected_contestants = retry[:limit]
+            else:
+                location_field_map = {
+                    SeasonLevel.COUNTRY: "city",
+                    SeasonLevel.REGIONAL: "country",
+                    SeasonLevel.CONTINENT: "region",
+                    SeasonLevel.GLOBAL: "continent",
+                }
+                location_field = location_field_map.get(to_level)
+                if location_field:
+                    grouped_retry = SeasonMigrationService.get_top_contestants_by_location(
+                        db,
+                        from_season.id,
+                        location_field,
+                        contest_id=contest_id,
+                        limit=limit,
+                        diagnostics=False,
+                        qualified_only=False,
+                        strict_season_scope=True,
+                        uncapped=True,
+                        cohort_round_id=int(from_season.round_id),
+                    )
+                    selected_contestants = []
+                    if from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL:
+                        for country, location_contestants in grouped_retry.items():
+                            pool_label = (
+                                SeasonMigrationService.regional_pool_label_for_raw_country(
+                                    country
+                                )
+                            )
+                            if not pool_label:
+                                continue
+                            for contestant in location_contestants:
+                                contestant.region = pool_label
+                                selected_contestants.append(contestant)
+                    else:
+                        for location_contestants in grouped_retry.values():
+                            selected_contestants.extend(location_contestants)
+            logger.info(
+                "  - Retry after cohort sync: %s contestants selected",
+                len(selected_contestants),
+            )
+
         if len(selected_contestants) == 0:
             # Not a failure: calendar may say "promote" while nobody qualified in this season yet.
             # Return a success-shaped payload so schedulers log a skip, not ERROR.
