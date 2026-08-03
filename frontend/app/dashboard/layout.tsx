@@ -9,6 +9,7 @@ import { AdminSidebar } from "@/components/dashboard/admin-sidebar"
 import { DashboardNavbar } from "@/components/dashboard/dashboard-navbar"
 import { useAuth } from "@/hooks/use-auth"
 import { useReferralShare } from "@/hooks/use-referral-share"
+import { toPublicSharePath } from "@/lib/public-share-urls"
 import { Skeleton } from "@/components/ui/skeleton"
 
 const MobileMenu = dynamic(
@@ -35,12 +36,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Détecter si on est sur une page admin
   const isAdminPage = pathname?.startsWith('/dashboard/admin') ?? false
 
-  // Rediriger si non authentifié
+  // Redirect guests away from dashboard; shared deep links go to public viewers.
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
+      const publicPath = pathname ? toPublicSharePath(pathname) : null
+      if (publicPath && publicPath !== pathname) {
+        const query = typeof window !== 'undefined' ? window.location.search : ''
+        router.replace(`${publicPath}${query}`)
+        return
+      }
       router.push('/')
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [isLoading, isAuthenticated, router, pathname])
 
   const handleMenuToggle = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen)

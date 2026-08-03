@@ -45,6 +45,7 @@ interface PostCardProps {
   onEdit?: (post: Post) => void
   onDelete?: (postId: number) => void
   showFullContent?: boolean
+  readOnly?: boolean
 }
 
 export function PostCard({
@@ -58,6 +59,7 @@ export function PostCard({
   onEdit,
   onDelete,
   showFullContent = false,
+  readOnly = false,
 }: PostCardProps) {
   const { t, language } = useLanguage()
   const dateLocale = getDateFnsLocale(language)
@@ -167,6 +169,7 @@ export function PostCard({
           )}
 
           {/* Actions - Twitter style */}
+          {!readOnly && (
           <div className="flex items-center justify-between max-w-md mt-4 pt-2">
             {/* Comment */}
             <button
@@ -218,6 +221,7 @@ export function PostCard({
               </div>
             </button>
           </div>
+          )}
         </div>
       </div>
     </article>

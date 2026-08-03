@@ -356,7 +356,7 @@ async def share_feed_post(
     if post and post.author:
         referral_code = referral_code or post.author.personal_referral_code
 
-    redirect_url = f"{_SITE_BASE}/dashboard/feed/{post_id}"
+    redirect_url = f"{_SITE_BASE}/feed/{post_id}"
     if referral_code:
         redirect_url += f"?{urlencode({'ref': referral_code})}"
 

@@ -17,7 +17,7 @@ import { shortenReferralUrl } from '@/lib/referral-share'
 function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth()
   const { t } = useLanguage()
   const { addToast } = useToast()
   const postId = parseInt(params.id as string)
@@ -28,14 +28,18 @@ function PostDetailPage() {
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login')
+    if (!authLoading && !isAuthenticated && postId) {
+      const ref = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('ref') : null
+      router.replace(`/feed/${postId}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`)
+      return
+    }
+    if (!isAuthenticated || authLoading) {
       return
     }
     if (postId) {
       loadPost()
     }
-  }, [isAuthenticated, postId, router])
+  }, [authLoading, isAuthenticated, postId, router])
 
   const loadPost = async () => {
     setIsLoading(true)

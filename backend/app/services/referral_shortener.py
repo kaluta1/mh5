@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -18,6 +19,38 @@ from app.models.referral_share import ReferralShareClick, ReferralShareConversio
 from app.models.user import User
 
 _BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+_DASHBOARD_FEED_RE = re.compile(r"^/dashboard/feed/(\d+)$")
+_DASHBOARD_CONTESTANT_RE = re.compile(r"^/dashboard/contests/\d+/contestant/(\d+)$")
+_SHARE_FEED_RE = re.compile(r"^/s/f/(\d+)$")
+_SHARE_CONTESTANT_RE = re.compile(r"^/s/c/(\d+)$")
+_SHORT_CONTESTANT_RE = re.compile(r"^/c/(\d+)$")
+
+
+def to_public_share_path(path: str) -> str:
+    """Map dashboard or preview paths to public viewer routes (no login required)."""
+    if _DASHBOARD_FEED_RE.match(path):
+        return _DASHBOARD_FEED_RE.sub(r"/feed/\1", path)
+    if _DASHBOARD_CONTESTANT_RE.match(path):
+        return _DASHBOARD_CONTESTANT_RE.sub(r"/contestants/\1", path)
+    if _SHARE_FEED_RE.match(path):
+        return _SHARE_FEED_RE.sub(r"/feed/\1", path)
+    if _SHARE_CONTESTANT_RE.match(path):
+        return _SHARE_CONTESTANT_RE.sub(r"/contestants/\1", path)
+    if _SHORT_CONTESTANT_RE.match(path):
+        return _SHORT_CONTESTANT_RE.sub(r"/contestants/\1", path)
+    return path
+
+
+def to_public_share_url(url: str) -> str:
+    parsed = urlparse(url)
+    public_path = to_public_share_path(parsed.path)
+    if public_path == parsed.path:
+        return url
+    return urlunparse(
+        (parsed.scheme, parsed.netloc, public_path, parsed.params, parsed.query, parsed.fragment)
+    )
+
 
 _TRACKING_PARAMS = frozenset(
     {
@@ -86,7 +119,8 @@ def validate_and_normalize_internal_url(input_url: str) -> tuple[str, str]:
             "",
         )
     )
-    return normalized, normalized
+    public = to_public_share_url(normalized)
+    return public, public
 
 
 def short_link_public_url(short_code: str) -> str:
@@ -196,7 +230,7 @@ def find_active_share_link(db: Session, short_code: str) -> Optional[ReferralSha
 
 def destination_with_referrer_ref(db: Session, link: ReferralShareLink) -> str:
     """Landing URL with ?ref= so legacy frontends still pick up the referral code."""
-    destination = link.destination_url
+    destination = to_public_share_url(link.destination_url)
     referrer = db.query(User).filter(User.id == link.user_id).first()
     ref_code = (referrer.personal_referral_code or "").strip() if referrer else ""
     if not ref_code:

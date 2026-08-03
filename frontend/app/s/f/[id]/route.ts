@@ -22,8 +22,8 @@ export async function GET(
     ? `${SITE_ORIGIN}/s/f/${id}?ref=${encodeURIComponent(ref)}`
     : `${SITE_ORIGIN}/s/f/${id}`
   const redirectUrl = ref
-    ? `${SITE_ORIGIN}/dashboard/feed/${id}?ref=${encodeURIComponent(ref)}`
-    : `${SITE_ORIGIN}/dashboard/feed/${id}`
+    ? `${SITE_ORIGIN}/feed/${id}?ref=${encodeURIComponent(ref)}`
+    : `${SITE_ORIGIN}/feed/${id}`
 
   const ua = request.headers.get('user-agent') || ''
   const crawler = isSocialCrawler(ua)

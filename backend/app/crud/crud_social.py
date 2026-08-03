@@ -32,10 +32,14 @@ class CRUDPost:
             Post.is_deleted == False
         ).first()
         
-        if post and user_id:
-            # Vérifier la visibilité
+        if not post:
+            return None
+        
+        if user_id:
             if not self._can_view_post(db, post, user_id):
                 return None
+        elif post.visibility != PostVisibility.PUBLIC:
+            return None
         
         return post
     
