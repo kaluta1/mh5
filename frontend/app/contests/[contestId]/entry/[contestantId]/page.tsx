@@ -11,13 +11,32 @@ import { useToast } from '@/components/ui/toast'
 import { cleanVideoUrl } from '@/lib/utils/video-platforms'
 import { getEffectiveApiUrl } from '@/lib/config'
 
+function unwrapMediaEntries(raw: unknown): string[] {
+  if (raw == null) return []
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    if (trimmed.startsWith('[') || trimmed.startsWith('{') || trimmed.startsWith('"')) {
+      try {
+        return unwrapMediaEntries(JSON.parse(trimmed))
+      } catch {
+        return [trimmed]
+      }
+    }
+    return [trimmed]
+  }
+  if (Array.isArray(raw)) {
+    return raw.flatMap((item) => unwrapMediaEntries(item))
+  }
+  return []
+}
+
 function parseMediaUrls(mediaIds: string | undefined): string[] {
   if (!mediaIds) return []
   try {
-    const parsed = JSON.parse(mediaIds) as string[]
-    if (!Array.isArray(parsed)) return []
+    const entries = unwrapMediaEntries(JSON.parse(mediaIds))
     const apiBase = typeof window !== 'undefined' ? getEffectiveApiUrl() : ''
-    return parsed
+    return entries
       .filter((url) => url && url.trim() !== '')
       .map((url) => {
         let fullUrl = cleanVideoUrl(url) || url
@@ -27,7 +46,9 @@ function parseMediaUrls(mediaIds: string | undefined): string[] {
         return fullUrl
       })
   } catch {
-    return []
+    return unwrapMediaEntries(mediaIds)
+      .filter((url) => url && url.trim() !== '')
+      .map((url) => cleanVideoUrl(url) || url)
   }
 }
 
