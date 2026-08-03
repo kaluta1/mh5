@@ -24,7 +24,7 @@ export function getServerApiBase(): string {
   if (internal) return internal
   // VPS: Next and uvicorn on same machine — prefer loopback (faster, no nginx SSL hop)
   if (process.env.NODE_ENV === 'production') {
-    const port = (process.env.API_PORT || process.env.BACKEND_PORT || '8000').trim()
+    const port = (process.env.API_PORT || process.env.BACKEND_PORT || '8001').trim()
     return `http://127.0.0.1:${port}`
   }
   const configured = API_URL.replace(/\/+$/, '')
