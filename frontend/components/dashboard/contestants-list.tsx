@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ContestantCard } from './contestant-card'
 import { ReportContestantDialog } from './report-contestant-dialog'
 import { useLanguage } from '@/contexts/language-context'
+import type { ContestantShareContext } from '@/lib/public-share-urls'
 
 interface Media {
   id: string
@@ -102,6 +103,7 @@ interface ContestantsListProps {
   contestants: Contestant[]
   contestId: string
   roundId?: string
+  shareContext?: ContestantShareContext
   currentUserId?: number
   favorites: string[]
   searchQuery?: string
@@ -126,6 +128,7 @@ export function ContestantsList({
   contestants,
   contestId,
   roundId,
+  shareContext,
   currentUserId,
   favorites,
   searchQuery = '',
@@ -200,6 +203,7 @@ export function ContestantsList({
             currentUserId={currentUserId}
             contestId={contestId}
             roundId={roundId}
+            shareContext={shareContext}
             name={contestant.name}
             country={contestant.country}
             city={contestant.city}

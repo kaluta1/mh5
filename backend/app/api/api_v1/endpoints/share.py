@@ -555,7 +555,18 @@ async def share_contestant(
     if ref:
         share_page_url += f"?{urlencode({'ref': ref})}"
 
-    flutter_url = f"{_SITE_BASE}/contestants/{contestant_id}"
+    contest_id = None
+    try:
+        stats = crud_contestant.get_with_stats(db, contestant_id, current_user_id=None)
+        if stats:
+            contest_id = stats.get("contest_id")
+    except Exception:
+        contest_id = None
+
+    if contest_id:
+        flutter_url = f"{_SITE_BASE}/contests/{contest_id}/entry/{contestant_id}"
+    else:
+        flutter_url = f"{_SITE_BASE}/contestants/{contestant_id}"
     if ref:
         flutter_url += f"?{urlencode({'ref': ref})}"
     

@@ -3,6 +3,7 @@ import { buildOgShareHtml } from '@/lib/og-share-html'
 import {
   SITE_ORIGIN,
   fetchContestantSharePreview,
+  fetchContestantContestId,
   isSocialCrawler,
 } from '@/lib/share-preview-server'
 
@@ -18,9 +19,14 @@ export async function GET(
   const shareUrl = ref
     ? `${SITE_ORIGIN}/s/c/${id}?ref=${encodeURIComponent(ref)}`
     : `${SITE_ORIGIN}/s/c/${id}`
-  const redirectUrl = ref
-    ? `${SITE_ORIGIN}/contestants/${id}?ref=${encodeURIComponent(ref)}`
+
+  const contestId = await fetchContestantContestId(id)
+  const entryBase = contestId
+    ? `${SITE_ORIGIN}/contests/${contestId}/entry/${id}`
     : `${SITE_ORIGIN}/contestants/${id}`
+  const redirectUrl = ref
+    ? `${entryBase}?ref=${encodeURIComponent(ref)}`
+    : entryBase
 
   const ua = request.headers.get('user-agent') || ''
   const crawler = isSocialCrawler(ua)

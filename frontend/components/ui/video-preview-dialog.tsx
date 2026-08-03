@@ -59,6 +59,8 @@ interface VideoPreviewDialogProps {
   rank?: number
   contestantId?: string
   commentsCount?: number
+  variant?: 'modal' | 'page'
+  onLoginRequired?: () => void
 }
 
 export function VideoPreviewDialog({
@@ -78,6 +80,8 @@ export function VideoPreviewDialog({
   rank,
   contestantId,
   commentsCount: initialCommentsCount = 0,
+  variant = 'modal',
+  onLoginRequired,
 }: VideoPreviewDialogProps) {
   const { t } = useLanguage()
   const { user } = useAuth()
@@ -172,7 +176,27 @@ export function VideoPreviewDialog({
     }
   }, [isOpen, contestantId, videoUrl])
 
-  if (!isOpen) return null
+  if (!isOpen && variant === 'modal') return null
+
+  const needsLogin = voteRestrictionReason === 'not_authenticated'
+  const voteDisabled =
+    isEntryAuthor || isVoting || hasVoted || (!canVote && !needsLogin)
+
+  const handleVoteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (needsLogin && onLoginRequired) {
+      onLoginRequired()
+      return
+    }
+    if (!isEntryAuthor && canVote && !isVoting && !hasVoted && onVote) {
+      onVote()
+    }
+  }
+
+  const shellClass =
+    variant === 'page'
+      ? 'min-h-screen w-full flex items-center justify-center bg-black/90 p-2 sm:p-4'
+      : 'fixed inset-0 z-[999999] flex items-center justify-center'
 
   const handleViewed30s = async () => {
     if (!contestantId || viewTracked) return
@@ -185,9 +209,10 @@ export function VideoPreviewDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center" onClick={onClose}>
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+    <div className={shellClass} onClick={variant === 'modal' ? onClose : undefined}>
+      {variant === 'modal' ? (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+      ) : null}
 
       {/* Dialog container */}
       <div
@@ -273,19 +298,16 @@ export function VideoPreviewDialog({
           {/* Vote + Comment buttons */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             {/* Vote Button */}
-            {onVote && (
+            {(onVote || onLoginRequired) && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!isEntryAuthor && canVote && !isVoting && !hasVoted) onVote()
-                }}
-                disabled={isEntryAuthor || !canVote || isVoting || hasVoted}
+                onClick={handleVoteClick}
+                disabled={voteDisabled}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                   isEntryAuthor
                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                     : hasVoted
                     ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-700'
-                    : canVote
+                    : needsLogin || canVote
                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                 }`}

@@ -156,12 +156,28 @@ export async function fetchPostSharePreview(postId: string): Promise<SharePostPr
 }
 
 type ApiContestant = {
+  content?: string | null
+  contest_id?: number | null
   title?: string | null
   description?: string | null
   author_name?: string | null
   contestant_image_url?: string | null
   contest_image_url?: string | null
   author_avatar_url?: string | null
+}
+
+export async function fetchContestantContestId(contestantId: string): Promise<number | null> {
+  const apiBase = getServerApiBase()
+  try {
+    const res = await fetchWithTimeout(`${apiBase}/api/v1/contestants/${contestantId}`, {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const c = (await res.json()) as ApiContestant
+    return typeof c.contest_id === 'number' ? c.contest_id : null
+  } catch {
+    return null
+  }
 }
 
 export async function fetchContestantSharePreview(

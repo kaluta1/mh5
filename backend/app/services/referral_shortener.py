@@ -21,24 +21,28 @@ from app.models.user import User
 _BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 _DASHBOARD_FEED_RE = re.compile(r"^/dashboard/feed/(\d+)$")
-_DASHBOARD_CONTESTANT_RE = re.compile(r"^/dashboard/contests/\d+/contestant/(\d+)$")
+_DASHBOARD_CONTESTANT_RE = re.compile(r"^/dashboard/contests/(\d+)/contestant/(\d+)$")
 _SHARE_FEED_RE = re.compile(r"^/s/f/(\d+)$")
 _SHARE_CONTESTANT_RE = re.compile(r"^/s/c/(\d+)$")
 _SHORT_CONTESTANT_RE = re.compile(r"^/c/(\d+)$")
+_LEGACY_CONTESTANT_RE = re.compile(r"^/contestants/(\d+)$")
 
 
 def to_public_share_path(path: str) -> str:
     """Map dashboard or preview paths to public viewer routes (no login required)."""
+    dashboard_entry = _DASHBOARD_CONTESTANT_RE.match(path)
+    if dashboard_entry:
+        return f"/contests/{dashboard_entry.group(1)}/entry/{dashboard_entry.group(2)}"
     if _DASHBOARD_FEED_RE.match(path):
         return _DASHBOARD_FEED_RE.sub(r"/feed/\1", path)
-    if _DASHBOARD_CONTESTANT_RE.match(path):
-        return _DASHBOARD_CONTESTANT_RE.sub(r"/contestants/\1", path)
     if _SHARE_FEED_RE.match(path):
         return _SHARE_FEED_RE.sub(r"/feed/\1", path)
     if _SHARE_CONTESTANT_RE.match(path):
-        return _SHARE_CONTESTANT_RE.sub(r"/contestants/\1", path)
+        return path
     if _SHORT_CONTESTANT_RE.match(path):
-        return _SHORT_CONTESTANT_RE.sub(r"/contestants/\1", path)
+        return path
+    if _LEGACY_CONTESTANT_RE.match(path):
+        return path
     return path
 
 

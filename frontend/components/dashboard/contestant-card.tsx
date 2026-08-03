@@ -15,6 +15,7 @@ import { contestService } from '@/services/contest-service'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
 import { shortenReferralUrl } from '@/lib/referral-share'
+import { buildPublicContestantEntryUrl, type ContestantShareContext } from '@/lib/public-share-urls'
 import { useToast } from '@/components/ui/toast'
 import { VoteButton } from './vote-button'
 import { FavoriteButton } from './favorite-button'
@@ -143,6 +144,7 @@ interface ContestantCardProps {
   favoritesList?: Array<any>
   contestId?: string
   roundId?: string
+  shareContext?: ContestantShareContext
   onToggleFavorite: () => void
   onViewDetails: () => void
   onVote: () => void
@@ -193,6 +195,7 @@ export function ContestantCard({
   favoritesList = [],
   contestId,
   roundId,
+  shareContext,
   onToggleFavorite,
   onViewDetails,
   onVote,
@@ -406,11 +409,15 @@ export function ContestantCard({
 
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const sharePath = `/c/${id}`
-    const shareUrl = new URL(`${baseUrl}${sharePath}`)
-
     const referralCode = user?.personal_referral_code
-    let shareLinkStr = shareUrl.toString()
+    const ctx: ContestantShareContext = shareContext || {
+      contestId: contestId || '0',
+      roundId,
+    }
+    if (contestId && (!shareContext || !shareContext.contestId)) {
+      ctx.contestId = contestId
+    }
+    let shareLinkStr = buildPublicContestantEntryUrl(baseUrl, id, ctx, referralCode || undefined)
     try {
       shareLinkStr = await shortenReferralUrl(shareLinkStr)
     } catch {

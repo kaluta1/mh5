@@ -28,6 +28,7 @@ import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import { followService } from '@/services/follow-service'
 import { sharesService } from '@/services/shares-service'
 import { shortenReferralUrl } from '@/lib/referral-share'
+import { buildPublicContestantEntryUrl } from '@/lib/public-share-urls'
 
 interface Media {
   id: string
@@ -542,9 +543,16 @@ function ContestantDetailContent() {
   const handleShare = async () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
     const refCode = (user as any)?.personal_referral_code || ''
-    const ownerUsername = contestant?.author_username?.trim()
-    const sharePath = ownerUsername ? `/${encodeURIComponent(ownerUsername)}` : `/c/${contestantId}`
-    let link = `${baseUrl}${sharePath}`
+    let link = buildPublicContestantEntryUrl(baseUrl, contestantId, {
+      contestId: contestId as string,
+      roundId: searchParams.get('roundId') || undefined,
+      contestLevel: searchParams.get('contestLevel') || undefined,
+      country: searchParams.get('country') || undefined,
+      region: searchParams.get('region') || undefined,
+      continent: searchParams.get('continent') || undefined,
+      entryType: searchParams.get('entryType') || undefined,
+      rosterOnly: searchParams.get('rosterOnly') || undefined,
+    }, refCode || undefined)
     try {
       link = await shortenReferralUrl(link)
     } catch {

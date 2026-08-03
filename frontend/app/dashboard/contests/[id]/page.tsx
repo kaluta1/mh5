@@ -1187,6 +1187,16 @@ export default function ContestDetailPage() {
                   contestants={filteredContestants}
                   contestId={contestId}
                   roundId={roundIdFromUrl || undefined}
+                  shareContext={{
+                    contestId,
+                    roundId: roundIdFromUrl || undefined,
+                    contestLevel: contestLevelFromUrl,
+                    country: filterCountry,
+                    region: filterRegion,
+                    continent: filterContinent,
+                    entryType: entryType || undefined,
+                    rosterOnly,
+                  }}
                   currentUserId={user?.id}
                   favorites={favorites}
                   searchQuery={searchQuery}
