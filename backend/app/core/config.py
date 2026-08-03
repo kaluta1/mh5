@@ -159,6 +159,12 @@ class Settings(BaseModel):
     # EDEN API (if needed)
     EDEN_API: str = os.getenv("EDEN_API", "")
 
+    # Referral short links (smarterblogger-referral-shortener integration)
+    SHORT_LINK_ORIGIN: str = _first_nonempty_env("SHORT_LINK_ORIGIN") or ""
+    SHORT_LINK_ALLOWED_HOSTS: str = os.getenv("SHORT_LINK_ALLOWED_HOSTS", "")
+    ATTRIBUTION_COOKIE_NAME: str = os.getenv("ATTRIBUTION_COOKIE_NAME", "mh5_ref")
+    ATTRIBUTION_DAYS: int = int(os.getenv("ATTRIBUTION_DAYS", "30"))
+
     # CRON / SCHEDULER
     CRON_SECRET: str = os.getenv("CRON_SECRET", "")
 

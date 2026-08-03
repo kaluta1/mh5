@@ -217,6 +217,10 @@ const nextConfig = {
         source: '/s/r',
         destination: `${backendUrl}/api/v1/share/r`,
       },
+      {
+        source: '/l/:code',
+        destination: `${backendUrl}/api/v1/l/:code`,
+      },
     ];
   },
 }

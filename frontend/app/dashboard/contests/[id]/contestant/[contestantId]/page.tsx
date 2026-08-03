@@ -27,6 +27,7 @@ import { commentsService, Comment as ServiceComment } from '@/lib/services/comme
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
 import { followService } from '@/services/follow-service'
 import { sharesService } from '@/services/shares-service'
+import { shortenReferralUrl } from '@/lib/referral-share'
 
 interface Media {
   id: string
@@ -543,7 +544,12 @@ function ContestantDetailContent() {
     const refCode = (user as any)?.personal_referral_code || ''
     const ownerUsername = contestant?.author_username?.trim()
     const sharePath = ownerUsername ? `/${encodeURIComponent(ownerUsername)}` : `/c/${contestantId}`
-    const link = `${baseUrl}${sharePath}`
+    let link = `${baseUrl}${sharePath}`
+    try {
+      link = await shortenReferralUrl(link)
+    } catch {
+      /* keep original URL */
+    }
     setShareLink(link)
     setShowShareDialog(true)
 

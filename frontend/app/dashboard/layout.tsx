@@ -8,6 +8,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { AdminSidebar } from "@/components/dashboard/admin-sidebar"
 import { DashboardNavbar } from "@/components/dashboard/dashboard-navbar"
 import { useAuth } from "@/hooks/use-auth"
+import { useReferralShare } from "@/hooks/use-referral-share"
 import { Skeleton } from "@/components/ui/skeleton"
 
 const MobileMenu = dynamic(
@@ -27,6 +28,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return Boolean(localStorage.getItem("access_token"))
   })
   const { isLoading, isAuthenticated } = useAuth()
+  useReferralShare()
   const router = useRouter()
   const pathname = usePathname()
   

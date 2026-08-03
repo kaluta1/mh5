@@ -14,6 +14,7 @@ import { htmlToPlainText } from '@/lib/utils'
 import { contestService } from '@/services/contest-service'
 import { reactionsService } from '@/services/reactions-service'
 import { sharesService } from '@/services/shares-service'
+import { shortenReferralUrl } from '@/lib/referral-share'
 import { useToast } from '@/components/ui/toast'
 import { VoteButton } from './vote-button'
 import { FavoriteButton } from './favorite-button'
@@ -409,7 +410,12 @@ export function ContestantCard({
     const shareUrl = new URL(`${baseUrl}${sharePath}`)
 
     const referralCode = user?.personal_referral_code
-    const shareLinkStr = shareUrl.toString()
+    let shareLinkStr = shareUrl.toString()
+    try {
+      shareLinkStr = await shortenReferralUrl(shareLinkStr)
+    } catch {
+      /* keep original URL */
+    }
     setShareLink(shareLinkStr)
     setShowShareDialog(true)
 

@@ -63,7 +63,7 @@ server {
     # IMPORTANT: /s/f and /s/c must hit Next.js (OG preview HTML), not the API.
     # Do NOT add a separate location /s/ { proxy_pass ...8000; } block.
 
-    # Everything else → Next.js (includes /s/f/24 share links)
+    # Everything else → Next.js (includes /s/f/24 share links and /l/{code} short links)
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;

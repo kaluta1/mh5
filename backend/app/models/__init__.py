@@ -32,6 +32,7 @@ from .newsletter import NewsletterSubscription
 from .login_log import LoginLog
 from .user_encryption_keys import UserEncryptionKeys
 from .round import Round
+from .referral_share import ReferralShareLink, ReferralShareClick, ReferralShareConversion
 
 __all__ = [
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
@@ -64,4 +65,5 @@ __all__ = [
     "LoginLog",
     "UserEncryptionKeys",
     "Round",
+    "ReferralShareLink", "ReferralShareClick", "ReferralShareConversion",
 ]

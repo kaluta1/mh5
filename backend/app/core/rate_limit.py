@@ -14,6 +14,7 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/auth/register": (5, 3600),
     "/api/v1/auth/password-reset-request": (5, 3600),
     "/api/v1/auth/password-reset-confirm": (10, 3600),
+    "/api/v1/share-links": (60, 60),
 }
 
 # Global fallback: 200 requests per minute per IP

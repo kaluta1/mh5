@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
+import { shortenReferralUrl } from '@/lib/referral-share'
 
 // Lazy load heavy feed components
 const PostCard = dynamic(() => import('@/components/feed/post-card').then(mod => ({ default: mod.PostCard })), {
@@ -132,9 +133,14 @@ export default function FeedPage() {
   const handleShareOut = async (post: Post) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const referralCode = user?.personal_referral_code?.trim()
-    const shareUrl = referralCode
+    let shareUrl = referralCode
       ? `${origin}/s/f/${post.id}?ref=${encodeURIComponent(referralCode)}`
       : `${origin}/s/f/${post.id}`
+    try {
+      shareUrl = await shortenReferralUrl(shareUrl)
+    } catch {
+      /* keep original URL */
+    }
     const title = post.author?.full_name || post.author?.username || 'MyHigh5'
     const text = (post.content || '').slice(0, 280)
 

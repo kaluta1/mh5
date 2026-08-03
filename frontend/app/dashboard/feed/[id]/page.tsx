@@ -12,6 +12,7 @@ import { socialService, Post } from '@/services/social-service'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
+import { shortenReferralUrl } from '@/lib/referral-share'
 
 function PostDetailPage() {
   const params = useParams()
@@ -86,9 +87,14 @@ function PostDetailPage() {
   const handleShareOut = async (p: Post) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const referralCode = user?.personal_referral_code?.trim()
-    const shareUrl = referralCode
+    let shareUrl = referralCode
       ? `${origin}/s/f/${p.id}?ref=${encodeURIComponent(referralCode)}`
       : `${origin}/s/f/${p.id}`
+    try {
+      shareUrl = await shortenReferralUrl(shareUrl)
+    } catch {
+      /* keep original URL */
+    }
     const title = p.author?.full_name || p.author?.username || 'MyHigh5'
     const text = (p.content || '').slice(0, 280)
     try {

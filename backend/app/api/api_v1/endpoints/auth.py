@@ -27,6 +27,7 @@ from app.crud import user as crud_user
 from app.api.deps import get_current_active_user
 from app.services.email import email_service
 from app.services.email_verification import verify_user_email_from_token, build_email_verify_redirect
+from app.services import referral_shortener
 from app.crud.crud_login_log import crud_login_log
 from app.services.device_location import extract_login_info, get_location_info
 import logging
@@ -48,6 +49,7 @@ def register_user(
     db: Session = Depends(get_db),
     user_in: UserCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     sponsor_code: Optional[str] = Query(None, description="Code de parrainage du parrain"),
     lang: Optional[str] = Query("en", description="Langue préférée (fr, en, es, de)")
 ) -> Any:
@@ -74,9 +76,13 @@ def register_user(
                 detail="Ce nom d'utilisateur est déjà pris."
             )
     
-    # Créer l'utilisateur avec le parrain si un code est fourni
+    # Créer l'utilisateur avec le parrain si un code est fourni (URL param or share-link cookie)
+    effective_sponsor_code = sponsor_code
+    if not effective_sponsor_code:
+        effective_sponsor_code = referral_shortener.get_sponsor_referral_code_from_request(request, db)
+
     try:
-        user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=sponsor_code)
+        user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=effective_sponsor_code)
     except IntegrityError as e:
         db.rollback()
         error_str = str(e.orig).lower()
@@ -110,6 +116,8 @@ def register_user(
         verify_url=verify_url,
         lang=lang or "en"
     )
+
+    referral_shortener.record_signup_conversion_from_request(request, db, user.id)
     
     return user
 

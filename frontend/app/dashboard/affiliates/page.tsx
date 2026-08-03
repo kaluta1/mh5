@@ -34,6 +34,7 @@ import Link from 'next/link'
 import { InviteDialog } from '@/components/dashboard/invite-dialog'
 import { cacheService } from '@/lib/cache-service'
 import api from '@/lib/api'
+import { shortenReferralUrl } from '@/lib/referral-share'
 
 interface Affiliate {
   id: string
@@ -265,7 +266,15 @@ export default function AffiliatesPage() {
 
   const copyToClipboard = async (text: string, linkType?: string) => {
     try {
-      await navigator.clipboard.writeText(text)
+      let toCopy = text
+      if (text.startsWith('http')) {
+        try {
+          toCopy = await shortenReferralUrl(text)
+        } catch {
+          /* keep original */
+        }
+      }
+      await navigator.clipboard.writeText(toCopy)
       if (linkType) {
         setCopiedLink(linkType)
       }
