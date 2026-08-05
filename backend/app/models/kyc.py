@@ -32,7 +32,8 @@ class DocumentType(str, enum.Enum):
 
 
 class VerificationProvider(str, enum.Enum):
-    SHUFTI_PRO = "shufti_pro"
+    KALUTA = "kaluta"
+    SHUFTI_PRO = "shufti_pro"  # legacy — set KYC_PROVIDER=shufti_pro to use
     JUMIO = "jumio"
     ONFIDO = "onfido"
     MANUAL = "manual"
@@ -46,7 +47,7 @@ class KYCVerification(Base):
     
     # Statut de vérification
     status: Mapped[KYCStatus] = mapped_column(SQLEnum(KYCStatus), default=KYCStatus.PENDING)
-    provider: Mapped[VerificationProvider] = mapped_column(SQLEnum(VerificationProvider), default=VerificationProvider.SHUFTI_PRO)
+    provider: Mapped[VerificationProvider] = mapped_column(SQLEnum(VerificationProvider), default=VerificationProvider.KALUTA)
     
     # Identifiants externes
     external_verification_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
+import { KalutaVerificationEmbed } from '@/components/kyc/kaluta-verification-embed'
 import { logger } from '@/lib/logger'
 import { 
   CheckCircle, 
@@ -55,6 +56,8 @@ interface KYCStatusData {
   available_payments?: number
   kyc_price?: number
   kyc_currency?: string
+  provider?: string
+  kyc_provider?: string
 }
 
 function KYCPageContent() {
@@ -68,6 +71,7 @@ function KYCPageContent() {
   const [kycData, setKycData] = useState<KYCStatusData | null>(null)
   const [isLoadingStatus, setIsLoadingStatus] = useState(true)
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null)
+  const [kycProvider, setKycProvider] = useState<string>('kaluta')
   
   // Payment dialog state
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
@@ -112,13 +116,14 @@ function KYCPageContent() {
       />
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
         {t('kyc.residential_address_hint') ||
-          'Enter the address that must match your proof-of-address document. It is locked once Shufti verification starts; changing it requires a new paid verification.'}
+          'Enter the address that must match your proof-of-address document. It is locked once verification starts; changing it requires a new paid verification.'}
       </p>
     </div>
   )
 
-  // Vérifier si on revient de Shufti Pro
-  const statusParam = searchParams.get('status')
+  // Return from provider redirect (Kaluta query params or legacy ?status=)
+  const statusParam = searchParams.get('status') || searchParams.get('kyc_status')
+  const kycSessionParam = searchParams.get('kyc_session_id')
 
   // Charger le statut KYC au montage
   useEffect(() => {
@@ -134,6 +139,10 @@ function KYCPageContent() {
 
         const status = await kycService.getKYCStatus(token)
         setKycData(status)
+        const st = status as KYCStatusData
+        if (st.kyc_provider || st.provider) {
+          setKycProvider(String(st.kyc_provider || st.provider))
+        }
         
         if (status.status === 'approved' || status.needs_proof_of_address) {
           refreshUser?.()
@@ -156,7 +165,7 @@ function KYCPageContent() {
     } else {
       setIsLoadingStatus(false)
     }
-  }, [isAuthenticated, statusParam, refreshUser])
+  }, [isAuthenticated, statusParam, kycSessionParam, refreshUser])
 
   useEffect(() => {
     const saved = kycData?.declared_residential_address
@@ -220,6 +229,7 @@ function KYCPageContent() {
       }
 
       if (result.verification_url) {
+        setKycProvider(result.provider || kycData?.kyc_provider || 'kaluta')
         setVerificationUrl(result.verification_url)
       } else {
         setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
@@ -245,10 +255,15 @@ function KYCPageContent() {
     await handleStartVerification(false)
   }
 
-  /** Nouvelle URL Shufti (évite une iframe INVALID liée à une session ou config obsolète). */
-  const handleRequestNewShuftiLink = async () => {
+  /** Nouvelle URL de vérification (session expirée ou lien invalide). */
+  const handleRequestNewVerificationLink = async () => {
     setVerificationUrl(null)
     await handleStartVerification(true)
+  }
+
+  const handleKalutaVerificationComplete = async () => {
+    setVerificationUrl(null)
+    await handleRefreshStatus()
   }
 
   const handleSubmitProofOfAddress = async () => {
@@ -352,6 +367,7 @@ function KYCPageContent() {
         return
       }
       if (result.verification_url) {
+        setKycProvider(result.provider || 'kaluta')
         setVerificationUrl(result.verification_url)
       } else {
         setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
@@ -376,8 +392,9 @@ function KYCPageContent() {
     return null
   }
 
-  // Affichage de l'iframe Shufti Pro (PRIORITAIRE)
+  // Affichage vérification en cours (Kaluta widget ou iframe Shufti legacy)
   if (verificationUrl) {
+    const useKalutaEmbed = kycProvider !== 'shufti_pro'
     return (
       <div className="min-h-[calc(100vh-6rem)] p-4">
         {/* Header compact */}
@@ -422,16 +439,24 @@ function KYCPageContent() {
           </div>
         </div>
 
-        {/* Iframe Shufti Pro */}
+        {/* Kaluta embed or legacy Shufti iframe */}
         <div className="max-w-4xl mx-auto">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl shadow-gray-200/50 dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <iframe
-              src={verificationUrl}
-              className="w-full border-0"
-              style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}
-              allow="camera; microphone"
-              title="Shufti Pro Verification"
-            />
+            {useKalutaEmbed ? (
+              <KalutaVerificationEmbed
+                verificationUrl={verificationUrl}
+                onComplete={() => void handleKalutaVerificationComplete()}
+                onClose={() => void handleKalutaVerificationComplete()}
+              />
+            ) : (
+              <iframe
+                src={verificationUrl}
+                className="w-full border-0"
+                style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}
+                allow="camera; microphone"
+                title="Identity Verification"
+              />
+            )}
           </div>
           
           {/* Footer info */}
@@ -445,7 +470,7 @@ function KYCPageContent() {
               variant="outline"
               size="sm"
               disabled={isInitiating}
-              onClick={() => void handleRequestNewShuftiLink()}
+              onClick={() => void handleRequestNewVerificationLink()}
               className="text-xs"
             >
               {isInitiating ? (

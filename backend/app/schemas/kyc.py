@@ -9,7 +9,7 @@ from app.models.kyc import KYCStatus, DocumentType, VerificationProvider
 # Schémas de base
 class KYCVerificationBase(BaseModel):
     status: Optional[KYCStatus] = KYCStatus.PENDING
-    provider: Optional[VerificationProvider] = VerificationProvider.SHUFTI_PRO
+    provider: Optional[VerificationProvider] = VerificationProvider.KALUTA
     reference_id: Optional[str] = None
     verified_first_name: Optional[str] = None
     verified_last_name: Optional[str] = None

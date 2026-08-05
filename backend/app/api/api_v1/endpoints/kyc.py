@@ -13,7 +13,23 @@ from app.crud import crud_kyc
 from app.crud import crud_deposit
 from app.models.user import User
 from app.models.geography import Country
-from app.models.kyc import KYCStatus, DocumentType
+from app.services.shufti_pro import (
+    shufti_pro_service,
+    kyc_flags_from_shufti_payload,
+    normalize_country_iso2_for_shufti,
+    resolve_shufti_callback_and_redirect_urls,
+)
+from app.services.kaluta_kyc import active_kyc_provider, is_kaluta_active, kaluta_kyc_service
+from app.services.kyc_provider_dispatch import (
+    check_kyc_session_validity,
+    generate_kyc_reference,
+    initiate_kyc_session,
+    process_kaluta_webhook_event,
+    provider_for_verification,
+    sync_verification_from_provider,
+    verification_provider_enum,
+)
+from app.models.kyc import KYCStatus, DocumentType, VerificationProvider
 from app.schemas.kyc import (
     KYCVerification, KYCVerificationCreate, KYCVerificationUpdate,
     KYCDocument, KYCDocumentCreate, KYCDocumentUpdate,
@@ -22,12 +38,6 @@ from app.schemas.kyc import (
     KYCAuditLog, KYCSubmissionRequest, KYCStatusResponse,
     KYCStatistics, KYCVerificationWithDocuments, KYCVerificationComplete,
     ShuftiProWebhookData, KYCWebhookResponse, KYCInitiateRequest,
-)
-from app.services.shufti_pro import (
-    shufti_pro_service,
-    kyc_flags_from_shufti_payload,
-    normalize_country_iso2_for_shufti,
-    resolve_shufti_callback_and_redirect_urls,
 )
 from app.services.email import email_service
 from app.services.payment_accounting import payment_accounting
@@ -155,12 +165,12 @@ async def initiate_shufti_verification(
     payload: KYCInitiateRequest = Body(default_factory=KYCInitiateRequest),
 ):
     """
-    Initier ou reprendre une vérification KYC avec Shufti Pro.
+    Initier ou reprendre une vérification KYC (Kaluta par défaut, Shufti Pro legacy).
     
     Règles:
     - UN SEUL enregistrement par utilisateur (jamais de doublons)
     - APPROVED: Bloquer (déjà vérifié)
-    - IN_PROGRESS/PENDING: Réutiliser si la référence Shufti Pro est encore valide
+    - IN_PROGRESS/PENDING: Réutiliser si la session provider est encore valide
     - REJECTED/REQUIRES_REVIEW/EXPIRED: Permettre de reprendre avec nouvelle référence
     """
     # Récupérer l'enregistrement KYC existant (il ne peut y en avoir qu'un par user)
@@ -263,52 +273,42 @@ async def initiate_shufti_verification(
         reference = verification.reference_id
         
         if reference:
-            # Vérifier auprès de Shufti Pro si la référence est toujours valide
-            validity_check = await shufti_pro_service.check_reference_validity(reference)
+            validity_check = await check_kyc_session_validity(verification)
             
-            # Si la vérification est terminée côté Shufti Pro, mettre à jour notre statut
             if validity_check.get("is_completed"):
-                is_ok = bool(validity_check.get("is_accepted"))
-                raw = validity_check.get("data") or {}
-                flags = kyc_flags_from_shufti_payload(raw if isinstance(raw, dict) else {}, overall_accepted=is_ok)
-
-                if validity_check.get("is_accepted"):
-                    crud_kyc.kyc_verification.apply_shufti_identity_accepted(
-                        db,
-                        verification=verification,
-                        flags=flags,
-                        external_verification_id=reference,
-                    )
-                    db.refresh(verification)
+                synced = await sync_verification_from_provider(
+                    db, crud_kyc=crud_kyc, verification=verification
+                )
+                if synced and synced.get("needs_proof_of_address"):
                     return {
                         "verification_url": None,
                         "reference": reference,
                         "verification_id": verification.id,
                         "reused": True,
+                        "provider": provider_for_verification(verification),
                         "status": "pending_proof_of_address",
                         "kyc_step": 2,
                         "needs_proof_of_address": True,
                         "message": "Identity verification accepted. Upload proof of address to finish KYC.",
                     }
-
-                update_data = KYCVerificationUpdate(
-                    status=KYCStatus.REJECTED,
-                    processed_at=datetime.utcnow(),
-                    identity_verified=flags["identity_verified"],
-                    document_verified=flags["document_verified"],
-                    face_verified=flags["face_verified"],
-                    address_verified=False,
-                )
-                crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
-                u = db.query(User).filter(User.id == verification.user_id).first()
-                if u:
-                    u.identity_verified = False
-                    u.address_verified = False
-                db.commit()
-                # Si rejected, on continue pour créer une nouvelle vérification
+                if synced and synced.get("fully_approved"):
+                    return {
+                        "verification_url": None,
+                        "reference": reference,
+                        "verification_id": verification.id,
+                        "reused": True,
+                        "provider": provider_for_verification(verification),
+                        "status": "approved",
+                        "kyc_step": 0,
+                        "needs_proof_of_address": False,
+                        "message": "KYC verification complete.",
+                    }
+                if synced and synced.get("status") == "rejected":
+                    pass  # fall through to new session
+                else:
+                    db.refresh(verification)
             
             elif validity_check.get("is_valid"):
-                # La référence est encore valide, réutiliser l'URL existante
                 verification_url = validity_check.get("verification_url") or verification.verification_url
                 
                 if verification_url:
@@ -317,6 +317,7 @@ async def initiate_shufti_verification(
                         "reference": reference,
                         "verification_id": verification.id,
                         "reused": True,
+                        "provider": provider_for_verification(verification),
                         "status": "in_progress",
                         "attempts_count": verification.attempts_count,
                         "max_attempts": verification.max_attempts,
@@ -325,8 +326,8 @@ async def initiate_shufti_verification(
     
     # Cas 3: Pas de vérification, ou statut REJECTED/REQUIRES_REVIEW/EXPIRED → Créer/Mettre à jour
     
-    # Générer une nouvelle référence aléatoire
-    reference = shufti_pro_service.generate_reference()
+    reference = generate_kyc_reference(current_user.id)
+    active_provider = verification_provider_enum()
     
     if verification:
         # Mettre à jour l'enregistrement existant (pas de doublon)
@@ -343,7 +344,8 @@ async def initiate_shufti_verification(
                 crud_deposit.deposit.mark_as_used(db, deposit=valid_payment)
         
         verification.reference_id = reference
-        verification.verification_url = None  # Sera mis à jour après l'appel Shufti
+        verification.provider = active_provider
+        verification.verification_url = None
         verification.status = KYCStatus.PENDING
         verification.submitted_at = datetime.utcnow()
         verification.processed_at = None
@@ -355,7 +357,8 @@ async def initiate_shufti_verification(
         verification_create = KYCVerificationCreate(
             user_id=current_user.id,
             status=KYCStatus.PENDING,
-            reference_id=reference
+            reference_id=reference,
+            provider=active_provider,
         )
         verification = crud_kyc.kyc_verification.create(db=db, obj_in=verification_create)
         # Incrémenter pour la première tentative
@@ -373,21 +376,28 @@ async def initiate_shufti_verification(
             obj_in=KYCVerificationUpdate(verified_address=addr),
         )
 
-    # Appeler Shufti Pro (document + face uniquement)
+    # Appeler le provider KYC actif (Kaluta ou Shufti legacy)
     lang = (language or "en").strip().lower()
     if len(lang) > 2:
         lang = lang[:2]
 
-    result = await shufti_pro_service.initiate_verification(
+    result = await initiate_kyc_session(
+        user=current_user,
         reference=reference,
-        email=current_user.email,
-        country=_shufti_country_iso2_for_user(db, current_user),
         language=lang,
+        country_iso=_shufti_country_iso2_for_user(db, current_user),
+        residential_address=addr if len(addr) >= 2 else None,
     )
     
     if not result.get("success"):
         err = result.get("error", "Erreur lors de l'initialisation de la vérification")
         err_l = (err or "").lower()
+        if is_kaluta_active():
+            if "not configured" in err_l or "kaluta_api_key" in err_l:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=err,
+                )
         # Shufti misconfiguration / bad credentials — clearer than generic 500
         if (
             "shufti pro is not configured" in err_l
@@ -415,19 +425,20 @@ async def initiate_shufti_verification(
         )
     
     verification_url = result.get("verification_url")
+    external_id = result.get("session_id") or result.get("reference") or reference
 
     # Mettre à jour avec l'URL et le statut IN_PROGRESS
     if verification.residential_address_locked_at is None:
         update_data = KYCVerificationUpdate(
             status=KYCStatus.IN_PROGRESS,
-            external_verification_id=result.get("reference"),
+            external_verification_id=external_id,
             verification_url=verification_url,
             residential_address_locked_at=datetime.utcnow(),
         )
     else:
         update_data = KYCVerificationUpdate(
             status=KYCStatus.IN_PROGRESS,
-            external_verification_id=result.get("reference"),
+            external_verification_id=external_id,
             verification_url=verification_url,
         )
     crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
@@ -437,6 +448,7 @@ async def initiate_shufti_verification(
         "reference": reference,
         "verification_id": verification.id,
         "reused": False,
+        "provider": active_kyc_provider(),
         "status": "new",
         "attempts_count": verification.attempts_count,
         "max_attempts": verification.max_attempts,
@@ -479,39 +491,10 @@ async def get_kyc_status_detailed(
             "message": "Aucune vérification KYC trouvée"
         }
     
-    # Si en cours, vérifier le statut auprès de Shufti Pro
+    # Si en cours, synchroniser avec le provider KYC actif
     if verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS] and verification.reference_id:
-        validity_check = await shufti_pro_service.check_reference_validity(verification.reference_id)
-        
-        # Mettre à jour le statut si terminé côté Shufti
-        if validity_check.get("is_completed"):
-            is_ok = bool(validity_check.get("is_accepted"))
-            raw = validity_check.get("data") or {}
-            flags = kyc_flags_from_shufti_payload(raw if isinstance(raw, dict) else {}, overall_accepted=is_ok)
-            if validity_check.get("is_accepted"):
-                crud_kyc.kyc_verification.apply_shufti_identity_accepted(
-                    db,
-                    verification=verification,
-                    flags=flags,
-                    external_verification_id=verification.reference_id,
-                )
-                db.refresh(verification)
-            else:
-                update_data = KYCVerificationUpdate(
-                    status=KYCStatus.REJECTED,
-                    processed_at=datetime.utcnow(),
-                    identity_verified=flags["identity_verified"],
-                    document_verified=flags["document_verified"],
-                    face_verified=flags["face_verified"],
-                    address_verified=False,
-                )
-                crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
-                u = db.query(User).filter(User.id == verification.user_id).first()
-                if u:
-                    u.identity_verified = False
-                    u.address_verified = False
-                db.commit()
-                db.refresh(verification)
+        await sync_verification_from_provider(db, crud_kyc=crud_kyc, verification=verification)
+        db.refresh(verification)
 
     # Déterminer si l'utilisateur peut démarrer/reprendre une vérification
     max_attempts_reached = verification.attempts_count >= verification.max_attempts
@@ -565,7 +548,9 @@ async def get_kyc_status_detailed(
         "has_valid_payment": has_valid_payment,
         "needs_payment": needs_payment,
         "kyc_price": KYC_PRICE_USD,
-        "kyc_currency": "USD"
+        "kyc_currency": "USD",
+        "provider": provider_for_verification(verification),
+        "kyc_provider": active_kyc_provider(),
     }
 
 
@@ -1184,3 +1169,51 @@ def shufti_pro_webhook(
         message="Webhook traité avec succès",
         verification_id=verification.id
     )
+
+
+@router.post("/webhook/kaluta")
+async def kaluta_kyc_webhook(
+    request: Request,
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Kaluta KYC webhook (session.approved, session.rejected, session.expired, …).
+    Verifies X-Kaluta-Signature when KALUTA_WEBHOOK_SECRET is set.
+    """
+    raw = await request.body()
+    signature = request.headers.get("x-kaluta-signature") or request.headers.get("X-Kaluta-Signature") or ""
+
+    if not kaluta_kyc_service.verify_webhook_signature(raw, signature):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+
+    try:
+        payload = json.loads(raw.decode("utf-8") or "{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+
+    ok = process_kaluta_webhook_event(db, crud_kyc=crud_kyc, payload=payload)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification not found")
+
+    return {"ok": True}
+
+
+@router.get("/deployment/kaluta-urls")
+def get_kaluta_deployment_urls(
+    *,
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """Debug: Kaluta webhook/redirect URLs this server uses (no secrets)."""
+    webhook, redirect = kaluta_kyc_service.webhook_url, kaluta_kyc_service.redirect_url
+    return {
+        "kyc_provider": active_kyc_provider(),
+        "webhook_url": webhook or None,
+        "redirect_url": redirect or None,
+        "api_key_configured": kaluta_kyc_service.configured(),
+        "webhook_secret_configured": bool(kaluta_kyc_service.webhook_secret),
+        "checklist": [
+            "Set KALUTA_API_KEY and KALUTA_WEBHOOK_SECRET on the VPS.",
+            "Register webhook URL in Kaluta Dashboard → Webhooks.",
+            "Ensure POST /api/v1/kyc/webhook/kaluta is reachable from the public internet.",
+        ],
+    }

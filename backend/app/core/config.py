@@ -130,7 +130,16 @@ class Settings(BaseModel):
         )
     )
     
-    # SHUFTI PRO KYC (accept UPPER_SNAKE and lowercase aliases from .env)
+    # KYC provider: kaluta (default) | shufti_pro (legacy)
+    KYC_PROVIDER: str = os.getenv("KYC_PROVIDER", "kaluta")
+
+    # Kaluta KYC (default)
+    KALUTA_API_KEY: str = _first_nonempty_env("KALUTA_API_KEY", "kaluta_api_key")
+    KALUTA_WEBHOOK_SECRET: str = _first_nonempty_env("KALUTA_WEBHOOK_SECRET", "kaluta_webhook_secret")
+    KALUTA_WEBHOOK_URL: str = _first_nonempty_env("KALUTA_WEBHOOK_URL", "kaluta_webhook_url")
+    KALUTA_REDIRECT_URL: str = _first_nonempty_env("KALUTA_REDIRECT_URL", "kaluta_redirect_url")
+
+    # SHUFTI PRO KYC — legacy (KYC_PROVIDER=shufti_pro)
     SHUFTI_CLIENT_ID: str = _first_nonempty_env("SHUFTI_CLIENT_ID", "shufti_client_id")
     SHUFTI_SECRET_KEY: str = _first_nonempty_env("SHUFTI_SECRET_KEY", "shufti_secret_key")
     SHUFTI_CALLBACK_URL: str = _first_nonempty_env("SHUFTI_CALLBACK_URL", "shufti_callback_url")

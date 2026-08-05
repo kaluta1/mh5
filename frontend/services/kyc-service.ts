@@ -41,6 +41,7 @@ export interface KYCInitiateResponse {
   kyc_step?: number
   needs_proof_of_address?: boolean
   message?: string
+  provider?: 'kaluta' | 'shufti_pro' | string
 }
 
 export interface ProofOfAddressPayload {
@@ -76,8 +77,8 @@ class KYCService {
   }
 
   /**
-   * Initier une vérification KYC avec Shufti Pro
-   * Retourne l'URL de vérification où rediriger l'utilisateur
+   * Initier une vérification KYC (Kaluta par défaut, Shufti Pro legacy)
+   * Retourne l'URL de vérification pour le widget embed ou iframe
    */
   async initiateVerification(
     token: string,
