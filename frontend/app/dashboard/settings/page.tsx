@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
@@ -12,6 +12,7 @@ import { SettingsProfileTab } from '@/components/dashboard/settings-profile-tab'
 import { SettingsLocationTab } from '@/components/dashboard/settings-location-tab'
 import { SettingsDemographicsTab } from '@/components/dashboard/settings-demographics-tab'
 import { SettingsPasswordTab } from '@/components/dashboard/settings-password-tab'
+import { SettingsWalletTab } from '@/components/dashboard/settings-wallet-tab'
 import { 
   User, 
   MapPin, 
@@ -26,10 +27,11 @@ import {
   Camera,
   Fingerprint,
   ChevronRight,
-  Lock
+  Lock,
+  Wallet
 } from 'lucide-react'
 
-type Tab = 'profile' | 'location' | 'demographics' | 'password'
+type Tab = 'profile' | 'location' | 'demographics' | 'password' | 'wallet'
 
 // Calcul du pourcentage de complétion du profil
 function calculateProfileCompletion(user: any, t: any): { percentage: number; missing: string[] } {
@@ -100,6 +102,7 @@ function formatGender(gender: string | null, t: any): string {
 
 export default function SettingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth()
   const { t } = useLanguage()
   const { addToast } = useToast()
@@ -117,6 +120,13 @@ export default function SettingsPage() {
       setPageLoading(false)
     }
   }, [isAuthenticated, isLoading, router])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'wallet' || tab === 'profile' || tab === 'location' || tab === 'demographics' || tab === 'password') {
+      setCurrentTab(tab)
+    }
+  }, [searchParams])
 
   if (pageLoading) {
     return <SettingsSkeleton />
@@ -146,6 +156,12 @@ export default function SettingsPage() {
       label: t('settings.password.title') || 'Mot de passe',
       icon: <Lock className="w-5 h-5" />,
       description: t('settings.password_short') || 'Sécurité du compte'
+    },
+    {
+      id: 'wallet',
+      label: t('settings.wallet.title') || 'Payout wallet',
+      icon: <Wallet className="w-5 h-5" />,
+      description: t('settings.wallet.tab_short') || 'USDT BSC for commissions'
     },
   ]
 
@@ -345,6 +361,7 @@ export default function SettingsPage() {
                   {currentTab === 'location' && (t('settings.location_description') || 'Définissez votre localisation géographique')}
                   {currentTab === 'demographics' && (t('settings.demographics_description') || 'Renseignez vos informations personnelles')}
                   {currentTab === 'password' && (t('settings.password.description') || 'Modifiez votre mot de passe pour sécuriser votre compte')}
+                  {currentTab === 'wallet' && (t('settings.wallet.description') || 'Receive affiliate commissions automatically via USDT BSC')}
                 </p>
               </div>
 
@@ -353,6 +370,7 @@ export default function SettingsPage() {
               {currentTab === 'location' && <SettingsLocationTab user={user} onUpdate={refreshUser} />}
               {currentTab === 'demographics' && <SettingsDemographicsTab user={user} onUpdate={refreshUser} />}
               {currentTab === 'password' && <SettingsPasswordTab user={user} />}
+              {currentTab === 'wallet' && <SettingsWalletTab />}
             </div>
           </div>
         </div>

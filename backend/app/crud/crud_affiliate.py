@@ -403,10 +403,16 @@ class CRUDAffiliateCommission:
             status_text.in_(earned_statuses)
         ).scalar() or 0.0
         
-        # Montant en attente
+        # Montant en attente (no wallet yet)
         pending_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
             AffiliateCommission.user_id == user_id,
             status_text == "pending"
+        ).scalar() or 0.0
+
+        # Approved — accrued, payout pending or manual withdraw
+        approved_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            AffiliateCommission.user_id == user_id,
+            status_text == "approved"
         ).scalar() or 0.0
         
         # Montant payé
@@ -439,6 +445,7 @@ class CRUDAffiliateCommission:
         return {
             "total_earned": float(total_earned),
             "pending_amount": float(pending_amount),
+            "approved_amount": float(approved_amount),
             "paid_amount": float(paid_amount),
             "this_month": float(this_month),
             "last_month": float(last_month_amount),
@@ -524,7 +531,8 @@ class CRUDAffiliateCommission:
                 "source_user_avatar": source_user.avatar_url if source_user else None,
                 "description": self._get_commission_description(c, product_type),
                 "created_at": c.transaction_date.isoformat() if c.transaction_date else None,
-                "paid_at": c.paid_date.isoformat() if c.paid_date else None
+                "paid_at": c.paid_date.isoformat() if c.paid_date else None,
+                "payout_reference": c.payout_reference,
             })
         
         return result

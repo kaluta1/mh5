@@ -33,7 +33,7 @@ interface Commission {
   baseAmount?: number
   type: 'direct' | 'indirect'
   level: number
-  status: 'pending' | 'paid' | 'cancelled'
+  status: 'pending' | 'approved' | 'paid' | 'cancelled'
   commissionType: string
   productTypeCode?: string
   productTypeName?: string
@@ -49,6 +49,7 @@ interface Commission {
 interface CommissionStats {
   totalEarned: number
   pendingAmount: number
+  approvedAmount: number
   paidAmount: number
   thisMonth: number
   lastMonth: number
@@ -68,12 +69,13 @@ export default function CommissionsPage() {
   const [stats, setStats] = useState<CommissionStats>({
     totalEarned: 0,
     pendingAmount: 0,
+    approvedAmount: 0,
     paidAmount: 0,
     thisMonth: 0,
     lastMonth: 0,
     growthRate: 0
   })
-  const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'cancelled'>('all')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid' | 'cancelled'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type'>('date')
   const [pageLoading, setPageLoading] = useState(true)
@@ -134,6 +136,7 @@ export default function CommissionsPage() {
           setStats({
             totalEarned: statsData.total_earned || 0,
             pendingAmount: statsData.pending_amount || 0,
+            approvedAmount: statsData.approved_amount || 0,
             paidAmount: statsData.paid_amount || 0,
             thisMonth: statsData.this_month || 0,
             lastMonth: statsData.last_month || 0,
@@ -343,6 +346,13 @@ export default function CommissionsPage() {
             {t('dashboard.commissions.pending') || 'En attente'}
           </span>
         )
+      case 'approved':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+            <CheckCircle className="w-3 h-3" />
+            {t('dashboard.commissions.approved') || 'Approved'}
+          </span>
+        )
       case 'cancelled':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
@@ -545,7 +555,7 @@ export default function CommissionsPage() {
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-gray-400" />
                 <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                  {(['all', 'pending', 'paid', 'cancelled'] as const).map((status) => (
+                  {(['all', 'pending', 'approved', 'paid', 'cancelled'] as const).map((status) => (
                     <button
                       key={status}
                       onClick={() => setFilter(status)}
@@ -557,6 +567,7 @@ export default function CommissionsPage() {
                     >
                       {status === 'all' && (t('dashboard.commissions.all') || 'Tout')}
                       {status === 'pending' && (t('dashboard.commissions.pending') || 'En attente')}
+                      {status === 'approved' && (t('dashboard.commissions.approved') || 'Approved')}
                       {status === 'paid' && (t('dashboard.commissions.paid') || 'Payé')}
                       {status === 'cancelled' && (t('dashboard.commissions.cancelled') || 'Annulé')}
                     </button>

@@ -12,6 +12,7 @@ from app.models.post import Post
 from app.models.user import User as UserModel
 from app.schemas.follow import FollowUserResponse
 from app.schemas.user import User, UserUpdate, PublicUserProfile
+from app.schemas.wallet import UserWalletUpdate, UserWalletResponse
 
 router = APIRouter()
 
@@ -36,6 +37,51 @@ def update_user_me(
     """
     user = crud_user.update(db, db_obj=current_user, obj_in=user_in)
     return user
+
+
+@router.patch("/me/wallet", response_model=UserWalletResponse)
+def update_user_wallet(
+    *,
+    db: Session = Depends(get_db),
+    wallet_in: UserWalletUpdate,
+    current_user: UserModel = Depends(get_current_active_user),
+) -> Any:
+    """
+    Register or update the member's USDT BSC payout wallet.
+    Pays any pending APPROVED/PENDING commissions after save.
+    """
+    from app.services.commission_payout_service import pay_pending_commissions_for_user_sync
+
+    current_user.usdt_wallet_address = wallet_in.usdt_wallet_address
+    current_user.payout_currency = wallet_in.payout_currency or "usdtbsc"
+    db.add(current_user)
+    db.flush()
+
+    paid_count = pay_pending_commissions_for_user_sync(db, current_user.id)
+    db.commit()
+    db.refresh(current_user)
+
+    return UserWalletResponse(
+        usdt_wallet_address=current_user.usdt_wallet_address,
+        payout_currency=current_user.payout_currency,
+        wallet_configured=bool(current_user.usdt_wallet_address),
+        pending_commissions_paid=paid_count,
+        supported_currencies=["usdtbsc", "usdterc20", "usdttrc20"],
+    )
+
+
+@router.get("/me/wallet", response_model=UserWalletResponse)
+def get_user_wallet(
+    current_user: UserModel = Depends(get_current_active_user),
+) -> Any:
+    """Return payout wallet configuration (masked address in frontend)."""
+    return UserWalletResponse(
+        usdt_wallet_address=current_user.usdt_wallet_address,
+        payout_currency=current_user.payout_currency or "usdtbsc",
+        wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
+        pending_commissions_paid=0,
+        supported_currencies=["usdtbsc", "usdterc20", "usdttrc20"],
+    )
 
 
 def _build_follow_users(

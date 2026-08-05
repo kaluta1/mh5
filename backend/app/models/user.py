@@ -101,6 +101,10 @@ class User(Base):
     # Accord d'affiliation
     affiliate_agreement_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     affiliate_agreement_accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Crypto payout wallet (USDT BSC / BEP20) — required to receive affiliate commissions
+    usdt_wallet_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    payout_currency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="usdtbsc")
     
     # Relations géographiques (dépréciées - les données sont maintenant stockées directement)
     # city_rel: Mapped[Optional["City"]] = relationship("City")

@@ -105,27 +105,27 @@
       "kyc_payments": {
         "title": "KYC Payments",
         "description": "Earn commissions when members in your network complete KYC verification.",
-        "commission": "20% on Level 1, 2% on Levels 2-10"
+        "commission": "10% on Level 1, 1% on Levels 2-10"
       },
       "founding_membership": {
         "title": "Founding Membership",
-        "description": "Earn commissions when members in your network join as Founding Members.",
-        "commission": "$20 on Level 1, $2 on Levels 2-10"
+        "description": "Earn commissions when members in your network join as Founding Members ($100).",
+        "commission": "10% on Level 1 ($10), 1% on Levels 2-10 ($1 each)"
       },
       "annual_membership": {
         "title": "Annual Membership Fee",
-        "description": "Earn commissions when Founding Members pay annual membership fees.",
-        "commission": "$10 on Level 1, $1 on Levels 2-10"
+        "description": "Earn commissions when Founding Members pay annual membership fees ($50).",
+        "commission": "10% on Level 1 ($5), 1% on Levels 2-10 ($0.50 each)"
       },
       "club_memberships": {
         "title": "Club Memberships",
-        "description": "Earn commissions on paid club memberships from your network.",
-        "commission": "20% on Level 1, 2% on Levels 2-10"
+        "description": "Earn commissions on paid club memberships from your network (from the 20% platform markup).",
+        "commission": "10% on Level 1, 1% on Levels 2-10"
       },
       "shop_purchases": {
         "title": "Shop Purchases",
         "description": "Earn commissions from digital content purchases in your network.",
-        "commission": "20% on Level 1, 2% on Levels 2-10"
+        "commission": "10% on Level 1, 1% on Levels 2-10"
       },
       "ad_revenue": {
         "title": "Ad Revenue Sharing",
@@ -1006,7 +1006,24 @@
       "commission": "Commission",
       "purchase": "Purchase",
       "pay": "Pay",
-      "invoice": "Invoice"
+      "invoice": "Invoice",
+      "no_payout_wallet_title": "Add your payout wallet",
+      "no_payout_wallet_body": "Commissions are paid automatically to your crypto wallet. Add an address in Settings to receive payouts.",
+      "setup_wallet": "Set up wallet",
+      "auto_pay_note": "Commissions are sent automatically to your wallet after each referral payment.",
+      "withdraw": "Withdraw",
+      "withdraw_title": "Withdraw commissions",
+      "withdraw_desc": "Batch withdraw approved commissions to your crypto wallet. Minimum $100; 1% fee (min $20, max $1,000).",
+      "setup_wallet_first": "Add a payout wallet in Settings before withdrawing.",
+      "approved_balance": "Approved balance",
+      "estimated_fee": "Estimated fee",
+      "you_receive": "You receive (net)",
+      "withdraw_amount": "Amount (USD)",
+      "min_withdrawal_hint": "Minimum $100. Auto-payout also sends each commission instantly when configured.",
+      "min_withdrawal": "Minimum withdrawal is $100.",
+      "insufficient_balance": "Insufficient approved balance.",
+      "confirm_withdraw": "Confirm withdrawal",
+      "withdraw_success": "Withdrawal submitted successfully."
     },
     "myhigh5": {
       "title": "MyHigh5",
@@ -1200,6 +1217,7 @@
       },
       "paid": "Paid",
       "pending": "Pending",
+      "approved": "Approved",
       "cancelled": "Cancelled",
       "title": "My commissions",
       "subtitle": "Track your earnings and affiliate revenue",
@@ -2437,7 +2455,21 @@
     "continent": "Continent",
     "region": "Region",
     "current_location": "Current location",
-    "remove": "Delete"
+    "remove": "Delete",
+    "wallet": {
+      "title": "Payout wallet",
+      "tab_short": "USDT for commissions",
+      "description": "Receive affiliate commissions automatically via crypto",
+      "subtitle": "Affiliate commissions are sent automatically to your crypto wallet after each validated payment.",
+      "configured": "Wallet configured",
+      "network_warning": "Choose the correct USDT network. Funds sent to the wrong network cannot be recovered.",
+      "currency_label": "Payout network",
+      "address_label": "Wallet address",
+      "invalid_address": "Invalid wallet address for the selected network.",
+      "save": "Save wallet",
+      "saved": "Payout wallet saved.",
+      "saved_with_payout": "Wallet saved. Pending commissions are being paid out."
+    }
   },
   "level": "Level",
   "product": "Product",

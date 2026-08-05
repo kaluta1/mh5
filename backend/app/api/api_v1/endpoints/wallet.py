@@ -1,19 +1,27 @@
 """
 Wallet API Endpoints
 """
-from fastapi import APIRouter, Depends
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case
 from typing import List, Optional
 from datetime import datetime, timedelta
-from decimal import Decimal
 
 from app.api import deps
 from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionStatus
 from app.models.payment import Deposit, DepositStatus, ProductType
+from app.schemas.wallet import (
+    WithdrawPreviewResponse,
+    WithdrawRequest,
+    WithdrawResponse,
+)
 
 router = APIRouter()
+
+MIN_WITHDRAWAL = Decimal("100")
 
 
 @router.get("/balance")
@@ -23,32 +31,34 @@ def get_wallet_balance(
 ):
     """
     Récupère le solde du portefeuille de l'utilisateur.
-    Le solde est basé sur les commissions payées et en attente.
+    Available = PAID commissions; pending = PENDING + APPROVED (accrued, not yet sent).
     """
-    # Solde disponible (commissions payées ou approuvées)
+    # Actually paid out via NOWPayments
     available_balance = db.query(
         func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
     ).filter(
         and_(
             AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.status.in_([CommissionStatus.PAID, CommissionStatus.APPROVED])
+            AffiliateCommission.status == CommissionStatus.PAID,
         )
     ).scalar() or Decimal(0)
-    
-    # Solde en attente (commissions pending)
+
+    # Accrued but not yet paid (waiting for wallet or payout retry)
     pending_balance = db.query(
         func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
     ).filter(
         and_(
             AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.status == CommissionStatus.PENDING
+            AffiliateCommission.status.in_([CommissionStatus.PENDING, CommissionStatus.APPROVED]),
         )
     ).scalar() or Decimal(0)
-    
-    # Si pas encore de système de paiement, inclure aussi les pending dans le solde disponible
-    # pour montrer les gains accumulés
-    if available_balance == 0 and pending_balance > 0:
-        available_balance = pending_balance
+
+    # When payout API is not configured, treat APPROVED as available for display
+    from app.services.nowpayments_service import payouts_configured
+
+    if not payouts_configured() and pending_balance > 0:
+        available_balance = available_balance + pending_balance
+        pending_balance = Decimal(0)
     
     # Total des gains (toutes les commissions non annulées)
     total_earnings = db.query(
@@ -183,6 +193,7 @@ def get_wallet_transactions(
                     "level": 1,
                     "source_user": referral_username,
                     "aggregate": False,
+                    "payout_reference": c.payout_reference,
                 }
             )
 
@@ -314,3 +325,57 @@ def get_wallet_stats(
         "total_deposits_count": total_deposits,
         "total_deposit_amount": float(total_deposit_amount)
     }
+
+
+@router.get("/withdraw/preview", response_model=WithdrawPreviewResponse)
+def preview_withdrawal(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """Preview manual withdrawal fees against APPROVED commission balance."""
+    from app.accounting.distribution_formulas import cashout_fee_and_net
+    from app.services.commission_payout_service import get_approved_balance_sync
+
+    available = get_approved_balance_sync(db, current_user.id)
+    fee = Decimal("0")
+    net = Decimal("0")
+    if available >= MIN_WITHDRAWAL:
+        preview = cashout_fee_and_net(available)
+        fee = preview.fee
+        net = preview.net_to_member
+
+    return WithdrawPreviewResponse(
+        available_to_withdraw=float(available),
+        minimum_withdrawal=float(MIN_WITHDRAWAL),
+        fee=float(fee),
+        net_amount=float(net),
+        wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
+        payout_currency=current_user.payout_currency or "usdtbsc",
+    )
+
+
+@router.post("/withdraw", response_model=WithdrawResponse)
+def request_withdrawal(
+    body: WithdrawRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Manual batch withdrawal from APPROVED commissions.
+    Min $100; fee 1% (min $20, max $1000) per MYHIGH5 chart of accounts.
+    """
+    from app.services.commission_payout_service import process_manual_withdrawal_sync
+
+    try:
+        result = process_manual_withdrawal_sync(db, current_user, body.amount)
+        db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Withdrawal processing failed",
+        ) from exc
+
+    return WithdrawResponse(**result)

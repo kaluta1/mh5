@@ -1,10 +1,9 @@
 """
 Service de distribution des commissions d'affiliation.
 
-Règles de commission (MyHigh5 Founding Members):
-- Founding Membership Fee (100$): 20$ direct, 2$ indirect (N2-10)
-- Annual Membership Fee (50$): 10$ direct, 1$ indirect (N2-10)
-- KYC (10$): 1$ direct (10%), 0.10$ indirect per level (1%, N2-10)
+Règles de commission (MyHigh5 — init_commission_rules.py):
+- KYC, MFM, annual, EFM: L1 10%, L2–L10 1% each (max 10 levels)
+- Auto-payout via NOWPayments when beneficiary has a USDT BSC wallet configured
 """
 
 from sqlalchemy.orm import Session
@@ -120,7 +119,18 @@ def distribute_commissions(
         # Ignorer les montants nuls ou négatifs
         if commission_amount <= 0:
             break
-        
+
+        sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
+        if not sponsor:
+            break
+
+        # No wallet → PENDING until user adds one; has wallet → APPROVED then auto-payout
+        initial_status = (
+            CommissionStatus.APPROVED
+            if (sponsor.usdt_wallet_address or "").strip()
+            else CommissionStatus.PENDING
+        )
+
         # Créer la commission
         try:
             commission = AffiliateCommission(
@@ -132,26 +142,24 @@ def distribute_commissions(
                 level=level,
                 base_amount=float(deposit.amount),
                 commission_amount=float(commission_amount),
-                status=CommissionStatus.APPROVED,
+                status=initial_status,
                 transaction_date=datetime.utcnow()
             )
-            
+
             db.add(commission)
             commissions_created.append(commission)
-            
+
             logger.info(
                 f"Commission created: user={current_sponsor_id}, "
                 f"level={level}, amount={commission_amount}, "
-                f"type={config['commission_type'].value}"
+                f"type={config['commission_type'].value}, status={initial_status.value}"
             )
         except Exception as e:
             logger.error(f"Error creating commission object: {e}")
-        
-        # Trouver le parrain du parrain
-        sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
-        current_sponsor_id = sponsor.sponsor_id if sponsor else None
+
+        current_sponsor_id = sponsor.sponsor_id
         level += 1
-    
+
     if commissions_created:
         try:
             if commit:
@@ -160,6 +168,19 @@ def distribute_commissions(
                 db.flush()
             for c in commissions_created:
                 db.refresh(c)
+            # Auto-payout eligible commissions (APPROVED + wallet set)
+            try:
+                from app.services.commission_payout_service import process_commission_payouts_sync
+
+                paid_count = process_commission_payouts_sync(db, commissions_created)
+                if paid_count:
+                    if commit:
+                        db.commit()
+                    else:
+                        db.flush()
+                    logger.info("Auto-paid %s commission(s) for deposit %s", paid_count, deposit.id)
+            except Exception as payout_err:
+                logger.exception("Auto-payout batch failed for deposit %s: %s", deposit.id, payout_err)
             logger.info(f"Created {len(commissions_created)} commissions for deposit {deposit.id}")
         except Exception as e:
             logger.error(f"Error saving commissions: {e}")

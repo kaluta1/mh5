@@ -15,10 +15,13 @@ import {
   Sparkles,
   ChevronRight,
   ShoppingBag,
-  Clock
+  Clock,
+  AlertTriangle,
+  ArrowUpRight
 } from 'lucide-react'
 import Link from 'next/link'
 import { TransactionTable, Transaction } from '@/components/wallet/transaction-table'
+import { WithdrawDialog } from '@/components/wallet/withdraw-dialog'
 
 const PaymentDialog = dynamic(
   () => import('@/components/dialogs/payment-dialog-v2').then((mod) => mod.PaymentDialog),
@@ -43,6 +46,8 @@ export default function WalletPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentInitialProduct, setPaymentInitialProduct] = useState<PaymentProduct>('kyc')
+  const [walletConfigured, setWalletConfigured] = useState(true)
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false)
   const openedMfmFromQuery = useRef(false)
 
   const formatCurrency = (amount: number) => {
@@ -89,6 +94,13 @@ export default function WalletPage() {
         setGrowthRate(balanceData.growth_rate || 0)
       }
       
+      // Wallet payout address (affiliate auto-pay)
+      const walletResponse = await fetch(`${apiUrl}/api/v1/users/me/wallet`, { headers })
+      if (walletResponse.ok) {
+        const walletData = await walletResponse.json()
+        setWalletConfigured(Boolean(walletData.wallet_configured))
+      }
+
       // Charger les transactions
       const transactionsResponse = await fetch(`${apiUrl}/api/v1/wallet/transactions?limit=20`, { headers })
       
@@ -141,6 +153,29 @@ export default function WalletPage() {
 
   return (
     <div className="space-y-6">
+      {!walletConfigured && (
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex gap-3 flex-1">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900 dark:text-amber-100">
+                {t('dashboard.wallet.no_payout_wallet_title') || 'Add your payout wallet'}
+              </p>
+              <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
+                {t('dashboard.wallet.no_payout_wallet_body') ||
+                  'Commissions are paid automatically to your USDT BSC wallet. Add an address in Settings to receive payouts.'}
+              </p>
+            </div>
+          </div>
+          <Link href="/dashboard/settings?tab=wallet">
+            <Button className="rounded-xl bg-amber-600 hover:bg-amber-700 whitespace-nowrap">
+              {t('dashboard.wallet.setup_wallet') || 'Set up wallet'}
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Payment tutorial (YouTube) */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
         <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
@@ -175,7 +210,7 @@ export default function WalletPage() {
             {t('dashboard.wallet.subtitle')}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link href="/dashboard/wallet/transactions">
             <Button 
               variant="outline"
@@ -185,6 +220,14 @@ export default function WalletPage() {
               {t('dashboard.wallet.history')}
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            onClick={() => setShowWithdrawDialog(true)}
+            className="rounded-xl border-2"
+          >
+            <ArrowUpRight className="w-4 h-4 mr-2" />
+            {t('dashboard.wallet.withdraw') || 'Withdraw'}
+          </Button>
           <Button 
             onClick={() => {
               setPaymentInitialProduct('kyc')
@@ -236,8 +279,15 @@ export default function WalletPage() {
             </div>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {t('dashboard.wallet.pending_description')}
+            {t('dashboard.wallet.pending_description') ||
+              'Accrued commissions awaiting payout to your wallet (add wallet in Settings if empty).'}
           </p>
+          {walletConfigured && (
+            <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+              {t('dashboard.wallet.auto_pay_note') ||
+                'Commissions are sent automatically to your USDT BSC wallet after each referral payment.'}
+            </p>
+          )}
         </div>
 
         {/* Total Earnings */}
@@ -298,6 +348,14 @@ export default function WalletPage() {
         initialProductCode={paymentInitialProduct}
         onPaymentInitiated={() => {
           loadWalletData()
+        }}
+      />
+
+      <WithdrawDialog
+        open={showWithdrawDialog}
+        onOpenChange={setShowWithdrawDialog}
+        onSuccess={() => {
+          void loadWalletData()
         }}
       />
     </div>

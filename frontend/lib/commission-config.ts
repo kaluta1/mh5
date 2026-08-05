@@ -10,21 +10,21 @@ export const COMMISSION_CONFIG = {
     currency: 'USD',
   },
   founding_membership: {
-    priceCents: 49900,
+    priceCents: 10000,
     platformRatePercent: 10,
-    payoutCents: 44910,
+    payoutCents: 9000,
     currency: 'USD',
   },
   mfm_membership: {
-    priceCents: 49900,
+    priceCents: 10000,
     platformRatePercent: 10,
-    payoutCents: 44910,
+    payoutCents: 9000,
     currency: 'USD',
   },
   annual_membership: {
-    priceCents: 9900,
+    priceCents: 5000,
     platformRatePercent: 10,
-    payoutCents: 8910,
+    payoutCents: 4500,
     currency: 'USD',
   },
 } as const

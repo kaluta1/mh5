@@ -73,6 +73,27 @@ interface Recipient {
 
 const KYC_PRICE_USD = 10
 
+const PREFERRED_PAY_CURRENCIES = ['usdtbsc', 'usdterc20', 'usdttrc20', 'usdt', 'btc', 'eth']
+
+function formatPayCurrencyLabel(code: string): string {
+  const labels: Record<string, string> = {
+    usdtbsc: 'USDT (BSC / BEP20)',
+    usdterc20: 'USDT (Ethereum / ERC20)',
+    usdttrc20: 'USDT (Tron / TRC20)',
+    usdt: 'USDT',
+    btc: 'Bitcoin',
+    eth: 'Ethereum',
+  }
+  return labels[code.toLowerCase()] || code.toUpperCase()
+}
+
+function sortPayCurrencies(currencies: string[]): string[] {
+  const lower = currencies.map((c) => c.toLowerCase())
+  const preferred = PREFERRED_PAY_CURRENCIES.filter((c) => lower.includes(c))
+  const rest = lower.filter((c) => !PREFERRED_PAY_CURRENCIES.includes(c)).sort()
+  return [...preferred, ...rest]
+}
+
 const getPaymentMethods = (t: (key: string) => string | undefined): PaymentMethod[] => [
   {
     id: 'crypto',
@@ -137,6 +158,8 @@ export function PaymentDialog({
     initialProductCode === 'annual_membership' ? 50 : 100
   )
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const [payCurrencies, setPayCurrencies] = useState<string[]>(['usdtbsc'])
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false)
 
   // Poll NOWPayments while on payment step
   useEffect(() => {
@@ -181,6 +204,36 @@ export function PaymentDialog({
       }
     }
   }, [open, step, payment?.deposit_id, paymentConfirmed, onPaymentInitiated, t])
+
+  // Load NOWPayments pay currencies on method step
+  useEffect(() => {
+    if (!open || step !== 'method') return
+
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    let cancelled = false
+    setLoadingCurrencies(true)
+    paymentService
+      .getAvailableCurrencies(token)
+      .then((all) => {
+        if (cancelled) return
+        const usdtFirst = all.filter((c) => c.toLowerCase().includes('usdt'))
+        const sorted = sortPayCurrencies(usdtFirst.length ? usdtFirst : all)
+        setPayCurrencies(sorted.length ? sorted : ['usdtbsc'])
+      })
+      .catch((err) => {
+        logger.error('Failed to load pay currencies', err)
+        if (!cancelled) setPayCurrencies(['usdtbsc'])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCurrencies(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, step])
 
   const checkPaymentNow = async () => {
     if (!payment?.deposit_id) return
@@ -303,7 +356,7 @@ export function PaymentDialog({
 
 
   // Handle method selection and create payment
-  const handleMethodSelect = async (methodId: string) => {
+  const handleMethodSelect = async (methodId: string, payCurrency = 'usdtbsc') => {
     setSelectedMethod(methodId)
     setPaymentError(null)
 
@@ -349,6 +402,7 @@ export function PaymentDialog({
         amount: totalAmount,
         currency: 'usd',
         product_code: apiRecipients[0]?.product_code || 'kyc',
+        pay_currency: payCurrency,
         recipients: apiRecipients,
       })
 
@@ -400,6 +454,8 @@ export function PaymentDialog({
       initialProductCode === 'annual_membership' ? 50 : 100
     )
     setPaymentConfirmed(false)
+    setPayCurrencies(['usdtbsc'])
+    setLoadingCurrencies(false)
     onOpenChange(false)
   }
 
@@ -823,21 +879,29 @@ export function PaymentDialog({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
                       {t('payment.cryptocurrencies') || 'Crypto-monnaies'}
                     </p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {paymentMethods.filter(m => m.category === 'crypto').map((method) => (
-                        <button
-                          key={method.id}
-                          onClick={() => handleMethodSelect(method.id)}
-                          disabled={isLoading}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                            {method.icon}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{method.name}</span>
-                        </button>
-                      ))}
-                    </div>
+                    {loadingCurrencies ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="w-6 h-6 animate-spin text-myhigh5-primary" />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {payCurrencies.map((currency) => (
+                          <button
+                            key={currency}
+                            onClick={() => handleMethodSelect('crypto', currency)}
+                            disabled={isLoading}
+                            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                              <Bitcoin className="w-5 h-5 text-orange-500" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {formatPayCurrencyLabel(currency)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>

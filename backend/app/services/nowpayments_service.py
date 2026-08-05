@@ -1,27 +1,32 @@
 """
-NOWPayments integration — create payments, poll status, verify IPN callbacks.
+NOWPayments integration — create payments, poll status, verify IPN callbacks, and affiliate payouts.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
+import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
+import pyotp
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.payment import Deposit, DepositStatus
-from app.services.commission_distribution import process_payment_validation
 
 logger = logging.getLogger(__name__)
 
 NOWPAYMENTS_API_BASE = "https://api.nowpayments.io/v1"
 NOWPAYMENTS_SANDBOX_BASE = "https://api-sandbox.nowpayments.io/v1"
+
+_jwt_cache: dict[str, float | str | None] = {"token": None, "expires_at": 0.0}
+_jwt_lock = asyncio.Lock()
 
 FINISHED_STATUSES = {"finished", "confirmed"}
 PENDING_STATUSES = {"waiting", "confirming", "sending"}
@@ -203,6 +208,8 @@ def finalize_deposit_from_nowpayments(
     if new_status == DepositStatus.VALIDATED:
         deposit.status = DepositStatus.VALIDATED
         deposit.validated_at = datetime.utcnow()
+        from app.services.commission_distribution import process_payment_validation
+
         ok = process_payment_validation(db, deposit, defer_commit=defer_commit)
         if not ok:
             return False
@@ -299,3 +306,195 @@ async def sync_deposit_with_provider(db: Session, deposit: Deposit) -> Dict[str,
         db.rollback()
         raise NowPaymentsError("Failed to finalize deposit after provider sync")
     return deposit_status_payload(deposit, payload)
+
+
+# ---------------------------------------------------------------------------
+# Affiliate payouts (NOWPayments Payout API + TOTP verification)
+# ---------------------------------------------------------------------------
+
+def _payout_base() -> str:
+    return NOWPAYMENTS_SANDBOX_BASE if settings.NOWPAYMENTS_SANDBOX else NOWPAYMENTS_API_BASE
+
+
+def payouts_configured() -> bool:
+    return bool((settings.NOWPAYMENTS_PAYOUT_API_KEY or "").strip())
+
+
+def _get_payout_jwt_sync() -> str:
+    if not settings.NOWPAYMENTS_EMAIL or not settings.NOWPAYMENTS_PASSWORD:
+        raise NowPaymentsError("NOWPAYMENTS_EMAIL/NOWPAYMENTS_PASSWORD required for payouts.")
+
+    if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
+        return str(_jwt_cache["token"])
+
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.post(
+            f"{_payout_base()}/auth",
+            json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
+        )
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}: {resp.text[:300]}")
+    token = resp.json().get("token")
+    if not token:
+        raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
+
+    _jwt_cache["token"] = token
+    _jwt_cache["expires_at"] = time.time() + 4.5 * 60
+    return str(token)
+
+
+async def _get_payout_jwt() -> str:
+    if not settings.NOWPAYMENTS_EMAIL or not settings.NOWPAYMENTS_PASSWORD:
+        raise NowPaymentsError("NOWPAYMENTS_EMAIL/NOWPAYMENTS_PASSWORD required for payouts.")
+
+    async with _jwt_lock:
+        if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
+            return str(_jwt_cache["token"])
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{_payout_base()}/auth",
+                json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
+            )
+        if resp.status_code >= 400:
+            raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}: {resp.text[:300]}")
+        token = resp.json().get("token")
+        if not token:
+            raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
+
+        _jwt_cache["token"] = token
+        _jwt_cache["expires_at"] = time.time() + 4.5 * 60
+        return str(token)
+
+
+def _payout_headers_sync() -> Dict[str, str]:
+    token = _get_payout_jwt_sync()
+    return {
+        "x-api-key": settings.NOWPAYMENTS_PAYOUT_API_KEY,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+async def _payout_headers() -> Dict[str, str]:
+    token = await _get_payout_jwt()
+    return {
+        "x-api-key": settings.NOWPAYMENTS_PAYOUT_API_KEY,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def send_payout_sync(*, withdrawals: List[dict]) -> dict:
+    if not payouts_configured():
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY is not configured.")
+
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(
+            f"{_payout_base()}/payout",
+            headers=_payout_headers_sync(),
+            json={"withdrawals": withdrawals},
+        )
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:300]}")
+    return resp.json()
+
+
+async def send_payout(*, withdrawals: List[dict]) -> dict:
+    if not payouts_configured():
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY is not configured.")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{_payout_base()}/payout",
+            headers=await _payout_headers(),
+            json={"withdrawals": withdrawals},
+        )
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:300]}")
+    return resp.json()
+
+
+def verify_payout_sync(batch_withdrawal_id: str) -> dict:
+    if not settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET:
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured.")
+
+    code = pyotp.TOTP(settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET).now()
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.post(
+            f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
+            headers=_payout_headers_sync(),
+            json={"verification_code": code},
+        )
+    if resp.status_code >= 400:
+        raise NowPaymentsError(
+            f"NowPayments POST /payout/{batch_withdrawal_id}/verify -> {resp.status_code}: {resp.text[:300]}"
+        )
+    try:
+        return resp.json()
+    except ValueError:
+        return {"raw": resp.text}
+
+
+async def verify_payout(batch_withdrawal_id: str) -> dict:
+    if not settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET:
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured.")
+
+    code = pyotp.TOTP(settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET).now()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
+            headers=await _payout_headers(),
+            json={"verification_code": code},
+        )
+    if resp.status_code >= 400:
+        raise NowPaymentsError(
+            f"NowPayments POST /payout/{batch_withdrawal_id}/verify -> {resp.status_code}: {resp.text[:300]}"
+        )
+    try:
+        return resp.json()
+    except ValueError:
+        return {"raw": resp.text}
+
+
+def send_single_payout_sync(
+    *,
+    wallet_address: str,
+    amount_usd: float,
+    currency: str = "usdtbsc",
+) -> dict:
+    """
+    Create + verify a single USDT payout. Never send extra_id for BEP20 — it causes silent REJECTED.
+    """
+    pay_currency = normalize_pay_currency(currency) or "usdtbsc"
+    withdrawal = {
+        "address": wallet_address,
+        "amount": round(amount_usd, 2),
+        "currency": pay_currency,
+    }
+    created = send_payout_sync(withdrawals=[withdrawal])
+    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
+    if not batch_id:
+        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
+    verify_payout_sync(batch_id)
+    return created
+
+
+async def send_single_payout(
+    *,
+    wallet_address: str,
+    amount_usd: float,
+    currency: str = "usdtbsc",
+) -> dict:
+    pay_currency = normalize_pay_currency(currency) or "usdtbsc"
+    withdrawal = {
+        "address": wallet_address,
+        "amount": round(amount_usd, 2),
+        "currency": pay_currency,
+    }
+    created = await send_payout(withdrawals=[withdrawal])
+    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
+    if not batch_id:
+        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
+    await verify_payout(batch_id)
+    return created

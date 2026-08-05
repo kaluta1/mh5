@@ -147,7 +147,12 @@ class Settings(BaseModel):
     NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD: float = float(
         os.getenv("NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD", "0.5")
     )
-    
+    # Payout API (affiliate commission auto-pay)
+    NOWPAYMENTS_PAYOUT_API_KEY: str = os.getenv("NOWPAYMENTS_PAYOUT_API_KEY", "")
+    NOWPAYMENTS_EMAIL: str = os.getenv("NOWPAYMENTS_EMAIL", "")
+    NOWPAYMENTS_PASSWORD: str = os.getenv("NOWPAYMENTS_PASSWORD", "")
+    NOWPAYMENTS_PAYOUT_TOTP_SECRET: str = os.getenv("NOWPAYMENTS_PAYOUT_TOTP_SECRET", "")
+
     # CONTENT MODERATION (Sightengine)
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"
     SIGHTENGINE_API_USER: str = os.getenv("SIGHTENGINE_API_USER", "")

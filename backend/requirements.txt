@@ -41,6 +41,7 @@ psycopg==3.2.12
 psycopg-binary==3.2.12
 psycopg2-binary==2.9.11
 pyasn1==0.6.1
+pyotp>=2.9.0
 pydantic==2.12.5
 pydantic-settings==2.11.0
 pydantic_core==2.41.5

@@ -28,21 +28,21 @@ COMMISSION_CONFIG: dict[str, ProductCommission] = {
         "currency": "USD",
     },
     "founding_membership": {
-        "price_cents": 49900,
+        "price_cents": 10000,
         "platform_rate_percent": 10.0,
-        "payout_cents": 44910,
+        "payout_cents": 9000,
         "currency": "USD",
     },
     "mfm_membership": {
-        "price_cents": 49900,
+        "price_cents": 10000,
         "platform_rate_percent": 10.0,
-        "payout_cents": 44910,
+        "payout_cents": 9000,
         "currency": "USD",
     },
     "annual_membership": {
-        "price_cents": 9900,
+        "price_cents": 5000,
         "platform_rate_percent": 10.0,
-        "payout_cents": 8910,
+        "payout_cents": 4500,
         "currency": "USD",
     },
 }

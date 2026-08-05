@@ -148,7 +148,7 @@ def get_commissions(
     commission_type: Optional[str] = None,
     product_type: Optional[str] = None,
     sort_by: Optional[str] = "date",  # date, amount, type
-    status: Optional[str] = None  # pending, paid, cancelled
+    status: Optional[str] = None  # pending, approved, paid, cancelled
 ):
     """
     Récupérer les commissions d'affiliation de l'utilisateur avec détails.
@@ -156,7 +156,7 @@ def get_commissions(
     - **commission_type**: Filtrer par type de commission (legacy)
     - **product_type**: Filtrer par code produit (founding_membership, annual_membership, etc.)
     - **sort_by**: Trier par date, amount ou type
-    - **status**: Filtrer par statut (pending, paid, cancelled)
+    - **status**: Filtrer par statut (pending, approved, paid, cancelled)
     
     Inclut les informations de l'utilisateur source (nom, avatar) et du produit.
     """

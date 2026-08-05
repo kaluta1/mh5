@@ -4656,3 +4656,22 @@ async def admin_kyc_provider_settlement(
         return {"journal_entry_id": je.id, "entry_number": je.entry_number}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/affiliate/retry-payouts")
+def admin_retry_affiliate_payouts(
+    user_id: Optional[int] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retry NOWPayments payouts for APPROVED commissions stuck after a transient failure.
+    Optionally scope to one user_id.
+    """
+    check_admin(current_user)
+    from app.services.commission_payout_service import retry_failed_payouts_sync
+
+    paid = retry_failed_payouts_sync(db, user_id=user_id, limit=min(limit, 200))
+    db.commit()
+    return {"retried": paid, "user_id": user_id}

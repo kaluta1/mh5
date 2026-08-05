@@ -32,6 +32,13 @@ class CommissionStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class CashoutStatus(str, enum.Enum):
+    REQUESTED = "requested"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class CommissionRule(Base):
     __tablename__ = "commission_rules"
     
@@ -103,12 +110,31 @@ class AffiliateCommission(Base):
     status: Mapped[CommissionStatus] = mapped_column(SQLEnum(CommissionStatus), default=CommissionStatus.PENDING)
     transaction_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     paid_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
+    payout_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     source_user: Mapped["User"] = relationship("User", foreign_keys=[source_user_id])
     product_type: Mapped[Optional["ProductType"]] = relationship("ProductType", back_populates="affiliate_commissions")
     deposit: Mapped[Optional["Deposit"]] = relationship("Deposit")
+
+
+class AffiliateCashoutRequest(Base):
+    """Audit trail for affiliate commission payouts (auto or manual)."""
+    __tablename__ = "affiliate_cashout_requests"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    gross_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    fee: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    net_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=CashoutStatus.PROCESSING.value)
+    payout_method: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, default="nowpayments_crypto")
+    wallet_snapshot: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    payout_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
 
 class ReferralLink(Base):

@@ -102,6 +102,8 @@ class User(UserBase):
     address_verified: Optional[bool] = False
     affiliate_agreement_accepted: Optional[bool] = False
     affiliate_agreement_accepted_at: Optional[datetime] = None
+    usdt_wallet_address: Optional[str] = None
+    payout_currency: Optional[str] = None
     # Anciens champs (dépréciés)
     city_id: Optional[int] = None
     country_id: Optional[int] = None
