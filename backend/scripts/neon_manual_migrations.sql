@@ -49,7 +49,16 @@ BEGIN
 END$$;
 
 -- ---------------------------------------------------------------------------
--- Mark alembic revisions applied (only if alembic_version table exists)
+-- Verify (should return 2 rows)
+-- ---------------------------------------------------------------------------
+-- SELECT column_name FROM information_schema.columns
+-- WHERE table_name = 'users' AND column_name IN ('usdt_wallet_address', 'payout_currency');
+
+-- Quick test query (should not error):
+-- SELECT id, email, usdt_wallet_address, payout_currency FROM users LIMIT 1;
+
+-- ---------------------------------------------------------------------------
+-- Mark alembic revisions applied
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -58,7 +67,7 @@ BEGIN
         WHERE table_schema = 'public' AND table_name = 'alembic_version'
     ) THEN
         UPDATE alembic_version SET version_num = 's3t4u5v6w7x8'
-        WHERE version_num = 'q1r2s3t4u5v6';
+        WHERE version_num IN ('q1r2s3t4u5v6', 'r2s3t4u5v6w7');
         IF NOT FOUND THEN
             INSERT INTO alembic_version (version_num)
             SELECT 's3t4u5v6w7x8'
