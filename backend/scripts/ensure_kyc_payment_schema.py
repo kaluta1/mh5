@@ -48,6 +48,8 @@ COLUMNS: dict[str, dict[str, str]] = {
         "identity_verified": "BOOLEAN NOT NULL DEFAULT false",
         "address_verified": "BOOLEAN NOT NULL DEFAULT false",
         "verification_date": "TIMESTAMP",
+        "usdt_wallet_address": "VARCHAR(100)",
+        "payout_currency": "VARCHAR(20) DEFAULT 'usdtbsc'",
     },
     "deposits": {
         "crypto_currency": "VARCHAR(20)",
@@ -60,6 +62,9 @@ COLUMNS: dict[str, dict[str, str]] = {
         "admin_notes": "TEXT",
         "validated_by": "INTEGER",
     },
+    "affiliate_commissions": {
+        "payout_reference": "VARCHAR(255)",
+    },
 }
 
 # enum type -> labels that must exist.
@@ -70,6 +75,7 @@ COLUMNS: dict[str, dict[str, str]] = {
 ENUM_VALUES: dict[str, list[str]] = {
     "kycstatus": ["PENDING_PROOF_OF_ADDRESS"],
     "depositstatus": ["partially_paid", "failed"],
+    "verificationprovider": ["kaluta"],
 }
 
 
