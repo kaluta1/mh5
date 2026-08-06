@@ -75,6 +75,31 @@ def build_info():
         "nomination_roster_fix": True,
     }
 
+
+@api_router.get("/health/db-schema", tags=["Status"])
+def health_db_schema():
+    """Report missing users columns (helps debug login 503). No secrets."""
+    from sqlalchemy import inspect, text
+    from app.db.session import engine
+    from app.models.user import User
+
+    try:
+        insp = inspect(engine)
+        db_cols = {c["name"] for c in insp.get_columns("users")} if insp.has_table("users") else set()
+        model_cols = {c.key for c in User.__table__.columns}
+        missing = sorted(model_cols - db_cols)
+        with engine.connect() as conn:
+            who = conn.execute(text("SELECT current_user, current_database()")).fetchone()
+        return {
+            "ok": len(missing) == 0,
+            "db_user": who[0] if who else None,
+            "db_name": who[1] if who else None,
+            "missing_users_columns": missing,
+            "hint": "Run backend/scripts/neon_manual_migrations.sql in Neon SQL Editor" if missing else None,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:500]}
+
 # TEMPORARY: Debug endpoint for continental issue — remove after fix verified
 try:
     from app.api.api_v1.endpoints import debug_continental
