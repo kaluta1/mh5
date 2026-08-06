@@ -20,14 +20,13 @@ echo "==> restart mh5 backend (port ${PORT})"
 EXPECTED="$(expected_build_id)"
 echo "    expected build_id: ${EXPECTED}"
 
-# Ensure venv exists
+# Ensure venv exists and dependencies match requirements.txt (git pull may add new packages)
 if [ ! -x "$BACKEND/.venv/bin/uvicorn" ]; then
   echo "    creating .venv..."
   python3 -m venv "$BACKEND/.venv"
-  # shellcheck disable=SC1091
-  source "$BACKEND/.venv/bin/activate"
-  pip install -q -r "$BACKEND/requirements.txt"
 fi
+echo "    syncing pip dependencies..."
+"$BACKEND/.venv/bin/pip" install -q -r "$BACKEND/requirements.txt"
 
 # Apply database migrations (the systemd unit runs uvicorn directly and does NOT
 # migrate, so prod schema drifts without this). 'heads' handles multiple branches.
