@@ -164,10 +164,20 @@ def test_june_cohort_regional_list_blocked_in_july():
         submission_start_date=date(2026, 6, 1),
         submission_end_date=date(2026, 6, 30),
     )
-    with patch("app.core.nomination_calendar.date") as mock_date:
-        mock_date.today.return_value = date(2026, 7, 15)
+    class FixedToday(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 7, 15)
+
+    with patch("app.core.nomination_calendar.date", FixedToday):
         assert nomination_vote_list_blocked(rnd, "nomination", "regional") is True
-        mock_date.today.return_value = date(2026, 8, 1)
+
+    class FixedTodayAugust(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 8, 1)
+
+    with patch("app.core.nomination_calendar.date", FixedTodayAugust):
         assert nomination_vote_list_blocked(rnd, "nomination", "regional") is False
 
 
