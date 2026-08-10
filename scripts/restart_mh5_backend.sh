@@ -28,6 +28,24 @@ fi
 echo "    syncing pip dependencies..."
 "$BACKEND/.venv/bin/pip" install -q -r "$BACKEND/requirements.txt"
 
+if [ -f "$ROOT/scripts/fix_postgres_ownership.sh" ]; then
+  echo "==> fix postgres table ownership (app user must own tables for alembic)"
+  if bash "$ROOT/scripts/fix_postgres_ownership.sh"; then
+    echo "    OK ownership"
+  else
+    echo "    WARN ownership fix failed — trying manual migrations as postgres" >&2
+  fi
+fi
+
+if [ -f "$ROOT/scripts/apply_vps_db_migrations.sh" ]; then
+  echo "==> apply idempotent VPS manual migrations (postgres superuser)"
+  if bash "$ROOT/scripts/apply_vps_db_migrations.sh"; then
+    echo "    OK manual migrations"
+  else
+    echo "    WARN manual migrations failed — see backend/scripts/neon_manual_migrations.sql" >&2
+  fi
+fi
+
 # Apply database migrations (the systemd unit runs uvicorn directly and does NOT
 # migrate, so prod schema drifts without this). 'heads' handles multiple branches.
 VENV_PY="$BACKEND/.venv/bin/python3"

@@ -189,15 +189,28 @@ wait_for_port_free
 
 if command -v pm2 >/dev/null 2>&1; then
   cd "$FRONTEND"
-  PORT="$PORT" INTERNAL_API_URL="$INTERNAL_API_URL" BACKEND_PORT="$BACKEND_PORT" \
-    pm2 start node_modules/next/dist/bin/next \
-    --name mh5-frontend \
-    --cwd "$FRONTEND" \
-    --max-restarts 10 \
-    --min-uptime 10000 \
-    --exp-backoff-restart-delay 100 \
-    --time \
-    -- start -H 127.0.0.1 -p "$PORT"
+  ECOSYSTEM="$(mktemp /tmp/mh5-frontend.ecosystem.XXXXXX.cjs)"
+  cat >"$ECOSYSTEM" <<EOF
+module.exports = {
+  apps: [{
+    name: 'mh5-frontend',
+    script: 'node_modules/next/dist/bin/next',
+    args: 'start -H 127.0.0.1 -p ${PORT}',
+    cwd: '${FRONTEND}',
+    env: {
+      NODE_ENV: 'production',
+      PORT: '${PORT}',
+      INTERNAL_API_URL: '${INTERNAL_API_URL}',
+      BACKEND_PORT: '${BACKEND_PORT}',
+    },
+    max_restarts: 10,
+    min_uptime: 10000,
+    exp_backoff_restart_delay: 100,
+  }],
+};
+EOF
+  pm2 start "$ECOSYSTEM"
+  rm -f "$ECOSYSTEM"
   pm2 save 2>/dev/null || true
 
   if ! wait_for_http "http://127.0.0.1:${PORT}/" 45; then

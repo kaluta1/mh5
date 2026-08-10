@@ -5,7 +5,6 @@ Revises: q1r2s3t4u5v6
 Create Date: 2026-08-05
 """
 from alembic import op
-import sqlalchemy as sa
 
 
 revision = "r2s3t4u5v6w7"
@@ -15,36 +14,38 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("usdt_wallet_address", sa.String(length=100), nullable=True))
-    op.add_column(
-        "users",
-        sa.Column("payout_currency", sa.String(length=20), nullable=True, server_default="usdtbsc"),
+    # Idempotent DDL — VPS app role may not own tables until fix_postgres_ownership.sh runs.
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS usdt_wallet_address VARCHAR(100)")
+    op.execute(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_currency VARCHAR(20) DEFAULT 'usdtbsc'"
+    )
+    op.execute(
+        "ALTER TABLE affiliate_commissions ADD COLUMN IF NOT EXISTS payout_reference VARCHAR(255)"
     )
 
-    op.add_column(
-        "affiliate_commissions",
-        sa.Column("payout_reference", sa.String(length=255), nullable=True),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS affiliate_cashout_requests (
+            id SERIAL PRIMARY KEY,
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            updated_at TIMESTAMP NOT NULL DEFAULT now(),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            gross_amount NUMERIC(10, 2) NOT NULL,
+            fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
+            net_amount NUMERIC(10, 2) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'processing',
+            payout_method VARCHAR(30) DEFAULT 'nowpayments_crypto',
+            wallet_snapshot VARCHAR(100),
+            payout_reference VARCHAR(255),
+            requested_at TIMESTAMP NOT NULL DEFAULT now(),
+            processed_at TIMESTAMP
+        )
+        """
     )
-
-    op.create_table(
-        "affiliate_cashout_requests",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("gross_amount", sa.Numeric(10, 2), nullable=False),
-        sa.Column("fee", sa.Numeric(10, 2), nullable=False, server_default="0"),
-        sa.Column("net_amount", sa.Numeric(10, 2), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="processing"),
-        sa.Column("payout_method", sa.String(length=30), nullable=True, server_default="nowpayments_crypto"),
-        sa.Column("wallet_snapshot", sa.String(length=100), nullable=True),
-        sa.Column("payout_reference", sa.String(length=255), nullable=True),
-        sa.Column("requested_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.Column("processed_at", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-        sa.PrimaryKeyConstraint("id"),
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_affiliate_cashout_requests_user_id "
+        "ON affiliate_cashout_requests (user_id)"
     )
-    op.create_index("ix_affiliate_cashout_requests_user_id", "affiliate_cashout_requests", ["user_id"])
 
 
 def downgrade() -> None:
