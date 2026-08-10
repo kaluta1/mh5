@@ -417,10 +417,9 @@ async def share_register(
     Route courte pour le partage du lien d'inscription
     Génère une page avec métadonnées Open Graph puis redirige vers l'app
     """
-    # URL de redirection vers l'app Flutter
-    flutter_url = f"https://myhigh5.com/register"
+    flutter_url = f"{_SITE_BASE}/register"
     if referral_code:
-        flutter_url += f"/{referral_code}"
+        flutter_url += f"?{urlencode({'ref': referral_code})}"
     
     # Titre et description
     title = "Rejoignez MyHighFive"
@@ -720,10 +719,9 @@ async def share_profile(
             detail="Utilisateur non trouvé"
         )
     
-    # URL de redirection vers l'app Flutter
-    flutter_url = f"https://myhigh5.com/profile/{username}"
+    flutter_url = f"{_SITE_BASE}/{username}"
     if ref:
-        flutter_url += f"/{ref}"
+        flutter_url += f"?{urlencode({'ref': ref})}"
     
     # Échapper les caractères HTML
     full_name = html.escape(user.full_name or user.username or "Utilisateur")

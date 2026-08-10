@@ -27,17 +27,33 @@ export async function GET(
   const ua = request.headers.get('user-agent') || ''
   const referer = request.headers.get('referer') || ''
 
-  try {
-    const upstream = await fetch(`${apiBase}/api/v1/l/${encodeURIComponent(code)}`, {
+  const fetchUpstream = () =>
+    fetch(`${apiBase}/api/v1/l/${encodeURIComponent(code)}`, {
       method: 'GET',
       redirect: 'manual',
       cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
       headers: {
         'x-forwarded-for': forwardedFor,
         'user-agent': ua,
         referer,
       },
     })
+
+  try {
+    let upstream: Response | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        upstream = await fetchUpstream()
+        break
+      } catch (err) {
+        if (attempt === 2) throw err
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+      }
+    }
+    if (!upstream) {
+      return NextResponse.json({ error: 'Unable to resolve share link' }, { status: 502 })
+    }
 
     if (upstream.status >= 300 && upstream.status < 400) {
       const location = upstream.headers.get('location')

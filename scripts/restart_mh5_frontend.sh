@@ -100,11 +100,9 @@ verify_next_build() {
 }
 
 # Stop serving BEFORE deleting .next — prevents ENOENT + EADDRINUSE crash loops.
-echo "==> stop old frontend (free :${PORT})"
-stop_frontend_pm2
-kill_frontend_listeners
-sleep 1
-wait_for_port_free
+# Keep the old process running during npm install + next build (rename .next keeps
+# open file handles valid on Linux). Stop only for the short swap after build succeeds.
+echo "==> prepare frontend build (keep current site online during build)"
 
 fix_maintenance_env() {
   local f="$1"
@@ -137,6 +135,8 @@ export NODE_ENV=production
 export NEXT_TELEMETRY_DISABLED=1
 export MAINTENANCE_MODE=false
 export IS_MAINTENANCE_MODE=false
+export INTERNAL_API_URL="${INTERNAL_API_URL:-http://127.0.0.1:${MH5_BACKEND_PORT:-8001}}"
+export BACKEND_PORT="${MH5_BACKEND_PORT:-8001}"
 
 if [ -f .env.production ]; then
   set -a
@@ -181,13 +181,21 @@ fi
 rm -rf .next.bak
 echo "    build OK (.next/prerender-manifest.json present)"
 
+echo "==> swap frontend (brief downtime — old process stops, new one starts)"
+stop_frontend_pm2
+kill_frontend_listeners
+sleep 1
+wait_for_port_free
+
 if command -v pm2 >/dev/null 2>&1; then
-  wait_for_port_free
   cd "$FRONTEND"
-  PORT="$PORT" pm2 start node_modules/next/dist/bin/next \
+  PORT="$PORT" INTERNAL_API_URL="$INTERNAL_API_URL" BACKEND_PORT="$BACKEND_PORT" \
+    pm2 start node_modules/next/dist/bin/next \
     --name mh5-frontend \
     --cwd "$FRONTEND" \
-    --max-restarts 5 \
+    --max-restarts 10 \
+    --min-uptime 10000 \
+    --exp-backoff-restart-delay 100 \
     --time \
     -- start -H 127.0.0.1 -p "$PORT"
   pm2 save 2>/dev/null || true

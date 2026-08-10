@@ -9,7 +9,7 @@ module.exports = {
       name: 'myhigh5-api',
       cwd: '/var/www/mh5-1/backend',
       script: 'uvicorn',
-      args: 'main:app --host 127.0.0.1 --port 8000 --workers 2',
+      args: 'main:app --host 127.0.0.1 --port 8001 --workers 2',
       interpreter: 'python3',
       env_file: '/var/www/mh5-1/backend/.env',
     },
@@ -21,7 +21,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3000',
-        INTERNAL_API_URL: 'http://127.0.0.1:8000',
+        INTERNAL_API_URL: 'http://127.0.0.1:8001',
         NEXT_PUBLIC_APP_URL: 'https://myhigh5.com',
         NEXT_PUBLIC_API_URL: 'https://myhigh5.com',
       },

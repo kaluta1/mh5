@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="3" />
+  <title>MyHigh5 — reconnecting…</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f8fafc;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .card {
+      max-width: 420px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 2rem 1.5rem;
+      backdrop-filter: blur(8px);
+    }
+    h1 { font-size: 1.25rem; margin-bottom: 0.75rem; font-weight: 600; }
+    p { color: #cbd5e1; line-height: 1.5; font-size: 0.95rem; margin-bottom: 1.25rem; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 999px;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Reconnecting to MyHigh5…</h1>
+    <p>The server was briefly unavailable. This page will retry automatically in a few seconds.</p>
+    <button type="button" onclick="location.reload()">Retry now</button>
+  </div>
+  <script>
+    (function () {
+      var key = 'mh5_502_retry';
+      var count = parseInt(sessionStorage.getItem(key) || '0', 10);
+      if (count < 2) {
+        sessionStorage.setItem(key, String(count + 1));
+        setTimeout(function () { location.reload(); }, 1500);
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    })();
+  </script>
+</body>
+</html>

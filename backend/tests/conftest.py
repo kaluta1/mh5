@@ -20,23 +20,43 @@ os.environ["KYC_PROVIDER"] = "kaluta"
 os.environ["KALUTA_API_KEY"] = "klt_test_key"
 os.environ["KALUTA_WEBHOOK_SECRET"] = "whsec_test_webhook_secret"
 
-# Register SQLite compilers for JSONB/ARRAY before any model import.
-import tests.sqlite_compat  # noqa: E402, F401
+# SQLite compat for PostgreSQL JSONB/ARRAY — MUST run before model import.
+from sqlalchemy import JSON, create_engine, event
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_for_sqlite(_element, compiler, **_kw):  # noqa: ARG001
+    return "JSON"
+
+
+@compiles(ARRAY, "sqlite")
+def _compile_array_for_sqlite(_element, compiler, **_kw):  # noqa: ARG001
+    return "JSON"
+
+
+def _patch_metadata_for_sqlite(metadata) -> None:
+    for table in metadata.tables.values():
+        for column in table.columns:
+            col_type = column.type
+            if isinstance(col_type, JSONB) or type(col_type).__name__ == "JSONB":
+                column.type = JSON()
+            elif isinstance(col_type, ARRAY) or type(col_type).__name__ == "ARRAY":
+                column.type = JSON()
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — register all models
 from app.db.base_class import Base
 from app.db.session import get_db
-from tests.sqlite_compat import patch_metadata_for_sqlite
+
+_patch_metadata_for_sqlite(Base.metadata)
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
-
-patch_metadata_for_sqlite(Base.metadata)
 
 engine = create_engine(
     TEST_DATABASE_URL,
@@ -52,7 +72,6 @@ TEST_PASSWORD = "SecurePass123!@"
 def setup_test_database():
     Base.metadata.create_all(bind=engine)
     yield
-    # Avoid CircularDependencyError on drop_all (private_messages ↔ private_conversations).
 
 
 @pytest.fixture(scope="function")

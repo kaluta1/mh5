@@ -146,7 +146,7 @@ export function DashboardNavbar({ onMenuToggle, onSidebarToggle }: DashboardNavb
                 user={user}
                 onLogout={handleLogout}
                 onSettings={() => router.push('/dashboard/settings')}
-                onProfile={() => router.push('/dashboard/profile')}
+                onProfile={() => router.push(user.id ? `/dashboard/users/${user.id}` : '/dashboard/settings')}
                 onKYC={() => router.push('/dashboard/kyc')}
               />
             </div>

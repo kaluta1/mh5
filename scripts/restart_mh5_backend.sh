@@ -87,8 +87,29 @@ fi
 sleep 1
 
 echo "    systemctl restart myhigh5-backend"
+
+wait_for_backend() {
+  local attempt=0
+  local max="${1:-30}"
+  while [ "$attempt" -lt "$max" ]; do
+    attempt=$((attempt + 1))
+    if curl -sf "http://127.0.0.1:${PORT}/api/v1/build-info" >/dev/null 2>&1; then
+      echo "    backend ready (attempt ${attempt})"
+      return 0
+    fi
+    if [ "$attempt" -eq 1 ] || [ $((attempt % 5)) -eq 0 ]; then
+      echo "    waiting for backend on :${PORT} (attempt ${attempt}/${max})..."
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 systemctl restart myhigh5-backend
-sleep 4
+if ! wait_for_backend 45; then
+  echo "    WARN backend not healthy after restart" >&2
+  systemctl status myhigh5-backend --no-pager -l | tail -20 || true
+fi
 
 BUILD_JSON="$(curl -sf "http://127.0.0.1:${PORT}/api/v1/build-info" || echo '{}')"
 echo "    local build-info: ${BUILD_JSON}"

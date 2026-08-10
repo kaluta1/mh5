@@ -171,7 +171,7 @@ export default function FollowingPage() {
                   className="flex items-center justify-between p-3 md:p-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors gap-2"
                 >
                   <Link
-                    href={`/dashboard/profile/${userItem.id}`}
+                    href={`/dashboard/users/${userItem.id}`}
                     className="flex items-center gap-2 md:gap-3 flex-1 min-w-0"
                   >
                     <UserAvatar user={userItem} className="w-10 h-10 md:w-12 md:h-12 shrink-0" />

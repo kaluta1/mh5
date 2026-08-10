@@ -142,7 +142,7 @@ export function Header({ user, onLoginClick, onLogout }: HeaderProps) {
                 <UserDropdown 
                   user={authUser}
                   onLogout={handleLogout}
-                  onProfile={() => router.push('/profile')}
+                  onProfile={() => router.push(authUser.id ? `/dashboard/users/${authUser.id}` : '/dashboard/settings')}
                   onSettings={() => router.push('/dashboard/settings')}
                 />
               ) : (

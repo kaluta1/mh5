@@ -5,10 +5,28 @@
 #
 # Requires:
 #   - Next.js: 127.0.0.1:3000  (cd frontend && npm run build && npm run start:vps)
-#   - FastAPI: 127.0.0.1:8000  (uvicorn on port 8000)
+#   - FastAPI: 127.0.0.1:8001  (uvicorn on port 8001)
 #
 # VPS media: set STORAGE_TYPE=local and LOCAL_STORAGE_PATH=/app/storage (Docker)
 # or /var/lib/myhigh5/media (bare metal). See backend/.env.vps.example.
+#
+# Apply hardened proxy + 502 retry page on VPS:
+#   bash scripts/fix_nginx_myhigh5.sh
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
+upstream mh5_frontend {
+    server 127.0.0.1:3000;
+    keepalive 32;
+}
+
+upstream mh5_backend {
+    server 127.0.0.1:8001;
+    keepalive 16;
+}
 
 server {
     listen 80;
@@ -27,16 +45,29 @@ server {
 
     client_max_body_size 64M;
 
+    error_page 502 503 504 /502.html;
+    location = /502.html {
+        root /var/www/myhigh5/nginx-errors;
+        internal;
+    }
+
     # Next.js static assets must always hit the same frontend process as the
     # HTML. A stale/misrouted /_next path makes pages render unstyled and causes
     # browser errors like "/_next/static/... 400 Bad Request".
     location ^~ /_next/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
         proxy_cache_bypass $http_upgrade;
         expires 1y;
         add_header Cache-Control "public, immutable";
@@ -44,44 +75,66 @@ server {
 
     # FastAPI — must come before location /
     location /api/ {
-        proxy_pass http://127.0.0.1:8001;
+        proxy_pass http://mh5_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
         proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
     }
 
     # Short referral links — can bypass Next.js (optional; app/l/[code]/route.ts also works)
     location ^~ /l/ {
-        proxy_pass http://127.0.0.1:8001/api/v1/l/;
+        proxy_pass http://mh5_backend/api/v1/l/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
     }
 
-    # Optional: media files served by backend
+    # Optional: media files served from disk (fix_nginx_myhigh5.sh uses alias)
     location /media/ {
-        proxy_pass http://127.0.0.1:8001;
+        proxy_pass http://mh5_backend;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
     }
 
     # IMPORTANT: /s/f and /s/c must hit Next.js (OG preview HTML), not the API.
-    # Do NOT add a separate location /s/ { proxy_pass ...8000; } block.
+    # Do NOT add a separate location /s/ { proxy_pass ...8001; } block.
 
     # Everything else → Next.js (includes /s/f/24 share links and /l/{code} short links)
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
+        proxy_buffering on;
     }
 }

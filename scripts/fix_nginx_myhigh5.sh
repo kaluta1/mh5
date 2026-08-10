@@ -53,11 +53,37 @@ else
 fi
 
 echo ""
+echo "=== install 502 retry page ==="
+ERROR_DIR="/var/www/myhigh5/nginx-errors"
+mkdir -p "$ERROR_DIR"
+if [ -f "${ROOT}/deploy/nginx-errors/502.html" ]; then
+  cp "${ROOT}/deploy/nginx-errors/502.html" "${ERROR_DIR}/502.html"
+  echo "    ${ERROR_DIR}/502.html"
+else
+  echo "    WARN: missing ${ROOT}/deploy/nginx-errors/502.html"
+fi
+
+echo ""
 echo "=== write ${SITE_AVAILABLE} ==="
 mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 
 if [ "$HAS_SSL" -eq 1 ]; then
   cat >"$SITE_AVAILABLE" <<NGINX
+map \$http_upgrade \$connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
+upstream mh5_frontend {
+    server 127.0.0.1:${FRONTEND_PORT};
+    keepalive 32;
+}
+
+upstream mh5_backend {
+    server 127.0.0.1:${BACKEND_PORT};
+    keepalive 16;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -77,29 +103,48 @@ server {
 
     client_max_body_size 64M;
 
+    error_page 502 503 504 /502.html;
+    location = /502.html {
+        root /var/www/myhigh5/nginx-errors;
+        internal;
+    }
+
     # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
     # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
     location ^~ /_next/ {
-        proxy_pass http://127.0.0.1:${FRONTEND_PORT};
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
         proxy_cache_bypass \$http_upgrade;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:${BACKEND_PORT};
+        proxy_pass http://mh5_backend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
         proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
     }
 
     location /media/ {
@@ -111,20 +156,42 @@ server {
     }
 
     location / {
-        proxy_pass http://127.0.0.1:${FRONTEND_PORT};
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
+        proxy_buffering on;
     }
 }
 NGINX
 else
   # Temporary HTTP-only so the site is reachable while SSL is renewed.
   cat >"$SITE_AVAILABLE" <<NGINX
+map \$http_upgrade \$connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
+upstream mh5_frontend {
+    server 127.0.0.1:${FRONTEND_PORT};
+    keepalive 32;
+}
+
+upstream mh5_backend {
+    server 127.0.0.1:${BACKEND_PORT};
+    keepalive 16;
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -132,26 +199,45 @@ server {
 
     client_max_body_size 64M;
 
+    error_page 502 503 504 /502.html;
+    location = /502.html {
+        root /var/www/myhigh5/nginx-errors;
+        internal;
+    }
+
     # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
     # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
     location ^~ /_next/ {
-        proxy_pass http://127.0.0.1:${FRONTEND_PORT};
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:${BACKEND_PORT};
+        proxy_pass http://mh5_backend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
         proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
     }
 
     location /media/ {
@@ -163,14 +249,21 @@ server {
     }
 
     location / {
-        proxy_pass http://127.0.0.1:${FRONTEND_PORT};
+        proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
+        proxy_buffering on;
     }
 }
 NGINX
@@ -190,10 +283,10 @@ else
 fi
 
 echo ""
-echo "=== nginx test + restart ==="
+echo "=== nginx test + reload ==="
 nginx -t
 systemctl enable nginx
-systemctl restart nginx
+systemctl reload nginx
 sleep 1
 systemctl is-active nginx && echo "    nginx: active" || {
   journalctl -u nginx -n 30 --no-pager
