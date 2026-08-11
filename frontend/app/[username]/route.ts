@@ -10,6 +10,7 @@ const RESERVED_USERNAMES = new Set([
   'register',
   'login',
   'dashboard',
+  'myhigh5',
   'maintenance',
   'contests',
   'contact',

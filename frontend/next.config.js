@@ -181,12 +181,6 @@ const nextConfig = {
       { source: '/terms-of-services', destination: '/terms', permanent: true },
       { source: '/terms-of-service', destination: '/terms', permanent: true },
       { source: '/privacy-policy', destination: '/privacy', permanent: true },
-      // Linux/VPS routes are case-sensitive; bookmarks/typed URLs often use MyHigh5 casing.
-      { source: '/dashboard/myHigh5', destination: '/dashboard/myhigh5', permanent: false },
-      { source: '/dashboard/MyHigh5', destination: '/dashboard/myhigh5', permanent: false },
-      { source: '/dashboard/MYHIGH5', destination: '/dashboard/myhigh5', permanent: false },
-      { source: '/dashboard/myHigh5/:path*', destination: '/dashboard/myhigh5/:path*', permanent: false },
-      { source: '/dashboard/MyHigh5/:path*', destination: '/dashboard/myhigh5/:path*', permanent: false },
     ];
   },
   async rewrites() {

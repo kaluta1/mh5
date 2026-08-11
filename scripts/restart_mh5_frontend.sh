@@ -79,9 +79,56 @@ stop_frontend_pm2() {
     return 0
   fi
   echo "    stopping pm2 frontend processes"
+  # Remove legacy names and broken temp ecosystem entries (mh5-frontend.ecosystem.*).
+  if pm2 jlist >/dev/null 2>&1; then
+    while read -r pm_id; do
+      [ -n "$pm_id" ] && pm2 delete "$pm_id" >/dev/null 2>&1 || true
+    done < <(python3 - <<'PY'
+import json
+import subprocess
+
+try:
+    procs = json.loads(subprocess.check_output(["pm2", "jlist"], text=True))
+except Exception:
+    raise SystemExit(0)
+
+for proc in procs:
+    name = proc.get("name") or ""
+    if (
+        name == "mh5-frontend"
+        or "ecosystem" in name
+        or name in ("myhigh5-web", "myhigh5-frontend", "mh5-web")
+    ):
+        print(proc.get("pm_id", name))
+PY
+)
+  fi
   pm2 stop mh5-frontend myhigh5-web myhigh5-frontend mh5-web >/dev/null 2>&1 || true
   pm2 delete mh5-frontend myhigh5-web myhigh5-frontend mh5-web >/dev/null 2>&1 || true
   pm2 save >/dev/null 2>&1 || true
+}
+
+pm2_frontend_status() {
+  if ! command -v pm2 >/dev/null 2>&1; then
+    echo "missing"
+    return 0
+  fi
+  python3 - <<'PY'
+import json
+import subprocess
+
+try:
+    procs = json.loads(subprocess.check_output(["pm2", "jlist"], text=True))
+except Exception:
+    print("unknown")
+    raise SystemExit(0)
+
+for proc in procs:
+    if proc.get("name") == "mh5-frontend":
+        print((proc.get("pm2_env") or {}).get("status") or "unknown")
+        raise SystemExit(0)
+print("missing")
+PY
 }
 
 verify_next_build() {
@@ -189,28 +236,16 @@ wait_for_port_free
 
 if command -v pm2 >/dev/null 2>&1; then
   cd "$FRONTEND"
-  ECOSYSTEM="$(mktemp /tmp/mh5-frontend.ecosystem.XXXXXX.cjs)"
-  cat >"$ECOSYSTEM" <<EOF
-module.exports = {
-  apps: [{
-    name: 'mh5-frontend',
-    script: 'node_modules/next/dist/bin/next',
-    args: 'start -H 127.0.0.1 -p ${PORT}',
-    cwd: '${FRONTEND}',
-    env: {
-      NODE_ENV: 'production',
-      PORT: '${PORT}',
-      INTERNAL_API_URL: '${INTERNAL_API_URL}',
-      BACKEND_PORT: '${BACKEND_PORT}',
-    },
-    max_restarts: 10,
-    min_uptime: 10000,
-    exp_backoff_restart_delay: 100,
-  }],
-};
-EOF
-  pm2 start "$ECOSYSTEM"
-  rm -f "$ECOSYSTEM"
+  # Direct pm2 start — old PM2 builds treat arbitrary *.cjs paths as scripts, not ecosystem files.
+  NODE_ENV=production \
+  PORT="$PORT" \
+  INTERNAL_API_URL="$INTERNAL_API_URL" \
+  BACKEND_PORT="$BACKEND_PORT" \
+  pm2 start node_modules/next/dist/bin/next \
+    --name mh5-frontend \
+    --cwd "$FRONTEND" \
+    --max-restarts 10 \
+    -- start -H 127.0.0.1 -p "$PORT"
   pm2 save 2>/dev/null || true
 
   if ! wait_for_http "http://127.0.0.1:${PORT}/" 45; then
@@ -220,6 +255,15 @@ EOF
     ss -ltnp "sport = :$PORT" 2>/dev/null || true
     echo "    recent logs:" >&2
     pm2 logs mh5-frontend --lines 40 --nostream 2>/dev/null || true
+    exit 1
+  fi
+
+  sleep 2
+  PM2_STATUS="$(pm2_frontend_status)"
+  if [ "$PM2_STATUS" != "online" ]; then
+    echo "    ERROR: pm2 mh5-frontend is ${PM2_STATUS} (expected online)" >&2
+    pm2 status mh5-frontend 2>/dev/null || true
+    pm2 logs mh5-frontend --lines 60 --nostream 2>/dev/null || true
     exit 1
   fi
 
