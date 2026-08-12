@@ -1,9 +1,10 @@
 'use client'
 
 import React from 'react'
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Home, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { clearCacheRedirectUrl, isChunkLoadError } from '@/lib/chunk-load-error'
 
 interface ErrorBoundaryProps {
   children: React.ReactNode
@@ -14,16 +15,6 @@ interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
   errorInfo: React.ErrorInfo | null
-}
-
-function isChunkLoadError(error: Error | null): boolean {
-  if (!error) return false
-  const msg = `${error.name} ${error.message}`.toLowerCase()
-  return (
-    msg.includes('loading chunk') ||
-    msg.includes('failed to fetch dynamically imported module') ||
-    msg.includes('chunkloaderror')
-  )
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -52,8 +43,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   handleReset = () => {
-    // Stale Next.js chunks after deploy need a full reload, not just remount.
-    if (isChunkLoadError(this.state.error) || typeof window !== 'undefined') {
+    if (isChunkLoadError(this.state.error)) {
       window.location.reload()
       return
     }
@@ -72,6 +62,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       const message = this.state.error?.message || 'An unexpected error occurred. Please try again.'
+      const chunkError = isChunkLoadError(this.state.error)
 
       return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -82,7 +73,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 <CardTitle>Something went wrong</CardTitle>
               </div>
               <CardDescription>
-                {isChunkLoadError(this.state.error)
+                {chunkError
                   ? 'The app was updated. Reload to continue.'
                   : 'An unexpected error occurred. Please try again.'}
               </CardDescription>
@@ -93,19 +84,31 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                   <p className="text-sm font-mono text-destructive break-words">{message}</p>
                 </div>
               )}
-              <div className="flex gap-2">
-                <Button onClick={this.handleReset} variant="outline" className="flex-1">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Try Again
-                </Button>
-                <Button
-                  onClick={() => (window.location.href = '/')}
-                  variant="default"
-                  className="flex-1"
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Go Home
-                </Button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Button onClick={this.handleReset} variant="outline" className="flex-1">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try Again
+                  </Button>
+                  <Button
+                    onClick={() => (window.location.href = '/')}
+                    variant="default"
+                    className="flex-1"
+                  >
+                    <Home className="h-4 w-4 mr-2" />
+                    Go Home
+                  </Button>
+                </div>
+                {chunkError && (
+                  <Button
+                    onClick={() => (window.location.href = clearCacheRedirectUrl())}
+                    variant="secondary"
+                    className="w-full"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Clear cache &amp; reload
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -131,6 +131,30 @@ print("missing")
 PY
 }
 
+verify_static_chunks() {
+  local build_id sample_chunk url code
+  if [ ! -f .next/BUILD_ID ]; then
+    echo "    ERROR: missing .next/BUILD_ID" >&2
+    return 1
+  fi
+  build_id="$(cat .next/BUILD_ID)"
+  echo "    BUILD_ID=${build_id}"
+
+  sample_chunk="$(find .next/static/chunks -maxdepth 1 -name '*.js' -type f 2>/dev/null | head -1)"
+  if [ -z "$sample_chunk" ]; then
+    echo "    ERROR: no JS chunks in .next/static/chunks" >&2
+    return 1
+  fi
+  sample_chunk="${sample_chunk#.next/}"
+  url="http://127.0.0.1:${PORT}/_next/${sample_chunk}"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10 "$url" 2>/dev/null || echo 000)"
+  if [ "$code" != "200" ]; then
+    echo "    ERROR: static chunk check failed — ${url} returned HTTP ${code}" >&2
+    return 1
+  fi
+  echo "    static chunk OK (${sample_chunk})"
+}
+
 verify_next_build() {
   local missing=0
   for f in \
@@ -254,6 +278,12 @@ if command -v pm2 >/dev/null 2>&1; then
     echo "    port ${PORT} listeners:" >&2
     ss -ltnp "sport = :$PORT" 2>/dev/null || true
     echo "    recent logs:" >&2
+    pm2 logs mh5-frontend --lines 40 --nostream 2>/dev/null || true
+    exit 1
+  fi
+
+  if ! verify_static_chunks; then
+    echo "    ERROR: frontend static assets not served correctly" >&2
     pm2 logs mh5-frontend --lines 40 --nostream 2>/dev/null || true
     exit 1
   fi

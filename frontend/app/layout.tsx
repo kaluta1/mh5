@@ -8,6 +8,7 @@ import { ClockProvider } from "@/contexts/clock-context"
 import { ToastProvider } from "@/components/ui/toast"
 import { CookieConsent } from "@/components/ui/cookie-consent"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { ChunkLoadRecovery } from "@/components/chunk-load-recovery"
 import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from "@/lib/metadata-translations"
 import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from "@/lib/language-cookie"
 import { API_ORIGIN } from "@/lib/config"
@@ -217,6 +218,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ErrorBoundary>
+            <ChunkLoadRecovery />
             <ToastProvider>
               <LanguageProvider>
                 <ClockProvider>

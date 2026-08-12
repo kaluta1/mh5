@@ -74,6 +74,11 @@ map \$http_upgrade \$connection_upgrade {
     ''      '';
 }
 
+map \$upstream_status \$mh5_next_static_cache {
+    200     "public, max-age=31536000, immutable";
+    default "no-store, no-cache, must-revalidate";
+}
+
 upstream mh5_frontend {
     server 127.0.0.1:${FRONTEND_PORT};
     keepalive 32;
@@ -112,6 +117,24 @@ server {
     # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
     # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
+    location ^~ /_next/static/ {
+        proxy_pass http://mh5_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
+        proxy_cache_bypass \$http_upgrade;
+        add_header Cache-Control \$mh5_next_static_cache always;
+    }
+
     location ^~ /_next/ {
         proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
@@ -127,8 +150,6 @@ server {
         proxy_next_upstream_tries 2;
         proxy_next_upstream_timeout 15s;
         proxy_cache_bypass \$http_upgrade;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
     }
 
     location /api/ {
@@ -182,6 +203,11 @@ map \$http_upgrade \$connection_upgrade {
     ''      '';
 }
 
+map \$upstream_status \$mh5_next_static_cache {
+    200     "public, max-age=31536000, immutable";
+    default "no-store, no-cache, must-revalidate";
+}
+
 upstream mh5_frontend {
     server 127.0.0.1:${FRONTEND_PORT};
     keepalive 32;
@@ -208,6 +234,24 @@ server {
     # /api/v1/media/file/* must proxy to FastAPI (S3 + multi-root local lookup).
     # Do NOT serve from disk here — uploads may live in S3 or a different LOCAL_STORAGE_PATH.
 
+    location ^~ /_next/static/ {
+        proxy_pass http://mh5_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 15s;
+        proxy_cache_bypass \$http_upgrade;
+        add_header Cache-Control \$mh5_next_static_cache always;
+    }
+
     location ^~ /_next/ {
         proxy_pass http://mh5_frontend;
         proxy_http_version 1.1;
@@ -222,6 +266,7 @@ server {
         proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
         proxy_next_upstream_tries 2;
         proxy_next_upstream_timeout 15s;
+        proxy_cache_bypass \$http_upgrade;
     }
 
     location /api/ {
