@@ -1,4 +1,5 @@
 from typing import Any, List, Union
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import func, or_
@@ -15,6 +16,7 @@ from app.schemas.user import User, UserUpdate, PublicUserProfile
 from app.schemas.wallet import UserWalletUpdate, UserWalletResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/me", response_model=User)
 def read_user_me(
@@ -55,11 +57,19 @@ def update_user_wallet(
     current_user.usdt_wallet_address = wallet_in.usdt_wallet_address
     current_user.payout_currency = wallet_in.payout_currency or "usdtbsc"
     db.add(current_user)
-    db.flush()
-
-    paid_count = pay_pending_commissions_for_user_sync(db, current_user.id)
     db.commit()
     db.refresh(current_user)
+
+    paid_count = 0
+    try:
+        paid_count = pay_pending_commissions_for_user_sync(db, current_user.id)
+        db.commit()
+    except Exception:
+        logger.exception(
+            "Wallet saved for user %s; pending commission payout skipped",
+            current_user.id,
+        )
+        db.rollback()
 
     return UserWalletResponse(
         usdt_wallet_address=current_user.usdt_wallet_address,
