@@ -102,14 +102,38 @@ def distribute_commissions(
     if not source_user.sponsor_id:
         logger.info(f"User {deposit.user_id} has no sponsor, no commissions to distribute")
         return commissions_created
+
+    if deposit.id:
+        existing = (
+            db.query(AffiliateCommission)
+            .filter(AffiliateCommission.deposit_id == deposit.id)
+            .all()
+        )
+        if existing:
+            logger.info(
+                "Commissions already exist for deposit %s (%s row(s)); skipping distribution",
+                deposit.id,
+                len(existing),
+            )
+            return existing
     
     # Remonter l'arbre des parrains
     current_sponsor_id = source_user.sponsor_id
     level = 1
+    visited_sponsor_ids: set[int] = set()
     
     max_levels = config["max_levels"]
     
     while current_sponsor_id and level <= max_levels:
+        if current_sponsor_id in visited_sponsor_ids:
+            logger.warning(
+                "Sponsor cycle detected at user %s for deposit %s; stopping at level %s",
+                current_sponsor_id,
+                deposit.id,
+                level,
+            )
+            break
+        visited_sponsor_ids.add(current_sponsor_id)
         # Déterminer le montant de la commission
         if level == 1:
             commission_amount = config["direct_amount"]
@@ -123,6 +147,26 @@ def distribute_commissions(
         sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
         if not sponsor:
             break
+
+        if deposit.id:
+            duplicate = (
+                db.query(AffiliateCommission)
+                .filter(
+                    AffiliateCommission.deposit_id == deposit.id,
+                    AffiliateCommission.user_id == current_sponsor_id,
+                )
+                .first()
+            )
+            if duplicate:
+                logger.warning(
+                    "Duplicate commission skipped for deposit %s beneficiary %s at level %s",
+                    deposit.id,
+                    current_sponsor_id,
+                    level,
+                )
+                current_sponsor_id = sponsor.sponsor_id
+                level += 1
+                continue
 
         # No wallet → PENDING until user adds one; has wallet → APPROVED then auto-payout
         initial_status = (

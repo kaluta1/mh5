@@ -39,8 +39,10 @@ interface Commission {
   productTypeName?: string
   sourceUser: {
     name: string
+    username?: string
     avatar?: string
   }
+  depositId?: number
   description: string
   createdAt: string
   paidAt?: string
@@ -94,8 +96,10 @@ export default function CommissionsPage() {
     productTypeName: c.product_type_name as string | undefined,
     sourceUser: {
       name: (c.source_user_name as string) || 'User',
+      username: c.source_user_username as string | undefined,
       avatar: c.source_user_avatar as string | undefined,
     },
+    depositId: typeof c.deposit_id === 'number' ? c.deposit_id : c.deposit_id != null ? Number(c.deposit_id) : undefined,
     description: (c.description as string) || '',
     createdAt: (c.created_at as string) || new Date().toISOString(),
     paidAt: c.paid_at as string | undefined,
@@ -629,7 +633,9 @@ export default function CommissionsPage() {
                         )}
                       </div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {commission.sourceUser.name}
+                        {commission.sourceUser.username
+                          ? `@${commission.sourceUser.username}`
+                          : commission.sourceUser.name}
                       </p>
                     </div>
                     
