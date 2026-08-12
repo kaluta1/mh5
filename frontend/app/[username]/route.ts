@@ -31,6 +31,7 @@ const RESERVED_USERNAMES = new Set([
   'pages_mobile',
   'link-preview',
   'tiktok-resolve',
+  'clear-cache',
   'c',
   's',
   'l',
