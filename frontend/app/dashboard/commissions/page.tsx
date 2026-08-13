@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
+import { dedupeCommissionRows } from '@/lib/dedupe-commissions'
 import type { AxiosError } from 'axios'
 
 interface Commission {
@@ -172,7 +173,12 @@ export default function CommissionsPage() {
 
       const raw = commissionsResponse.data
       const rows = Array.isArray(raw) ? raw : []
-      setCommissions(rows.map((c) => mapCommissionRow(c as Record<string, unknown>)))
+      const mapped = rows.map((c) => mapCommissionRow(c as Record<string, unknown>))
+      const deduped = dedupeCommissionRows(mapped)
+      deduped.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      setCommissions(deduped)
     } catch (error) {
       console.error('Error loading commissions data:', error)
       setCommissions([])

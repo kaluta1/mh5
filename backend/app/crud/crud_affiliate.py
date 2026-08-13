@@ -280,6 +280,43 @@ class CRUDAffiliateCommission:
     # Taux de commission par niveau (niveau 1 = parrain direct = 20%, niveaux 2-10 = 2%)
     # Canonical rates: see app.core.commission_config (10% direct, 1% indirect).
     COMMISSION_RATES = {i: level_rate(i) for i in range(1, MAX_LEVELS + 1)}
+
+    @staticmethod
+    def _dedupe_commission_records(commissions: List[AffiliateCommission]) -> List[AffiliateCommission]:
+        """
+        One display row per payment event for a beneficiary.
+        Keeps the lowest level (true network depth) when sponsor cycles created duplicates.
+        """
+        kept: dict[tuple, AffiliateCommission] = {}
+
+        for commission in commissions:
+            if commission.deposit_id:
+                key = ("deposit", commission.deposit_id, commission.user_id)
+            else:
+                tx_day = (
+                    commission.transaction_date.date()
+                    if commission.transaction_date
+                    else None
+                )
+                key = (
+                    "legacy",
+                    commission.user_id,
+                    commission.source_user_id,
+                    commission.commission_type,
+                    tx_day,
+                )
+
+            previous = kept.get(key)
+            if previous is None:
+                kept[key] = commission
+                continue
+
+            if commission.level < previous.level:
+                kept[key] = commission
+            elif commission.level == previous.level and commission.id < previous.id:
+                kept[key] = commission
+
+        return list(kept.values())
     
     def create_commission(
         self, db: Session, 
@@ -381,7 +418,6 @@ class CRUDAffiliateCommission:
     def get_commissions_stats(self, db: Session, user_id: int) -> dict:
         """Statistiques de commissions pour le dashboard."""
         from datetime import datetime, timedelta
-        from calendar import monthrange
         
         now = datetime.utcnow()
         
@@ -390,51 +426,42 @@ class CRUDAffiliateCommission:
         
         # Début du mois dernier
         last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
-        
-        # Use textual status matching to avoid runtime failures when DB enum labels
-        # drift from Python enum symbols across environments.
-        status_text = func.lower(cast(AffiliateCommission.status, String))
-        earned_statuses = ["approved", "paid"]
-        month_statuses = ["approved", "paid", "pending"]
 
-        # Total gagné (toutes commissions approuvées/payées)
-        total_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            status_text.in_(earned_statuses)
-        ).scalar() or 0.0
-        
-        # Montant en attente (no wallet yet)
-        pending_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            status_text == "pending"
-        ).scalar() or 0.0
+        all_commissions = (
+            db.query(AffiliateCommission)
+            .filter(AffiliateCommission.user_id == user_id)
+            .all()
+        )
+        commissions = self._dedupe_commission_records(all_commissions)
 
-        # Approved — accrued, payout pending or manual withdraw
-        approved_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            status_text == "approved"
-        ).scalar() or 0.0
-        
-        # Montant payé
-        paid_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            status_text == "paid"
-        ).scalar() or 0.0
-        
-        # Ce mois
-        this_month = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            AffiliateCommission.transaction_date >= first_day_this_month,
-            status_text.in_(month_statuses)
-        ).scalar() or 0.0
-        
-        # Mois dernier
-        last_month_amount = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-            AffiliateCommission.user_id == user_id,
-            AffiliateCommission.transaction_date >= last_month,
-            AffiliateCommission.transaction_date < first_day_this_month,
-            status_text.in_(month_statuses)
-        ).scalar() or 0.0
+        def _amount(c: AffiliateCommission) -> float:
+            return float(c.commission_amount or 0)
+
+        def _status(c: AffiliateCommission) -> str:
+            return (c.status.value if c.status else "pending").lower()
+
+        total_earned = sum(
+            _amount(c) for c in commissions if _status(c) in ("approved", "paid")
+        )
+        pending_amount = sum(_amount(c) for c in commissions if _status(c) == "pending")
+        approved_amount = sum(_amount(c) for c in commissions if _status(c) == "approved")
+        paid_amount = sum(_amount(c) for c in commissions if _status(c) == "paid")
+
+        this_month = sum(
+            _amount(c)
+            for c in commissions
+            if c.transaction_date
+            and c.transaction_date >= first_day_this_month
+            and _status(c) in ("approved", "paid", "pending")
+        )
+        last_month_amount = sum(
+            _amount(c)
+            for c in commissions
+            if c.transaction_date
+            and c.transaction_date >= last_month
+            and c.transaction_date < first_day_this_month
+            and _status(c) in ("approved", "paid", "pending")
+        )
         
         # Taux de croissance
         if last_month_amount > 0:
@@ -504,7 +531,25 @@ class CRUDAffiliateCommission:
         else:  # date (default)
             query = query.order_by(AffiliateCommission.transaction_date.desc())
         
-        commissions = query.offset(skip).limit(limit).all()
+        all_commissions = query.all()
+        deduped = self._dedupe_commission_records(all_commissions)
+
+        if sort_by == "amount":
+            deduped.sort(key=lambda c: float(c.commission_amount or 0), reverse=True)
+        elif sort_by == "type":
+            deduped.sort(
+                key=lambda c: (
+                    c.commission_type.value if c.commission_type else "",
+                    -(c.transaction_date.timestamp() if c.transaction_date else 0),
+                )
+            )
+        else:
+            deduped.sort(
+                key=lambda c: c.transaction_date or datetime.min,
+                reverse=True,
+            )
+
+        commissions = deduped[skip : skip + limit]
         
         result = []
         for c in commissions:
