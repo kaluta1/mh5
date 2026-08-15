@@ -316,8 +316,55 @@ def _payout_base() -> str:
     return NOWPAYMENTS_SANDBOX_BASE if settings.NOWPAYMENTS_SANDBOX else NOWPAYMENTS_API_BASE
 
 
+def payout_api_key() -> str:
+    """Same NOWPayments account can use the pay-in API key for payouts."""
+    return (
+        (settings.NOWPAYMENTS_PAYOUT_API_KEY or "").strip()
+        or (settings.NOWPAYMENTS_API_KEY or "").strip()
+    )
+
+
+def payout_totp_secret() -> str:
+    return (settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET or "").replace(" ", "").strip()
+
+
+def payout_config_status() -> Dict[str, Any]:
+    """Which NOWPayments payout credentials are present (no secret values)."""
+    has_payin_key = bool((settings.NOWPAYMENTS_API_KEY or "").strip())
+    has_ipn = bool((settings.NOWPAYMENTS_IPN_SECRET or "").strip())
+    has_payout_key = bool(payout_api_key())
+    has_email = bool((settings.NOWPAYMENTS_EMAIL or "").strip())
+    has_password = bool((settings.NOWPAYMENTS_PASSWORD or "").strip())
+    has_totp = bool(payout_totp_secret())
+    missing: List[str] = []
+    if not has_payout_key:
+        missing.append("NOWPAYMENTS_PAYOUT_API_KEY (or NOWPAYMENTS_API_KEY)")
+    if not has_email:
+        missing.append("NOWPAYMENTS_EMAIL")
+    if not has_password:
+        missing.append("NOWPAYMENTS_PASSWORD")
+    if not has_totp:
+        missing.append("NOWPAYMENTS_PAYOUT_TOTP_SECRET")
+    return {
+        "payouts_ready": not missing,
+        "has_api_key": has_payin_key,
+        "has_ipn_secret": has_ipn,
+        "has_payout_api_key": has_payout_key,
+        "has_email": has_email,
+        "has_password": has_password,
+        "has_totp_secret": has_totp,
+        "missing": missing,
+        "hint": (
+            "NOWPayments payouts need Authenticator 2FA (not email). "
+            "In the NOWPayments dashboard: Settings → 2FA → Authenticator app, "
+            "save the secret as NOWPAYMENTS_PAYOUT_TOTP_SECRET, plus account email/password."
+        ),
+    }
+
+
 def payouts_configured() -> bool:
-    return bool((settings.NOWPAYMENTS_PAYOUT_API_KEY or "").strip())
+    """Ready to create + verify payouts (SmartBlogger: API key + JWT auth + TOTP)."""
+    return bool(payout_config_status()["payouts_ready"])
 
 
 def _get_payout_jwt_sync() -> str:
@@ -370,7 +417,7 @@ async def _get_payout_jwt() -> str:
 def _payout_headers_sync() -> Dict[str, str]:
     token = _get_payout_jwt_sync()
     return {
-        "x-api-key": settings.NOWPAYMENTS_PAYOUT_API_KEY,
+        "x-api-key": payout_api_key(),
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
@@ -379,15 +426,15 @@ def _payout_headers_sync() -> Dict[str, str]:
 async def _payout_headers() -> Dict[str, str]:
     token = await _get_payout_jwt()
     return {
-        "x-api-key": settings.NOWPAYMENTS_PAYOUT_API_KEY,
+        "x-api-key": payout_api_key(),
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
 
 
 def send_payout_sync(*, withdrawals: List[dict]) -> dict:
-    if not payouts_configured():
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY is not configured.")
+    if not payout_api_key():
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
 
     with httpx.Client(timeout=30.0) as client:
         resp = client.post(
@@ -401,8 +448,8 @@ def send_payout_sync(*, withdrawals: List[dict]) -> dict:
 
 
 async def send_payout(*, withdrawals: List[dict]) -> dict:
-    if not payouts_configured():
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY is not configured.")
+    if not payout_api_key():
+        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
@@ -416,10 +463,15 @@ async def send_payout(*, withdrawals: List[dict]) -> dict:
 
 
 def verify_payout_sync(batch_withdrawal_id: str) -> dict:
-    if not settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET:
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured.")
+    secret = payout_totp_secret()
+    if not secret:
+        raise NowPaymentsError(
+            "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured. "
+            "Enable Authenticator 2FA on the NOWPayments dashboard (not email 2FA) "
+            "and store the TOTP secret in backend/.env — same as SmartBlogger."
+        )
 
-    code = pyotp.TOTP(settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET).now()
+    code = pyotp.TOTP(secret).now()
     with httpx.Client(timeout=15.0) as client:
         resp = client.post(
             f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
@@ -437,10 +489,15 @@ def verify_payout_sync(batch_withdrawal_id: str) -> dict:
 
 
 async def verify_payout(batch_withdrawal_id: str) -> dict:
-    if not settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET:
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured.")
+    secret = payout_totp_secret()
+    if not secret:
+        raise NowPaymentsError(
+            "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured. "
+            "Enable Authenticator 2FA on the NOWPayments dashboard (not email 2FA) "
+            "and store the TOTP secret in backend/.env — same as SmartBlogger."
+        )
 
-    code = pyotp.TOTP(settings.NOWPAYMENTS_PAYOUT_TOTP_SECRET).now()
+    code = pyotp.TOTP(secret).now()
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",

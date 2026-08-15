@@ -62,6 +62,16 @@ def validate_critical_settings():
             "NOWPAYMENTS_IPN_SECRET is missing. Payment webhooks cannot be verified."
         )
 
+    from app.services.nowpayments_service import payout_config_status
+
+    payout_status = payout_config_status()
+    if not payout_status["payouts_ready"]:
+        payment_warnings.append(
+            "Affiliate payouts are disabled until NOWPayments 2FA is configured. Missing: "
+            + ", ".join(payout_status["missing"])
+            + ". Use Authenticator app 2FA (not email), same as SmartBlogger."
+        )
+
     # Cryptogriphic key missing, the app will shut down in production 
     if critical_errors:
         print("\n" + "=" * 70)

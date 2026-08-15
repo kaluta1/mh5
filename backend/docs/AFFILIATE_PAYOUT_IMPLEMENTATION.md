@@ -45,7 +45,14 @@ NOWPAYMENTS_PAYOUT_TOTP_SECRET=
 
 Existing pay-in vars (`NOWPAYMENTS_API_KEY`, etc.) are unchanged.
 
-**NOWPayments dashboard:** enable Payout API, USDT networks, and Authenticator 2FA (not email).
+**NOWPayments dashboard (same as SmartBlogger):**
+
+1. Enable **Payout API**
+2. Enable **Authenticator app 2FA** on payouts (**not email 2FA**)
+3. Copy the TOTP secret shown once into `NOWPAYMENTS_PAYOUT_TOTP_SECRET`
+4. Set dashboard login as `NOWPAYMENTS_EMAIL` / `NOWPAYMENTS_PASSWORD`
+
+Payouts will not send until all four are set. Check: `GET /api/v1/admin/affiliate/payout-status`
 
 ## Database migration
 

@@ -4658,6 +4658,42 @@ async def admin_kyc_provider_settlement(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.get("/affiliate/payout-status")
+def admin_affiliate_payout_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Which NOWPayments payout credentials are set (no secret values)."""
+    check_admin(current_user)
+    from app.services.nowpayments_service import payout_config_status
+
+    return payout_config_status()
+
+
+@router.get("/affiliate/nowpayments-totp")
+def admin_nowpayments_totp_code(
+    current_user: User = Depends(get_current_user),
+):
+    """Current 6-digit Authenticator code for manual NOWPayments dashboard confirmations."""
+    check_admin(current_user)
+    import time
+
+    import pyotp
+
+    from app.services.nowpayments_service import payout_totp_secret
+
+    secret = payout_totp_secret()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not set. "
+                "Enable Authenticator 2FA on the NOWPayments dashboard and save the secret."
+            ),
+        )
+    code = pyotp.TOTP(secret).now()
+    return {"code": code, "seconds_remaining": 30 - (int(time.time()) % 30)}
+
+
 @router.post("/affiliate/retry-payouts")
 def admin_retry_affiliate_payouts(
     user_id: Optional[int] = None,

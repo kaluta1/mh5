@@ -1,3 +1,3 @@
 """Backend build identifier — bump when deploying nomination/API fixes."""
 
-BACKEND_BUILD_ID = "public-contestant-entry-v3-20260803"
+BACKEND_BUILD_ID = "nowpayments-mh5-payout-2fa-20260815"

@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission, CommissionStatus
 from app.models.user import User
-from app.services.nowpayments_service import NowPaymentsError, payouts_configured, send_single_payout_sync
+from app.services.nowpayments_service import (
+    NowPaymentsError,
+    payout_config_status,
+    payouts_configured,
+    send_single_payout_sync,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +71,12 @@ def trigger_commission_payout_sync(
         return False
 
     if not payouts_configured():
-        logger.debug("Payout API not configured — commission %s stays APPROVED", commission.id)
+        missing = ", ".join(payout_config_status().get("missing") or [])
+        logger.warning(
+            "Payout skipped for commission %s — NOWPayments payout not ready (%s)",
+            commission.id,
+            missing or "missing credentials",
+        )
         return False
 
     if float(commission.commission_amount or 0) <= 0:
@@ -189,7 +199,13 @@ def process_manual_withdrawal_sync(
         raise ValueError("Configure your payout wallet in Settings before withdrawing.")
 
     if not payouts_configured():
-        raise ValueError("Crypto payouts are not enabled on this server yet.")
+        missing = ", ".join(payout_config_status().get("missing") or [])
+        raise ValueError(
+            "Crypto payouts are not enabled yet. Missing: "
+            + (missing or "NOWPayments payout credentials")
+            + ". Enable Authenticator 2FA on the NOWPayments account and set "
+            "NOWPAYMENTS_EMAIL, NOWPAYMENTS_PASSWORD, NOWPAYMENTS_PAYOUT_TOTP_SECRET."
+        )
 
     available = get_approved_balance_sync(db, user.id)
     if gross > available:

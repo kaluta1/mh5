@@ -82,14 +82,17 @@ for key in FRONTEND_URL BACKEND_PUBLIC_URL NEXT_PUBLIC_API_URL API_BASE_URL; do
   fi
 done
 
-# NOWPayments — must be set manually (cannot auto-generate)
-NP_KEY="$(get_env NOWPAYMENTS_API_KEY)"
-NP_IPN="$(get_env NOWPAYMENTS_IPN_SECRET)"
-if [ -z "$NP_KEY" ] || [ -z "$NP_IPN" ]; then
-  echo "    WARN: NOWPAYMENTS_API_KEY and/or NOWPAYMENTS_IPN_SECRET missing in backend/.env"
-  echo "          Crypto checkout will return 502 until both are set, then: systemctl restart myhigh5-backend"
+# NOWPayments pay-in keys (MH5 account) — always apply so deploys pick up the current keys
+bash "${ROOT}/scripts/set_nowpayments_mh5.sh"
+
+PAYOUT_EMAIL="$(get_env NOWPAYMENTS_EMAIL)"
+PAYOUT_PASS="$(get_env NOWPAYMENTS_PASSWORD)"
+PAYOUT_TOTP="$(get_env NOWPAYMENTS_PAYOUT_TOTP_SECRET)"
+if [ -z "$PAYOUT_EMAIL" ] || [ -z "$PAYOUT_PASS" ] || [ -z "$PAYOUT_TOTP" ]; then
+  echo "    WARN: affiliate payouts need Authenticator 2FA (SmartBlogger pattern)"
+  echo "          set NOWPAYMENTS_EMAIL, NOWPAYMENTS_PASSWORD, NOWPAYMENTS_PAYOUT_TOTP_SECRET"
 else
-  echo "    OK NOWPayments keys present"
+  echo "    OK NOWPayments payout 2FA credentials present"
 fi
 
 if ! grep -qE '^NOWPAYMENTS_DEFAULT_PAY_CURRENCY=' "$ENV_FILE"; then
