@@ -26,10 +26,11 @@ PY
 
 echo "==> apply VPS manual migrations on ${DB_NAME}"
 
+# postgres cannot always read /root/mh5/... (Permission denied). Pipe as root.
 if id postgres >/dev/null 2>&1; then
-  sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${DB_NAME}" -f "${SQL_FILE}"
+  cat "$SQL_FILE" | sudo -u postgres psql -v ON_ERROR_STOP=1 -d "${DB_NAME}"
 else
-  psql -v ON_ERROR_STOP=1 -d "${DB_NAME}" -f "${SQL_FILE}"
+  psql -v ON_ERROR_STOP=1 -d "${DB_NAME}" -f "$SQL_FILE"
 fi
 
 echo "    OK manual migrations applied"

@@ -68,6 +68,23 @@ ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};
 SQL
 
 run_psql -d "${DB_NAME}" <<SQL
+-- Tables first. Identity/serial sequences follow the table owner; altering the
+-- sequence alone fails with: "is linked to table ..."
+DO \$\$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT c.relname
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+  LOOP
+    EXECUTE format('ALTER TABLE public.%I OWNER TO ${DB_USER}', r.relname);
+  END LOOP;
+END \$\$;
+
 DO \$\$
 DECLARE
   r RECORD;
@@ -78,15 +95,38 @@ BEGIN
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
-      AND c.relkind IN ('r', 'S', 'v', 'm')
+      AND c.relkind IN ('v', 'm')
   LOOP
     kind_sql := CASE r.relkind
-      WHEN 'S' THEN 'SEQUENCE'
       WHEN 'v' THEN 'VIEW'
-      WHEN 'm' THEN 'MATERIALIZED VIEW'
-      ELSE 'TABLE'
+      ELSE 'MATERIALIZED VIEW'
     END;
     EXECUTE format('ALTER %s public.%I OWNER TO ${DB_USER}', kind_sql, r.relname);
+  END LOOP;
+END \$\$;
+
+DO \$\$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT c.relname
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'S'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_depend d
+        WHERE d.objid = c.oid
+          AND d.deptype IN ('a', 'i')
+      )
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER SEQUENCE public.%I OWNER TO ${DB_USER}', r.relname);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'skip sequence %: %', r.relname, SQLERRM;
+    END;
   END LOOP;
 END \$\$;
 
@@ -103,6 +143,12 @@ BEGIN
     EXECUTE format('ALTER TYPE public.%I OWNER TO ${DB_USER}', r.typname);
   END LOOP;
 END \$\$;
+
+ALTER SCHEMA public OWNER TO ${DB_USER};
+GRANT ALL ON SCHEMA public TO ${DB_USER};
+GRANT ALL ON ALL TABLES IN SCHEMA public TO ${DB_USER};
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO ${DB_USER};
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO ${DB_USER};
 SQL
 
 echo "    OK ownership updated for ${DB_NAME}.${DB_USER}"

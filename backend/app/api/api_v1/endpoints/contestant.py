@@ -174,6 +174,20 @@ _MYHIGH5_LEVEL_DATE_FIELDS = {
 }
 
 
+def _myhigh5_level_to_season_enum(level: str) -> Optional[SeasonLevel]:
+    """Map MyHigh5 / Top High5 geography tabs onto nomination calendar levels."""
+    raw = (level or "").strip().lower()
+    return {
+        "city": SeasonLevel.COUNTRY,  # city votes share the country (M+1) vote month
+        "country": SeasonLevel.COUNTRY,
+        "regional": SeasonLevel.REGIONAL,
+        "region": SeasonLevel.REGIONAL,
+        "continent": SeasonLevel.CONTINENT,
+        "continental": SeasonLevel.CONTINENT,
+        "global": SeasonLevel.GLOBAL,
+    }.get(raw)
+
+
 def _myhigh5_season_is_currently_live(
     db: Session,
     *,
@@ -182,16 +196,18 @@ def _myhigh5_season_is_currently_live(
     contest_id: Optional[int],
     now: Optional[datetime] = None,
 ) -> bool:
-    """True when this MyHigh5 slot is the live vote window (Active tab).
+    """True when this slot is the live Top High5 session for that geography.
 
-    Past country/regional slices belong in History even if the round's overall
-    voting_end_date is still open for a later geography.
+    Country = current month's M+1 cohort, Regional M+2, Continental M+3, Global M+4.
+    Closed slices (e.g. May country in August) belong in History on every tab.
     """
     when = now or datetime.utcnow()
+    today = when.date() if hasattr(when, "date") else when
     if season is None or getattr(season, "is_deleted", False):
         return False
 
     from app.models.round import Round, RoundStatus
+    from app.services.season_migration import SeasonMigrationService
 
     round_obj = getattr(season, "round", None)
     if round_obj is None and getattr(season, "round_id", None):
@@ -202,6 +218,12 @@ def _myhigh5_season_is_currently_live(
         status_s = status_val.value if hasattr(status_val, "value") else str(status_val or "")
         if str(status_s).lower() == RoundStatus.CANCELLED.value:
             return False
+
+        sl = _myhigh5_level_to_season_enum(effective_level)
+        if sl is not None:
+            vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
+            if vote_open:
+                return SeasonMigrationService.nomination_stage_voting_open(round_obj, sl, today)
 
         fields = _MYHIGH5_LEVEL_DATE_FIELDS.get((effective_level or "").strip().lower())
         if fields:
@@ -1063,7 +1085,7 @@ def get_my_votes(
     if requested_level_norm and all_votes:
         all_votes = [vote for vote in all_votes if _effective_vote_level(vote) == requested_level_norm]
 
-    # Active tab: keep only votes whose geography window is open now (unless archive round_id).
+    # Active tab: current Top High5 session per geography (country/regional/continent/global/city).
     if round_id is None and all_votes:
         live_now = datetime.utcnow()
         all_votes = [
@@ -1072,7 +1094,7 @@ def get_my_votes(
             if _myhigh5_season_is_currently_live(
                 db,
                 season=vote.season,
-                effective_level=_effective_vote_level(vote),
+                effective_level=requested_level_norm or _effective_vote_level(vote),
                 contest_id=vote.contest_id,
                 now=live_now,
             )
@@ -1401,16 +1423,17 @@ def get_my_votes_history(
         kept = []
         for vote in all_votes:
             contest_for_vote = vote.contest
+            vote_level = _effective_myhigh5_vote_level(
+                season_level=_season_level_norm(vote.season),
+                contest_mode_norm=_normalize_contest_mode(
+                    getattr(contest_for_vote, "contest_mode", None)
+                ),
+                contest_level_norm=_contest_level_norm(contest_for_vote),
+            )
             live = _myhigh5_season_is_currently_live(
                 db,
                 season=vote.season,
-                effective_level=_effective_myhigh5_vote_level(
-                    season_level=_season_level_norm(vote.season),
-                    contest_mode_norm=_normalize_contest_mode(
-                        getattr(contest_for_vote, "contest_mode", None)
-                    ),
-                    contest_level_norm=_contest_level_norm(contest_for_vote),
-                ),
+                effective_level=vote_level,
                 contest_id=vote.contest_id,
                 now=live_now,
             )

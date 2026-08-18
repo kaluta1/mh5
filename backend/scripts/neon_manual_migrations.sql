@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS affiliate_cashout_requests (
 CREATE INDEX IF NOT EXISTS ix_affiliate_cashout_requests_user_id
     ON affiliate_cashout_requests (user_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_affiliate_commissions_deposit_user
+    ON affiliate_commissions (deposit_id, user_id)
+    WHERE deposit_id IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- s3t4u5v6w7x8 — Kaluta KYC provider enum value
 -- ---------------------------------------------------------------------------
