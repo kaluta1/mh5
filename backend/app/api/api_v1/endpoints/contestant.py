@@ -1,4 +1,5 @@
 from typing import List, Optional, Any, Set, Tuple, Dict
+from datetime import datetime, time as dt_time
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request, Body
 import json
 import re
@@ -160,6 +161,70 @@ def _effective_myhigh5_vote_level(
     if sl == "city":
         return "country"
     return sl
+
+
+_MYHIGH5_LEVEL_DATE_FIELDS = {
+    "city": ("city_season_start_date", "city_season_end_date"),
+    "country": ("country_season_start_date", "country_season_end_date"),
+    "regional": ("regional_start_date", "regional_end_date"),
+    "region": ("regional_start_date", "regional_end_date"),
+    "continent": ("continental_start_date", "continental_end_date"),
+    "continental": ("continental_start_date", "continental_end_date"),
+    "global": ("global_start_date", "global_end_date"),
+}
+
+
+def _myhigh5_season_is_currently_live(
+    db: Session,
+    *,
+    season: Optional[ContestSeason],
+    effective_level: str,
+    contest_id: Optional[int],
+    now: Optional[datetime] = None,
+) -> bool:
+    """True when this MyHigh5 slot is the live vote window (Active tab).
+
+    Past country/regional slices belong in History even if the round's overall
+    voting_end_date is still open for a later geography.
+    """
+    when = now or datetime.utcnow()
+    if season is None or getattr(season, "is_deleted", False):
+        return False
+
+    from app.models.round import Round, RoundStatus
+
+    round_obj = getattr(season, "round", None)
+    if round_obj is None and getattr(season, "round_id", None):
+        round_obj = db.query(Round).filter(Round.id == season.round_id).first()
+
+    if round_obj is not None:
+        status_val = getattr(round_obj, "status", None)
+        status_s = status_val.value if hasattr(status_val, "value") else str(status_val or "")
+        if str(status_s).lower() == RoundStatus.CANCELLED.value:
+            return False
+
+        fields = _MYHIGH5_LEVEL_DATE_FIELDS.get((effective_level or "").strip().lower())
+        if fields:
+            start_date = getattr(round_obj, fields[0], None)
+            end_date = getattr(round_obj, fields[1], None)
+            if start_date and end_date:
+                start_dt = datetime.combine(start_date, dt_time.min)
+                end_dt = datetime.combine(end_date, dt_time(23, 59, 59))
+                return start_dt <= when <= end_dt
+
+    if contest_id:
+        link = (
+            db.query(ContestSeasonLink)
+            .filter(
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.season_id == season.id,
+            )
+            .first()
+        )
+        if link is not None:
+            return bool(link.is_active)
+
+    return False
 
 
 def _normalize_video_media_ids_for_dedup(blob: Any) -> str:
@@ -867,11 +932,10 @@ def get_my_votes(
     ),
 ) -> dict:
     """
-    Récupère les votes MyHigh5, groupés par saison + (category_id si défini, sinon
-    contest_type + contest_mode). Chaque groupe a au plus 5 votes.
+    Active MyHigh5 votes for the live geography window, grouped by season + category bucket.
 
-    Ne pas exiger un ContestSeasonLink actif : après migration de saison le lien peut
-    être inactif alors que le vote reste valide — sinon les votes disparaissent du dashboard.
+    Past slices (e.g. May country votes after that window closed) are omitted here and
+    returned by GET /user/my-votes/history. Pass round_id to inspect a specific archive round.
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case, func
@@ -880,7 +944,7 @@ def get_my_votes(
 
     query = db.query(ContestantVoting).options(
         joinedload(ContestantVoting.contestant),
-        joinedload(ContestantVoting.season),
+        joinedload(ContestantVoting.season).joinedload(ContestSeason.round),
         joinedload(ContestantVoting.contest)
     ).filter(
         ContestantVoting.user_id == current_user.id
@@ -998,6 +1062,21 @@ def get_my_votes(
 
     if requested_level_norm and all_votes:
         all_votes = [vote for vote in all_votes if _effective_vote_level(vote) == requested_level_norm]
+
+    # Active tab: keep only votes whose geography window is open now (unless archive round_id).
+    if round_id is None and all_votes:
+        live_now = datetime.utcnow()
+        all_votes = [
+            vote
+            for vote in all_votes
+            if _myhigh5_season_is_currently_live(
+                db,
+                season=vote.season,
+                effective_level=_effective_vote_level(vote),
+                contest_id=vote.contest_id,
+                now=live_now,
+            )
+        ]
     
     # Grouper par saison + vote_bucket_key (une ligne MyHigh5 par catégorie réelle)
     votes_by_group: dict = {}
@@ -1253,18 +1332,17 @@ def get_my_votes_history(
     ),
 ) -> dict:
     """
-    Récupère l'historique complet des votes de l'utilisateur connecté (MyHigh5).
-    Retourne tous les votes, y compris ceux des saisons inactives, groupés par contestant et season.
+    Past MyHigh5 votes (closed geography windows). Live Active-tab votes are excluded
+    unless round_id is set (archive view of that round).
     """
     from sqlalchemy.orm import joinedload
     from sqlalchemy import case
     from app.models.contests import Contestant
     from app.models.contest import Contest
     
-    # Construire la requête de base (sans filtre sur is_active)
     query = db.query(ContestantVoting).options(
         joinedload(ContestantVoting.contestant),
-        joinedload(ContestantVoting.season),
+        joinedload(ContestantVoting.season).joinedload(ContestSeason.round),
         joinedload(ContestantVoting.contest)
     ).filter(
         ContestantVoting.user_id == current_user.id
@@ -1317,6 +1395,28 @@ def get_my_votes_history(
         ),
         ContestantVoting.vote_date.asc()
     ).all()
+
+    if round_id is None and all_votes:
+        live_now = datetime.utcnow()
+        kept = []
+        for vote in all_votes:
+            contest_for_vote = vote.contest
+            live = _myhigh5_season_is_currently_live(
+                db,
+                season=vote.season,
+                effective_level=_effective_myhigh5_vote_level(
+                    season_level=_season_level_norm(vote.season),
+                    contest_mode_norm=_normalize_contest_mode(
+                        getattr(contest_for_vote, "contest_mode", None)
+                    ),
+                    contest_level_norm=_contest_level_norm(contest_for_vote),
+                ),
+                contest_id=vote.contest_id,
+                now=live_now,
+            )
+            if not live:
+                kept.append(vote)
+        all_votes = kept
     
     # Grouper par vote_bucket_key (catégorie MyHigh5), puis par season_id
     votes_by_bucket: dict = {}
