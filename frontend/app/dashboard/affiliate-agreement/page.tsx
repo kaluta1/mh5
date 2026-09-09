@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -43,7 +44,7 @@ export default function AffiliateAgreementPage() {
       const token = localStorage.getItem('access_token')
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
       
-      const response = await fetch(`${resolvePublicApiBase()}/api/v1/user/me`, {
+      const response = await fetch(`${resolvePublicApiBase()}/api/v1/users/me`, {
         headers
       })
       
@@ -159,7 +160,7 @@ export default function AffiliateAgreementPage() {
             <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">
               <li>Promote our platform ethically and truthfully;</li>
               <li>Not make false or misleading statements regarding our products, services, or earnings potential;</li>
-              <li>Comply with all applicable federal, provincial, and local laws including, but not limited to, the Competition Act, Privacy Act, and CASL (Canada's Anti-Spam Legislation);</li>
+              <li>Comply with all applicable federal, provincial, and local laws including, but not limited to, the Competition Act, Privacy Act, and CASL (Canada&apos;s Anti-Spam Legislation);</li>
               <li>Avoid spamming, click fraud, or deceptive advertising practices;</li>
               <li>Ensure that all your marketing materials disclose your affiliate relationship with us, in compliance with Canadian advertising guidelines and industry standards.</li>
             </ul>
@@ -175,7 +176,7 @@ export default function AffiliateAgreementPage() {
               <li>May be forfeited in case of fraudulent activity, policy violations, or returned/cancelled orders.</li>
             </ul>
             <p className="text-gray-700 dark:text-gray-300 mt-3">
-              We reserve the right to amend the commission structure at any time with at least 30 days' notice to active affiliates.
+              We reserve the right to amend the commission structure at any time with at least 30 days&apos; notice to active affiliates.
             </p>
             
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">5. Tracking and Attribution</h5>
@@ -188,7 +189,7 @@ export default function AffiliateAgreementPage() {
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">6. Payment Terms</h5>
             <p className="text-gray-700 dark:text-gray-300">Commissions will be paid according to the following terms:</p>
             <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">
-              <li>Payments will be processed monthly for the previous month's confirmed commissions;</li>
+              <li>Payments will be processed monthly for the previous month&apos;s confirmed commissions;</li>
               <li>A minimum threshold of $100 must be reached before payment is issued;</li>
               <li>Payment methods include bank transfer, PayPal, or BSC USDT;</li>
               <li>All applicable taxes are the responsibility of the Affiliate.</li>
@@ -199,7 +200,7 @@ export default function AffiliateAgreementPage() {
             <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">
               <li>Commences upon your acceptance and our approval;</li>
               <li>Continues until terminated by either party;</li>
-              <li>May be terminated by either party with 30 days' written notice;</li>
+              <li>May be terminated by either party with 30 days&apos; written notice;</li>
               <li>May be terminated immediately by us in case of violation of this Agreement or applicable laws.</li>
             </ul>
             <p className="text-gray-700 dark:text-gray-300 mt-3">
@@ -241,7 +242,7 @@ export default function AffiliateAgreementPage() {
             
             <h5 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">14. Electronic Consent</h5>
             <p className="text-gray-700 dark:text-gray-300">
-              By checking the box labeled "I Agree" or signing digitally, you affirm that you have read and accepted this Affiliate Agreement and that it is legally binding upon you.
+              By checking the box labeled &quot;I Agree&quot; or signing digitally, you affirm that you have read and accepted this Affiliate Agreement and that it is legally binding upon you.
             </p>
             
             <p className="text-center mt-8 text-gray-700 dark:text-gray-300 font-medium">

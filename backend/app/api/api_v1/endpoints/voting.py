@@ -1,5 +1,5 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -95,8 +95,8 @@ def cast_vote(
 def get_user_voting_history(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 20
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100)
 ):
     """
     Récupérer l'historique de vote de l'utilisateur.
@@ -167,8 +167,8 @@ def get_voting_session(
 def get_stage_leaderboard(
     stage_id: int,
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 10
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
 ):
     """
     Récupérer le classement complet d'une étape de concours.

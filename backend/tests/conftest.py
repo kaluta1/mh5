@@ -21,7 +21,7 @@ os.environ["KALUTA_API_KEY"] = "klt_test_key"
 os.environ["KALUTA_WEBHOOK_SECRET"] = "whsec_test_webhook_secret"
 
 # SQLite compat for PostgreSQL JSONB/ARRAY — MUST run before model import.
-from sqlalchemy import JSON, create_engine, event
+from sqlalchemy import JSON, create_engine
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session, sessionmaker
@@ -76,22 +76,26 @@ def setup_test_database():
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session, None, None]:
-    """DB session with SAVEPOINT so API commits roll back after each test."""
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-    connection.begin_nested()
+    """Provide an empty database even when endpoint code commits transactions."""
+    # SQLite savepoints can be invalidated by endpoint-level commits/rollbacks.
+    # Clearing rows before each test is deterministic and keeps the schema built
+    # once for the session, while still exercising normal commit behaviour.
+    # Some endpoint-only models are registered when the FastAPI app is first
+    # imported, after the session-scoped schema setup has run.
+    Base.metadata.create_all(bind=engine)
+    from app.core.rate_limit import _buckets
 
-    @event.listens_for(session, "after_transaction_end")
-    def restart_savepoint(sess, trans):  # noqa: ARG001
-        if connection.in_transaction() and not connection.in_nested_transaction():
-            connection.begin_nested()
+    _buckets.clear()
+    with engine.begin() as connection:
+        for table in reversed(list(Base.metadata.tables.values())):
+            connection.execute(table.delete())
+
+    session = TestingSessionLocal()
 
     yield session
 
+    session.rollback()
     session.close()
-    transaction.rollback()
-    connection.close()
 
 
 @pytest.fixture(scope="module")
@@ -117,7 +121,7 @@ def client(app, db: Session) -> Generator[TestClient, None, None]:
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(app, raise_server_exceptions=True) as test_client:
         yield test_client
     app.dependency_overrides.pop(get_db, None)
     session_module.engine = original_engine

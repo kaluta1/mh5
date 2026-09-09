@@ -13,6 +13,7 @@ from app.models.accounting import (
     AccountType,
 )
 from app.services.journal_entry_status import posted_status_literal_for_db
+from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,20 @@ class AccountingService:
             date = datetime.utcnow()
             
         # 1. Valider l'équilibre Débit / Crédit
-        total_debit = sum(Decimal(str(line.get("debit", 0.0))) for line in lines)
-        total_credit = sum(Decimal(str(line.get("credit", 0.0))) for line in lines)
+        if not lines:
+            raise AccountingError("Journal Entry requires at least one line")
+        normalized_lines: List[Dict[str, any]] = []
+        for raw_line in lines:
+            debit = money(raw_line.get("debit", 0))
+            credit = money(raw_line.get("credit", 0))
+            if debit < 0 or credit < 0:
+                raise AccountingError("Journal line amounts cannot be negative")
+            if debit > 0 and credit > 0:
+                raise AccountingError("A journal line cannot contain both debit and credit")
+            normalized_lines.append({**raw_line, "debit": debit, "credit": credit})
+
+        total_debit = sum((line["debit"] for line in normalized_lines), Decimal("0.00"))
+        total_credit = sum((line["credit"] for line in normalized_lines), Decimal("0.00"))
         
         if total_debit != total_credit:
             raise AccountingError(f"Journal Entry unbalanced: Debit={total_debit}, Credit={total_credit}")
@@ -60,8 +73,8 @@ class AccountingService:
             entry_number=entry_number,
             entry_date=date,
             description=description,
-            total_debit=float(total_debit),
-            total_credit=float(total_credit),
+            total_debit=total_debit,
+            total_credit=total_credit,
             status=posted_status_literal_for_db(db),
         )
         db.add(entry)
@@ -72,15 +85,15 @@ class AccountingService:
             raise
         
         # 3. Créer les lignes
-        for line_data in lines:
+        for line_data in normalized_lines:
             account_code = line_data["account_code"]
             account = self.get_account_by_code(db, account_code)
             
             if not account:
                 raise AccountingError(f"Account not found: {account_code}")
                 
-            debit = float(line_data.get("debit", 0.0))
-            credit = float(line_data.get("credit", 0.0))
+            debit = line_data["debit"]
+            credit = line_data["credit"]
             
             # Mise à jour des soldes du compte (dénormalisation pour perf)
             # Actif/Dépense augmentent au Débit. Passif/Revenu/Capitaux augmentent au Crédit.

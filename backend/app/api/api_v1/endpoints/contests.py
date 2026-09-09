@@ -2,6 +2,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from datetime import datetime
 
 from app.api.deps import get_current_active_user, get_current_active_user_optional
 from app.crud import contest
@@ -87,10 +88,12 @@ def create_contest(
 def read_contests(
     *,
     db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 12,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(12, ge=1, le=100),
     location_id: int = None,
     contest_type: str = None,
+    category_id: Optional[int] = Query(None, description="Canonical category ID"),
+    category_slug: Optional[str] = Query(None, description="Canonical category slug"),
     active: bool = Query(None),
     search: str = Query(None, description="Recherche par nom de concours"),
     voting_level: str = Query(None, description="Filtrer par niveau de vote (country pour Nomination)"),
@@ -124,6 +127,18 @@ def read_contests(
         filters["location_id"] = location_id
     if contest_type:
         filters["contest_type"] = contest_type
+    if category_id is not None:
+        filters["category_id"] = category_id
+    elif category_slug:
+        from app.models.category import Category
+
+        category = db.query(Category).filter(
+            Category.is_active == True,
+            Category.slug == category_slug.strip().lower(),
+        ).order_by(Category.id.asc()).first()
+        if category is None:
+            return []
+        filters["category_id"] = category.id
     if search:
         filters["search"] = search
     if voting_level:
@@ -145,16 +160,15 @@ def read_contests(
     logger = logging.getLogger(__name__)
     
     try:
-        logger.info(f"Fetching contests with filters: {filters}")
+        logger.debug("Fetching contests with filters: %s", filters)
         contests = contest.get_multi_with_filters(
             db=db, skip=skip, limit=limit, filters=filters
         )
-        logger.info(f"Successfully fetched {len(contests)} contests from database")
+        logger.debug("Fetched %s contests", len(contests))
         
         # DEBUG: Log contest IDs and basic info
         if contests:
-            logger.info(f"Sample contest IDs: {[c.id for c in contests[:5]]}")
-            logger.info(f"Sample contest names: {[c.name for c in contests[:5]]}")
+            logger.debug("Sample contest IDs: %s", [c.id for c in contests[:5]])
         else:
             logger.warning("No contests found in database with current filters!")
     except Exception as e:
@@ -174,6 +188,7 @@ def read_contests(
     contest_ids = [c.id for c in contests]
     contestant_counts = {}
     current_user_contesting_map = {}
+    user_entry_round_map = {}
     
     if contest_ids:
         # Batch query for contestant counts per contest
@@ -190,42 +205,67 @@ def read_contests(
             # Build contest_mode map for entry_type filtering
             contest_mode_map = {c.id: _normalize_contest_mode(getattr(c, 'contest_mode', 'participation')) for c in contests}
 
-            from sqlalchemy import or_
-
-            for contest_id in contest_ids:
-                count = 0
-                # Determine expected entry_type based on contest_mode
-                expected_entry_type = _entry_type_from_contest_mode(contest_mode_map.get(contest_id))
-                is_nomination = expected_entry_type == "nomination"
-                if is_nomination:
-                    entry_clause = or_(
+            candidate_season_ids = set(contest_ids) | set(season_by_contest.values())
+            count_rows = (
+                db.query(
+                    Contestant.season_id,
+                    Contestant.entry_type,
+                    func.count(Contestant.id).label("row_count"),
+                    func.count(func.distinct(Contestant.user_id)).label("user_count"),
+                )
+                .filter(
+                    Contestant.season_id.in_(candidate_season_ids),
+                    Contestant.is_deleted == False,
+                )
+                .group_by(Contestant.season_id, Contestant.entry_type)
+                .all()
+            )
+            counts_by_season_and_type = {
+                (int(row.season_id), row.entry_type): (
+                    int(row.row_count or 0), int(row.user_count or 0)
+                )
+                for row in count_rows
+                if row.season_id is not None
+            }
+            nomination_counts = {
+                int(row.season_id): int(row.user_count or 0)
+                for row in db.query(
+                    Contestant.season_id,
+                    func.count(func.distinct(Contestant.user_id)).label("user_count"),
+                )
+                .filter(
+                    Contestant.season_id.in_(candidate_season_ids),
+                    Contestant.is_deleted == False,
+                    or_(
                         Contestant.entry_type == "nomination",
                         Contestant.entry_type.is_(None),
-                    )
-                    count_agg = func.count(func.distinct(Contestant.user_id))
-                else:
-                    entry_clause = Contestant.entry_type == expected_entry_type
-                    count_agg = func.count(Contestant.id)
+                    ),
+                )
+                .group_by(Contestant.season_id)
+                .all()
+                if row.season_id is not None
+            }
 
-                # Check via season_id from ContestSeasonLink
-                if contest_id in season_by_contest:
-                    season_id = season_by_contest[contest_id]
-                    count = db.query(count_agg).filter(
-                        Contestant.season_id == season_id,
-                        Contestant.is_deleted == False,
-                        entry_clause,
-                    ).scalar() or 0
-                
-                # Also check if season_id directly equals contest_id (legacy)
-                direct_count = db.query(count_agg).filter(
-                    Contestant.season_id == contest_id,
-                    Contestant.is_deleted == False,
-                    entry_clause,
-                ).scalar() or 0
-                
-                # Prefer direct_count (season_id == contest_id) as it is contest-specific
-                # ContestSeasonLink seasons may be shared across contests
-                contestant_counts[contest_id] = direct_count if direct_count > 0 else count
+            def _count_for(season_id, expected_entry_type):
+                if season_id is None:
+                    return 0
+                if expected_entry_type == "nomination":
+                    return nomination_counts.get(season_id, 0)
+                return counts_by_season_and_type.get(
+                    (season_id, expected_entry_type), (0, 0)
+                )[0]
+
+            for contest_id in contest_ids:
+                expected_entry_type = _entry_type_from_contest_mode(
+                    contest_mode_map.get(contest_id)
+                )
+                linked_count = _count_for(
+                    season_by_contest.get(contest_id), expected_entry_type
+                )
+                direct_count = _count_for(contest_id, expected_entry_type)
+                contestant_counts[contest_id] = (
+                    direct_count if direct_count > 0 else linked_count
+                )
             
             # Check current_user_contesting in batch if user is authenticated
             # We want to know if the user is participating in the ACTIVE round or ACTIVE season
@@ -280,33 +320,58 @@ def read_contests(
 
                         # Nominations: any round for this contest (hub pill may be vote month).
                         if is_nomination:
-                            is_contesting = any(
-                                uc.season_id == contest_id and _entry_matches(uc)
+                            matching_entries = [
+                                uc
                                 for uc in user_contestants
-                            )
+                                if uc.season_id == contest_id and _entry_matches(uc)
+                            ]
+                            is_contesting = bool(matching_entries)
                             if is_contesting:
                                 current_user_contesting_map[contest_id] = True
+                                latest = max(
+                                    matching_entries,
+                                    key=lambda row: (
+                                        getattr(row, "registration_date", None) or datetime.min,
+                                        row.id or 0,
+                                    ),
+                                )
+                                user_entry_round_map[contest_id] = latest.round_id
                             continue
 
                         # Participations: round-scoped when an active submission round exists.
                         if contest_id in active_rounds_by_contest:
                             target_round_id = active_rounds_by_contest[contest_id]
-                            is_contesting = any(
+                            matching_entries = [
+                                uc
+                                for uc in user_contestants
+                                if (
                                 uc.round_id == target_round_id
                                 and uc.season_id == contest_id
                                 and _entry_matches(uc)
-                                for uc in user_contestants
-                            )
+                                )
+                            ]
+                            is_contesting = bool(matching_entries)
                             if is_contesting:
                                 current_user_contesting_map[contest_id] = True
+                                user_entry_round_map[contest_id] = target_round_id
                                 continue
 
-                        is_contesting = any(
-                            uc.season_id == contest_id and _entry_matches(uc)
+                        matching_entries = [
+                            uc
                             for uc in user_contestants
-                        )
+                            if uc.season_id == contest_id and _entry_matches(uc)
+                        ]
+                        is_contesting = bool(matching_entries)
                         if is_contesting:
                             current_user_contesting_map[contest_id] = True
+                            latest = max(
+                                matching_entries,
+                                key=lambda row: (
+                                    getattr(row, "registration_date", None) or datetime.min,
+                                    row.id or 0,
+                                ),
+                            )
+                            user_entry_round_map[contest_id] = latest.round_id
                 except Exception as e:
                     logger.warning(f"Error matching user contestants: {str(e)}")
         except Exception as e:
@@ -316,25 +381,31 @@ def read_contests(
     
     # Sort contests if returning all or by standard search
     
-    basic_contests = []
-    
     for c in contests:
         try:
             expected_entry_type = _entry_type_from_contest_mode(
                 _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
             )
-            stats_for_card = contest.enrich_contest_with_stats(
-                db=db,
-                contest=c,
-                current_user=current_user,
-                filter_country=filter_country,
-                filter_region=filter_region,
-                filter_continent=filter_continent,
-                include_top_contestants=False,
-                entry_type=expected_entry_type,
-                round_id=round_id,
+            contextual_count_required = bool(
+                filter_country or filter_region or filter_continent or round_id is not None
             )
-            visible_participants_count = int(stats_for_card.get("participants_count") or 0)
+            if contextual_count_required:
+                stats_for_card = contest.enrich_contest_with_stats(
+                    db=db,
+                    contest=c,
+                    current_user=current_user,
+                    filter_country=filter_country,
+                    filter_region=filter_region,
+                    filter_continent=filter_continent,
+                    include_top_contestants=False,
+                    entry_type=expected_entry_type,
+                    round_id=round_id,
+                )
+                visible_participants_count = int(
+                    stats_for_card.get("participants_count") or 0
+                )
+            else:
+                visible_participants_count = int(contestant_counts.get(c.id, 0))
             # Singeli/East Africa special alignment: card count must match opened roster.
             if (
                 c.id == 17
@@ -371,22 +442,7 @@ def read_contests(
                 )
 
             
-            user_entry_round_id = None
-            if current_user and current_user_contesting_map.get(c.id, False):
-                expected_et = _entry_type_from_contest_mode(
-                    _normalize_contest_mode(getattr(c, "contest_mode", "participation"))
-                )
-                from app.crud import contestant as crud_contestant_mod
-
-                latest = crud_contestant_mod.get_latest_entry_in_contest(
-                    db,
-                    contest_id=c.id,
-                    user_id=current_user.id,
-                    entry_type=expected_et,
-                    round_id=None,
-                )
-                if latest and getattr(latest, "round_id", None) is not None:
-                    user_entry_round_id = latest.round_id
+            user_entry_round_id = user_entry_round_map.get(c.id)
 
             basic_contest = {
                 "id": c.id,
@@ -410,7 +466,7 @@ def read_contests(
             }
             # Debug log for current_user_contesting
             if current_user and current_user_contesting_map.get(c.id, False):
-                logger.info(f"Contest {c.id} ({c.name}): User {current_user.id} has already nominated")
+                logger.debug("Contest %s: current user has an entry", c.id)
             enriched_contests.append(basic_contest)
         except Exception as e:
             logger.error(f"Error creating basic contest data for {c.id}: {str(e)}")
@@ -456,7 +512,7 @@ def read_contests(
 
         enriched_contests = filtered_contests
 
-    logger.info(f"Successfully enriched {len(enriched_contests)} out of {len(contests)} contests")
+    logger.debug("Built %s/%s contest cards", len(enriched_contests), len(contests))
     return enriched_contests
 
 
@@ -476,6 +532,7 @@ def validate_contest_video_link(
     import json
 
     from app.api.api_v1.endpoints.contestant import (
+        _canonicalize_social_media_url,
         _find_duplicate_video_submission,
         _get_contest_context_from_season,
         _get_contest_ids_from_season,
@@ -488,6 +545,14 @@ def validate_contest_video_link(
         ContestModel.id == contest_id,
         ContestModel.is_deleted == False
     ).first()
+
+    for video_ref in request.video_media_ids:
+        value = str(video_ref or "").strip()
+        if value.startswith(("http://", "https://")) and _canonicalize_social_media_url(value) is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unsupported or malformed video URL",
+            )
 
     season = None
     if not contest_obj:

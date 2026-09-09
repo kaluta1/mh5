@@ -20,12 +20,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/components/ui/toast'
 import { cacheService } from '@/lib/cache-service'
+import { UploadButton } from '@/components/ui/upload-button'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface Category {
   id: number
   name: string
   slug: string
   description: string | null
+  image_url: string | null
   is_active: boolean
   created_at: string
 }
@@ -42,6 +45,7 @@ export default function CategoriesPage() {
     name: '',
     slug: '',
     description: '',
+    image_url: '',
     is_active: true,
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -96,6 +100,7 @@ export default function CategoriesPage() {
         name: category.name,
         slug: category.slug,
         description: category.description || '',
+        image_url: category.image_url || '',
         is_active: category.is_active,
       })
     } else {
@@ -104,6 +109,7 @@ export default function CategoriesPage() {
         name: '',
         slug: '',
         description: '',
+        image_url: '',
         is_active: true,
       })
     }
@@ -118,6 +124,7 @@ export default function CategoriesPage() {
       name: '',
       slug: '',
       description: '',
+      image_url: '',
       is_active: true,
     })
     setFormErrors({})
@@ -169,6 +176,7 @@ export default function CategoriesPage() {
           name: formData.name.trim(),
           slug: formData.slug.trim(),
           description: formData.description.trim() || null,
+          image_url: formData.image_url.trim() || null,
           is_active: formData.is_active,
         })
         addToast(t('admin.categories.category_updated') || 'Category updated successfully', 'success')
@@ -178,6 +186,7 @@ export default function CategoriesPage() {
           name: formData.name.trim(),
           slug: formData.slug.trim(),
           description: formData.description.trim() || null,
+          image_url: formData.image_url.trim() || null,
           is_active: formData.is_active,
         })
         addToast(t('admin.categories.category_created') || 'Category created successfully', 'success')
@@ -285,11 +294,16 @@ export default function CategoriesPage() {
             <Card key={category.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
+                  <div className="flex flex-1 items-start gap-3">
+                    {category.image_url && (
+                      <MediaImage src={category.image_url} alt="" width={48} height={48} className="h-12 w-12 rounded object-cover" />
+                    )}
+                    <div>
                     <CardTitle className="text-lg font-semibold">{category.name}</CardTitle>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                       {category.slug}
                     </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {category.is_active ? (
@@ -401,6 +415,35 @@ export default function CategoriesPage() {
                 placeholder={t('admin.categories.description_placeholder') || 'Category description (optional)'}
                 rows={3}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="image_url">Category image</Label>
+              <Input
+                id="image_url"
+                value={formData.image_url}
+                onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                placeholder="https://... or /api/v1/media/file/..."
+              />
+              <div className="flex items-center gap-3">
+                <UploadButton
+                  endpoint="imageUploader"
+                  onClientUploadComplete={(files) => {
+                    const url = files?.[0]?.url
+                    if (url) setFormData(current => ({ ...current, image_url: url }))
+                  }}
+                  onUploadError={(error) => addToast(error instanceof Error ? error.message : 'Upload failed', 'error')}
+                />
+                {formData.image_url && (
+                  <Button type="button" variant="outline" onClick={() => setFormData({ ...formData, image_url: '' })}>
+                    Remove reference
+                  </Button>
+                )}
+              </div>
+              {formData.image_url && (
+                <MediaImage src={formData.image_url} alt="Category preview" width={96} height={64} className="h-16 w-24 rounded object-cover" />
+              )}
+              <p className="text-xs text-gray-500">Replacing or removing the reference does not delete a shared stored object.</p>
             </div>
 
             <div className="flex items-center justify-between">

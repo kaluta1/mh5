@@ -49,47 +49,52 @@ export function cleanVideoUrl(url: string | null | undefined): string {
 export function detectVideoPlatform(url: string | null | undefined): VideoPlatform {
   if (!url || typeof url !== 'string') return 'unknown'
 
-  const lowerUrl = cleanVideoUrl(url).toLowerCase()
+  const cleaned = cleanVideoUrl(url)
+  let parsed: URL
+  try {
+    parsed = new URL(cleaned)
+  } catch {
+    return 'unknown'
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return 'unknown'
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '')
+  const isHost = (...domains: string[]) => domains.some(domain => host === domain || host.endsWith(`.${domain}`))
 
   // YouTube — tous les formats
   if (
-    lowerUrl.includes('youtube.com') ||
-    lowerUrl.includes('youtu.be') ||
-    lowerUrl.includes('m.youtube.com') ||
-    lowerUrl.includes('music.youtube.com') ||
-    lowerUrl.includes('youtube-nocookie.com')
+    isHost('youtube.com', 'youtu.be', 'youtube-nocookie.com')
   ) {
     return 'youtube'
   }
 
   // TikTok — tous les formats
-  if (lowerUrl.includes('tiktok.com')) {
+  if (isHost('tiktok.com')) {
     return 'tiktok'
   }
 
   // Vimeo
-  if (lowerUrl.includes('vimeo.com')) {
+  if (isHost('vimeo.com')) {
     return 'vimeo'
   }
 
   // Facebook
-  if (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.com') || lowerUrl.includes('fb.watch')) {
+  if (isHost('facebook.com', 'fb.com', 'fb.watch')) {
     return 'facebook'
   }
 
   // Instagram
-  if (lowerUrl.includes('instagram.com') || lowerUrl.includes('instagr.am')) {
+  if (isHost('instagram.com', 'instagr.am')) {
     return 'instagram'
   }
 
   // Snapchat
-  if (lowerUrl.includes('snapchat.com') || lowerUrl.includes('snap.com')) {
+  if (isHost('snapchat.com', 'snap.com')) {
     return 'snapchat'
   }
 
   // Vidéo directe (fichier vidéo)
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v']
-  if (videoExtensions.some(ext => lowerUrl.endsWith(ext) || lowerUrl.includes(ext + '?'))) {
+  if (parsed.protocol === 'https:' && videoExtensions.some(ext => parsed.pathname.toLowerCase().endsWith(ext))) {
     return 'direct'
   }
 
@@ -207,7 +212,7 @@ export function convertToEmbedUrl(url: string | null | undefined): VideoInfo {
           videoId
         }
       }
-      return { platform: 'youtube', embedUrl: originalUrl, originalUrl }
+      return { platform: 'unknown', embedUrl: '', originalUrl }
     }
 
     case 'tiktok': {
@@ -230,7 +235,7 @@ export function convertToEmbedUrl(url: string | null | undefined): VideoInfo {
           videoId
         }
       }
-      return { platform: 'vimeo', embedUrl: originalUrl, originalUrl }
+      return { platform: 'unknown', embedUrl: '', originalUrl }
     }
 
     case 'facebook': {
@@ -256,7 +261,7 @@ export function convertToEmbedUrl(url: string | null | undefined): VideoInfo {
  */
 export function isYouTubeShort(url: string | null | undefined): boolean {
   if (!url || typeof url !== 'string') return false
-  return /youtube\.com\/shorts\//i.test(url)
+  return detectVideoPlatform(url) === 'youtube' && /\/shorts\//i.test(cleanVideoUrl(url))
 }
 
 /**
@@ -265,6 +270,6 @@ export function isYouTubeShort(url: string | null | undefined): boolean {
  */
 export function isValidVideoUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== 'string') return false
-  const platform = detectVideoPlatform(url)
-  return platform === 'youtube' || platform === 'tiktok' || platform === 'vimeo' || platform === 'facebook'
+  const info = convertToEmbedUrl(url)
+  return ['youtube', 'tiktok', 'vimeo', 'facebook'].includes(info.platform) && Boolean(info.embedUrl)
 }

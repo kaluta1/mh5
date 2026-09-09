@@ -5,14 +5,9 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-def test_kaluta_deployment_urls(client):
-    resp = client.get("/api/v1/kyc/deployment/kaluta-urls")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "webhook_url" in body
-    assert "redirect_url" in body
-    assert "provider" in body
-    assert body["provider"] == "kaluta"
+def test_kaluta_deployment_urls_are_admin_only(client, auth_headers):
+    resp = client.get("/api/v1/kyc/deployment/kaluta-urls", headers=auth_headers)
+    assert resp.status_code == 403
 
 
 def test_kyc_status_requires_auth(client):

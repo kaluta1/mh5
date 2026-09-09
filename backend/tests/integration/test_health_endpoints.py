@@ -27,15 +27,9 @@ def test_auth_health_probe(client):
     assert resp.json()["status"] == "ok"
 
 
-def test_db_schema_health_against_sqlite(client):
+def test_db_schema_diagnostics_are_not_public(client):
     resp = client.get("/api/v1/health/db-schema")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "ok" in body
-    assert "missing_users_columns" in body
-    # In-memory SQLite test DB should have all model columns after create_all.
-    assert body["ok"] is True
-    assert body["missing_users_columns"] == []
+    assert resp.status_code == 401
 
 
 def test_security_headers_present(client):

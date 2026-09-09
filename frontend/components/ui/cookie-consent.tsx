@@ -8,6 +8,7 @@ import { useLanguage } from "@/contexts/language-context"
 import { Cookie, X, Shield, Settings } from "lucide-react"
 
 const COOKIE_CONSENT_KEY = "myhigh5_cookie_consent"
+export const COOKIE_CONSENT_EVENT = "myhigh5-cookie-consent-changed"
 
 export function CookieConsent() {
   const { language } = useLanguage()
@@ -81,6 +82,7 @@ export function CookieConsent() {
         advertising: true
       }
     }))
+    window.dispatchEvent(new Event(COOKIE_CONSENT_EVENT))
     closeConsent()
   }
 
@@ -94,6 +96,7 @@ export function CookieConsent() {
         advertising: false
       }
     }))
+    window.dispatchEvent(new Event(COOKIE_CONSENT_EVENT))
     closeConsent()
   }
 

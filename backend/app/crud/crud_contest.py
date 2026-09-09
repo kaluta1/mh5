@@ -735,9 +735,8 @@ class CRUDContest:
             logger.warning(f"Error applying sorting logic: {str(e)}")
             query = query.order_by(Contest.participant_count.desc(), Contest.id.desc())
         
-        # FIXED: Increase default limit if not specified to get all active contests
-        # This ensures we don't miss contests due to low limits
-        effective_limit = limit if limit > 0 else 1000
+        # Defense in depth for internal callers as well as API validation.
+        effective_limit = min(max(int(limit or 10), 1), 100)
         
         # FIXED: Defer date columns that don't exist in database to avoid SQL errors
         from sqlalchemy.orm import defer
@@ -764,9 +763,9 @@ class CRUDContest:
             # Continue without defer - may fail if columns don't exist
         
         try:
-            logger.info(f"Executing query with skip={skip}, limit={effective_limit}")
+            logger.debug("Executing contest query skip=%s limit=%s", skip, effective_limit)
             results = query.offset(skip).limit(effective_limit).all()
-            logger.info(f"Query returned {len(results)} contests")
+            logger.debug("Contest query returned %s rows", len(results))
             return results
         except Exception as e:
             logger.error(f"Error executing contest query: {str(e)}", exc_info=True)
@@ -792,9 +791,13 @@ class CRUDContest:
         contest_type = obj_in.contest_type
         if category_id:
             from app.models.category import Category
-            category = db.query(Category).filter(Category.id == category_id).first()
-            if category:
-                contest_type = category.slug
+            category = db.query(Category).filter(
+                Category.id == category_id,
+                Category.is_active == True,
+            ).first()
+            if not category:
+                raise ValueError("Category not found or inactive")
+            contest_type = category.slug
         
         # Convertir les strings en enums si nécessaire
         verification_type = obj_in.verification_type
@@ -972,9 +975,13 @@ class CRUDContest:
                 elif field == 'category_id':
                     if value is not None and value != 0:
                         from app.models.category import Category
-                        category = db.query(Category).filter(Category.id == value).first()
-                        if category:
-                            update_data['contest_type'] = category.slug
+                        category = db.query(Category).filter(
+                            Category.id == value,
+                            Category.is_active == True,
+                        ).first()
+                        if not category:
+                            raise ValueError("Category not found or inactive")
+                        update_data['contest_type'] = category.slug
                 
                 # Enums
                 elif field == 'verification_type' and value is not None:
@@ -2685,6 +2692,7 @@ class CRUDContest:
         user_votes_in_season: Dict[int, Any] = {}
         votes_count_by_contestant = {cid: 0 for cid in contestant_ids}
         points_by_contestant = {cid: 0 for cid in contestant_ids}
+        canonical_rank_by_contestant: Dict[int, int] = {}
 
         if contestant_ids and roster_only:
             try:
@@ -2904,6 +2912,36 @@ class CRUDContest:
                     v.get("points", 0) for v in votes_list
                 )
 
+        # Ranking and displayed totals use the same compatibility engine as
+        # TopHigh5. This preserves historical ``votes`` while also including
+        # contextual MyHigh5 rows, without copying either dataset.
+        if contestant_ids and season:
+            try:
+                from app.services.voting_ranking import (
+                    aggregate_rankings,
+                    bucket_key_for_contest,
+                )
+
+                canonical_rows = aggregate_rankings(
+                    db,
+                    season_ids=[season.id],
+                    contestant_ids=contestant_ids,
+                    contest_id=contest_id,
+                    bucket_key=bucket_key_for_contest(contest_obj),
+                )
+                votes_count_by_contestant.update(
+                    {row.contestant_id: row.total_votes for row in canonical_rows}
+                )
+                points_by_contestant.update(
+                    {row.contestant_id: row.total_points for row in canonical_rows}
+                )
+                canonical_rank_by_contestant = {
+                    row.contestant_id: row.rank for row in canonical_rows
+                }
+            except Exception as exc:
+                logger.exception("Canonical ranking aggregate failed: %s", exc)
+                raise
+
         from app.models.contests import ContestantSeason
         from app.services.season_migration import SeasonMigrationService
 
@@ -2938,6 +2976,8 @@ class CRUDContest:
                     prior_stage_rank=prior_stage_rank_map.get(cid),
                     joined_at=joined_at_by_contestant.get(cid),
                 )
+            if cid in canonical_rank_by_contestant:
+                return (canonical_rank_by_contestant[cid], cid or 0)
             return (
                 -points_by_contestant.get(cid, 0),
                 -votes_count_by_contestant.get(cid, 0),

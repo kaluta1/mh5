@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { geographyService, type Continent, type Region, type Country, type City } from '@/services/geography-service'
 import { useToast } from '@/components/ui/toast'
+import { useLanguage } from '@/contexts/language-context'
 
 interface LocationSelectorProps {
   onLocationSelected: (cityId: number) => void
@@ -11,6 +12,7 @@ interface LocationSelectorProps {
 
 export function LocationSelector({ onLocationSelected, isLoading }: LocationSelectorProps) {
   const { addToast } = useToast()
+  const { t } = useLanguage()
   const [continents, setContinents] = useState<Continent[]>([])
   const [regions, setRegions] = useState<Region[]>([])
   const [countries, setCountries] = useState<Country[]>([])

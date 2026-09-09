@@ -4,8 +4,7 @@ Messages API Endpoints with E2E Encryption for Feed System
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy import func
-from sqlalchemy import text
+from sqlalchemy import func, inspect
 from typing import List, Optional
 from datetime import datetime
 
@@ -36,13 +35,12 @@ def _get_or_create_user_keys(
             UserEncryptionKeys.user_id == user_id,
             UserEncryptionKeys.is_active == True
         ).first()
-    except (OperationalError, ProgrammingError):
-        # Table might not exist yet; create it and retry
-        UserEncryptionKeys.__table__.create(db.bind, checkfirst=True)
-        user_keys = db.query(UserEncryptionKeys).filter(
-            UserEncryptionKeys.user_id == user_id,
-            UserEncryptionKeys.is_active == True
-        ).first()
+    except (OperationalError, ProgrammingError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Encrypted messaging schema is not ready",
+        ) from exc
 
     if user_keys:
         return user_keys
@@ -65,11 +63,22 @@ def _get_or_create_user_keys(
 
 
 def _ensure_sender_encrypted_column(db: Session) -> None:
+    """Validate schema without running DDL in a request transaction."""
     try:
-        db.execute(text("ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS sender_encrypted_content TEXT"))
-        db.commit()
-    except Exception:
-        db.rollback()
+        columns = {
+            column["name"]
+            for column in inspect(db.get_bind()).get_columns("private_messages")
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Encrypted messaging schema is not ready",
+        ) from exc
+    if "sender_encrypted_content" not in columns:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Encrypted messaging schema is not ready",
+        )
 
 
 @router.post("/send", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)

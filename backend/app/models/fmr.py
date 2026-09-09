@@ -16,6 +16,8 @@ class MemberFmpLedger(Base):
     """
 
     __tablename__ = "member_fmp_ledger"
+    # The immutable ledger schema intentionally has no updated_at column.
+    updated_at = None
     __table_args__ = (
         UniqueConstraint(
             "source_type", "source_id", "user_id", name="uq_member_fmp_ledger_source_user"
@@ -36,6 +38,9 @@ class MemberFmpBalance(Base):
     """Cached total FMP per user (FMR denominator uses global sum of these totals)."""
 
     __tablename__ = "member_fmp_balances"
+    # user_id is the sole primary key in the production/Alembic schema.
+    id = None
+    created_at = None
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     total_fmp: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=0)

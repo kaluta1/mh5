@@ -20,6 +20,9 @@ function buildApiMediaRemotePatterns() {
   const candidates = [
     process.env.NEXT_PUBLIC_API_URL,
     process.env.NEXT_PUBLIC_BACKEND_URL,
+    'https://kalutafoundation.com',
+    'https://www.kalutafoundation.com',
+    // Retain legacy media hosts for historical objects only.
     'https://api.myhigh5.com',
     'https://myhigh5.com',
     'http://localhost:8001',
@@ -58,6 +61,9 @@ function buildApiMediaRemotePatterns() {
 
 const nextConfig = {
   ...turbopackConfig,
+
+  // Produce the minimal self-contained Node server used by the VPS image.
+  output: 'standalone',
 
   // Enable compression
   compress: true,
@@ -184,7 +190,7 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://myhigh5.com').replace(/\/+$/, '')
+    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://kalutafoundation.com').replace(/\/+$/, '')
 
     return [
       {

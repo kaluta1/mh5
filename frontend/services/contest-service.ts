@@ -1,6 +1,8 @@
 import api, { apiService } from '@/lib/api'
-import { resolvePublicApiBase, rewriteLocalhostUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
+import { normalizeMediaUrl } from '@/lib/media-url'
+
+const topHigh5InFlight = new Map<string, Promise<TopHigh5Response>>()
 
 /** axios validateStatus accepts 4xx — treat as errors so nominate/participate UI can show messages. */
 function throwIfParticipateError(
@@ -72,6 +74,9 @@ export interface Contest {
   favorites?: number
   isOpen: boolean
   contestType?: string
+  categoryId?: number | null
+  categoryName?: string
+  categorySlug?: string
   genderRestriction?: 'male' | 'female' | null
   participationStartDate?: Date
   participationEndDate?: Date
@@ -123,6 +128,8 @@ export interface ContestResponse {
   created_at?: string
   updated_at?: string
   active_round_id?: number | null
+  display_round_id?: number | null
+  user_entry_round_id?: number | null
 
   // Contest settings
   is_active?: boolean
@@ -405,34 +412,12 @@ class ContestService {
     const startDate = response.start_date ? new Date(response.start_date) : new Date();
     const endDate = response.end_date ? new Date(response.end_date) : undefined;
 
-    // Process cover image
-    let coverImage = response.cover_image_url || response.image_url || '';
-
-    // If image exists, ensure it's a valid URL or emoji
-    if (coverImage.trim() !== '') {
-      const firstCodePoint = coverImage.codePointAt(0) || 0;
-      const isEmoji = coverImage.length <= 4 && firstCodePoint > 0x1F000;
-
-      if (!isEmoji && !coverImage.startsWith('http')) {
-        // If it's not an emoji and not a complete URL, prepend base URL
-        const API_BASE_URL = resolvePublicApiBase();
-        if (coverImage.startsWith('/')) {
-          coverImage = `${API_BASE_URL}${coverImage}`;
-        } else if (coverImage.trim() !== '') {
-          coverImage = `${API_BASE_URL}/${coverImage}`;
-        }
-      } else if (coverImage.startsWith('http')) {
-        coverImage = rewriteLocalhostUrl(coverImage)
-      }
-
-      // If still no valid image, use an emoji
-      if (!coverImage || coverImage.trim() === '' || (!coverImage.startsWith('http') && !coverImage.startsWith('/') && !coverImage.startsWith('data:'))) {
-        coverImage = this.getEmojiForType(response.contest_type);
-      }
-    } else {
-      // If no image, use an emoji
-      coverImage = this.getEmojiForType(response.contest_type);
-    }
+    const coverCandidate = response.cover_image_url || response.image_url || '';
+    const firstCodePoint = coverCandidate.codePointAt(0) || 0;
+    const isEmoji = coverCandidate.length <= 4 && firstCodePoint > 0x1F000;
+    const coverImage = isEmoji
+      ? coverCandidate
+      : (normalizeMediaUrl(coverCandidate) || this.getEmojiForType(response.contest_type));
 
     // Determine contest status
     const now = new Date();
@@ -477,6 +462,9 @@ class ContestService {
       favorites: 0,
       isOpen,
       contestType: response.contest_type || '',
+      categoryId: response.category_id ?? null,
+      categoryName: response.category?.name,
+      categorySlug: response.category?.slug,
       genderRestriction: response.gender_restriction || null,
       participationStartDate: submissionStart,
       participationEndDate: submissionEnd,
@@ -1210,13 +1198,21 @@ class ContestService {
     country?: string
     level?: TopHigh5Level
   }): Promise<TopHigh5Response> {
+    const requestKey = JSON.stringify({
+      roundId: params?.roundId ?? null,
+      country: (params?.country || '').trim().toLowerCase(),
+      level: params?.level || 'country',
+    })
+    const existing = topHigh5InFlight.get(requestKey)
+    if (existing) return existing
+
+    const request = (async () => {
     try {
       const response = await api.get<TopHigh5Response>('/api/v1/seasons/top-high5', {
         params: {
           round_id: params?.roundId,
           country: params?.country,
           level: params?.level,
-          _ts: Date.now(),
         },
         // Prevent the UI from hanging forever on upstream stalls.
         timeout: 8000,
@@ -1226,6 +1222,15 @@ class ContestService {
       console.error('Error fetching top high5 by country:', error)
       // Surface the error so the UI can show diagnostics instead of silent empties.
       throw error
+    }
+    })()
+    topHigh5InFlight.set(requestKey, request)
+    try {
+      return await request
+    } finally {
+      if (topHigh5InFlight.get(requestKey) === request) {
+        topHigh5InFlight.delete(requestKey)
+      }
     }
   }
 

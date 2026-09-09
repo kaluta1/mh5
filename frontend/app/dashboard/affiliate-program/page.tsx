@@ -149,7 +149,7 @@ export default function AffiliateProgramPage() {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Earn commissions when members in your network pay for Founding Member's joining fees
+                  Earn commissions when members in your network pay for Founding Member&apos;s joining fees
                 </p>
                 <p className="text-lg font-bold text-myhigh5-primary">
                   10% on Level 1, 1% on Levels 2-10
@@ -251,7 +251,7 @@ export default function AffiliateProgramPage() {
                     Personalized Affiliate Links
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Every member gets a unique referral link that's automatically embedded on every page they visit
+                    Every member gets a unique referral link that&apos;s automatically embedded on every page they visit
                   </p>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
+from decimal import Decimal
+from sqlalchemy import Integer, String, ForeignKey, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -28,14 +29,14 @@ class DSPWallet(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     
     # Solde en Digital Shopping Points
-    balance_dsp: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    balance_dsp: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     # Soldes gelés (en attente de confirmation)
-    frozen_balance: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    frozen_balance: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     # Statistiques
-    total_earned: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
-    total_spent: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    total_earned: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
+    total_spent: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -50,11 +51,11 @@ class DSPTransaction(Base):
     wallet_id: Mapped[int] = mapped_column(Integer, ForeignKey("dsp_wallets.id"), nullable=False)
     
     transaction_type: Mapped[TransactionType] = mapped_column(SQLEnum(TransactionType), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     
     # Solde avant et après transaction
-    balance_before: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    balance_after: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    balance_before: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    balance_after: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -74,7 +75,7 @@ class DSPExchangeRate(Base):
     
     # Taux de change DSP vers monnaie fiduciaire
     currency: Mapped[str] = mapped_column(String(3), nullable=False)  # USD, EUR, CAD, etc.
-    rate_to_usd: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False)  # 1 DSP = X currency
+    rate_to_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)  # 1 DSP = X currency
     
     effective_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -89,9 +90,9 @@ class DigitalProduct(Base):
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     
     # Prix (au moins 50% en DSP)
-    price_dsp: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    price_cad: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
-    price_usd: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    price_dsp: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    price_cad: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    price_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     
     # Fichier téléchargeable
@@ -106,7 +107,7 @@ class DigitalProduct(Base):
     # Statistiques
     downloads: Mapped[int] = mapped_column(Integer, default=0)
     views: Mapped[int] = mapped_column(Integer, default=0)
-    fee_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    fee_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -123,13 +124,13 @@ class DigitalPurchase(Base):
     buyer_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     
     # Montants payés
-    total_paid: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    dsp_paid: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    fiat_paid: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    total_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    dsp_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    fiat_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     
     # Frais de plateforme (20%)
-    platform_fee: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    seller_earnings: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    platform_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    seller_earnings: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     
     # Téléchargement
     download_token: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)

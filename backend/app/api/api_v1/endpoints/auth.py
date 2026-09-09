@@ -16,6 +16,7 @@ from app.core.security import (
     verify_password,
     create_password_reset_token,
     verify_password_reset_token,
+    get_password_reset_subject,
     create_email_verification_token,
     validate_access_token,
     get_user_id_from_token
@@ -24,7 +25,7 @@ from app.core.public_urls import public_site_base
 from app.core.config import settings
 from app.db.session import get_db
 from app.crud import user as crud_user
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, oauth2_scheme
 from app.services.email import email_service
 from app.services.email_verification import verify_user_email_from_token, build_email_verify_redirect
 from app.services import referral_shortener
@@ -280,7 +281,7 @@ def request_password_reset(
     # même si l'utilisateur n'existe pas
     if user and user.is_active:
         # Générer le token de réinitialisation
-        reset_token = create_password_reset_token(user.email)
+        reset_token = create_password_reset_token(user.email, user.hashed_password)
         
         # Construire l'URL de réinitialisation
         site_base = public_site_base()
@@ -312,8 +313,9 @@ def confirm_password_reset(
     """
     Confirmer la réinitialisation de mot de passe avec le token.
     """
-    # Vérifier le token
-    email = verify_password_reset_token(password_reset.token)
+    # Decode only to locate the account; validity is bound to its current
+    # password hash below, making a successfully used reset token one-time.
+    email = get_password_reset_subject(password_reset.token)
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -327,6 +329,9 @@ def confirm_password_reset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Utilisateur non trouvé"
         )
+
+    if verify_password_reset_token(password_reset.token, user.hashed_password) != user.email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalide ou expiré")
     
     if not user.is_active:
         raise HTTPException(
@@ -382,7 +387,7 @@ def read_user_me(
 
 @router.post("/validate-token")
 def validate_token(
-    token: str = Query(..., description="Token JWT à valider")
+    token: str = Depends(oauth2_scheme)
 ) -> Any:
     """
     Valide un token JWT et retourne l'ID utilisateur si valide.

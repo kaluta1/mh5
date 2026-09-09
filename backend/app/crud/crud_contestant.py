@@ -242,6 +242,32 @@ class CRUDContestant:
         for cid in contestant_ids:
             votes_count_by_contestant.setdefault(cid, 0)
 
+        canonical_rank_by_contestant: Dict[int, int] = {}
+        if season and contestant_ids:
+            from app.services.voting_ranking import aggregate_rankings, bucket_key_for_contest
+
+            scope_contest = None
+            if contest_id:
+                scope_contest = db.query(Contest).filter(
+                    Contest.id == contest_id, Contest.is_deleted == False
+                ).first()
+            canonical_rows = aggregate_rankings(
+                db,
+                season_ids=[season.id],
+                contestant_ids=contestant_ids,
+                contest_id=contest_id,
+                bucket_key=(
+                    bucket_key_for_contest(scope_contest) if scope_contest else None
+                ),
+            )
+            votes_count_by_contestant = {
+                row.contestant_id: row.total_votes for row in canonical_rows
+            }
+            canonical_rank_by_contestant = {
+                row.contestant_id: row.rank for row in canonical_rows
+            }
+            votes_count = votes_count_by_contestant.get(contestant.id, 0)
+
         def get_group_key(c: Contestant) -> str:
             if not c.user:
                 return "global"
@@ -271,8 +297,10 @@ class CRUDContestant:
         group_ids = groups.get(current_group_key, contestant_ids)
         ranked_ids = sorted(
             group_ids,
-            key=lambda cid: votes_count_by_contestant.get(cid, 0),
-            reverse=True,
+            key=lambda cid: (
+                canonical_rank_by_contestant.get(cid, 10**12),
+                cid,
+            ),
         )
         for position, cid in enumerate(ranked_ids, start=1):
             if cid == contestant.id:
@@ -307,18 +335,11 @@ class CRUDContestant:
             # Si l'utilisateur a voté pour le contestant X dans la saison CITY, il peut voter pour le contestant Y dans la même saison CITY
             # Mais il ne peut pas voter deux fois pour X dans la même saison CITY
             # S'il migre vers COUNTRY, il peut voter à nouveau pour X dans la nouvelle saison COUNTRY
-            if contest_id:
-                existing_vote = db.query(ContestantVoting).filter(
-                    ContestantVoting.user_id == current_user_id,
-                    ContestantVoting.contestant_id == contestant.id,
-                    ContestantVoting.contest_id == contest_id,
-                ).first()
-            else:
-                existing_vote = db.query(ContestantVoting).filter(
-                    ContestantVoting.user_id == current_user_id,
-                    ContestantVoting.contestant_id == contestant.id,
-                    ContestantVoting.season_id == season.id,
-                ).first()
+            existing_vote = db.query(ContestantVoting).filter(
+                ContestantVoting.user_id == current_user_id,
+                ContestantVoting.contestant_id == contestant.id,
+                ContestantVoting.season_id == season.id,
+            ).first()
             
             if existing_vote:
                 # L'utilisateur a déjà voté pour ce contestant dans cette saison en cours
@@ -870,10 +891,8 @@ class CRUDContestant:
         
         if contestant_ids:
             # Récupérer les votes en une seule requête
-            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
-                .filter(Vote.contestant_id.in_(contestant_ids))\
-                .group_by(Vote.contestant_id).all()
-            votes_by_contestant = {cid: count for cid, count in votes_results}
+            from app.services.voting_ranking import lifetime_vote_counts
+            votes_by_contestant = lifetime_vote_counts(db, contestant_ids)
             
             # Récupérer les favoris en une seule requête
             fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
@@ -1060,10 +1079,8 @@ class CRUDContestant:
         
         if contestant_ids:
             # Récupérer les votes en une seule requête
-            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
-                .filter(Vote.contestant_id.in_(contestant_ids))\
-                .group_by(Vote.contestant_id).all()
-            votes_by_contestant = {cid: count for cid, count in votes_results}
+            from app.services.voting_ranking import lifetime_vote_counts
+            votes_by_contestant = lifetime_vote_counts(db, contestant_ids)
             
             # Récupérer les favoris en une seule requête
             fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\
@@ -1542,10 +1559,8 @@ class CRUDContestant:
         comments_by_contestant = {}
         
         # Récupérer les votes en une seule requête
-        votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
-            .filter(Vote.contestant_id.in_(contestant_ids))\
-            .group_by(Vote.contestant_id).all()
-        votes_by_contestant = {cid: count for cid, count in votes_results}
+        from app.services.voting_ranking import lifetime_vote_counts
+        votes_by_contestant = lifetime_vote_counts(db, contestant_ids)
         
         # Récupérer les favoris en une seule requête
         fav_results = db.query(MyFavorites.contestant_id, func.count(MyFavorites.id))\

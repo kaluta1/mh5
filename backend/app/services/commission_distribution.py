@@ -3,12 +3,12 @@ Service de distribution des commissions d'affiliation.
 
 Règles de commission (MyHigh5 — init_commission_rules.py):
 - KYC, MFM, annual, EFM: L1 10%, L2–L10 1% each (max 10 levels)
-- Auto-payout via NOWPayments when beneficiary has a USDT BSC wallet configured
+- Commission accrual commits independently of any external payout side effect
 """
 
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 
@@ -16,6 +16,8 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
+from app.services.affiliate_hierarchy import MAX_AFFILIATE_LEVELS
+from app.services.financial_integrity import money
 logger = logging.getLogger(__name__)
 
 
@@ -120,9 +122,9 @@ def distribute_commissions(
     # Remonter l'arbre des parrains
     current_sponsor_id = source_user.sponsor_id
     level = 1
-    visited_sponsor_ids: set[int] = set()
+    visited_sponsor_ids: set[int] = {int(deposit.user_id)}
     
-    max_levels = config["max_levels"]
+    max_levels = min(max(int(config["max_levels"] or 0), 0), MAX_AFFILIATE_LEVELS)
     
     while current_sponsor_id and level <= max_levels:
         if current_sponsor_id in visited_sponsor_ids:
@@ -147,6 +149,17 @@ def distribute_commissions(
         sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
         if not sponsor:
             break
+
+        if sponsor.is_active is False or sponsor.is_deleted is True:
+            logger.warning(
+                "Ineligible sponsor %s skipped for deposit %s at level %s",
+                sponsor.id,
+                deposit.id,
+                level,
+            )
+            current_sponsor_id = sponsor.sponsor_id
+            level += 1
+            continue
 
         if deposit.id:
             duplicate = (
@@ -176,30 +189,30 @@ def distribute_commissions(
         )
 
         # Créer la commission
-        try:
-            commission = AffiliateCommission(
-                user_id=current_sponsor_id,
-                source_user_id=deposit.user_id,
-                product_type_id=deposit.product_type_id,
-                deposit_id=deposit.id,
-                commission_type=config["commission_type"],
-                level=level,
-                base_amount=float(deposit.amount),
-                commission_amount=float(commission_amount),
-                status=initial_status,
-                transaction_date=datetime.utcnow()
-            )
+        commission = AffiliateCommission(
+            user_id=current_sponsor_id,
+            source_user_id=deposit.user_id,
+            product_type_id=deposit.product_type_id,
+            deposit_id=deposit.id,
+            commission_type=config["commission_type"],
+            level=level,
+            base_amount=money(deposit.amount),
+            commission_amount=money(commission_amount),
+            status=initial_status,
+            transaction_date=datetime.utcnow()
+        )
 
-            db.add(commission)
-            commissions_created.append(commission)
+        db.add(commission)
+        commissions_created.append(commission)
 
-            logger.info(
-                f"Commission created: user={current_sponsor_id}, "
-                f"level={level}, amount={commission_amount}, "
-                f"type={config['commission_type'].value}, status={initial_status.value}"
-            )
-        except Exception as e:
-            logger.error(f"Error creating commission object: {e}")
+        logger.info(
+            "Commission created: user=%s, level=%s, amount=%s, type=%s, status=%s",
+            current_sponsor_id,
+            level,
+            commission_amount,
+            config["commission_type"].value,
+            initial_status.value,
+        )
 
         current_sponsor_id = sponsor.sponsor_id
         level += 1
@@ -212,19 +225,6 @@ def distribute_commissions(
                 db.flush()
             for c in commissions_created:
                 db.refresh(c)
-            # Auto-payout eligible commissions (APPROVED + wallet set)
-            try:
-                from app.services.commission_payout_service import process_commission_payouts_sync
-
-                paid_count = process_commission_payouts_sync(db, commissions_created)
-                if paid_count:
-                    if commit:
-                        db.commit()
-                    else:
-                        db.flush()
-                    logger.info("Auto-paid %s commission(s) for deposit %s", paid_count, deposit.id)
-            except Exception as payout_err:
-                logger.exception("Auto-payout batch failed for deposit %s: %s", deposit.id, payout_err)
             logger.info(f"Created {len(commissions_created)} commissions for deposit {deposit.id}")
         except Exception as e:
             logger.error(f"Error saving commissions: {e}")
@@ -264,52 +264,30 @@ def process_payment_validation(
         
         # Distribuer les commissions
         commissions = distribute_commissions(
-            db, deposit, product_code, commit=not defer_commit
+            db, deposit, product_code, commit=False
         )
 
-        # Activer le service pour l'utilisateur
+        # The validated deposit is the durable entitlement record.  Do not set
+        # transient, unmapped User attributes that disappear after the request.
         user = db.query(User).filter(User.id == deposit.user_id).first()
         if user:
+            validity_days = int(getattr(product_type, "validity_days", 0) or 0)
+            if validity_days > 0 and deposit.expires_at is None:
+                deposit.expires_at = datetime.utcnow() + timedelta(days=validity_days)
             if product_code == "kyc":
                 # KYC sera traité séparément après vérification
                 logger.info(f"KYC payment validated for user {user.id}")
             elif product_code in ["mfm_membership", "efm_membership", "founding_membership"]:
-                # Activer le statut Founding Member
-                user.is_founding_member = True
-                user.founding_member_since = datetime.utcnow()
-                logger.info(f"Founding membership activated for user {user.id}")
+                logger.info("Founding membership deposit validated for user %s", user.id)
             elif product_code == "annual_membership":
-                # Renouveler le statut Founding Member
-                if user.is_founding_member:
-                    user.founding_member_expires = datetime.utcnow().replace(
-                        year=datetime.utcnow().year + 1
-                    )
-                    logger.info(f"Annual membership renewed for user {user.id}")
+                logger.info("Annual membership deposit validated for user %s", user.id)
 
-            if defer_commit:
-                db.flush()
-            else:
-                db.commit()
-            
-            # Envoyer l'email de confirmation de paiement
-            try:
-                user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
-                email_service.send_payment_confirmation_email(
-                    to_email=user.email,
-                    amount=f"${float(deposit.amount):.2f}",
-                    product=product_type.name,
-                    reference=str(deposit.external_payment_id or deposit.id),
-                    date=datetime.utcnow().strftime('%d/%m/%Y'),
-                    lang=user_lang
-                )
-                logger.info(f"Payment confirmation email sent to {user.email}")
-            except Exception as e:
-                logger.error(f"Failed to send payment confirmation email: {e}")
+            db.flush()
 
         # Écritures comptables (plan comptable MyHigh5 — voir docs/MYHIGH5_CHART_OF_ACCOUNTS.md)
         from app.services.payment_accounting import payment_accounting
 
-        journal_commit = not defer_commit
+        journal_commit = False
         if product_code == "kyc":
             # Step 1: cash to deferred2113. Step 2 posts when KYC is approved (Shufti webhook / status sync).
             payment_accounting.process_kyc_cash_receipt_accounting(
@@ -331,6 +309,23 @@ def process_payment_validation(
             payment_accounting.process_club_membership_payment_accounting(
                 db, deposit, commissions, journal_commit=journal_commit
             )
+
+        if not defer_commit:
+            db.commit()
+            if user:
+                try:
+                    user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
+                    email_service.send_payment_confirmation_email(
+                        to_email=user.email,
+                        amount=f"${float(deposit.amount):.2f}",
+                        product=product_type.name,
+                        reference=str(deposit.external_payment_id or deposit.id),
+                        date=datetime.utcnow().strftime('%d/%m/%Y'),
+                        lang=user_lang
+                    )
+                    logger.info("Payment confirmation email sent for user %s", user.id)
+                except Exception as e:
+                    logger.error("Failed to send payment confirmation email: %s", e)
 
         return True
 

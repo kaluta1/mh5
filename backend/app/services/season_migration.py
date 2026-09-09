@@ -5,9 +5,42 @@ S'exécute toutes les 24h pour vérifier les migrations selon les dates des sais
 """
 from datetime import datetime, timedelta, date
 import calendar
+import logging
 from typing import List, Optional, Dict, FrozenSet, ClassVar
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, and_, or_, text
+from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger(__name__)
+
+# Fixed key for Postgres advisory locking around season migration processing.
+# Payments/contest-status/monthly-round can all trigger migrations (Vercel Cron,
+# an in-process asyncio scheduler, and — where enabled — Celery beat may all be
+# configured against the same database), so a non-blocking advisory lock keeps
+# two concurrent runs from racing to create duplicate ContestSeason rows.
+SEASON_MIGRATION_LOCK_KEY = 875321001
+
+
+def _try_acquire_migration_lock(db: Session) -> bool:
+    """Best-effort non-blocking advisory lock. No-op (always True) outside Postgres."""
+    bind = db.get_bind()
+    if not bind or bind.dialect.name != "postgresql":
+        return True
+    return bool(
+        db.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": SEASON_MIGRATION_LOCK_KEY}
+        ).scalar()
+    )
+
+
+def _release_migration_lock(db: Session) -> None:
+    bind = db.get_bind()
+    if not bind or bind.dialect.name != "postgresql":
+        return
+    try:
+        db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SEASON_MIGRATION_LOCK_KEY})
+    except Exception:
+        logger.warning("Failed to release season migration advisory lock", exc_info=True)
 
 from app.models.contest import Contest
 from app.models.contests import (
@@ -883,81 +916,22 @@ class SeasonMigrationService:
             if sibling_ids:
                 points_season_ids = list({*points_season_ids, *sibling_ids})
 
-        points_rows = (
-            db.query(
-                ContestantVoting.contestant_id,
-                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-            )
-            .filter(
-                ContestantVoting.season_id.in_(points_season_ids),
-                or_(
-                    ContestantVoting.vote_bucket_key == bucket_key,
-                    ContestantVoting.contest_id == contest.id,
-                ),
-                ContestantVoting.contestant_id.in_(contestant_ids),
-            )
-            .group_by(ContestantVoting.contestant_id)
-            .all()
-        )
-        points_by_id = {
-            row.contestant_id: int(row.total_points or 0) for row in points_rows
-        }
+        from app.services.voting_ranking import aggregate_rankings
 
-        if season.level == SeasonLevel.REGIONAL:
-            ranked_user_ids = [
-                getattr(c, "user_id", None)
-                for c in members
-                if getattr(c, "user_id", None) is not None
-            ]
-            if ranked_user_ids:
-                user_points_rows = (
-                    db.query(
-                        Contestant.user_id,
-                        func.coalesce(func.sum(ContestantVoting.points), 0).label(
-                            "total_points"
-                        ),
-                    )
-                    .join(Contestant, Contestant.id == ContestantVoting.contestant_id)
-                    .filter(
-                        ContestantVoting.season_id.in_(points_season_ids),
-                        or_(
-                            ContestantVoting.vote_bucket_key == bucket_key,
-                            ContestantVoting.contest_id == contest.id,
-                        ),
-                        Contestant.user_id.in_(ranked_user_ids),
-                    )
-                    .group_by(Contestant.user_id)
-                    .all()
-                )
-                points_by_user_id = {
-                    row.user_id: int(row.total_points or 0)
-                    for row in user_points_rows
-                    if row.user_id is not None
-                }
-                for candidate in members:
-                    candidate_user_id = getattr(candidate, "user_id", None)
-                    if candidate_user_id in points_by_user_id:
-                        points_by_id[candidate.id] = max(
-                            points_by_id.get(candidate.id, 0),
-                            points_by_user_id[candidate_user_id],
-                        )
-
-        engagement_by_id = SeasonMigrationService._engagement_by_contestant(
-            db, contestant_ids
+        ranking_rows = aggregate_rankings(
+            db,
+            season_ids=points_season_ids,
+            contestant_ids=contestant_ids,
+            contest_id=contest.id,
+            bucket_key=bucket_key,
+            require_votes=True,
         )
-
-        sorted_ranked = sorted(
-            members,
-            key=lambda c: (
-                points_by_id.get(c.id, 0),
-                engagement_by_id.get(c.id, {}).get("shares", 0),
-                engagement_by_id.get(c.id, {}).get("likes", 0),
-                engagement_by_id.get(c.id, {}).get("comments", 0),
-                engagement_by_id.get(c.id, {}).get("views", 0),
-                -(c.id or 0),
-            ),
-            reverse=True,
-        )
+        members_by_id = {candidate.id: candidate for candidate in members}
+        sorted_ranked = [
+            members_by_id[row.contestant_id]
+            for row in ranking_rows
+            if row.contestant_id in members_by_id
+        ]
 
         seen_user_ids: set[int] = set()
         deduped: List[Contestant] = []
@@ -1075,20 +1049,23 @@ class SeasonMigrationService:
         """Points and engagement from the previous stage, used to preserve migration order."""
         if not season_id or not contestant_ids:
             return {}, {}
-        vote_rows = (
-            db.query(
-                ContestantVoting.contestant_id,
-                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-            )
-            .filter(
-                ContestantVoting.season_id == season_id,
-                ContestantVoting.contestant_id.in_(contestant_ids),
-            )
-            .group_by(ContestantVoting.contestant_id)
-            .all()
+        from app.services.voting_ranking import aggregate_rankings
+
+        rows = aggregate_rankings(
+            db,
+            season_ids=[season_id],
+            contestant_ids=contestant_ids,
         )
-        points = {row.contestant_id: int(row.total_points or 0) for row in vote_rows}
-        engagement = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+        points = {row.contestant_id: row.total_points for row in rows}
+        engagement = {
+            row.contestant_id: {
+                "shares": row.shares,
+                "likes": row.likes,
+                "comments": row.comments,
+                "views": row.views,
+            }
+            for row in rows
+        }
         return points, engagement
 
     @staticmethod
@@ -1254,29 +1231,70 @@ class SeasonMigrationService:
             if season:
                 return season
 
-        query = db.query(ContestSeason).filter(
-            and_(
-                ContestSeason.level == level,
-                ContestSeason.is_deleted == False,
+        # This is called both from the migration scheduler (already holding the
+        # coarse SEASON_MIGRATION_LOCK_KEY session lock) and directly from the
+        # live contest-entry request path (contestant.py), which does NOT hold
+        # that lock. ContestSeason has no DB-level unique constraint on
+        # (round_id, level), so without a lock two concurrent callers (two
+        # simultaneous entry submissions, or a request racing the scheduler)
+        # can both pass the SELECT below and each INSERT their own row,
+        # splitting contestants/votes across two "same round+level" seasons.
+        # Lock per (round_id, level) via hashtext so unrelated rounds/levels
+        # don't serialize against each other; reentrant/no-op on the same
+        # session, safe no-op on SQLite (tests).
+        bind = db.get_bind()
+        use_lock = bool(bind) and bind.dialect.name == "postgresql"
+        composite_key = f"{round_id}:{level.value}"
+        if use_lock:
+            db.execute(
+                text("SELECT pg_advisory_lock(:ns, hashtext(:composite))"),
+                {"ns": SEASON_MIGRATION_LOCK_KEY, "composite": composite_key},
             )
-        )
-        if round_id is not None:
-            query = query.filter(ContestSeason.round_id == round_id)
-
-        season = query.order_by(ContestSeason.id.asc()).first()
-
-        if not season:
-            season = ContestSeason(
-                title=title,
-                level=level,
-                is_deleted=False,
-                round_id=round_id,
+        try:
+            query = db.query(ContestSeason).filter(
+                and_(
+                    ContestSeason.level == level,
+                    ContestSeason.is_deleted == False,
+                )
             )
-            db.add(season)
-            db.commit()
-            db.refresh(season)
+            if round_id is not None:
+                query = query.filter(ContestSeason.round_id == round_id)
 
-        return season
+            season = query.order_by(ContestSeason.id.asc()).first()
+
+            if not season:
+                season = ContestSeason(
+                    title=title,
+                    level=level,
+                    is_deleted=False,
+                    round_id=round_id,
+                )
+                db.add(season)
+                try:
+                    db.commit()
+                    db.refresh(season)
+                except IntegrityError:
+                    # Defense in depth in case a DB-level unique constraint is
+                    # added later, or this is ever reached without the lock.
+                    db.rollback()
+                    requery = db.query(ContestSeason).filter(
+                        and_(
+                            ContestSeason.level == level,
+                            ContestSeason.round_id == round_id,
+                            ContestSeason.is_deleted == False,
+                        )
+                    ).order_by(ContestSeason.id.asc()).first()
+                    if requery is None:
+                        raise
+                    season = requery
+
+            return season
+        finally:
+            if use_lock:
+                db.execute(
+                    text("SELECT pg_advisory_unlock(:ns, hashtext(:composite))"),
+                    {"ns": SEASON_MIGRATION_LOCK_KEY, "composite": composite_key},
+                )
 
     @staticmethod
     def get_top_contestants_by_location(
@@ -1293,6 +1311,7 @@ class SeasonMigrationService:
         strict_season_scope: bool = False,
         uncapped: bool = False,
         cohort_round_id: Optional[int] = None,
+        ranking_bucket_key: Optional[str] = None,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -1335,7 +1354,7 @@ class SeasonMigrationService:
                 from app.core.nomination_calendar import nomination_cohort_created_at_filters
 
                 season_filters.extend(nomination_cohort_created_at_filters(cohort_round))
-        contestants_query = db.query(Contestant).join(
+        contestants_query = db.query(Contestant).options(joinedload(Contestant.user)).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).filter(and_(*season_filters))
         strict_contest_scope = bool(contest_id is not None)
@@ -1378,9 +1397,9 @@ class SeasonMigrationService:
         # Hard cap the candidate pool to avoid timeouts on very large seasons.
         # We still rank and dedupe later, so we keep a generous buffer above the
         # requested `limit` to preserve the true Top 5 while reducing load.
+        # Do not cap before applying the complete canonical ordering.  Pre-capping
+        # by points/ID can exclude the real winner when engagement breaks a tie.
         candidate_limit = None
-        if limit is not None and not uncapped:
-            candidate_limit = max(limit * 25, 200)  # e.g., limit=5 -> cap at 125; floor at 200
 
         if candidate_limit is not None:
             try:
@@ -1435,7 +1454,9 @@ class SeasonMigrationService:
                 fallback_filters.append(Contestant.id.in_(voted_ids))
             else:
                 fallback_filters.append(Contestant.season_id == contest_id)
-            contestants_query = db.query(Contestant).filter(and_(*fallback_filters))
+            contestants_query = db.query(Contestant).options(
+                joinedload(Contestant.user)
+            ).filter(and_(*fallback_filters))
             if country_filter:
                 raw = country_filter.strip().lower()
                 alias_map = {
@@ -1611,46 +1632,6 @@ class SeasonMigrationService:
             return {}
         
         # Récupérer les points par contestant depuis ContestantVoting.
-        # Primary: contest+season (strict migration scope)
-        # Fallback: contest only (legacy data where season_id on votes may drift)
-        points_query = db.query(
-            ContestantVoting.contestant_id,
-            func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
-            func.count(ContestantVoting.id).label('vote_count')
-        )
-        if contest_id is not None:
-            points_query = points_query.filter(
-                and_(
-                    ContestantVoting.season_id == season_id,
-                    ContestantVoting.contest_id == contest_id,
-                )
-            )
-        else:
-            points_query = points_query.filter(ContestantVoting.season_id == season_id)
-        points_data = points_query.group_by(ContestantVoting.contestant_id).all()
-
-        if not points_data and contest_id is not None and not strict_season_scope and not uncapped:
-            if diagnostics:
-                logger.warning(
-                    f"  - No vote points found with season+contest scope "
-                    f"(season_id={season_id}, contest_id={contest_id}); fallback to contest-only scope"
-                )
-            points_data = db.query(
-                ContestantVoting.contestant_id,
-                func.coalesce(func.sum(ContestantVoting.points), 0).label('total_points'),
-                func.count(ContestantVoting.id).label('vote_count')
-            ).filter(
-                ContestantVoting.contest_id == contest_id
-            ).group_by(
-                ContestantVoting.contestant_id
-            ).all()
-        
-        points_by_contestant = {p.contestant_id: p.total_points for p in points_data}
-        votes_by_contestant = {p.contestant_id: p.vote_count for p in points_data}
-        if diagnostics:
-            logger.info(f"  - Points/Votes found for {len(points_by_contestant)} contestants")
-            print(f"[Migration]   Points/Votes found for {len(points_by_contestant)} contestants")
-        
         # Grouper par localisation
         grouped = {}
         for contestant in contestants:
@@ -1680,7 +1661,44 @@ class SeasonMigrationService:
             grouped[location_value].append(contestant)
         
         contestant_ids = [c.id for c in contestants]
-        engagement_by_id = SeasonMigrationService._engagement_by_contestant(db, contestant_ids)
+        from app.services.voting_ranking import aggregate_rankings
+
+        ranking_contest = (
+            db.query(Contest).filter(Contest.id == contest_id).first()
+            if contest_id is not None and ranking_bucket_key is None
+            else None
+        )
+        ranking_rows = aggregate_rankings(
+            db,
+            season_ids=[season_id],
+            contestant_ids=contestant_ids,
+            contest_id=contest_id,
+            bucket_key=(
+                ranking_bucket_key
+                or (
+                    SeasonMigrationService._top_high5_bucket_key_for_contest(ranking_contest)
+                    if ranking_contest is not None
+                    else None
+                )
+            ),
+            require_votes=True,
+        )
+        rank_order = {row.contestant_id: row.rank for row in ranking_rows}
+        points_by_contestant = {
+            row.contestant_id: row.total_points for row in ranking_rows
+        }
+        votes_by_contestant = {
+            row.contestant_id: row.total_votes for row in ranking_rows
+        }
+        engagement_by_id = {
+            row.contestant_id: {
+                "shares": row.shares,
+                "likes": row.likes,
+                "comments": row.comments,
+                "views": row.views,
+            }
+            for row in ranking_rows
+        }
 
         # Trier et limiter pour chaque localisation
         result = {}
@@ -1689,17 +1707,14 @@ class SeasonMigrationService:
         for location_value, location_contestants in grouped.items():
             # Business winner order:
             # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
+            vote_backed_contestants = [
+                candidate
+                for candidate in location_contestants
+                if candidate.id in rank_order
+            ]
             sorted_contestants = sorted(
-                location_contestants,
-                key=lambda c: (
-                    points_by_contestant.get(c.id, 0),
-                    engagement_by_id.get(c.id, {}).get("shares", 0),
-                    engagement_by_id.get(c.id, {}).get("likes", 0),
-                    engagement_by_id.get(c.id, {}).get("comments", 0),
-                    engagement_by_id.get(c.id, {}).get("views", 0),
-                    -(c.id or 0),
-                ),
-                reverse=True
+                vote_backed_contestants,
+                key=lambda candidate: rank_order.get(candidate.id, 10**12),
             )
             
             # One country winner per nominator (nomination user_id = nominator).
@@ -2164,10 +2179,15 @@ class SeasonMigrationService:
         )
         if from_season_id is not None:
             query = query.filter(ContestSeasonLink.season_id == from_season_id)
-        else:
-            # deterministic fallback for legacy calls
-            query = query.order_by(ContestSeasonLink.linked_at.desc(), ContestSeasonLink.id.desc())
-        contest_season_link = query.first()
+        matching_links = query.order_by(ContestSeasonLink.season_id.asc()).all()
+        if len(matching_links) > 1:
+            return {
+                "error": (
+                    "Ambiguous source season; pass from_season_id explicitly. "
+                    f"Candidates: {[link.season_id for link in matching_links]}"
+                )
+            }
+        contest_season_link = matching_links[0] if matching_links else None
         
         import logging
         logger = logging.getLogger(__name__)
@@ -2637,11 +2657,46 @@ class SeasonMigrationService:
 
         Participation contests use round stage date columns (city M+1, country M+2, …).
         """
-        import logging
-        logger = logging.getLogger(__name__)
         from app.models.round import round_contests as rc_table
+        from app.services.contest_context import contest_context_service
         from app.services.contest_status import contest_status_service
-        
+
+        # Fail before status changes, season creation, or promotion if an
+        # official calendar month has multiple non-cancelled round identities.
+        periods = [
+            row[0]
+            for row in db.query(Round.submission_start_date)
+            .filter(
+                Round.submission_start_date.isnot(None),
+                Round.status != RoundStatus.CANCELLED,
+            )
+            .distinct()
+            .all()
+            if row[0] is not None and row[0].day == 1
+        ]
+        contest_context_service.preflight_monthly_rounds(db, periods)
+
+        if not _try_acquire_migration_lock(db):
+            logger.info(
+                "Season migration already running in another process; skipping this pass."
+            )
+            return {"processed": 0, "results": [], "skipped": "locked"}
+
+        try:
+            return SeasonMigrationService._check_and_process_migrations_locked(
+                db, rc_table, contest_status_service, allow_multi_hop=allow_multi_hop
+            )
+        finally:
+            _release_migration_lock(db)
+
+    @staticmethod
+    def _check_and_process_migrations_locked(
+        db: Session,
+        rc_table,
+        contest_status_service,
+        *,
+        allow_multi_hop: bool = False,
+    ) -> dict:
         results = []
         today = date.today()
         if allow_multi_hop is False and today.day == 1:

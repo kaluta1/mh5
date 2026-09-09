@@ -6,9 +6,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ROOT}/backend/.env"
 
-# MH5 production NOWPayments account (pay-in)
-NP_API_KEY="${NOWPAYMENTS_API_KEY_OVERRIDE:-MVMSTBP-17K4MDK-NX6FDFQ-2Q9DSEF}"
-NP_IPN_SECRET="${NOWPAYMENTS_IPN_SECRET_OVERRIDE:-6p+2u0dV0MxkO9j+PirVQaEKz+O50x85}"
+# Credentials must be injected by the operator. Never keep live or sandbox
+# provider credentials in repository defaults.
+NP_API_KEY="${NOWPAYMENTS_API_KEY_OVERRIDE:-}"
+NP_IPN_SECRET="${NOWPAYMENTS_IPN_SECRET_OVERRIDE:-}"
+
+if [ -z "$NP_API_KEY" ] || [ -z "$NP_IPN_SECRET" ]; then
+  echo "ERROR: set NOWPAYMENTS_API_KEY_OVERRIDE and NOWPAYMENTS_IPN_SECRET_OVERRIDE" >&2
+  exit 1
+fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "ERROR: $ENV_FILE not found" >&2

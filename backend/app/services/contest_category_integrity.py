@@ -39,12 +39,12 @@ def normalize_contest_mode(mode: Any) -> str:
 
 def category_scope_key(contest: Any) -> str:
     """Stable key for dedupe / audit (contest_type preferred — avoids split keys when category_id is null on one row)."""
-    ctype = (getattr(contest, "contest_type", None) or "").strip().lower()
-    if ctype and ctype not in ("unknown", ""):
-        return f"ty:{ctype}"
     cid = getattr(contest, "category_id", None)
     if cid:
         return f"cat:{int(cid)}"
+    ctype = (getattr(contest, "contest_type", None) or "").strip().lower()
+    if ctype and ctype not in ("unknown", ""):
+        return f"ty:{ctype}"
     name = (getattr(contest, "name", None) or "").strip().lower()
     if name:
         return f"name:{name}"
@@ -368,13 +368,18 @@ def contest_ids_for_category(
         Contest.is_deleted == False,
         Contest.is_active == True,
     )
-    ctype = (contest_type or "").strip().lower()
-    if ctype:
-        q = q.filter(Contest.contest_type == contest_type)
-    elif category_id and category_id > 0:
+    if category_id and category_id > 0:
         q = q.filter(Contest.category_id == category_id)
     else:
-        return []
+        ctype = (contest_type or "").strip().lower()
+        if not ctype:
+            return []
+        from sqlalchemy import func
+
+        q = q.filter(
+            Contest.category_id.is_(None),
+            func.lower(func.trim(Contest.contest_type)) == ctype,
+        )
     return [row[0] for row in q.all()]
 
 

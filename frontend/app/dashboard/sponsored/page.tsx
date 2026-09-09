@@ -190,6 +190,7 @@ export default function SponsoredPage() {
             onLoad={onIframeLoad}
             className="w-full min-h-[800px] border-0 block"
             allow="payment *; fullscreen *"
+            sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>

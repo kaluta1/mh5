@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.api import deps
 from app.models import Contest, User, FanClub, Contestant
+from app.models.clubs import ClubStatus
 
 router = APIRouter()
 
@@ -39,12 +40,12 @@ def search(
     search_term = f"%{q}%"
     
     # Search contests (with basic geo info from level/location)
-    contests = db.query(Contest).limit(10).filter(
+    contests = db.query(Contest).options(joinedload(Contest.location)).filter(
         or_(
             Contest.name.ilike(search_term),
             Contest.description.ilike(search_term)
         )
-    ).all()
+    ).limit(10).all()
     
     for contest in contests:
         location_name = None
@@ -67,6 +68,7 @@ def search(
     # Search contestants (by submission, user name and geo fields)
     contestants = (
         db.query(Contestant)
+        .options(joinedload(Contestant.user))
         .join(Contestant.user)
         .filter(
             or_(
@@ -120,12 +122,20 @@ def search(
         })
     
     # Search clubs
-    clubs = db.query(FanClub).filter(
-        or_(
-            FanClub.name.ilike(search_term),
-            FanClub.description.ilike(search_term)
+    clubs = (
+        db.query(FanClub)
+        .filter(
+            FanClub.is_public.is_(True),
+            FanClub.status == ClubStatus.ACTIVE,
+            or_(
+                FanClub.name.ilike(search_term),
+                FanClub.description.ilike(search_term),
+            ),
         )
-    ).limit(10).all()
+        .order_by(FanClub.name.asc(), FanClub.id.asc())
+        .limit(10)
+        .all()
+    )
     
     for club in clubs:
         results["club"].append({
@@ -180,6 +190,7 @@ def search_contestants(
     
     contestants = (
         db.query(Contestant)
+        .options(joinedload(Contestant.user))
         .join(Contestant.user)
         .filter(
             or_(
@@ -244,12 +255,21 @@ def search_clubs(
     """Search only clubs"""
     search_term = f"%{q}%"
     
-    clubs = db.query(FanClub).filter(
-        or_(
-            FanClub.name.ilike(search_term),
-            FanClub.description.ilike(search_term)
+    clubs = (
+        db.query(FanClub)
+        .filter(
+            FanClub.is_public.is_(True),
+            FanClub.status == ClubStatus.ACTIVE,
+            or_(
+                FanClub.name.ilike(search_term),
+                FanClub.description.ilike(search_term),
+            ),
         )
-    ).offset(skip).limit(limit).all()
+        .order_by(FanClub.name.asc(), FanClub.id.asc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     
     return [
         {

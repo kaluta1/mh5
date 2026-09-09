@@ -1,5 +1,6 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from app.models.clubs import ClubStatus, MembershipType, MembershipStatus
@@ -10,9 +11,9 @@ class FanClubBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
-    membership_fee: float = 0.0
-    premium_fee: Optional[float] = None
-    annual_discount_percentage: float = 20.0
+    membership_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
+    premium_fee: Optional[Decimal] = Field(default=None, ge=0)
+    annual_discount_percentage: Decimal = Field(default=Decimal("20.00"), ge=0, le=100)
     requires_approval: bool = False
     is_public: bool = True
     max_members: Optional[int] = None
@@ -26,9 +27,9 @@ class FanClubCreate(FanClubBase):
 class FanClubUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    membership_fee: Optional[float] = None
-    premium_fee: Optional[float] = None
-    annual_discount_percentage: Optional[float] = None
+    membership_fee: Optional[Decimal] = Field(default=None, ge=0)
+    premium_fee: Optional[Decimal] = Field(default=None, ge=0)
+    annual_discount_percentage: Optional[Decimal] = Field(default=None, ge=0, le=100)
     requires_approval: Optional[bool] = None
     is_public: Optional[bool] = None
     max_members: Optional[int] = None
@@ -44,7 +45,7 @@ class FanClub(FanClubBase):
     
     # Statistiques
     total_members: int = 0
-    total_revenue: float = 0.0
+    total_revenue: Decimal = Decimal("0.00")
 
 
 class FanClubWithOwner(FanClub):
@@ -94,7 +95,7 @@ class ClubMembershipBase(BaseModel):
     membership_type: MembershipType
     start_date: datetime
     end_date: datetime
-    amount_paid: float
+    amount_paid: Decimal
     payment_method: str  # dsp, stripe, paypal
     auto_renewal: bool = True
 
@@ -127,11 +128,11 @@ class ClubMembershipWithUser(ClubMembership):
 # Club Wallet schemas
 class ClubWalletBase(BaseModel):
     club_id: int
-    balance_cad: float = 0.0
-    balance_usd: float = 0.0
-    balance_dsp: float = 0.0
-    total_membership_revenue: float = 0.0
-    total_ad_revenue: float = 0.0
+    balance_cad: Decimal = Decimal("0.00")
+    balance_usd: Decimal = Decimal("0.00")
+    balance_dsp: Decimal = Decimal("0.00")
+    total_membership_revenue: Decimal = Decimal("0.00")
+    total_ad_revenue: Decimal = Decimal("0.00")
 
 
 class ClubWalletCreate(ClubWalletBase):
@@ -139,9 +140,9 @@ class ClubWalletCreate(ClubWalletBase):
 
 
 class ClubWalletUpdate(BaseModel):
-    balance_cad: Optional[float] = None
-    balance_usd: Optional[float] = None
-    balance_dsp: Optional[float] = None
+    balance_cad: Optional[Decimal] = None
+    balance_usd: Optional[Decimal] = None
+    balance_dsp: Optional[Decimal] = None
 
 
 class ClubWallet(ClubWalletBase):
@@ -155,7 +156,7 @@ class ClubWallet(ClubWalletBase):
 class ClubTransactionBase(BaseModel):
     wallet_id: int
     transaction_type: str  # deposit, withdrawal, fee, revenue
-    amount: float
+    amount: Decimal
     currency: str
     description: Optional[str] = None
     reference_id: Optional[str] = None
@@ -298,7 +299,7 @@ class ClubDashboard(BaseModel):
     total_members: int = 0
     active_members: int = 0
     premium_members: int = 0
-    monthly_revenue: float = 0.0
+    monthly_revenue: Decimal = Decimal("0.00")
     pending_transactions: int = 0
     recent_content: List[ClubContent] = []
 
@@ -313,10 +314,10 @@ class ClubMembersList(BaseModel):
 
 class ClubFinancialSummary(BaseModel):
     """Résumé financier d'un club"""
-    total_revenue: float = 0.0
-    membership_revenue: float = 0.0
-    ad_revenue: float = 0.0
-    total_expenses: float = 0.0
-    net_profit: float = 0.0
-    pending_withdrawals: float = 0.0
-    available_balance: float = 0.0
+    total_revenue: Decimal = Decimal("0.00")
+    membership_revenue: Decimal = Decimal("0.00")
+    ad_revenue: Decimal = Decimal("0.00")
+    total_expenses: Decimal = Decimal("0.00")
+    net_profit: Decimal = Decimal("0.00")
+    pending_withdrawals: Decimal = Decimal("0.00")
+    available_balance: Decimal = Decimal("0.00")

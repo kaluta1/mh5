@@ -15,6 +15,7 @@ import uvicorn
 # Setup Logger to fix NameError globally
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn.error")
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").strip().lower() == "production"
 
 # Fix Windows console encoding for emoji/log output
 if sys.platform == "win32":
@@ -37,6 +38,14 @@ def validate_critical_settings():
     critical_errors = []
     payment_warnings = []
 
+    raw_cors = os.getenv("BACKEND_CORS_ORIGINS", "").strip()
+    if is_production:
+        configured_origins = [item.strip() for item in raw_cors.split(",") if item.strip()]
+        if not configured_origins:
+            critical_errors.append("BACKEND_CORS_ORIGINS must be explicitly configured in production.")
+        elif any(origin == "*" or not origin.startswith("https://") for origin in configured_origins):
+            critical_errors.append("Production CORS origins must be explicit HTTPS origins without wildcards.")
+
     # 1. Critical Security Checks: These checks are absolutely essential, and the application should never run without them.
 
     if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
@@ -53,6 +62,26 @@ def validate_critical_settings():
             "ENCRYPTION_KEY_DERIVATION_SALT is missing. Set a random salt in your .env file."
         )
 
+    if settings.ALGORITHM not in {"HS256", "HS384", "HS512"}:
+        critical_errors.append("ALGORITHM must be an approved HMAC JWT algorithm.")
+
+    if is_production:
+        if not settings.FRONTEND_URL.startswith("https://") or not settings.BACKEND_PUBLIC_URL.startswith("https://"):
+            critical_errors.append("Public frontend/backend URLs must use HTTPS in production.")
+        active_kyc = (settings.KYC_PROVIDER or "kaluta").strip().lower()
+        if active_kyc == "kaluta" and (not settings.KALUTA_API_KEY or not settings.KALUTA_WEBHOOK_SECRET):
+            critical_errors.append("Active Kaluta KYC requires its API key and webhook secret.")
+        if active_kyc in {"shufti", "shufti_pro"} and (not settings.SHUFTI_CLIENT_ID or not settings.SHUFTI_SECRET_KEY):
+            critical_errors.append("Active Shufti KYC requires its client ID and secret.")
+        for name, value in {
+            "KALUTA_WEBHOOK_SECRET": settings.KALUTA_WEBHOOK_SECRET,
+            "SHUFTI_SECRET_KEY": settings.SHUFTI_SECRET_KEY,
+            "NOWPAYMENTS_IPN_SECRET": settings.NOWPAYMENTS_IPN_SECRET,
+            "ANNUALADS_WEBHOOK_SECRET": settings.ANNUALADS_WEBHOOK_SECRET,
+        }.items():
+            if value and str(value).strip().lower().startswith(("http://", "https://")):
+                critical_errors.append(f"{name} has URL-shaped content instead of a secret.")
+
     if not settings.NOWPAYMENTS_API_KEY:
         payment_warnings.append(
             "NOWPAYMENTS_API_KEY is missing. Crypto checkout will not work."
@@ -61,6 +90,8 @@ def validate_critical_settings():
         payment_warnings.append(
             "NOWPAYMENTS_IPN_SECRET is missing. Payment webhooks cannot be verified."
         )
+        if is_production:
+            critical_errors.append("NOWPAYMENTS_IPN_SECRET is required for production payment callbacks.")
 
     from app.services.nowpayments_service import payout_config_status
 
@@ -124,14 +155,14 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="API pour MyHigh5 - Plateforme de concours modernes multi-langues",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
     redirect_slashes=True,
     lifespan=lifespan,
 )
 
 # Configuration CORS - DOIT être avant les autres middlewares
-cors_origins = [
+development_cors_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:8000",
@@ -150,6 +181,8 @@ cors_origins = [
     "https://www.kaluta.tech"
 ]
 
+cors_origins = [] if IS_PRODUCTION else development_cors_origins
+
 # Ajouter les origines depuis les settings
 if settings.BACKEND_CORS_ORIGINS:
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
@@ -160,10 +193,10 @@ if settings.BACKEND_CORS_ORIGINS:
 # Nettoyer et supprimer les doublons
 cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 
-print(f"CORS Origins configured: {cors_origins}")
+logger.info("CORS configured with %d explicit origins", len(cors_origins))
 
 # Origin regex
-_CORS_ORIGIN_REGEX = (
+_CORS_ORIGIN_REGEX = None if IS_PRODUCTION else (
     r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     r"|^https://.*\.vercel\.app$"
     r"|^https://.*\.vercel\.dev$"
@@ -179,7 +212,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["X-Backend-Build-Id"],
     max_age=86400,
 )
 
@@ -202,13 +235,12 @@ class CORSExtraMiddleware(BaseHTTPMiddleware):
         if "access-control-allow-origin" in response.headers:
             return response
 
-        is_allowed = (
-            origin in cors_origins or
+        is_allowed = origin in cors_origins or (not IS_PRODUCTION and (
             re.match(r"^https://.*\.vercel\.(app|dev)$", origin) or
             re.match(r"^https://.*\.onrender\.com$", origin) or
             re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or
             re.match(r"^https?://(?:[0-9]{1,3}\.){3}[0-9]{1,3}(:\d+)?$", origin)
-        )
+        ))
         if is_allowed:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -287,17 +319,6 @@ app.add_middleware(BuildIdMiddleware)
 # Inclusion des routes API
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Public media files — registered on the app so contest/category images always resolve
-# (some older deployments missed the router-mounted /media/file/... route).
-from app.api.api_v1.endpoints.media import serve_media_file
-
-app.add_api_route(
-    f"{settings.API_V1_STR}/media/file/{{user_id}}/{{filename}}",
-    serve_media_file,
-    methods=["GET"],
-    tags=["Médias"],
-)
-
 # GraphQL endpoint
 try:
     from app.graphql.schema import graphql_app
@@ -331,7 +352,7 @@ def read_root():
         "status": "online",
         "service": settings.PROJECT_NAME,
         "version": "0.1.0",
-        "documentation": "/docs"
+        "documentation": None if IS_PRODUCTION else "/docs"
     }
 
 
@@ -358,8 +379,10 @@ def robots_txt():
     )
 
 # Route de debug CORS
-@app.get("/debug/cors", tags=["Debug"])
+@app.get("/debug/cors", tags=["Debug"], include_in_schema=not IS_PRODUCTION)
 def debug_cors():
+    if IS_PRODUCTION:
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
     return {
         "cors_origins": cors_origins,
         "environment": os.getenv("ENVIRONMENT", "not set"),
@@ -380,12 +403,13 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "method": request.method
             }
         )
+    safe_detail = "Internal server error" if IS_PRODUCTION and exc.status_code >= 500 else exc.detail
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "detail": exc.detail,
+            "detail": safe_detail,
             "code": f"HTTP_{exc.status_code}",
-            "message": str(exc.detail)
+            "message": str(safe_detail)
         }
     )
 

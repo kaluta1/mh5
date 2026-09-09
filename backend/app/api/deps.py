@@ -2,7 +2,7 @@ from typing import Generator, Optional, List, Callable
 from functools import wraps
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
+from jose import JWTError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.token import TokenPayload
+from app.core.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -22,11 +23,9 @@ def get_current_user(
     Valide le token JWT et récupère l'utilisateur correspondant
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
-        )
+        payload = decode_access_token(token)
+        if not payload:
+            raise JWTError("invalid access token")
         token_data = TokenPayload(**payload)
     except (JWTError, ValidationError):
         raise HTTPException(
@@ -83,11 +82,9 @@ def get_current_active_user_optional(
         return None
     
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
-        )
+        payload = decode_access_token(token)
+        if not payload:
+            raise JWTError("invalid access token")
         token_data = TokenPayload(**payload)
     except (JWTError, ValidationError):
         return None

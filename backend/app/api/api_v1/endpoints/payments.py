@@ -2,12 +2,15 @@
 Payment API Endpoints — NOWPayments crypto checkout.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import HTMLResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from decimal import Decimal
+import hashlib
 import logging
 
 from app.api import deps
@@ -24,6 +27,11 @@ from app.services.nowpayments_service import (
 )
 from app.core.config import settings
 from app.crud import crud_deposit
+from app.services.financial_integrity import (
+    FinancialIntegrityError,
+    authoritative_product_terms,
+    validate_client_purchase_terms,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,11 +46,11 @@ def _should_sync_deposit_with_provider(deposit: Deposit) -> bool:
 class PaymentRecipient(BaseModel):
     username_or_email: str
     product_code: str
-    amount: float
+    amount: Decimal = Field(gt=0)
 
 
 class CreatePaymentRequest(BaseModel):
-    amount: float
+    amount: Decimal = Field(gt=0)
     currency: str = "usd"
     product_code: str
     pay_currency: Optional[str] = None
@@ -61,6 +69,30 @@ class PaymentResponse(BaseModel):
     price_currency: str
     invoice_url: Optional[str] = None
     status: str
+
+
+def _idempotent_order_id(user_id: int, key: str) -> str:
+    normalized = key.strip()
+    if not normalized or len(normalized) > 128:
+        raise HTTPException(status_code=400, detail="Invalid Idempotency-Key")
+    digest = hashlib.sha256(f"{user_id}:{normalized}".encode("utf-8")).hexdigest()[:40]
+    return f"mh5-idem-{digest}"
+
+
+def _stored_payment_response(deposit: Deposit) -> PaymentResponse:
+    return PaymentResponse(
+        deposit_id=deposit.id,
+        order_id=deposit.order_id or "",
+        payment_id=deposit.external_payment_id or "",
+        payment_status=deposit.status.value,
+        pay_address=deposit.payment_address or "",
+        pay_amount=deposit.crypto_amount or "",
+        pay_currency=(deposit.crypto_currency or "").lower(),
+        price_amount=float(deposit.amount),
+        price_currency=(deposit.currency or "USD").lower(),
+        invoice_url=None,
+        status=deposit.status.value,
+    )
 
 
 @router.get("/verify-user")
@@ -105,16 +137,60 @@ async def create_payment(
     request: CreatePaymentRequest,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a NOWPayments invoice and local pending deposit."""
-    order_id = build_order_id()
-
-    product = crud_deposit.product_type.get_by_code(db, code=request.product_code)
+    product_code = request.product_code.strip().lower()
+    product = crud_deposit.product_type.get_by_code(db, code=product_code)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    if request.product_code == "efm_membership" and request.amount < 100:
-        raise HTTPException(status_code=400, detail="Minimum amount for EFM membership is $100")
+    try:
+        expected_amount, expected_currency = authoritative_product_terms(product)
+        validate_client_purchase_terms(
+            submitted_amount=request.amount,
+            submitted_currency=request.currency,
+            expected_amount=expected_amount,
+            expected_currency=expected_currency,
+        )
+        if request.recipients:
+            if len(request.recipients) != 1:
+                raise FinancialIntegrityError(
+                    "Multi-recipient checkout is unavailable until orders have item-level accounting"
+                )
+            recipient = request.recipients[0]
+            identity = recipient.username_or_email.strip().lower()
+            own_identities = {
+                str(current_user.email or "").strip().lower(),
+                str(current_user.username or "").strip().lower(),
+            }
+            if identity not in own_identities:
+                raise FinancialIntegrityError(
+                    "Third-party purchases are unavailable until payer and beneficiary are audited separately"
+                )
+            if recipient.product_code.strip().lower() != product_code:
+                raise FinancialIntegrityError("Recipient product does not match the order product")
+            validate_client_purchase_terms(
+                submitted_amount=recipient.amount,
+                submitted_currency=request.currency,
+                expected_amount=expected_amount,
+                expected_currency=expected_currency,
+            )
+    except FinancialIntegrityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    order_id = _idempotent_order_id(current_user.id, idempotency_key) if idempotency_key else build_order_id()
+    existing = crud_deposit.deposit.get_by_order_id(db, order_id=order_id)
+    if existing:
+        if (
+            existing.user_id != current_user.id
+            or existing.product_type_id != product.id
+            or Decimal(str(existing.amount)) != expected_amount
+        ):
+            raise HTTPException(status_code=409, detail="Idempotency key is already used for another order")
+        if not existing.external_payment_id:
+            raise HTTPException(status_code=409, detail="Payment creation is already in progress")
+        return _stored_payment_response(existing)
 
     pay_currency = normalize_pay_currency(
         request.pay_currency
@@ -125,36 +201,51 @@ async def create_payment(
     deposit = Deposit(
         user_id=current_user.id,
         product_type_id=product.id,
-        amount=request.amount,
-        currency=request.currency.upper(),
+        amount=expected_amount,
+        currency=expected_currency,
         order_id=order_id,
         status=DepositStatus.PENDING,
     )
     db.add(deposit)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        duplicate = crud_deposit.deposit.get_by_order_id(db, order_id=order_id)
+        if duplicate and duplicate.external_payment_id:
+            return _stored_payment_response(duplicate)
+        raise HTTPException(status_code=409, detail="Payment creation is already in progress") from exc
     db.refresh(deposit)
+    deposit_id = int(deposit.id)
+    order_description = f"MyHigh5 {product.name} — deposit {deposit_id}"
+    # Commit/refresh starts a new read transaction; release it before the
+    # bounded provider call so Neon never sees an idle transaction here.
+    db.rollback()
 
     try:
         provider_payload = await now_create_payment(
-            price_amount=request.amount,
-            price_currency=request.currency,
+            price_amount=expected_amount,
+            price_currency=expected_currency,
             order_id=order_id,
-            order_description=f"MyHigh5 {product.name} — deposit {deposit.id}",
+            order_description=order_description,
             pay_currency=pay_currency,
             success_url=f"{settings.FRONTEND_URL.rstrip('/')}/dashboard/wallet?payment=success",
             cancel_url=f"{settings.FRONTEND_URL.rstrip('/')}/dashboard/wallet?payment=cancelled",
         )
     except NowPaymentsError as exc:
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("NOWPayments create error: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("Payment creation error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
     deposit.external_payment_id = str(provider_payload.get("payment_id") or "")
     deposit.payment_address = provider_payload.get("pay_address")
     deposit.crypto_amount = (
@@ -179,8 +270,8 @@ async def create_payment(
         pay_address=str(status_payload.get("pay_address") or ""),
         pay_amount=str(status_payload.get("pay_amount") or ""),
         pay_currency=str(status_payload.get("pay_currency") or pay_currency),
-        price_amount=request.amount,
-        price_currency=request.currency,
+        price_amount=float(expected_amount),
+        price_currency=expected_currency,
         invoice_url=provider_payload.get("invoice_url"),
         status="pending",
     )
@@ -302,26 +393,11 @@ async def get_payment_status(
 @router.get("/invoice/{deposit_id}", response_class=HTMLResponse)
 async def get_invoice(
     deposit_id: int,
-    token: Optional[str] = None,
     lang: Optional[str] = "fr",
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user_optional),
+    current_user: User = Depends(deps.get_current_active_user),
 ):
     """Generate an invoice for a validated deposit."""
-    if token and not current_user:
-        from jose import jwt, JWTError
-
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
-                current_user = db.query(User).filter(User.id == int(user_id)).first()
-        except JWTError:
-            pass
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
 
     if not deposit:

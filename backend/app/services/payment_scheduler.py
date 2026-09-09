@@ -123,7 +123,16 @@ class PaymentScheduler:
         )
 
         try:
-            payload = await get_payment_status(deposit.external_payment_id)
+            deposit_id = int(deposit.id)
+            payment_id = str(deposit.external_payment_id)
+            db.rollback()
+            payload = await get_payment_status(payment_id)
+            deposit = (
+                db.query(Deposit)
+                .filter(Deposit.id == deposit_id)
+                .with_for_update()
+                .one()
+            )
             ok = finalize_deposit_from_nowpayments(db, deposit, payload, defer_commit=True)
             if not ok:
                 logger.warning("Commission/accounting failed for deposit %s during scheduler sync", deposit.id)

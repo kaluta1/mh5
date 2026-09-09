@@ -11,6 +11,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -19,11 +20,21 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.payment import Deposit, DepositStatus
+from app.services.financial_integrity import (
+    FinancialIntegrityError,
+    money,
+    validate_provider_payment_identity,
+)
 
 logger = logging.getLogger(__name__)
 
 NOWPAYMENTS_API_BASE = "https://api.nowpayments.io/v1"
 NOWPAYMENTS_SANDBOX_BASE = "https://api-sandbox.nowpayments.io/v1"
+
+PAYMENT_HTTP_TIMEOUT = httpx.Timeout(60.0, connect=5.0, read=45.0, write=10.0, pool=5.0)
+STATUS_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, pool=5.0)
+PAYOUT_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, pool=5.0)
+AUTH_HTTP_TIMEOUT = httpx.Timeout(15.0, connect=5.0, read=10.0, write=10.0, pool=5.0)
 
 _jwt_cache: dict[str, float | str | None] = {"token": None, "expires_at": 0.0}
 _jwt_lock = asyncio.Lock()
@@ -92,32 +103,32 @@ def map_nowpayments_status(payment_status: str) -> DepositStatus:
     return DepositStatus.PENDING
 
 
-def _expected_fiat_amount(deposit: Deposit, payload: Dict[str, Any]) -> float:
+def _expected_fiat_amount(deposit: Deposit, payload: Dict[str, Any]) -> Decimal:
     if payload.get("price_amount") is not None:
-        return float(payload["price_amount"])
-    return float(deposit.amount or 0)
+        return money(payload["price_amount"])
+    return money(deposit.amount or 0)
 
 
-def _received_fiat_amount(payload: Dict[str, Any], expected_fiat: float) -> Optional[float]:
+def _received_fiat_amount(payload: Dict[str, Any], expected_fiat: Decimal) -> Optional[Decimal]:
     """Estimate fiat received from NOWPayments payload (USD invoice amounts)."""
     price_currency = str(payload.get("price_currency") or "usd").lower()
     outcome_currency = str(payload.get("outcome_currency") or "").lower()
 
     outcome_amount = payload.get("outcome_amount")
     if outcome_amount is not None and outcome_currency in ("usd", price_currency):
-        return float(outcome_amount)
+        return money(outcome_amount)
 
     actually_paid = payload.get("actually_paid")
     pay_amount = payload.get("pay_amount")
     if actually_paid is not None and pay_amount:
-        pay_f = float(pay_amount)
+        pay_f = Decimal(str(pay_amount))
         if pay_f > 0:
             price_base = (
-                float(payload["price_amount"])
+                money(payload["price_amount"])
                 if payload.get("price_amount") is not None
                 else expected_fiat
             )
-            return price_base * (float(actually_paid) / pay_f)
+            return money(price_base * (Decimal(str(actually_paid)) / pay_f))
 
     return None
 
@@ -135,7 +146,7 @@ def within_underpayment_tolerance(deposit: Deposit, payload: Dict[str, Any]) -> 
     if received is None or received <= 0:
         return False
 
-    tolerance = max(0.0, float(settings.NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD))
+    tolerance = max(Decimal("0.00"), money(settings.NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD))
     shortfall = expected - received
     return shortfall <= tolerance
 
@@ -167,6 +178,7 @@ def verify_ipn_signature(body: Dict[str, Any], signature: str) -> bool:
 
 
 def apply_nowpayments_payload_to_deposit(deposit: Deposit, payload: Dict[str, Any]) -> DepositStatus:
+    validate_provider_payment_identity(deposit, payload)
     new_status = resolve_deposit_status_from_provider(deposit, payload)
 
     pay_address = payload.get("pay_address")
@@ -200,6 +212,13 @@ def finalize_deposit_from_nowpayments(
     defer_commit: bool = False,
 ) -> bool:
     """Apply provider payload and run business validation when payment is finished."""
+    provider_status = str(payload.get("payment_status") or payload.get("status") or "").lower()
+    validate_provider_payment_identity(deposit, payload)
+    if provider_status == "refunded":
+        from app.services.financial_reversal import reverse_provider_refund
+
+        return reverse_provider_refund(db, deposit, payload, defer_commit=defer_commit)
+
     if deposit.status == DepositStatus.VALIDATED:
         return True
 
@@ -221,7 +240,7 @@ def finalize_deposit_from_nowpayments(
 
 
 async def get_available_currencies() -> list[str]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=STATUS_HTTP_TIMEOUT) as client:
         response = await client.get(f"{api_base()}/currencies", headers=_headers())
         if response.status_code >= 400:
             raise NowPaymentsError(response.text or "Failed to fetch currencies")
@@ -234,7 +253,7 @@ async def get_available_currencies() -> list[str]:
 
 async def create_payment(
     *,
-    price_amount: float,
+    price_amount: Decimal,
     price_currency: str,
     order_id: str,
     order_description: str,
@@ -243,7 +262,7 @@ async def create_payment(
     cancel_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
-        "price_amount": price_amount,
+        "price_amount": float(money(price_amount)),
         "price_currency": price_currency.lower(),
         "order_id": order_id,
         "order_description": order_description,
@@ -256,7 +275,7 @@ async def create_payment(
     if cancel_url:
         payload["cancel_url"] = cancel_url
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=PAYMENT_HTTP_TIMEOUT) as client:
         response = await client.post(f"{api_base()}/payment", headers=_headers(), json=payload)
         if response.status_code >= 400:
             logger.error("NOWPayments create failed: %s %s", response.status_code, response.text)
@@ -265,7 +284,7 @@ async def create_payment(
 
 
 async def get_payment_status(payment_id: str) -> Dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=STATUS_HTTP_TIMEOUT) as client:
         response = await client.get(f"{api_base()}/payment/{payment_id}", headers=_headers())
         if response.status_code >= 400:
             raise NowPaymentsError(response.text or "Failed to fetch payment status")
@@ -300,7 +319,14 @@ async def sync_deposit_with_provider(db: Session, deposit: Deposit) -> Dict[str,
     if not deposit.external_payment_id:
         return deposit_status_payload(deposit)
 
-    payload = await get_payment_status(deposit.external_payment_id)
+    deposit_id = int(deposit.id)
+    payment_id = str(deposit.external_payment_id)
+    # Release the read transaction before waiting on the remote provider.
+    db.rollback()
+    payload = await get_payment_status(payment_id)
+    deposit = (
+        db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
+    )
     ok = finalize_deposit_from_nowpayments(db, deposit, payload, defer_commit=True)
     if not ok:
         db.rollback()
@@ -374,7 +400,7 @@ def _get_payout_jwt_sync() -> str:
     if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
         return str(_jwt_cache["token"])
 
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
         resp = client.post(
             f"{_payout_base()}/auth",
             json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
@@ -398,7 +424,7 @@ async def _get_payout_jwt() -> str:
         if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
             return str(_jwt_cache["token"])
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=AUTH_HTTP_TIMEOUT) as client:
             resp = await client.post(
                 f"{_payout_base()}/auth",
                 json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
@@ -436,7 +462,7 @@ def send_payout_sync(*, withdrawals: List[dict]) -> dict:
     if not payout_api_key():
         raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
 
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=PAYOUT_HTTP_TIMEOUT) as client:
         resp = client.post(
             f"{_payout_base()}/payout",
             headers=_payout_headers_sync(),
@@ -451,7 +477,7 @@ async def send_payout(*, withdrawals: List[dict]) -> dict:
     if not payout_api_key():
         raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=PAYOUT_HTTP_TIMEOUT) as client:
         resp = await client.post(
             f"{_payout_base()}/payout",
             headers=await _payout_headers(),
@@ -472,7 +498,7 @@ def verify_payout_sync(batch_withdrawal_id: str) -> dict:
         )
 
     code = pyotp.TOTP(secret).now()
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
         resp = client.post(
             f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
             headers=_payout_headers_sync(),
@@ -498,7 +524,7 @@ async def verify_payout(batch_withdrawal_id: str) -> dict:
         )
 
     code = pyotp.TOTP(secret).now()
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=AUTH_HTTP_TIMEOUT) as client:
         resp = await client.post(
             f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
             headers=await _payout_headers(),

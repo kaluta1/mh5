@@ -36,13 +36,12 @@ def generate_keys(
             UserEncryptionKeys.user_id == user_id,
             UserEncryptionKeys.is_active == True
         ).first()
-    except (OperationalError, ProgrammingError):
-        # Table might not exist yet; create it and retry
-        UserEncryptionKeys.__table__.create(db.bind, checkfirst=True)
-        existing = db.query(UserEncryptionKeys).filter(
-            UserEncryptionKeys.user_id == user_id,
-            UserEncryptionKeys.is_active == True
-        ).first()
+    except (OperationalError, ProgrammingError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Encrypted messaging schema is not ready",
+        ) from exc
     
     if existing:
         raise HTTPException(
@@ -92,13 +91,12 @@ def get_public_key(
             UserEncryptionKeys.user_id == user_id,
             UserEncryptionKeys.is_active == True
         ).first()
-    except (OperationalError, ProgrammingError):
-        # Table might not exist yet; create it and retry
-        UserEncryptionKeys.__table__.create(db.bind, checkfirst=True)
-        user_keys = db.query(UserEncryptionKeys).filter(
-            UserEncryptionKeys.user_id == user_id,
-            UserEncryptionKeys.is_active == True
-        ).first()
+    except (OperationalError, ProgrammingError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Encrypted messaging schema is not ready",
+        ) from exc
     
     if not user_keys:
         raise HTTPException(

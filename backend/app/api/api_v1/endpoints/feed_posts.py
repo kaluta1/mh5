@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-import uuid
 
 from app.db.session import get_db
 from app.api.deps import get_current_active_user
@@ -13,7 +12,8 @@ from app.models.user import User
 from app.models.post import Post, PostMedia, PostComment, PostReaction, PostType, PostVisibility, ReactionType
 from app.models.social_group import SocialGroup, GroupMember
 from app.schemas.feed_post import PostCreate, PostResponse, PostCommentCreate, PostCommentResponse
-from app.services.feed_aws_s3 import s3_service
+from app.core.storage import store_media
+from app.models.media import Media
 
 router = APIRouter()
 
@@ -89,40 +89,45 @@ async def upload_post_media(
             detail="Post not found"
         )
     
-    # Upload to S3
-    file_key = f"posts/{post_id}/{uuid.uuid4()}_{file.filename}"
-    
     try:
-        media_url = s3_service.upload_file(
-            file_obj=file.file,
-            key=file_key,
-            content_type=file.content_type
-        )
-    except Exception as e:
+        media_info = await store_media(file, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload media: {str(e)}"
+            detail="Failed to upload media",
         )
-    
-    # Create post media record
-    # Count existing media to determine order
-    existing_count = db.query(PostMedia).filter(PostMedia.post_id == post_id).count()
-    
-    post_media = PostMedia(
-        post_id=post_id,
-        media_url=media_url,
-        media_type=file.content_type or "image",
-        order=existing_count
+
+    metadata = media_info.get("metadata") or {}
+    media = Media(
+        title=file.filename or "post-media",
+        description="",
+        media_type=media_info["media_type"],
+        path=media_info["path"],
+        url=media_info["url"],
+        user_id=user_id,
+        file_size=metadata.get("file_size"),
+        width=metadata.get("width"),
+        height=metadata.get("height"),
     )
-    
-    db.add(post_media)
-    db.commit()
-    db.refresh(post_media)
+    try:
+        existing_count = db.query(PostMedia).filter(PostMedia.post_id == post_id).count()
+        db.add(media)
+        db.flush()
+        post_media = PostMedia(post_id=post_id, media_id=media.id, order=existing_count)
+        db.add(post_media)
+        db.commit()
+        db.refresh(post_media)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save post media")
     
     return {
         "id": post_media.id,
-        "media_url": media_url,
-        "media_type": post_media.media_type,
+        "media_id": media.id,
+        "media_url": media.url,
+        "media_type": media.media_type,
         "order": post_media.order
     }
 

@@ -78,7 +78,7 @@ function setToCache(key: string, data: any) {
 }
 
 function contestCategoryKey(c: {
-  id?: number
+  id?: string | number
   contest_type?: string
   title?: string
   contest_mode?: unknown
@@ -90,7 +90,7 @@ function contestCategoryKey(c: {
 
 function dedupeContestsByCategory<
   T extends {
-    id?: number
+    id?: string | number
     contest_type?: string
     title?: string
     contest_mode?: unknown

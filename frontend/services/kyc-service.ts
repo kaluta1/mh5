@@ -20,6 +20,9 @@ export interface KYCStatusResponse {
   submittedAt?: string
   reviewedAt?: string
   rejectionReason?: string
+  needs_proof_of_address?: boolean
+  needs_payment?: boolean
+  has_valid_payment?: boolean
 }
 
 export interface KYCSubmissionResponse {

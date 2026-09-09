@@ -41,7 +41,9 @@ def _run_distribution(users: dict[int, User], deposit: Deposit) -> list[Affiliat
     user_ids_in_order = [deposit.user_id]
     payer = users[deposit.user_id]
     sid = payer.sponsor_id
-    while sid is not None:
+    visited: set[int] = set()
+    while sid is not None and sid not in visited:
+        visited.add(sid)
         user_ids_in_order.append(sid)
         sid = users[sid].sponsor_id if sid in users else None
 
@@ -65,7 +67,7 @@ def _run_distribution(users: dict[int, User], deposit: Deposit) -> list[Affiliat
     db.add.side_effect = lambda obj: created.append(obj)
 
     with patch(
-        "app.services.commission_distribution.process_commission_payouts_sync",
+        "app.services.commission_payout_service.process_commission_payouts_sync",
         return_value=0,
     ):
         distribute_commissions(db, deposit, "kyc", commit=False)

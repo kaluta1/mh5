@@ -19,9 +19,9 @@ describe('metadata-translations', () => {
     expect(meta.pages.home.title).toContain('MyHigh5')
   })
 
-  it('detects language from cookie header', () => {
+  it('ignores saved language cookies while the site is English-only', () => {
     const headers = new Headers({ cookie: 'myhigh5-language=fr' })
-    expect(detectLanguageFromHeaders(headers)).toBe('fr')
+    expect(detectLanguageFromHeaders(headers)).toBe('en')
   })
 
   it('defaults to English when only accept-language is set', () => {

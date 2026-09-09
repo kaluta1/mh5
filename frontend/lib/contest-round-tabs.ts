@@ -205,8 +205,8 @@ function pickNominationRound(
   rounds: Round[],
   voteRound: Round | undefined,
   calendarAnchor: Round | undefined,
+  now: Date = new Date(),
 ): Round | undefined {
-  const now = new Date()
   const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const currentMonthStr = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toLowerCase()
   const notVote = (r: Round) => {
@@ -235,12 +235,15 @@ function pickNominationRound(
 /**
  * Contests dashboard top pills: always separate **Submit** (nomination month) and **Vote** (live vote round).
  */
-export function computeDisplayRounds(rounds: Round[]): DisplayRoundTab[] {
+export function computeDisplayRounds(
+  rounds: Round[],
+  now: Date = new Date(),
+): DisplayRoundTab[] {
   if (!rounds?.length) return []
   const liveVote = rounds.find((r: Round) => isRoundVotingLive(r, rounds))
-  const calendarAnchor = resolveVoteCalendarAnchorRound(rounds)
+  const calendarAnchor = resolveVoteCalendarAnchorRound(rounds, now)
   const voteRound = calendarAnchor ?? liveVote
-  const nominationRound = pickNominationRound(rounds, voteRound, calendarAnchor)
+  const nominationRound = pickNominationRound(rounds, voteRound, calendarAnchor, now)
 
   const out: DisplayRoundTab[] = []
   const seen = new Set<string>()

@@ -1,7 +1,8 @@
 from typing import Any, List
 import os
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
+from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
@@ -73,29 +74,40 @@ async def upload_media(
         _parts = _url.rstrip("/").split("/")
         if len(_parts) >= 2:
             _filename = _os.path.basename(_parts[-1])
-            _src, _ref, _ = resolve_media_for_serving(current_user.id, _filename)
+            _src, _ref, _ = await run_in_threadpool(
+                resolve_media_for_serving, current_user.id, _filename
+            )
             if not _src or not _ref:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Upload saved but file is not available to serve. Check S3/local storage.",
                 )
 
+        metadata = media_info.get("metadata") or {}
         media_data = MediaCreate(
             title=title or file.filename or "uploaded-media",
             description=description or "",
-            media_type=content_type.split("/")[0],
+            media_type=media_info["media_type"],
             path=media_info["path"],
             url=media_info["url"],
             user_id=current_user.id,
+            file_size=metadata.get("file_size"),
+            width=metadata.get("width"),
+            height=metadata.get("height"),
         )
         media = crud_media.create(db=db, obj_in=media_data)
         return media
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Media upload failed: {str(e)}",
+            detail="Media upload failed",
         )
 
 
@@ -103,8 +115,8 @@ async def upload_media(
 def read_medias(
     *,
     db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     current_user: Any = Depends(get_current_active_user),
 ) -> Any:
     """

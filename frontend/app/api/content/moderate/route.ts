@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { moderateImage, moderateVideo, type ModerationResult } from '@/lib/services/content-moderation-service'
+import { hasValidBackendBearer } from '@/lib/server-auth'
 
 /**
  * API pour modérer un contenu (image ou vidéo)
@@ -9,6 +10,9 @@ import { moderateImage, moderateVideo, type ModerationResult } from '@/lib/servi
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!(await hasValidBackendBearer(request))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const body = await request.json()
     const { contentUrl, contentType } = body
 
@@ -46,7 +50,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Content moderation error:', error)
     return NextResponse.json(
-      { error: 'Erreur lors de la modération', details: String(error) },
+      { error: 'Erreur lors de la modération' },
       { status: 500 }
     )
   }

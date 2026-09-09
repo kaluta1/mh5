@@ -1,0 +1,75 @@
+name: kalutafoundation
+
+services:
+  backend:
+    build:
+      context: ../../backend
+    container_name: kalutafoundation_backend
+    restart: unless-stopped
+    env_file:
+      - ../../backend/.env
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      PORT: "8000"
+      FRONTEND_URL: https://kalutafoundation.com
+      BACKEND_PUBLIC_URL: https://kalutafoundation.com
+      BACKEND_CORS_ORIGINS: https://kalutafoundation.com,https://www.kalutafoundation.com
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_TYPE: local
+      LOCAL_STORAGE_PATH: /app/storage
+      USE_CELERY: "false"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - media_data:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ../../frontend
+      args:
+        NEXT_PUBLIC_API_URL: https://kalutafoundation.com
+        NEXT_PUBLIC_BACKEND_URL: https://kalutafoundation.com
+        NEXT_PUBLIC_APP_URL: https://kalutafoundation.com
+    container_name: kalutafoundation_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      INTERNAL_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: https://kalutafoundation.com
+      NEXT_PUBLIC_BACKEND_URL: https://kalutafoundation.com
+      NEXT_PUBLIC_APP_URL: https://kalutafoundation.com
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: kalutafoundation_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  media_data:
+  redis_data:

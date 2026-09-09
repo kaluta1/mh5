@@ -50,7 +50,6 @@ const auth = async (req: Request) => {
 
     if (!accessToken) {
       console.warn("No access token found in Authorization header, cookies, or custom headers");
-      console.warn("Available headers:", Array.from(req.headers.entries()).map(([k, v]) => `${k}: ${v.substring(0, 50)}`));
       throw new UploadThingError("Unauthorized: No access token found");
     }
 
@@ -72,14 +71,12 @@ const auth = async (req: Request) => {
       headers: {
         "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json"
-      }
+      },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!meResponse.ok) {
       console.warn(`Auth endpoint returned ${meResponse.status}`);
-      const errorText = await meResponse.text();
-      console.warn("Auth error response:", errorText);
-      console.warn("Auth URL used:", `${apiUrl}/auth/me`);
       throw new UploadThingError(`Unauthorized: Invalid token (${meResponse.status})`);
     }
 
@@ -231,7 +228,14 @@ export const ourFileRouter = {
             throw error;
           }
           console.error("Moderation error:", error);
-          // En cas d'erreur de modération, on laisse passer (fail-open)
+          const fileKey = file.key || file.ufsUrl.split('/').pop();
+          if (fileKey) {
+            await deleteUploadthingFile(fileKey).catch(cleanupError => {
+              console.error("Could not remove unmoderated upload:", cleanupError);
+            });
+          }
+          throw new UploadThingError("Content moderation is temporarily unavailable");
+          // Fail closed when moderation was explicitly enabled.
         }
       }
       

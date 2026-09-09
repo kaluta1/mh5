@@ -46,7 +46,7 @@ interface Affiliate {
 interface LevelStats {
   [key: number]: {
     count: number
-    commissions: number
+    commissions?: number
   }
 }
 
@@ -156,8 +156,8 @@ export default function AffiliatesListPage() {
         setAffiliates(transformedAffiliates)
         setFilteredAffiliates(transformedAffiliates)
         setTotalCount(data.total_all_levels || transformedAffiliates.length)
-        setLevelStats(data.level_stats || {})
-        setKycStats(data.kyc_stats || null)
+        setLevelStats((data.level_stats || {}) as LevelStats)
+        setKycStats((data.kyc_stats as unknown as KYCStats | null) || null)
       } else {
         console.error('Error fetching affiliates:', response.status)
         addToast(t('common.error') || 'Error loading data', 'error')

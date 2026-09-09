@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useClock } from '@/contexts/clock-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { MediaImage } from '@/components/ui/media-image'
 
 interface TopContestant {
   id: number
@@ -618,12 +619,11 @@ export const ContestCard = React.memo(function ContestCard({
                 {topContestants.slice(0, 3).map((contestant) => (
                   <div key={contestant.id} className="relative w-7 h-7 rounded-full border-2 border-white dark:border-gray-900 overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700 bg-gray-100 dark:bg-gray-800">
                     {(contestant.image_url || contestant.author_avatar_url) ? (
-                      <Image
+                      <MediaImage
                         src={contestant.image_url || contestant.author_avatar_url || ''}
                         alt="Contestant"
                         fill
                         className="object-cover"
-                        sizes="28px"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-200 text-[9px] text-gray-600 dark:bg-gray-700 dark:text-white font-medium">

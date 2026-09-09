@@ -63,14 +63,14 @@ export default function FoundingMemberPage() {
                       Monthly Revenue Commission Pool (5%)
                     </h3>
                     <p className="text-gray-700 dark:text-gray-300 mb-3">
-                      Five percent (5%) of MyHigh5's monthly net revenue is allocated to the Founding Members Commission Pool. This pool is distributed monthly based on each member's Founding Membership Ratio.
+                      Five percent (5%) of MyHigh5&apos;s monthly net revenue is allocated to the Founding Members Commission Pool. This pool is distributed monthly based on each member&apos;s Founding Membership Ratio.
                     </p>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                       <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
                         Founding Membership Ratio:
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Calculated as the number of a member's verified direct referrals divided by the total number of verified direct referrals across the entire platform.
+                        Calculated as the number of a member&apos;s verified direct referrals divided by the total number of verified direct referrals across the entire platform.
                       </p>
                     </div>
                   </div>
@@ -88,7 +88,7 @@ export default function FoundingMemberPage() {
                       Annual Profit Pool (10%)
                     </h3>
                     <p className="text-gray-700 dark:text-gray-300 mb-3">
-                      Founding Members of MyHigh5 and <a href="https://digitalshoppingmall.net/">Digital Shopping Mall</a>  participate in a combined pool comprising ten percent (10%) of MyHigh5's annual profit after taxes.
+                      Founding Members of MyHigh5 and <a href="https://digitalshoppingmall.net/">Digital Shopping Mall</a> participate in a combined pool comprising ten percent (10%) of MyHigh5&apos;s annual profit after taxes.
                     </p>
                     <div className="space-y-3">
                       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">

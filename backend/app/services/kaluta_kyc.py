@@ -10,6 +10,7 @@ import json
 import logging
 import random
 import string
+import os
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -102,7 +103,7 @@ class KalutaKYCService:
     def verify_webhook_signature(self, raw_body: bytes, signature_header: str) -> bool:
         if not self.webhook_secret:
             logger.warning("KALUTA_WEBHOOK_SECRET not set — webhook signature not verified")
-            return settings.ENVIRONMENT.lower() in ("development", "dev", "local")
+            return os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local", "test")
 
         if not signature_header:
             return False
@@ -164,7 +165,8 @@ class KalutaKYCService:
         headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            timeout = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{KALUTA_API_BASE}/sessions", headers=headers, json=body)
             if resp.status_code >= 400:
                 detail = resp.text[:500]
@@ -199,7 +201,8 @@ class KalutaKYCService:
 
         headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            timeout = httpx.Timeout(20.0, connect=5.0, read=15.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(f"{KALUTA_API_BASE}/sessions/{session_id}", headers=headers)
             if resp.status_code >= 400:
                 return {"success": False, "error": resp.text[:300], "status_code": resp.status_code}

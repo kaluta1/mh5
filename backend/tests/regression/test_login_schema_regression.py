@@ -28,10 +28,7 @@ def test_sqlite_test_db_has_wallet_columns(db):
     assert "payout_currency" in db_cols
 
 
-def test_health_db_schema_reports_ok(client):
+def test_health_db_schema_does_not_expose_schema_publicly(client):
     """Regression: prod login 503 when columns missing — health must detect it."""
     resp = client.get("/api/v1/health/db-schema")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["ok"] is True
-    assert body["missing_users_columns"] == []
+    assert resp.status_code == 401

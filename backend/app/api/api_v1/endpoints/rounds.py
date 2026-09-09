@@ -765,8 +765,8 @@ def _lightweight_round_data(
 @router.get("/", response_model=List[round_schema.RoundWithStats])
 def read_rounds(
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 24,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=100),
     contest_id: Optional[int] = Query(None, description="ID du contest pour récupérer ses rounds"),
     round_id: Optional[int] = Query(None, alias="roundId", description="ID du round spécifique"),
     current_user: Optional[models.User] = Depends(deps.get_current_active_user_optional),
@@ -775,8 +775,8 @@ def read_rounds(
     filter_country: Optional[str] = Query(None, alias="filterCountry", description="Filtrer les participants par pays"),
     filter_region: Optional[str] = Query(None, alias="filterRegion", description="Filtrer les participants par région"),
     filter_continent: Optional[str] = Query(None, alias="filterContinent", description="Filtrer les participants par continent"),
-    contest_limit: int = Query(12, alias="contestLimit", description="Nombre maximum de contests par round"),
-    contest_skip: int = Query(0, alias="contestSkip", description="Nombre de contests à sauter pour la pagination"),
+    contest_limit: int = Query(12, ge=1, le=100, alias="contestLimit", description="Nombre maximum de contests par round"),
+    contest_skip: int = Query(0, ge=0, alias="contestSkip", description="Nombre de contests à sauter pour la pagination"),
     search_term: Optional[str] = Query(None, alias="searchTerm", description="Rechercher dans les noms et descriptions de contests"),
 ) -> Any:
     """
@@ -1254,10 +1254,12 @@ def read_round(
 def ensure_january_round(
     *,
     db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_admin_user),
 ) -> Any:
     """
     Ensure January round exists for current year and links all active contests.
-    Public endpoint - can be called without authentication for initial setup.
+
+    This is a mutating repair/setup operation and is intentionally admin-only.
     """
     from app.services.monthly_round_scheduler import monthly_round_scheduler
     

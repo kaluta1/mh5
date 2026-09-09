@@ -25,7 +25,14 @@ def get_redis_client() -> Optional[redis.Redis]:
         # Construire l'URL Redis
         redis_url = getattr(settings, 'REDIS_URL', None)
         if redis_url:
-            _redis_client = redis.from_url(redis_url, decode_responses=True)
+            _redis_client = redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=1.0,
+                socket_timeout=1.0,
+                retry_on_timeout=False,
+                health_check_interval=30,
+            )
         else:
             redis_host = getattr(settings, 'REDIS_HOST', 'localhost')
             redis_port = getattr(settings, 'REDIS_PORT', 6379)
@@ -33,7 +40,11 @@ def get_redis_client() -> Optional[redis.Redis]:
                 host=redis_host,
                 port=redis_port,
                 db=0,
-                decode_responses=True
+                decode_responses=True,
+                socket_connect_timeout=1.0,
+                socket_timeout=1.0,
+                retry_on_timeout=False,
+                health_check_interval=30,
             )
         
         # Tester la connexion
@@ -41,6 +52,7 @@ def get_redis_client() -> Optional[redis.Redis]:
         logger.info("✅ Connexion Redis établie avec succès")
         return _redis_client
     except Exception as e:
+        _redis_client = None
         logger.warning(f"⚠️ Redis non disponible: {e}. L'application continuera sans cache.")
         return None
 
@@ -116,10 +128,16 @@ class CacheService:
             return 0
         
         try:
-            keys = self.redis.keys(pattern)
-            if keys:
-                return self.redis.delete(*keys)
-            return 0
+            deleted = 0
+            batch = []
+            for key in self.redis.scan_iter(match=pattern, count=200):
+                batch.append(key)
+                if len(batch) >= 200:
+                    deleted += int(self.redis.delete(*batch) or 0)
+                    batch.clear()
+            if batch:
+                deleted += int(self.redis.delete(*batch) or 0)
+            return deleted
         except Exception as e:
             logger.error(f"Erreur lors de la suppression par pattern {pattern}: {e}")
             return 0

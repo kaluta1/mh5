@@ -16,9 +16,9 @@ from app.db.session import SessionLocal
 from app.services.contest_status import contest_status_service
 from app.services.monthly_round_scheduler import (
     close_stale_voting_rounds,
-    dedupe_submission_month_rounds,
     monthly_round_scheduler,
 )
+from app.services.contest_context import add_months, contest_context_service
 from app.services.season_migration import season_migration_service
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def run_season_migrations(db: Session, *, today: date | None = None) -> Dict[str
 def run_monthly_calendar_ops(db: Session | None = None) -> Dict[str, Any]:
     """
     Full calendar pipeline:
-    1. Dedupe / close stale vote flags
+    1. Reject duplicate period identities, then close stale vote flags
     2. Ensure all official nomination cohort rounds (March…current) exist
     3. Ensure current-month round + link contests
     4. Sync contest open/close flags
@@ -95,7 +95,18 @@ def run_monthly_calendar_ops(db: Session | None = None) -> Dict[str, Any]:
     }
 
     try:
-        dedupe_submission_month_rounds(db, today)
+        # Fail before any mutation when a calendar month has multiple live
+        # identities. Historical duplicates require an explicit operator data
+        # decision; a scheduler must never pick or cancel one automatically.
+        from app.core.nomination_calendar import OFFICIAL_NOMINATION_START
+
+        periods = []
+        period = OFFICIAL_NOMINATION_START
+        while period <= date(today.year, today.month, 1):
+            periods.append(period)
+            period = add_months(period, 1)
+        contest_context_service.preflight_monthly_rounds(db, periods)
+
         close_stale_voting_rounds(db, today)
 
         from app.services.monthly_round_scheduler import ensure_nomination_cohort_rounds

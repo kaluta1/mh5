@@ -23,8 +23,7 @@ const MIN_CONTENT_DESCRIPTION_LENGTH = 4
 const MAX_CONTENT_TITLE_LENGTH = 100
 const MAX_CONTENT_DESCRIPTION_LENGTH = 500
 
-type ReactQuillModule = typeof import('react-quill')
-type ReactQuillComponent = ReactQuillModule['default']
+type ReactQuillComponent = React.ComponentType<any>
 
 interface MediaRequirements {
   requiresVideo?: boolean
@@ -105,7 +104,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
       .then(async (mod) => {
         if (!mounted) return
         await import('@/styles/quill-snow.css')
-        setReactQuillComponent(() => mod.default)
+        setReactQuillComponent(() => (mod.default ?? mod) as ReactQuillComponent)
       })
       .catch((err) => {
         console.error('Failed to load react-quill, falling back to textarea:', err)
@@ -943,7 +942,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('participation.content_description') || 'Description'}</p>
-                  <div className="text-white text-sm prose dark:prose-invert prose-sm max-w-none [&>*]:m-0" dangerouslySetInnerHTML={{ __html: description }} />
+                  <div className="text-white text-sm whitespace-pre-wrap break-words">{description}</div>
                 </div>
                 <button type="button" onClick={() => setCurrentStep(0)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">{t('common.edit') || 'Edit'}</button>
               </div>

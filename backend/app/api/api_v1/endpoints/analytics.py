@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from app.api import deps
 from app.models.user import User
 from app.models.contests import Contestant, ContestSeason
-from app.models.voting import Vote, ContestantReaction
+from app.models.voting import Vote, VoteStatus, ContestantReaction, ContestantVoting
 from app.models.comment import Comment
 from app.schemas.analytics import (
     DashboardAnalytics,
@@ -50,9 +50,14 @@ def get_dashboard_analytics(
     
     if contestant_ids:
         # Compter les votes
-        total_votes = db.query(func.count(Vote.id)).filter(
-            Vote.contestant_id.in_(contestant_ids)
+        historical_votes = db.query(func.count(Vote.id)).filter(
+            Vote.contestant_id.in_(contestant_ids),
+            Vote.status == VoteStatus.ACTIVE,
         ).scalar() or 0
+        current_votes = db.query(func.count(ContestantVoting.id)).filter(
+            ContestantVoting.contestant_id.in_(contestant_ids)
+        ).scalar() or 0
+        total_votes = int(historical_votes) + int(current_votes)
         
         # Compter les commentaires
         total_comments = db.query(func.count(Comment.id)).filter(
@@ -74,9 +79,12 @@ def get_dashboard_analytics(
         
         contest_name = contestant.title or (season.title if season else f"Concours #{contestant.season_id}")
         
-        votes = db.query(func.count(Vote.id)).filter(
-            Vote.contestant_id == contestant.id
-        ).scalar() or 0
+        votes = int(db.query(func.count(Vote.id)).filter(
+            Vote.contestant_id == contestant.id,
+            Vote.status == VoteStatus.ACTIVE,
+        ).scalar() or 0) + int(db.query(func.count(ContestantVoting.id)).filter(
+            ContestantVoting.contestant_id == contestant.id
+        ).scalar() or 0)
         
         comments = db.query(func.count(Comment.id)).filter(
             Comment.contestant_id == contestant.id
@@ -143,11 +151,18 @@ def get_dashboard_analytics(
         day_votes = 0
         
         if contestant_ids:
-            day_votes = db.query(func.count(Vote.id)).filter(
+            historical_day_votes = db.query(func.count(Vote.id)).filter(
                 Vote.contestant_id.in_(contestant_ids),
-                Vote.created_at >= day_start,
-                Vote.created_at <= day_end
+                Vote.status == VoteStatus.ACTIVE,
+                Vote.vote_date >= day_start,
+                Vote.vote_date <= day_end
             ).scalar() or 0
+            current_day_votes = db.query(func.count(ContestantVoting.id)).filter(
+                ContestantVoting.contestant_id.in_(contestant_ids),
+                ContestantVoting.vote_date >= day_start,
+                ContestantVoting.vote_date <= day_end,
+            ).scalar() or 0
+            day_votes = int(historical_day_votes) + int(current_day_votes)
         
         weekly_activity.append(WeeklyActivity(
             day=days_fr[day.weekday()],

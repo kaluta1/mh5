@@ -108,7 +108,7 @@ export function KYCStatusDisplay({
             {status === 'pending' || status === 'under_review' ? (
               <div className={`mt-4 p-3 bg-white dark:bg-gray-800 rounded border ${config.borderColor}`}>
                 <p className={`text-xs ${config.textColor} opacity-75`}>
-                  ⏱️ Typical processing time: 24-48 hours. We'll notify you via email once the review is complete.
+                  ⏱️ Typical processing time: 24-48 hours. We&apos;ll notify you via email once the review is complete.
                 </p>
               </div>
             ) : null}

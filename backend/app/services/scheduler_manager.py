@@ -15,14 +15,17 @@ from app.services.monthly_round_scheduler import MonthlyRoundScheduler
 
 logger = logging.getLogger(__name__)
 
-# Task name -> (scheduler instance, coroutine factory name)
+# Task name -> (scheduler instance, coroutine factory name). Each scheduler is
+# registered once: aliases are resolved only for explicit run-now calls and do
+# not start a duplicate background loop.
 _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     "payments": (PaymentScheduler(), "_check_pending_payments"),
     "contest-status": (ContestStatusScheduler(), "_check_contest_statuses"),
     "season-migration": (SeasonMigrationScheduler(), "_process_migrations"),
-    "monthly-round": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
     "monthly-ops": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
 }
+
+_TASK_ALIASES = {"monthly-round": "monthly-ops"}
 
 
 class BackgroundSchedulerManager:
@@ -69,8 +72,9 @@ class BackgroundSchedulerManager:
 
     async def run_task(self, name: str):
         """Run a single scheduler task once (used by cron endpoints/scripts)."""
+        name = _TASK_ALIASES.get(name, name)
         if name not in self._schedulers:
-            raise ValueError(f"Unknown scheduler task: {name}. Valid: {list(self._schedulers)}")
+            raise ValueError(f"Unknown scheduler task: {name}. Valid: {self.list_tasks()}")
 
         scheduler = self._schedulers[name]
         method_name = self._task_methods[name]
@@ -79,7 +83,7 @@ class BackgroundSchedulerManager:
 
     def list_tasks(self):
         """Return the list of supported scheduler task names."""
-        return list(self._schedulers.keys())
+        return list(self._schedulers.keys()) + list(_TASK_ALIASES.keys())
 
 
 # Global manager instance used by the application lifespan and cron endpoints.

@@ -3,6 +3,9 @@ from typing import Any, Union, Optional
 
 from jose import jwt
 import bcrypt
+import hashlib
+import hmac
+import uuid
 
 from app.core.config import settings
 
@@ -16,7 +19,11 @@ def create_access_token(
         expire = datetime.utcnow() + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-    to_encode = {"exp": expire, "sub": str(subject)}
+    now = datetime.utcnow()
+    to_encode = {
+        "exp": expire, "iat": now, "sub": str(subject), "type": "access",
+        "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE, "jti": uuid.uuid4().hex,
+    }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -38,13 +45,31 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
 
-def create_password_reset_token(email: str) -> str:
+def _password_version(hashed_password: str) -> str:
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()
+
+
+def _decode_token(token: str) -> dict:
+    return jwt.decode(
+        token,
+        settings.SECRET_KEY,
+        algorithms=[settings.ALGORITHM],
+        issuer=settings.JWT_ISSUER,
+        audience=settings.JWT_AUDIENCE,
+    )
+
+
+def create_password_reset_token(email: str, hashed_password: str) -> str:
     """Créer un token de réinitialisation de mot de passe"""
     delta = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
     now = datetime.utcnow()
     expires = now + delta
     encoded_jwt = jwt.encode(
-        {"exp": expires, "sub": email, "type": "password_reset"}, 
+        {
+            "exp": expires, "iat": now, "sub": email, "type": "password_reset",
+            "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE,
+            "jti": uuid.uuid4().hex, "pwdv": _password_version(hashed_password),
+        },
         settings.SECRET_KEY, 
         algorithm=settings.ALGORITHM
     )
@@ -56,26 +81,44 @@ def create_email_verification_token(email: str) -> str:
     now = datetime.utcnow()
     expires = now + delta
     encoded_jwt = jwt.encode(
-        {"exp": expires, "sub": email, "type": "email_verification"}, 
+        {
+            "exp": expires, "iat": now, "sub": email, "type": "email_verification",
+            "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE, "jti": uuid.uuid4().hex,
+        },
         settings.SECRET_KEY, 
         algorithm=settings.ALGORITHM
     )
     return encoded_jwt
 
-def verify_password_reset_token(token: str) -> str:
+def verify_password_reset_token(token: str, hashed_password: str) -> str:
     """Vérifier et décoder un token de réinitialisation"""
     try:
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = _decode_token(token)
         if decoded_token.get("type") != "password_reset":
             return None
+        if not hmac.compare_digest(
+            str(decoded_token.get("pwdv") or ""), _password_version(hashed_password)
+        ):
+            return None
         return decoded_token.get("sub")
+    except jwt.JWTError:
+        return None
+
+
+def get_password_reset_subject(token: str) -> Optional[str]:
+    """Validate reset-token signature/claims and return its account locator."""
+    try:
+        payload = _decode_token(token)
+        if payload.get("type") != "password_reset" or not payload.get("pwdv"):
+            return None
+        return payload.get("sub")
     except jwt.JWTError:
         return None
 
 def verify_email_verification_token(token: str) -> str:
     """Vérifier et décoder un token de vérification d'email"""
     try:
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = _decode_token(token)
         if decoded_token.get("type") != "email_verification":
             return None
         return decoded_token.get("sub")
@@ -85,7 +128,9 @@ def verify_email_verification_token(token: str) -> str:
 def decode_access_token(token: str) -> dict:
     """Décode un token d'accès JWT"""
     try:
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = _decode_token(token)
+        if decoded_token.get("type") != "access":
+            return {}
         return decoded_token
     except jwt.JWTError:
         return {}
@@ -99,7 +144,9 @@ def validate_access_token(token: str) -> Optional[dict]:
         dict: Le payload du token si valide, None sinon
     """
     try:
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = _decode_token(token)
+        if decoded_token.get("type") != "access":
+            return None
         return decoded_token
     except jwt.JWTError:
         return None

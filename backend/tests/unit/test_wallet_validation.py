@@ -22,11 +22,15 @@ VALID_TRC20 = "T" + "1" * 33
         ("usdterc20", "usdterc20"),
         ("usdttrc20", "usdttrc20"),
         (None, "usdtbsc"),
-        ("unknown", "usdtbsc"),
     ],
 )
 def test_normalize_payout_currency(raw, expected):
     assert normalize_payout_currency(raw) == expected
+
+
+def test_unknown_payout_currency_is_rejected():
+    with pytest.raises(ValueError, match="Unsupported"):
+        normalize_payout_currency("unknown")
 
 
 def test_validate_bep20_address():

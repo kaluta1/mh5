@@ -1,4 +1,5 @@
 from typing import Optional, List
+from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
@@ -8,10 +9,10 @@ from app.models.dsp import TransactionType, TransactionStatus
 # DSP Wallet schemas
 class DSPWalletBase(BaseModel):
     user_id: int
-    balance_dsp: float = 0.0
-    frozen_balance: float = 0.0
-    total_earned: float = 0.0
-    total_spent: float = 0.0
+    balance_dsp: Decimal = Decimal("0.00")
+    frozen_balance: Decimal = Decimal("0.00")
+    total_earned: Decimal = Decimal("0.00")
+    total_spent: Decimal = Decimal("0.00")
 
 
 class DSPWalletCreate(DSPWalletBase):
@@ -19,8 +20,8 @@ class DSPWalletCreate(DSPWalletBase):
 
 
 class DSPWalletUpdate(BaseModel):
-    balance_dsp: Optional[float] = None
-    frozen_balance: Optional[float] = None
+    balance_dsp: Optional[Decimal] = None
+    frozen_balance: Optional[Decimal] = None
 
 
 class DSPWallet(DSPWalletBase):
@@ -34,16 +35,16 @@ class DSPWallet(DSPWalletBase):
 class DSPWalletResponse(DSPWallet):
     """Réponse wallet avec informations utilisateur"""
     user_name: Optional[str] = None
-    available_balance: float = 0.0  # balance_dsp - frozen_balance
+    available_balance: Decimal = Decimal("0.00")  # balance_dsp - frozen_balance
 
 
 # DSP Transaction schemas
 class DSPTransactionBase(BaseModel):
     wallet_id: int
     transaction_type: TransactionType
-    amount: float
-    balance_before: float
-    balance_after: float
+    amount: Decimal
+    balance_before: Decimal
+    balance_after: Decimal
     description: Optional[str] = None
     reference_id: Optional[str] = None
     reference_type: Optional[str] = None
@@ -52,7 +53,7 @@ class DSPTransactionBase(BaseModel):
 
 class DSPTransactionCreate(BaseModel):
     transaction_type: TransactionType
-    amount: float
+    amount: Decimal
     description: Optional[str] = None
     reference_id: Optional[str] = None
     reference_type: Optional[str] = None
@@ -73,8 +74,8 @@ class DSPTransaction(DSPTransactionBase):
 # DSP Exchange Rate schemas
 class DSPExchangeRateBase(BaseModel):
     currency: str
-    rate_to_cad: float
-    rate_to_usd: float
+    rate_to_cad: Decimal
+    rate_to_usd: Decimal
     is_active: bool = True
 
 
@@ -83,8 +84,8 @@ class DSPExchangeRateCreate(DSPExchangeRateBase):
 
 
 class DSPExchangeRateUpdate(BaseModel):
-    rate_to_cad: Optional[float] = None
-    rate_to_usd: Optional[float] = None
+    rate_to_cad: Optional[Decimal] = None
+    rate_to_usd: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
 
@@ -100,9 +101,9 @@ class DigitalProductBase(BaseModel):
     title: str
     description: str
     category: str
-    price_dsp: float
-    price_cad: Optional[float] = None
-    price_usd: Optional[float] = None
+    price_dsp: Decimal
+    price_cad: Optional[Decimal] = None
+    price_usd: Optional[Decimal] = None
     currency: str = "USD"
     file_url: str
     file_size: Optional[int] = None
@@ -120,9 +121,9 @@ class DigitalProductUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
-    price_dsp: Optional[float] = None
-    price_cad: Optional[float] = None
-    price_usd: Optional[float] = None
+    price_dsp: Optional[Decimal] = None
+    price_cad: Optional[Decimal] = None
+    price_usd: Optional[Decimal] = None
     file_url: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
@@ -154,11 +155,11 @@ class DigitalProductWithSeller(DigitalProduct):
 class DigitalPurchaseBase(BaseModel):
     product_id: int
     buyer_id: int
-    total_paid: float
-    dsp_paid: float
-    fiat_paid: float
-    platform_fee: float
-    seller_earnings: float
+    total_paid: Decimal
+    dsp_paid: Decimal
+    fiat_paid: Decimal
+    platform_fee: Decimal
+    seller_earnings: Decimal
     download_token: str
     max_downloads: int = 5
 
@@ -223,20 +224,20 @@ class ProductReviewWithReviewer(ProductReview):
 # Response schemas complexes
 class DSPEarningsSummary(BaseModel):
     """Résumé des gains DSP d'un utilisateur"""
-    total_earned: float = 0.0
-    sales_earnings: float = 0.0
-    affiliate_commissions: float = 0.0
-    contest_rewards: float = 0.0
-    ad_revenue_share: float = 0.0
-    referral_bonuses: float = 0.0
-    current_month_earnings: float = 0.0
+    total_earned: Decimal = Decimal("0.00")
+    sales_earnings: Decimal = Decimal("0.00")
+    affiliate_commissions: Decimal = Decimal("0.00")
+    contest_rewards: Decimal = Decimal("0.00")
+    ad_revenue_share: Decimal = Decimal("0.00")
+    referral_bonuses: Decimal = Decimal("0.00")
+    current_month_earnings: Decimal = Decimal("0.00")
 
 
 class DigitalProductStats(BaseModel):
     """Statistiques d'un produit digital"""
     product: DigitalProduct
     total_sales: int = 0
-    total_revenue: float = 0.0
+    total_revenue: Decimal = Decimal("0.00")
     average_rating: float = 0.0
     total_reviews: int = 0
     conversion_rate: float = 0.0
@@ -255,6 +256,6 @@ class DSPTransactionHistory(BaseModel):
     """Historique des transactions DSP avec pagination"""
     transactions: List[DSPTransaction] = []
     total_count: int = 0
-    total_earned: float = 0.0
-    total_spent: float = 0.0
-    current_balance: float = 0.0
+    total_earned: Decimal = Decimal("0.00")
+    total_spent: Decimal = Decimal("0.00")
+    current_balance: Decimal = Decimal("0.00")

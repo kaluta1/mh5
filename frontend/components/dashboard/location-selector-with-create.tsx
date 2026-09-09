@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDown, Plus, X } from 'lucide-react'
 import { locationService, type LocationData } from '@/services/location-service'
 import { useToast } from '@/components/ui/toast'
+import { useLanguage } from '@/contexts/language-context'
 
 interface LocationSelectorWithCreateProps {
   onContinentSelected: (id: number, name: string) => void
@@ -21,6 +22,7 @@ export function LocationSelectorWithCreate({
   isLoading,
 }: LocationSelectorWithCreateProps) {
   const { addToast } = useToast()
+  const { t } = useLanguage()
 
   const [continents, setContinents] = useState<LocationData[]>([])
   const [regions, setRegions] = useState<LocationData[]>([])
@@ -258,7 +260,7 @@ export function LocationSelectorWithCreate({
                 className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Créer "{continentInput}"
+                Créer &quot;{continentInput}&quot;
               </button>
             )}
           </div>
@@ -310,7 +312,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer "{regionInput}"
+                  Créer &quot;{regionInput}&quot;
                 </button>
               )}
             </div>
@@ -363,7 +365,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer "{countryInput}"
+                  Créer &quot;{countryInput}&quot;
                 </button>
               )}
             </div>
@@ -416,7 +418,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer "{cityInput}"
+                  Créer &quot;{cityInput}&quot;
                 </button>
               )}
             </div>

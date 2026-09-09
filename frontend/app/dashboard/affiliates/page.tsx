@@ -196,7 +196,7 @@ export default function AffiliatesPage() {
             joinedAt: r.created_at || new Date().toISOString(),
             level: 1,
             totalEarnings: r.commissions_generated || 0,
-            status: 'active',
+            status: 'active' as const,
             country: r.country,
             city: r.city,
             identity_verified: r.identity_verified,
@@ -216,7 +216,7 @@ export default function AffiliatesPage() {
             joinedAt: r.created_at || new Date().toISOString(),
             level: 1,
             totalEarnings: r.commissions_generated || 0,
-            status: 'active',
+            status: 'active' as const,
             country: r.country,
             city: r.city,
             identity_verified: r.identity_verified,
@@ -238,7 +238,17 @@ export default function AffiliatesPage() {
       } else {
         const sponsorResponse = await api.get(sponsorEndpoint)
         if (sponsorResponse.status === 200 && sponsorResponse.data) {
-          const sponsorData = sponsorResponse.data as Record<string, unknown>
+          const sponsorData = sponsorResponse.data as {
+            id: number
+            username?: string
+            full_name?: string
+            first_name?: string
+            last_name?: string
+            avatar_url?: string
+            personal_referral_code?: string
+            country?: string
+            city?: string
+          }
           setSponsorInfo(sponsorData)
           cacheService.set(sponsorCacheKey, sponsorData)
         }
@@ -840,7 +850,7 @@ export default function AffiliatesPage() {
                       </div>
                       {invitation.message && (
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate italic">
-                          "{invitation.message}"
+                          &quot;{invitation.message}&quot;
                         </p>
                       )}
                     </div>

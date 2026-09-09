@@ -96,10 +96,17 @@ class PaymentService {
     return data.currencies || []
   }
 
-  async createPayment(token: string, request: PaymentRequest): Promise<PaymentResponse> {
+  async createPayment(
+    token: string,
+    request: PaymentRequest,
+    idempotencyKey?: string
+  ): Promise<PaymentResponse> {
     const response = await fetch(`${this.getBaseUrl()}/create`, {
       method: 'POST',
-      headers: this.getHeaders(token),
+      headers: {
+        ...this.getHeaders(token),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+      },
       body: JSON.stringify(request),
     })
 

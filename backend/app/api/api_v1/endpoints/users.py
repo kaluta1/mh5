@@ -76,7 +76,7 @@ def update_user_wallet(
         payout_currency=current_user.payout_currency,
         wallet_configured=bool(current_user.usdt_wallet_address),
         pending_commissions_paid=paid_count,
-        supported_currencies=["usdtbsc", "usdterc20", "usdttrc20"],
+        supported_currencies=["usdtbsc"],
     )
 
 
@@ -90,7 +90,7 @@ def get_user_wallet(
         payout_currency=current_user.payout_currency or "usdtbsc",
         wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
         pending_commissions_paid=0,
-        supported_currencies=["usdtbsc", "usdterc20", "usdttrc20"],
+        supported_currencies=["usdtbsc"],
     )
 
 
@@ -276,8 +276,8 @@ def read_user_by_id(
 @router.get("/", response_model=List[User])
 def read_users(
     db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """

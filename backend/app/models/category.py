@@ -15,6 +15,8 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # This column already exists in production; no migration is required.
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     

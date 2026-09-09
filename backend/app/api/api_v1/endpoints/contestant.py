@@ -281,8 +281,9 @@ def _canonicalize_social_media_url(url: str) -> Optional[str]:
     except ValueError:
         return None
 
-    hostname = (parsed.netloc or "").lower()
-    hostname = hostname[4:] if hostname.startswith("www.") else hostname
+    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
+        return None
+    hostname = (parsed.hostname or "").lower().rstrip(".")
     path = unquote(parsed.path or "").rstrip("/")
     path_parts = [part for part in path.split("/") if part]
     query = parse_qs(parsed.query)
@@ -290,7 +291,10 @@ def _canonicalize_social_media_url(url: str) -> Optional[str]:
     if not hostname:
         return None
 
-    if any(domain in hostname for domain in ("youtube.com", "youtu.be", "youtube-nocookie.com")):
+    def host_matches(*domains: str) -> bool:
+        return any(hostname == domain or hostname.endswith(f".{domain}") for domain in domains)
+
+    if host_matches("youtube.com", "youtu.be", "youtube-nocookie.com"):
         video_id = None
         if hostname == "youtu.be" and path_parts:
             video_id = path_parts[0]
@@ -303,31 +307,23 @@ def _canonicalize_social_media_url(url: str) -> Optional[str]:
                     if index + 1 < len(path_parts):
                         video_id = path_parts[index + 1]
                         break
-        return f"youtube:{video_id}" if video_id else f"youtube:path:{path.lower()}"
+        if not video_id or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            return None
+        return f"youtube:{video_id}"
 
-    if "tiktok.com" in hostname:
+    if host_matches("tiktok.com"):
         for marker in ("video", "photo", "t"):
             if marker in path_parts:
                 index = path_parts.index(marker)
                 if index + 1 < len(path_parts):
                     return f"tiktok:{path_parts[index + 1]}"
-        return f"tiktok:path:{path.lower()}"
+        return None
 
-    if hostname in {"twitter.com", "x.com"}:
-        if "status" in path_parts:
-            index = path_parts.index("status")
-            if index + 1 < len(path_parts):
-                return f"x:{path_parts[index + 1]}"
-        return f"x:path:{path.lower()}"
+    if host_matches("vimeo.com"):
+        video_id = next((part for part in reversed(path_parts) if part.isdigit()), None)
+        return f"vimeo:{video_id}" if video_id else None
 
-    if "instagram.com" in hostname or "instagr.am" in hostname:
-        if path_parts:
-            if path_parts[0] in {"p", "reel", "reels", "tv"} and len(path_parts) > 1:
-                return f"instagram:{path_parts[0]}:{path_parts[1]}"
-            return f"instagram:path:{'/'.join(path_parts).lower()}"
-        return "instagram:root"
-
-    if hostname in {"facebook.com", "m.facebook.com", "fb.com", "fb.watch"}:
+    if host_matches("facebook.com", "fb.com", "fb.watch"):
         if hostname == "fb.watch" and path_parts:
             return f"facebook:{path_parts[0]}"
         if query.get("v"):
@@ -340,16 +336,12 @@ def _canonicalize_social_media_url(url: str) -> Optional[str]:
                 index = path_parts.index(marker)
                 if index + 1 < len(path_parts):
                     return f"facebook:{path_parts[index + 1]}"
-        return f"facebook:path:{path.lower()}"
+        return None
 
-    filtered_query = []
-    for key in sorted(query.keys()):
-        if key.lower().startswith("utm_"):
-            continue
-        filtered_query.append(f"{key}={','.join(sorted(query[key]))}")
-    query_suffix = f"?{'&'.join(filtered_query)}" if filtered_query else ""
-    normalized_path = path.lower() or "/"
-    return f"{hostname}{normalized_path}{query_suffix}"
+    if parsed.scheme == "https" and path.lower().endswith((".mp4", ".webm", ".mov")):
+        return f"direct:{hostname}{path.lower()}"
+
+    return None
 
 
 def _extract_canonical_video_urls(db: Session, video_media_ids: Optional[str]) -> Set[str]:
@@ -1575,6 +1567,73 @@ def reorder_my_votes(
     votes_to_reorder = data.get("votes", [])
     season_id = data.get("season_id")
     contest_id = data.get("contest_id")
+
+    if not votes_to_reorder:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No votes to reorder")
+    if not season_id or not contest_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="season_id and contest_id are required for an unambiguous reorder",
+        )
+    if len(votes_to_reorder) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 votes allowed per MyHigh5 category for this season",
+        )
+    try:
+        normalized = [
+            (int(item["position"]), int(item["contestant_id"]))
+            for item in votes_to_reorder
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Each vote requires integer contestant_id and position values",
+        ) from exc
+    if sorted(position for position, _ in normalized) != list(
+        range(1, len(normalized) + 1)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Positions must be unique and contiguous from 1",
+        )
+
+    scope_contest = db.query(Contest).filter(
+        Contest.id == int(contest_id), Contest.is_deleted == False
+    ).first()
+    if scope_contest is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
+    from app.services.voting_ranking import (
+        VotingValidationError,
+        bucket_key_for_contest,
+        invalidate_ranking_cache,
+        reorder_myhigh5_votes,
+    )
+
+    try:
+        reordered = reorder_myhigh5_votes(
+            db,
+            voter_id=current_user.id,
+            season_id=int(season_id),
+            contest_id=int(contest_id),
+            bucket_key=bucket_key_for_contest(scope_contest),
+            ordered_contestant_ids=[
+                contestant_id for _, contestant_id in sorted(normalized)
+            ],
+        )
+        db.commit()
+    except VotingValidationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    invalidate_ranking_cache(season_id=int(season_id), contest_id=int(contest_id))
+    return {
+        "message": "Votes reordered successfully",
+        "count": len(reordered),
+        "season_id": int(season_id),
+        "contest_id": int(contest_id),
+    }
     
     if not votes_to_reorder:
         raise HTTPException(
@@ -2181,10 +2240,8 @@ def get_contest_contestants(
         try:
             from app.models.voting import Vote, ContestLike, ContestComment
             
-            votes_results = db.query(Vote.contestant_id, func.count(Vote.id))\
-                .filter(Vote.contestant_id.in_(contestant_ids))\
-                .group_by(Vote.contestant_id).all()
-            votes_by_contestant = {cid: count for cid, count in votes_results}
+            from app.services.voting_ranking import lifetime_vote_counts
+            votes_by_contestant = lifetime_vote_counts(db, contestant_ids)
         except Exception as e:
             logger.warning(f"Error fetching votes: {e}")
         
@@ -3769,6 +3826,73 @@ def vote_for_contestant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=geo_error,
         )
+
+    # Canonical current-generation write. The service rechecks duplicate and
+    # five-slot rules while holding a voter row lock, calculates points on the
+    # server, and relies on the DB unique constraint as final authority.
+    from app.services.voting_ranking import (
+        VotingConflict,
+        VotingValidationError,
+        bucket_key_for_contest,
+        cast_myhigh5_vote,
+        invalidate_ranking_cache,
+    )
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        new_voting = cast_myhigh5_vote(
+            db,
+            voter_id=current_user.id,
+            contestant_id=contestant_id,
+            nominator_user_id=contestant.user_id,
+            season_id=season.id,
+            contest_id=contest.id,
+            bucket_key=bucket_key_for_contest(contest),
+        )
+        db.commit()
+        db.refresh(new_voting)
+    except VotingConflict as exc:
+        db.rollback()
+        detail = {"code": exc.code, "message": exc.message, **exc.payload}
+        replacement = detail.get("replaced_contestant")
+        if isinstance(replacement, dict) and replacement.get("id"):
+            fifth = db.query(Contestant).filter(
+                Contestant.id == replacement["id"]
+            ).first()
+            replacement["name"] = fifth.title if fifth else "Unknown"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+    except VotingValidationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    # Notification is ancillary and follows the durable vote transaction.
+    from app.crud.crud_notification import crud_notification
+    from app.models.notification import NotificationType
+
+    voter_name = current_user.full_name or current_user.username or "Someone"
+    try:
+        crud_notification.create(
+            db,
+            user_id=contestant.user_id,
+            type=NotificationType.CONTEST,
+            title="New vote",
+            message=f"{voter_name} voted for your application",
+            related_contestant_id=contestant_id,
+            related_contest_id=contest.id,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Vote %s saved but notification creation failed", new_voting.id)
+
+    invalidate_ranking_cache(season_id=season.id, contest_id=contest.id)
+    return {
+        "message": f"Vote recorded successfully for {season_level or 'season'} season",
+        "voting_id": new_voting.id,
+        "season_id": season.id,
+        "season_level": season_level,
+    }
     
     # Vérifier les restrictions de genre pour le vote
     # Vérifier si l'utilisateur a déjà voté pour ce contestant dans cette saison active
@@ -4135,6 +4259,63 @@ def replace_fifth_vote(
             is_allowed, error_message = contest_status_service.check_voting_allowed(db, contest.id)
             if not is_allowed:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
+
+    from app.services.voting_ranking import (
+        VotingConflict,
+        VotingValidationError,
+        bucket_key_for_contest,
+        invalidate_ranking_cache,
+        replace_fifth_myhigh5_vote,
+    )
+
+    try:
+        new_voting, removed_contestant_id = replace_fifth_myhigh5_vote(
+            db,
+            voter_id=current_user.id,
+            contestant_id=contestant_id,
+            nominator_user_id=contestant.user_id,
+            season_id=season.id,
+            contest_id=contest.id,
+            bucket_key=bucket_key_for_contest(contest),
+        )
+        db.commit()
+        db.refresh(new_voting)
+    except VotingConflict as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message, **exc.payload},
+        ) from exc
+    except VotingValidationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    from app.crud.crud_notification import crud_notification
+    from app.models.notification import NotificationType
+
+    voter_name = current_user.full_name or current_user.username or "Someone"
+    try:
+        crud_notification.create(
+            db,
+            user_id=contestant.user_id,
+            type=NotificationType.CONTEST,
+            title="New vote",
+            message=f"{voter_name} voted for your application",
+            related_contestant_id=contestant_id,
+            related_contest_id=contest.id,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Replacement vote %s saved but notification failed", new_voting.id)
+
+    invalidate_ranking_cache(season_id=season.id, contest_id=contest.id)
+    return {
+        "message": "Vote replaced successfully",
+        "voting_id": new_voting.id,
+        "removed_contestant_id": removed_contestant_id,
+        "season_id": season.id,
+        "season_level": season_level,
+    }
 
     # Vérifier que l'utilisateur n'a pas déjà voté pour ce contestant
     existing_vote_for_contestant = db.query(ContestantVoting).filter(

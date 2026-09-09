@@ -13,7 +13,12 @@ class UserWalletUpdate(BaseModel):
     @field_validator("payout_currency")
     @classmethod
     def normalize_currency(cls, v: Optional[str]) -> str:
-        return normalize_payout_currency(v)
+        normalized = normalize_payout_currency(v)
+        if normalized != "usdtbsc":
+            raise ValueError(
+                "Only USDT on BSC (BEP20) is enabled until separate network ledger accounts are configured."
+            )
+        return normalized
 
     @model_validator(mode="after")
     def validate_wallet_pair(self) -> "UserWalletUpdate":
@@ -28,7 +33,7 @@ class UserWalletResponse(BaseModel):
     payout_currency: Optional[str] = None
     wallet_configured: bool = False
     pending_commissions_paid: int = 0
-    supported_currencies: List[str] = ["usdtbsc", "usdterc20", "usdttrc20"]
+    supported_currencies: List[str] = ["usdtbsc"]
 
     class Config:
         from_attributes = True

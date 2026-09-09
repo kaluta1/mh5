@@ -24,7 +24,7 @@ const inter = Inter({
   fallback: ['system-ui', 'arial']
 })
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kalutafoundation.com"
 const defaultImage = `${appUrl}/logo.png` // Default OG image for social sharing
 
 // Générer les métadonnées selon la langue détectée
@@ -192,7 +192,16 @@ export default function RootLayout({
                 });
                 // Load ads after the first page paint so third-party JS doesn't
                 // compete with route hydration and API requests.
+                function hasAdvertisingConsent() {
+                  try {
+                    var consent = JSON.parse(localStorage.getItem('myhigh5_cookie_consent') || '{}');
+                    return consent && consent.preferences && consent.preferences.advertising === true;
+                  } catch (_) {
+                    return false;
+                  }
+                }
                 function loadAds() {
+                  if (!hasAdvertisingConsent()) return;
                   if (document.querySelector('script[src^="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) return;
                   var s = document.createElement('script');
                   s.async = true;
@@ -207,6 +216,7 @@ export default function RootLayout({
                     setTimeout(loadAds, 1500);
                   }
                 }, { once: true });
+                window.addEventListener('myhigh5-cookie-consent-changed', loadAds);
               })();
             `,
           }}

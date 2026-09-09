@@ -71,7 +71,7 @@ export function SettingsWalletTab() {
   const [payoutCurrency, setPayoutCurrency] = useState('usdtbsc')
 
   const supportedCurrencies = useMemo(
-    () => walletInfo?.supported_currencies?.length ? walletInfo.supported_currencies : ['usdtbsc', 'usdterc20', 'usdttrc20'],
+    () => walletInfo?.supported_currencies?.length ? walletInfo.supported_currencies : ['usdtbsc'],
     [walletInfo?.supported_currencies],
   )
 
@@ -164,7 +164,7 @@ export function SettingsWalletTab() {
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           {t('settings.wallet.subtitle') ||
-            'Affiliate commissions are sent automatically to your crypto wallet after each validated payment.'}
+            'Affiliate commissions become available after payment validation and can be withdrawn safely to your configured wallet.'}
         </p>
       </div>
 

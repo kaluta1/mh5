@@ -2,6 +2,7 @@
 
 import { normalizeMediaUrl } from '@/lib/media-url'
 import { cn } from '@/lib/utils'
+import { useEffect, useState } from 'react'
 
 type MediaImageProps = {
   src?: string | null
@@ -12,6 +13,7 @@ type MediaImageProps = {
   className?: string
   title?: string
   onError?: () => void
+  fallbackSrc?: string | null
 }
 
 /**
@@ -27,9 +29,23 @@ export function MediaImage({
   className,
   title,
   onError,
+  fallbackSrc,
 }: MediaImageProps) {
-  const url = normalizeMediaUrl(src)
+  const primaryUrl = normalizeMediaUrl(src)
+  const fallbackUrl = normalizeMediaUrl(fallbackSrc)
+  const [url, setUrl] = useState(primaryUrl || fallbackUrl)
+
+  useEffect(() => {
+    setUrl(primaryUrl || fallbackUrl)
+  }, [primaryUrl, fallbackUrl])
+
   if (!url) return null
+
+  const handleError = () => {
+    if (fallbackUrl && url !== fallbackUrl) setUrl(fallbackUrl)
+    else setUrl('')
+    onError?.()
+  }
 
   if (fill) {
     return (
@@ -38,7 +54,7 @@ export function MediaImage({
         alt={alt}
         className={cn('h-full w-full object-cover', className)}
         title={title}
-        onError={onError}
+        onError={handleError}
       />
     )
   }
@@ -51,7 +67,7 @@ export function MediaImage({
       height={height}
       className={className}
       title={title}
-      onError={onError}
+      onError={handleError}
     />
   )
 }

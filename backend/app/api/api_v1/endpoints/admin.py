@@ -1,8 +1,10 @@
 import logging
+import os
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text, inspect
+from sqlalchemy import func, inspect, text
 from psycopg2.errors import UniqueViolation
 from app.db.base_class import Base
 from app.api.deps import get_db, get_current_user
@@ -17,15 +19,42 @@ from app.models.clubs import FanClub, ClubMembership, ClubAdmin
 from app.models.follow import Affiliation
 from app.models.affiliate import AffiliateTree, FoundingMember
 from app.models.category import Category
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
 from app.crud.crud_round import round as crud_round
 from app.crud import crud_accounting
 from app.schemas.round import RoundCreate
+from app.models.accounting import AuditTrail
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _block_production_accounting_maintenance(*, dry_run: bool = False) -> None:
+    """Require the reviewed offline runbook for production schema/data repair."""
+    if os.getenv("ENVIRONMENT", "development").strip().lower() == "production" and not dry_run:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Production accounting maintenance requires the reviewed offline runbook",
+        )
+
+
+def _record_admin_audit(db: Session, *, actor_id: int, record_id: int, action: str, old: dict, new: dict) -> None:
+    db.add(AuditTrail(
+        table_name="users", record_id=record_id, action=action,
+        old_values=old, new_values=new, user_id=actor_id,
+    ))
+
+
+class AdminRoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    is_admin: StrictBool
+
+
+class AdminStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    is_active: StrictBool
 
 # Pydantic models
 class ContestCreateRequest(BaseModel):
@@ -163,6 +192,18 @@ def check_admin(current_user: User) -> User:
         )
     return current_user
 
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Router-level dependency wrapping check_admin's exact semantics.
+
+    Every route below also calls check_admin(current_user) itself, so this is
+    redundant-by-design defense in depth: it guarantees admin enforcement
+    structurally (visible on the route signature, verified before the handler
+    runs) rather than relying solely on every future route remembering to call
+    check_admin() in its body.
+    """
+    return check_admin(current_user)
+
 # Helper function to get contest statistics
 def get_contest_stats(db: Session, contest_id: int):
     """
@@ -231,12 +272,14 @@ def generate_contest_dates(submission_start_date: Optional[str] = None):
 
 # Contests endpoints
 @router.get("/contests", response_model=List[ContestResponse])
-async def get_all_contests(
+def get_all_contests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     level: Optional[str] = None,
     is_active: Optional[bool] = None,
-    contest_type: Optional[str] = None
+    contest_type: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=500),
 ):
     """
     Récupère tous les concours (admin uniquement)
@@ -255,7 +298,7 @@ async def get_all_contests(
         if contest_type:
             query = query.filter(Contest.contest_type == contest_type)
         
-        contests = query.all()
+        contests = query.order_by(Contest.id.desc()).offset(skip).limit(limit).all()
         
         # Récupérer tous les season_id en une seule requête pour optimiser
         contest_ids = [c.id for c in contests]
@@ -503,7 +546,7 @@ async def get_all_contests(
         )
 
 @router.get("/contests/{contest_id}", response_model=ContestResponse)
-async def get_contest(
+def get_contest(
     contest_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -608,12 +651,14 @@ async def get_contest(
     }
 
 @router.get("/contestants")
-async def get_all_contestants(
+def get_all_contestants(
     status_filter: Optional[str] = Query(None, alias="status_filter"),
     country_filter: Optional[str] = Query(None, alias="country_filter"),
     round_id: Optional[int] = Query(None, alias="round_id"),
     date_from: Optional[date] = Query(None, alias="date_from"),
     date_to: Optional[date] = Query(None, alias="date_to"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -661,7 +706,7 @@ async def get_all_contestants(
         )
         query = query.join(User, Contestant.user_id == User.id).filter(country_expr == normalized_country)
     
-    contestants = query.all()
+    contestants = query.order_by(Contestant.id.desc()).offset(skip).limit(limit).all()
     
     # Get all submissions and comments in bulk to avoid N+1 queries
     from sqlalchemy import func
@@ -785,7 +830,7 @@ async def get_all_contestants(
     return result
 
 @router.get("/contests/{contest_id}/contestants")
-async def get_contest_contestants(
+def get_contest_contestants(
     contest_id: int,
     status_filter: Optional[str] = Query(None, alias="status_filter"),
     db: Session = Depends(get_db),
@@ -939,7 +984,7 @@ async def get_contest_contestants(
 
 
 @router.get("/contestants/{contestant_id}/comments")
-async def get_contestant_comments(
+def get_contestant_comments(
     contestant_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1071,9 +1116,16 @@ async def create_contest(
         # Si category_id est fourni, valider et récupérer la catégorie pour mettre à jour contest_type
         contest_type = contest_data.contest_type
         if category_id:
-            category = db.query(Category).filter(Category.id == category_id).first()
-            if category:
-                contest_type = category.slug
+            category = db.query(Category).filter(
+                Category.id == category_id,
+                Category.is_active == True,
+            ).first()
+            if not category:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Category not found or inactive",
+                )
+            contest_type = category.slug
 
         from app.services.contest_category_integrity import assert_unique_category_mode
 
@@ -1091,7 +1143,7 @@ async def create_contest(
         new_contest = Contest(
             name=contest_data.name,
             description=contest_data.description,
-            contest_type=contest_data.contest_type,
+            contest_type=contest_type,
             level=level,
             is_active=contest_data.is_active,
             is_submission_open=contest_data.is_submission_open,
@@ -1327,9 +1379,16 @@ async def update_contest(
         
         # Si category_id est fourni, mettre à jour contest_type
         if contest.category_id:
-            category = db.query(Category).filter(Category.id == contest.category_id).first()
-            if category:
-                contest.contest_type = category.slug
+            category = db.query(Category).filter(
+                Category.id == contest.category_id,
+                Category.is_active == True,
+            ).first()
+            if not category:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Category not found or inactive",
+                )
+            contest.contest_type = category.slug
 
         from app.services.contest_category_integrity import assert_unique_category_mode
 
@@ -1623,7 +1682,7 @@ class SeasonResponse(BaseModel):
         from_attributes = True
 
 @router.get("/seasons", response_model=List[SeasonResponse])
-async def get_all_seasons(
+def get_all_seasons(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2050,7 +2109,7 @@ async def bulk_approve_contestants(
         )
 
 @router.get("/seasons/by-level/{level}")
-async def get_seasons_by_level(
+def get_seasons_by_level(
     level: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2453,12 +2512,14 @@ async def restore_comment(
 
 # Users endpoints
 @router.get("/users")
-async def get_all_users(
+def get_all_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     is_admin: Optional[bool] = None,
     is_active: Optional[bool] = None,
-    is_verified: Optional[bool] = None
+    is_verified: Optional[bool] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=500),
 ):
     """
     Récupère tous les utilisateurs (admin uniquement)
@@ -2476,9 +2537,9 @@ async def get_all_users(
         
         # Trier du plus récent au plus ancien (fallback sur id si created_at absent)
         try:
-            users = query.order_by(User.created_at.desc()).all()
+            users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
         except Exception:
-            users = query.order_by(User.id.desc()).all()
+            users = query.order_by(User.id.desc()).offset(skip).limit(limit).all()
         
         # Batch-load sponsor labels for list view (country / joined / sponsor summary column).
         sponsor_ids = {
@@ -2493,15 +2554,26 @@ async def get_all_users(
                     sponsor.full_name or sponsor.username or sponsor.email
                 )
 
+        user_ids = [user.id for user in users]
+        participation_counts = {
+            row.user_id: int(row.amount or 0)
+            for row in db.query(
+                Contestant.user_id, func.count(Contestant.id).label("amount")
+            ).filter(Contestant.user_id.in_(user_ids)).group_by(Contestant.user_id).all()
+        } if user_ids else {}
+        contest_entry_counts = {
+            row.user_id: int(row.amount or 0)
+            for row in db.query(
+                ContestEntry.user_id, func.count(ContestEntry.id).label("amount")
+            ).filter(ContestEntry.user_id.in_(user_ids)).group_by(ContestEntry.user_id).all()
+        } if user_ids else {}
+
         # Enrichir avec les statistiques (safe getattr pour colonnes optionnelles)
         result = []
         for user in users:
-            try:
-                participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
-                contestants_count = participations_count
-                contests_participated = db.query(ContestEntry).filter(ContestEntry.user_id == user.id).count()
-            except Exception:
-                participations_count = contestants_count = contests_participated = 0
+            participations_count = participation_counts.get(user.id, 0)
+            contestants_count = participations_count
+            contests_participated = contest_entry_counts.get(user.id, 0)
             prizes_count = 0
 
             created_at = getattr(user, 'created_at', None)
@@ -2549,7 +2621,7 @@ async def get_all_users(
         )
 
 @router.get("/users/{user_id}")
-async def get_user_details(
+def get_user_details(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2614,7 +2686,10 @@ async def get_user_details(
                         'personal_referral_code': sponsor.personal_referral_code
                     }
 
-        # Source 4: if no referrer exists, assign to the founding member account (mlenzi123).
+        # Source 4 is display-only legacy fallback.  A GET endpoint must never
+        # mutate the canonical sponsor chain: an assignment changes who earns
+        # future commissions and therefore requires an explicit, audited
+        # financial-admin workflow.
         if sponsor_info is None:
             sponsor = (
                 db.query(User)
@@ -2632,42 +2707,6 @@ async def get_user_details(
                     'email': sponsor.email,
                     'personal_referral_code': sponsor.personal_referral_code
                 }
-                # Persist fallback assignment so admin always sees a consistent referrer.
-                try:
-                    if not user.sponsor_id:
-                        user.sponsor_id = sponsor.id
-
-                    tree_row = db.query(AffiliateTree).filter(AffiliateTree.user_id == user.id).first()
-                    if tree_row:
-                        if not tree_row.sponsor_id:
-                            tree_row.sponsor_id = sponsor.id
-                    else:
-                        db.add(AffiliateTree(user_id=user.id, sponsor_id=sponsor.id, level=1))
-
-                    existing_affiliation = (
-                        db.query(Affiliation)
-                        .filter(Affiliation.referred_user_id == user.id)
-                        .first()
-                    )
-                    if not existing_affiliation:
-                        db.add(
-                            Affiliation(
-                                affiliate_id=sponsor.id,
-                                referred_user_id=user.id,
-                                referral_code=sponsor.personal_referral_code,
-                                is_active=True,
-                            )
-                        )
-
-                    db.commit()
-                    db.refresh(user)
-                except Exception as assignment_error:
-                    db.rollback()
-                    logger.warning(
-                        "Could not persist founding-member fallback referral for user %s: %s",
-                        user.id,
-                        assignment_error,
-                    )
         
         # Récupérer les statistiques
         participations_count = db.query(Contestant).filter(Contestant.user_id == user.id).count()
@@ -2943,7 +2982,7 @@ async def get_user_details(
 @router.put("/users/{user_id}/role")
 async def update_user_role(
     user_id: int,
-    role_data: dict,
+    role_data: AdminRoleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2960,7 +2999,9 @@ async def update_user_role(
                 detail="Utilisateur non trouvé"
             )
         
-        user.is_admin = role_data.get('is_admin', user.is_admin)
+        old_value = bool(user.is_admin)
+        user.is_admin = role_data.is_admin
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_ROLE_UPDATE", old={"is_admin": old_value}, new={"is_admin": bool(user.is_admin)})
         db.commit()
         db.refresh(user)
         
@@ -2981,7 +3022,7 @@ async def update_user_role(
 @router.put("/users/{user_id}/status")
 async def update_user_status(
     user_id: int,
-    status_data: dict,
+    status_data: AdminStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2998,7 +3039,9 @@ async def update_user_status(
                 detail="Utilisateur non trouvé"
             )
         
-        user.is_active = status_data.get('is_active', user.is_active)
+        old_value = bool(user.is_active)
+        user.is_active = status_data.is_active
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_STATUS_UPDATE", old={"is_active": old_value}, new={"is_active": bool(user.is_active)})
         db.commit()
         db.refresh(user)
         
@@ -3035,7 +3078,9 @@ async def delete_user(
                 detail="Utilisateur non trouvé"
             )
         
+        old_value = bool(user.is_deleted)
         user.is_deleted = True
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_SOFT_DELETE", old={"is_deleted": old_value}, new={"is_deleted": True})
         db.commit()
         
         return {
@@ -3053,7 +3098,7 @@ async def delete_user(
         )
 
 @router.get("/statistics")
-async def get_admin_statistics(
+def get_admin_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -3193,11 +3238,11 @@ async def get_admin_statistics(
         )
 
 @router.get("/reports")
-async def get_reports(
+def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, reviewed, resolved)"),
 ):
     """
@@ -3215,24 +3260,48 @@ async def get_reports(
         query = query.filter(Report.contestant_id.isnot(None))
         
         reports = query.order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
-        
+        contestant_ids = {row.contestant_id for row in reports if row.contestant_id}
+        contestants_by_id = (
+            {
+                row.id: row
+                for row in db.query(Contestant)
+                .filter(Contestant.id.in_(contestant_ids))
+                .all()
+            }
+            if contestant_ids
+            else {}
+        )
+        user_ids = {row.reporter_id for row in reports if row.reporter_id}
+        user_ids.update(row.user_id for row in contestants_by_id.values() if row.user_id)
+        users_by_id = (
+            {row.id: row for row in db.query(User).filter(User.id.in_(user_ids)).all()}
+            if user_ids
+            else {}
+        )
+        contest_ids = {row.contest_id for row in reports if row.contest_id}
+        contests_by_id = (
+            {row.id: row for row in db.query(Contest).filter(Contest.id.in_(contest_ids)).all()}
+            if contest_ids
+            else {}
+        )
+
         result = []
         for report in reports:
             # Récupérer le contestant
-            contestant = db.query(Contestant).filter(Contestant.id == report.contestant_id).first()
+            contestant = contestants_by_id.get(report.contestant_id)
             
             # Récupérer l'auteur du contestant
             author = None
             if contestant:
-                author = db.query(User).filter(User.id == contestant.user_id).first()
+                author = users_by_id.get(contestant.user_id)
             
             # Récupérer le reporter
-            reporter = db.query(User).filter(User.id == report.reporter_id).first()
+            reporter = users_by_id.get(report.reporter_id)
             
             # Récupérer le contest si disponible
             contest = None
             if report.contest_id:
-                contest = db.query(Contest).filter(Contest.id == report.contest_id).first()
+                contest = contests_by_id.get(report.contest_id)
             
             result.append({
                 'id': report.id,
@@ -3280,11 +3349,11 @@ async def get_reports(
         )
 
 @router.get("/suggested-contests")
-async def get_suggested_contests(
+def get_suggested_contests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     status: Optional[str] = Query(None, description="Filtrer par statut (pending, approved, rejected)"),
 ):
     """
@@ -3347,7 +3416,7 @@ async def get_suggested_contests(
         )
 
 @router.get("/statistics/user-progress")
-async def get_user_progress_statistics(
+def get_user_progress_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     days: int = 7,
@@ -3422,7 +3491,7 @@ async def get_user_progress_statistics(
         )
 
 @router.get("/statistics/deposits")
-async def get_deposits_statistics(
+def get_deposits_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     days: int = 30,
@@ -3494,7 +3563,7 @@ async def get_deposits_statistics(
         )
 
 @router.get("/statistics/withdrawals")
-async def get_withdrawals_statistics(
+def get_withdrawals_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     days: int = 30,
@@ -3587,8 +3656,10 @@ async def verify_user_kyc(
                 detail="Utilisateur non trouvé"
             )
         
+        old_value = bool(user.identity_verified)
         user.identity_verified = True
         user.verification_date = datetime.utcnow()
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_VERIFY", old={"identity_verified": old_value}, new={"identity_verified": True})
         db.commit()
         db.refresh(user)
         
@@ -3626,8 +3697,10 @@ async def unverify_user_kyc(
                 detail="Utilisateur non trouvé"
             )
         
+        old_value = bool(user.identity_verified)
         user.identity_verified = False
         user.verification_date = None
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_UNVERIFY", old={"identity_verified": old_value}, new={"identity_verified": False})
         db.commit()
         db.refresh(user)
         
@@ -3656,9 +3729,10 @@ GRANTABLE_PRODUCT_CODES = ["kyc", "mfm_membership", "annual_membership", "foundi
 
 
 class GrantPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     product_code: str = "kyc"
-    amount: Optional[float] = None
-    notes: Optional[str] = None
+    amount: Optional[Decimal] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
     verify_identity: bool = False  # Also mark the user's identity as verified (skips Shufti)
 
 
@@ -3698,7 +3772,7 @@ async def get_user_payment_status(
 
 
 @router.post("/users/{user_id}/grant-payment")
-async def grant_user_payment(
+def grant_user_payment(
     user_id: int,
     request: GrantPaymentRequest,
     db: Session = Depends(get_db),
@@ -3730,7 +3804,7 @@ async def grant_user_payment(
             detail=f"Unsupported product_code. Allowed: {', '.join(GRANTABLE_PRODUCT_CODES)}",
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -3745,8 +3819,10 @@ async def grant_user_payment(
         """Optionally flag the user's identity as verified (admin override, skips Shufti)."""
         if not request.verify_identity:
             return False
+        old_value = bool(user.identity_verified)
         user.identity_verified = True
         user.verification_date = datetime.utcnow()
+        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_VERIFY_WITH_GRANT", old={"identity_verified": old_value}, new={"identity_verified": True})
         db.commit()
         db.refresh(user)
         return True
@@ -3768,7 +3844,14 @@ async def grant_user_payment(
 
     validity_days = getattr(product, "validity_days", 0) or 0
     expires_at = datetime.utcnow() + timedelta(days=validity_days) if validity_days > 0 else None
-    amount = request.amount if request.amount is not None else float(product.price)
+    from app.services.financial_integrity import money
+
+    amount = money(product.price)
+    if request.amount is not None and money(request.amount) != amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin amount must match the server product price",
+        )
     admin_note = request.notes or f"Manually marked as paid by admin #{current_user.id}"
 
     try:
@@ -3786,6 +3869,8 @@ async def grant_user_payment(
 
         created_new = False
         if deposit:
+            deposit.amount = amount
+            deposit.currency = (getattr(product, "currency", None) or "USD").upper()
             deposit.status = DepositStatus.VALIDATED
             deposit.validated_at = datetime.utcnow()
             deposit.validated_by = current_user.id
@@ -3817,6 +3902,11 @@ async def grant_user_payment(
                 detail="Failed to process payment validation",
             )
 
+        _record_admin_audit(
+            db, actor_id=current_user.id, record_id=user.id, action="ADMIN_PAYMENT_GRANT",
+            old={"deposit_id": None if created_new else deposit.id},
+            new={"deposit_id": deposit.id, "product_code": product_code, "amount": str(amount)},
+        )
         db.commit()
         db.refresh(deposit)
 
@@ -3866,7 +3956,7 @@ class TransactionEnriched(BaseModel):
 
 
 @router.get("/invoices/export")
-async def export_all_invoices_pdf(
+def export_all_invoices_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
@@ -3945,7 +4035,7 @@ async def export_all_invoices_pdf(
 
 
 @router.get("/transactions/export")
-async def export_all_transactions_csv(
+def export_all_transactions_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     transaction_type: Optional[str] = Query(
@@ -4001,15 +4091,15 @@ async def export_all_transactions_csv(
 
 
 @router.get("/transactions", response_model=List[TransactionEnriched])
-async def get_all_transactions(
+def get_all_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     transaction_type: Optional[str] = Query(None, description="Filtrer par type (deposit, withdrawal, entry_fee, prize_payout, commission, refund)"),
     status: Optional[str] = Query(None, description="Filtrer par statut"),
     user_id: Optional[int] = Query(None, description="Filtrer par utilisateur"),
     search: Optional[str] = Query(None, description="Rechercher par référence, description, email ou username"),
-    skip: int = 0,
-    limit: int = 10
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
 ):
     """
     Récupère toutes les transactions (dépôts, retraits, et autres transactions) avec des informations enrichies (admin uniquement).
@@ -4132,7 +4222,7 @@ def _fetch_admin_chart_of_accounts_rows(db: Session) -> list:
 
 
 @router.get("/accounting/chart-of-accounts")
-async def admin_accounting_chart_of_accounts(
+def admin_accounting_chart_of_accounts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -4140,14 +4230,6 @@ async def admin_accounting_chart_of_accounts(
     check_admin(current_user)
     try:
         rows = _fetch_admin_chart_of_accounts_rows(db)
-        if not rows:
-            try:
-                from app.initial_data import ensure_chart_of_accounts
-
-                ensure_chart_of_accounts(db)
-                rows = _fetch_admin_chart_of_accounts_rows(db)
-            except Exception as e:
-                logger.warning("admin chart_of_accounts auto-seed failed: %s", e)
         return [
             {
                 "id": r["id"],
@@ -4160,16 +4242,16 @@ async def admin_accounting_chart_of_accounts(
             }
             for r in rows
         ]
-    except Exception as e:
+    except Exception:
         logger.exception("admin chart_of_accounts endpoint failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur chart of accounts: {str(e)}",
+            detail="Unable to load chart of accounts",
         )
 
 
 @router.get("/accounting/journal-entries")
-async def admin_accounting_journal_entries(
+def admin_accounting_journal_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     limit: int = Query(100, ge=1, le=2000),
@@ -4245,7 +4327,7 @@ async def admin_accounting_journal_entries(
 
 
 @router.get("/accounting/ledger-health")
-async def admin_accounting_ledger_health(
+def admin_accounting_ledger_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     kyc_scan_limit: int = Query(500, ge=1, le=5000),
@@ -4271,6 +4353,7 @@ async def admin_accounting_ensure_coa(
 ):
     """Insert/update chart_of_accounts from init_coa.py (names, descriptions, new codes)."""
     check_admin(current_user)
+    _block_production_accounting_maintenance()
     try:
         from app.initial_data import ensure_chart_of_accounts
 
@@ -4285,7 +4368,7 @@ async def admin_accounting_ensure_coa(
 
 
 @router.get("/accounting/founding-pool/snapshots")
-async def admin_founding_pool_list_snapshots(
+def admin_founding_pool_list_snapshots(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = Query(0, ge=0),
@@ -4324,7 +4407,7 @@ async def admin_founding_pool_list_snapshots(
 
 
 @router.get("/accounting/balance-sheet")
-async def admin_accounting_balance_sheet(
+def admin_accounting_balance_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     as_of: Optional[date] = Query(
@@ -4345,7 +4428,7 @@ async def admin_accounting_balance_sheet(
 
 
 @router.get("/accounting/income-statement")
-async def admin_accounting_income_statement(
+def admin_accounting_income_statement(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     start_date: Optional[date] = Query(None),
@@ -4366,7 +4449,7 @@ async def admin_accounting_income_statement(
 
 
 @router.get("/accounting/trial-balance")
-async def admin_accounting_trial_balance(
+def admin_accounting_trial_balance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     as_of: Optional[date] = Query(
@@ -4387,7 +4470,7 @@ async def admin_accounting_trial_balance(
 
 
 @router.get("/accounting/cash-flow-statement")
-async def admin_accounting_cash_flow(
+def admin_accounting_cash_flow(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     start_date: Optional[date] = Query(None),
@@ -4408,7 +4491,7 @@ async def admin_accounting_cash_flow(
 
 
 @router.get("/accounting/full-financial-report")
-async def admin_accounting_full_financial_report(
+def admin_accounting_full_financial_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     as_of: Optional[date] = Query(
@@ -4440,7 +4523,7 @@ async def admin_accounting_full_financial_report(
 
 
 @router.get("/accounting/general-ledger")
-async def admin_accounting_general_ledger(
+def admin_accounting_general_ledger(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     account_code: str = Query(..., min_length=1, description="Chart of accounts code, e.g. 1001"),
@@ -4475,6 +4558,7 @@ async def admin_accounting_backfill_journals(
     Does not duplicate affiliate commissions; only creates ledger entries.
     """
     check_admin(current_user)
+    _block_production_accounting_maintenance(dry_run=dry_run)
     from app.services.payment_accounting_backfill import backfill_missing_payment_journals
 
     try:
@@ -4502,6 +4586,7 @@ async def admin_accounting_backfill_kyc_recognition(
     and kyc_verifications.status is APPROVED (unless skip_approval_guard). Run before founding-pool-only backfill for KYC deposits.
     """
     check_admin(current_user)
+    _block_production_accounting_maintenance(dry_run=dry_run)
     from app.services.payment_accounting_backfill import backfill_missing_kyc_recognition
 
     try:
@@ -4527,6 +4612,7 @@ async def admin_accounting_backfill_founding_pool_accruals(
     adjusting entry (Dr revenue / Cr 2104). Run after backfill-journals for legacy data.
     """
     check_admin(current_user)
+    _block_production_accounting_maintenance(dry_run=dry_run)
     from app.services.payment_accounting_backfill import backfill_missing_founding_pool_accruals
 
     try:
@@ -4673,25 +4759,12 @@ def admin_affiliate_payout_status(
 def admin_nowpayments_totp_code(
     current_user: User = Depends(get_current_user),
 ):
-    """Current 6-digit Authenticator code for manual NOWPayments dashboard confirmations."""
+    """Never expose a provider second factor through the application API."""
     check_admin(current_user)
-    import time
-
-    import pyotp
-
-    from app.services.nowpayments_service import payout_totp_secret
-
-    secret = payout_totp_secret()
-    if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not set. "
-                "Enable Authenticator 2FA on the NOWPayments dashboard and save the secret."
-            ),
-        )
-    code = pyotp.TOTP(secret).now()
-    return {"code": code, "seconds_remaining": 30 - (int(time.time()) % 30)}
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Provider authentication codes are not available through this API",
+    )
 
 
 @router.post("/affiliate/retry-payouts")

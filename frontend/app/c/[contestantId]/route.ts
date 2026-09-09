@@ -5,7 +5,7 @@ export async function GET(
   { params }: { params: Promise<{ contestantId: string }> }
 ) {
   const { contestantId } = await params
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'https://myhigh5.com'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'https://kalutafoundation.com'
   const redirectUrl = new URL(`/s/c/${encodeURIComponent(contestantId)}`, appUrl)
   const ref = request.nextUrl.searchParams.get('ref')
 

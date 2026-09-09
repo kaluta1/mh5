@@ -18,6 +18,9 @@ def posted_status_literal_for_db(db: Session) -> str:
     key = str(bind.url)
     if key in _cache:
         return _cache[key]
+    if bind.dialect.name != "postgresql":
+        _cache[key] = "posted"
+        return "posted"
 
     row = db.execute(
         text(

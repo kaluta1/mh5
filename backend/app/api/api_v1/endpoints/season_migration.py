@@ -2,9 +2,12 @@
 Endpoints pour gérer les migrations de saisons
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, func, or_, select
 from datetime import date
+from functools import wraps
+import inspect
+import threading
 
 from app.api import deps
 from app.services.season_migration import SeasonMigrationService, season_migration_service
@@ -22,6 +25,64 @@ from app.models.contests import Contestant, ContestantSeason
 from sqlalchemy import text
 
 router = APIRouter()
+
+_top_high5_flights_lock = threading.Lock()
+_top_high5_flights: dict[tuple, dict] = {}
+
+
+def _singleflight_top_high5(func):
+    """Coalesce identical in-process leaderboard requests without caching stale data."""
+    signature = inspect.signature(func)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        bound = signature.bind_partial(*args, **kwargs)
+        values = bound.arguments
+        response = values.get("response")
+        if response is not None:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        current_user = values.get("current_user")
+        requested_country = str(
+            values.get("country")
+            or getattr(current_user, "country", None)
+            or ""
+        ).strip().lower()
+        key = (
+            values.get("round_id"),
+            requested_country,
+            str(values.get("level") or "country").strip().lower(),
+        )
+
+        with _top_high5_flights_lock:
+            flight = _top_high5_flights.get(key)
+            leader = flight is None
+            if leader:
+                flight = {"event": threading.Event(), "result": None, "error": None}
+                _top_high5_flights[key] = flight
+
+        if not leader:
+            # The endpoint has an 8-second DB statement limit. Fail open after
+            # twelve seconds if the leader is stuck outside the database.
+            if not flight["event"].wait(timeout=12):
+                return func(*args, **kwargs)
+            if flight["error"] is not None:
+                raise flight["error"]
+            return flight["result"]
+
+        try:
+            flight["result"] = func(*args, **kwargs)
+            return flight["result"]
+        except BaseException as exc:
+            flight["error"] = exc
+            raise
+        finally:
+            with _top_high5_flights_lock:
+                flight["event"].set()
+                _top_high5_flights.pop(key, None)
+
+    return wrapper
 
 
 def _next_level(level: SeasonLevel):
@@ -94,6 +155,7 @@ _LEVEL_TO_LOCATION_FIELD = {
 
 
 @router.get("/top-high5")
+@_singleflight_top_high5
 def get_top_high5_by_country(
     response: Response,
     round_id: int | None = Query(default=None),
@@ -174,6 +236,7 @@ def get_top_high5_by_country(
             ]
             nomination_contests = (
                 db.query(Contest)
+                .options(joinedload(Contest.category))
                 .filter(Contest.id.in_(contest_ids))
                 .filter(Contest.contest_mode == "nomination")
                 .count()
@@ -217,6 +280,40 @@ def get_top_high5_by_country(
                 .all()
             )
 
+            # Contest seasons are shared by many nomination contests. Resolve
+            # every candidate link once rather than issuing up to four queries
+            # for each contest in this request.
+            link_rows = (
+                db.query(ContestSeasonLink, ContestSeason)
+                .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
+                .filter(
+                    ContestSeasonLink.contest_id.in_(contest_ids),
+                    ContestSeason.round_id == rnd.id,
+                    ContestSeason.is_deleted == False,
+                )
+                .order_by(ContestSeason.id.asc())
+                .all()
+            )
+            links_by_scope: dict[tuple[int, SeasonLevel, bool], list[tuple]] = {}
+            for link, linked_season in link_rows:
+                key = (int(link.contest_id), linked_season.level, bool(link.is_active))
+                links_by_scope.setdefault(key, []).append((link, linked_season))
+
+            round_transition_season_ids = [
+                int(row[0])
+                for row in db.query(ContestSeason.id)
+                .filter(
+                    ContestSeason.round_id == rnd.id,
+                    ContestSeason.is_deleted == False,
+                    ContestSeason.level.in_(
+                        [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
+                    ),
+                )
+                .distinct()
+                .all()
+                if row and row[0] is not None
+            ]
+
             contests_out = []
             for contest in nomination_contests:
                 # Targeted business override requested by product:
@@ -228,19 +325,19 @@ def get_top_high5_by_country(
                 ):
                     continue
                 def _pick_link(level: SeasonLevel, link_active: bool):
-                    return (
-                        db.query(ContestSeasonLink, ContestSeason)
-                        .join(ContestSeason, ContestSeason.id == ContestSeasonLink.season_id)
-                        .filter(
-                            ContestSeasonLink.contest_id == contest.id,
-                            ContestSeasonLink.is_active == link_active,
-                            ContestSeason.round_id == rnd.id,
-                            ContestSeason.level == level,
-                            ContestSeason.is_deleted == False,
+                    rows = links_by_scope.get((int(contest.id), level, link_active), [])
+                    if len(rows) > 1:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": "Multiple contest seasons match the requested period.",
+                                "contest_id": contest.id,
+                                "round_id": rnd.id,
+                                "level": level.value,
+                                "season_ids": [row[1].id for row in rows],
+                            },
                         )
-                        .order_by(ContestSeason.id.desc())
-                        .first()
-                    )
+                    return rows[0] if rows else None
 
                 country_fallback_from_regional = False
                 csl = None
@@ -345,6 +442,7 @@ def get_top_high5_by_country(
                         qualified_only=False,
                         strict_season_scope=True,
                         active_links_only=al,
+                        ranking_bucket_key=_top_high5_bucket_key_for_contest(contest),
                     )
                     matched_key = None
                     for key in grouped.keys():
@@ -402,6 +500,7 @@ def get_top_high5_by_country(
                         strict_season_scope=True,
                         active_links_only=al,
                         cohort_round_id=rnd.id,
+                        ranking_bucket_key=_top_high5_bucket_key_for_contest(contest),
                     )
                     regional_vote_backed_members: list[Contestant] = []
                     selected_regional_pool_id = None
@@ -410,19 +509,7 @@ def get_top_high5_by_country(
                             selected_country
                         )
                         bucket_key = _top_high5_bucket_key_for_contest(contest)
-                        round_season_rows = (
-                            db.query(ContestSeason.id)
-                            .filter(ContestSeason.round_id == rnd.id)
-                            .filter(ContestSeason.is_deleted == False)
-                            .filter(
-                                ContestSeason.level.in_(
-                                    [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
-                                )
-                            )
-                            .distinct()
-                            .all()
-                        )
-                        round_season_ids = [row[0] for row in round_season_rows if row and row[0] is not None]
+                        round_season_ids = round_transition_season_ids
                         if round_season_ids:
                             regional_vote_backed_members = (
                                 db.query(Contestant)
@@ -485,6 +572,32 @@ def get_top_high5_by_country(
                         if country_matching_members:
                             per_location_groups.append((key, country_matching_members))
 
+                # A season is shared by many contests in production. Restrict
+                # the display to contestants backed by an exact contest roster
+                # signal; a vote itself is not membership evidence.
+                from app.services.contest_context import contest_context_service
+
+                roster = contest_context_service.resolve_period_roster(
+                    db, contest_id=contest.id, season_id=season.id
+                )
+                allowed_contestant_ids = set(roster.contestant_ids)
+                per_location_groups = [
+                    (
+                        location,
+                        [
+                            candidate
+                            for candidate in members
+                            if candidate.id in allowed_contestant_ids
+                        ],
+                    )
+                    for location, members in per_location_groups
+                ]
+                per_location_groups = [
+                    (location, members)
+                    for location, members in per_location_groups
+                    if members
+                ]
+
                 if not per_location_groups:
                     continue
 
@@ -493,7 +606,13 @@ def get_top_high5_by_country(
                 per_location_groups.sort(key=lambda kv: (kv[0] or "").lower())
 
                 for matched_key, ranked in per_location_groups:
-                    rows = _build_rows_for_group(db, contest, season, ranked)
+                    rows = _build_rows_for_group(
+                        db,
+                        contest,
+                        season,
+                        ranked,
+                        round_transition_season_ids,
+                    )
                     ranking_scope = (
                         "global" if season.level == SeasonLevel.GLOBAL else
                         "country_group" if (
@@ -522,106 +641,53 @@ def get_top_high5_by_country(
                     )
             return contests_out
 
-        def _build_rows_for_group(db, contest, season, ranked):
+        def _build_rows_for_group(
+            db, contest, season, ranked, round_transition_season_ids
+        ):
             """Compute stars/engagement and produce ranked rows for a single group."""
             contestant_ids = [c.id for c in ranked]
-            points_by_id: dict[int, int] = {}
-            engagement_by_id: dict[int, dict] = {}
-            if contestant_ids:
-                bucket_key = _top_high5_bucket_key_for_contest(contest)
-                points_season_ids = [season.id]
-                if getattr(season, "level", None) == SeasonLevel.REGIONAL:
-                    # Regional votes may be stored on country/city season rows during
-                    # migration transitions; include same-round nomination season rows
-                    # so TopHigh5 stars reflect what users voted in MyHigh5.
-                    sibling_rows = (
-                        db.query(ContestSeason.id)
-                        .filter(ContestSeason.round_id == season.round_id)
-                        .filter(ContestSeason.is_deleted == False)
-                        .filter(
-                            ContestSeason.level.in_(
-                                [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
-                            )
-                        )
-                        .distinct()
-                        .all()
-                    )
-                    sibling_ids = [r[0] for r in sibling_rows if r and r[0] is not None]
-                    if sibling_ids:
-                        points_season_ids = list({*points_season_ids, *sibling_ids})
-                points_rows = (
-                    db.query(
-                        ContestantVoting.contestant_id,
-                        func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                    )
-                    .filter(
-                        and_(
-                            ContestantVoting.season_id.in_(points_season_ids),
-                            or_(
-                                ContestantVoting.vote_bucket_key == bucket_key,
-                                ContestantVoting.contest_id == contest.id,
-                            ),
-                            ContestantVoting.contestant_id.in_(contestant_ids),
-                        )
-                    )
-                    .group_by(ContestantVoting.contestant_id)
-                    .all()
+            bucket_key = _top_high5_bucket_key_for_contest(contest)
+            points_season_ids = [season.id]
+            if getattr(season, "level", None) == SeasonLevel.REGIONAL:
+                # These IDs were loaded once for the whole round in _build_for_round.
+                points_season_ids = list(
+                    {*points_season_ids, *round_transition_season_ids}
                 )
-                points_by_id = {r.contestant_id: int(r.total_points or 0) for r in points_rows}
-                if getattr(season, "level", None) == SeasonLevel.REGIONAL:
-                    ranked_user_ids = [
-                        getattr(c, "user_id", None)
-                        for c in ranked
-                        if getattr(c, "user_id", None) is not None
-                    ]
-                    if ranked_user_ids:
-                        user_points_rows = (
-                            db.query(
-                                Contestant.user_id,
-                                func.coalesce(func.sum(ContestantVoting.points), 0).label("total_points"),
-                            )
-                            .join(Contestant, Contestant.id == ContestantVoting.contestant_id)
-                            .filter(
-                                and_(
-                                    ContestantVoting.season_id.in_(points_season_ids),
-                                    or_(
-                                        ContestantVoting.vote_bucket_key == bucket_key,
-                                        ContestantVoting.contest_id == contest.id,
-                                    ),
-                                    Contestant.user_id.in_(ranked_user_ids),
-                                )
-                            )
-                            .group_by(Contestant.user_id)
-                            .all()
-                        )
-                        points_by_user_id = {
-                            row.user_id: int(row.total_points or 0)
-                            for row in user_points_rows
-                            if row.user_id is not None
-                        }
-                        for candidate in ranked:
-                            candidate_user_id = getattr(candidate, "user_id", None)
-                            if candidate_user_id in points_by_user_id:
-                                points_by_id[candidate.id] = max(
-                                    points_by_id.get(candidate.id, 0),
-                                    points_by_user_id[candidate_user_id],
-                                )
-                engagement_by_id = season_migration_service._engagement_by_contestant(db, contestant_ids)
 
-            # Canonical winner order: stars desc -> shares -> likes -> comments ->
-            # views -> earliest contestant. Kept in sync with the rendered columns.
-            sorted_ranked = sorted(
-                ranked,
-                key=lambda c: (
-                    points_by_id.get(c.id, 0),
-                    engagement_by_id.get(c.id, {}).get("shares", 0),
-                    engagement_by_id.get(c.id, {}).get("likes", 0),
-                    engagement_by_id.get(c.id, {}).get("comments", 0),
-                    engagement_by_id.get(c.id, {}).get("views", 0),
-                    -(c.id or 0),
-                ),
-                reverse=True,
+            # One canonical ranking engine combines immutable historical stage
+            # votes with current contextual MyHigh5 votes.  Candidate IDs keep
+            # legacy stage rows within this contest/location roster.
+            from app.services.voting_ranking import aggregate_rankings
+
+            canonical_rows = aggregate_rankings(
+                db,
+                season_ids=points_season_ids,
+                contestant_ids=contestant_ids,
+                contest_id=contest.id,
+                bucket_key=bucket_key,
+                require_votes=True,
             )
+            candidate_by_id = {candidate.id: candidate for candidate in ranked}
+            sorted_ranked = [
+                candidate_by_id[row.contestant_id]
+                for row in canonical_rows
+                if row.contestant_id in candidate_by_id
+            ]
+            points_by_id = {
+                row.contestant_id: row.total_points for row in canonical_rows
+            }
+            votes_by_id = {
+                row.contestant_id: row.total_votes for row in canonical_rows
+            }
+            engagement_by_id = {
+                row.contestant_id: {
+                    "shares": row.shares,
+                    "likes": row.likes,
+                    "comments": row.comments,
+                    "views": row.views,
+                }
+                for row in canonical_rows
+            }
 
             # User-facing Top High5 must show one row per nominator (user).
             # Keep only the best-ranked entry when stale/migrated duplicates exist.
@@ -659,6 +725,7 @@ def get_top_high5_by_country(
                         "region": c.region,
                         "continent": c.continent,
                         "stars_points": points_by_id.get(c.id, 0),
+                        "votes_count": votes_by_id.get(c.id, 0),
                         "shares": e.get("shares", 0),
                         "likes": e.get("likes", 0),
                         "comments": e.get("comments", 0),
@@ -668,9 +735,17 @@ def get_top_high5_by_country(
             return rows
 
         if round_id is not None:
-            rnd = db.query(Round).filter(Round.id == round_id).first()
-            if not rnd:
-                raise HTTPException(status_code=404, detail=f"Round id={round_id} not found")
+            from app.services.contest_context import (
+                ContestContextError,
+                ContestContextNotFound,
+                contest_context_service,
+            )
+            try:
+                rnd = contest_context_service.resolve_round_by_id(db, round_id)
+            except ContestContextNotFound as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ContestContextError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             contests_out = _build_for_round(rnd, allow_inactive_links=True)
             if contests_out:
                 return {
@@ -682,8 +757,45 @@ def get_top_high5_by_country(
                     "fallback_applied": False,
                     "diagnostics": _diagnostics_for_round(rnd),
                 }
+            return {
+                "round_id": rnd.id,
+                "round_name": rnd.name,
+                "country": selected_country,
+                "level": requested_level.value,
+                "contests": [],
+                "fallback_applied": False,
+                "diagnostics": _diagnostics_for_round(rnd),
+            }
             # Stale/wrong round id (e.g. old May 2024) — auto-pick the best round for this level.
             round_id = None
+
+        from app.services.contest_context import (
+            AmbiguousContestContext,
+            ContestContextError,
+            ContestContextNotFound,
+            contest_context_service,
+        )
+        try:
+            resolved_round = contest_context_service.resolve_vote_round(
+                db, requested_level, today=today
+            )
+        except ContestContextNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (AmbiguousContestContext, ContestContextError) as exc:
+            detail = {"message": str(exc)}
+            if isinstance(exc, AmbiguousContestContext):
+                detail["candidate_round_ids"] = list(exc.candidate_ids)
+            raise HTTPException(status_code=409, detail=detail) from exc
+
+        return {
+            "round_id": resolved_round.id,
+            "round_name": resolved_round.name,
+            "country": selected_country,
+            "level": requested_level.value,
+            "contests": _build_for_round(resolved_round, allow_inactive_links=False),
+            "fallback_applied": False,
+            "diagnostics": _diagnostics_for_round(resolved_round),
+        }
 
         candidate_rounds = (
             db.query(Round)

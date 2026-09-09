@@ -138,6 +138,7 @@ export function PaymentDialog({
   
   // Ref for polling interval
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const paymentIdempotencyKeyRef = useRef<string | null>(null)
   
   // Steps: 'recipients' | 'method' | 'payment' | 'success'
   const [step, setStep] = useState<'recipients' | 'method' | 'payment' | 'success'>('recipients')
@@ -357,6 +358,7 @@ export function PaymentDialog({
 
   // Handle method selection and create payment
   const handleMethodSelect = async (methodId: string, payCurrency = 'usdtbsc') => {
+    if (isLoading) return
     setSelectedMethod(methodId)
     setPaymentError(null)
 
@@ -398,13 +400,20 @@ export function PaymentDialog({
         }
       })
 
-      const paymentOrder = await paymentService.createPayment(token, {
-        amount: totalAmount,
-        currency: 'usd',
-        product_code: apiRecipients[0]?.product_code || 'kyc',
-        pay_currency: payCurrency,
-        recipients: apiRecipients,
-      })
+      if (!paymentIdempotencyKeyRef.current) {
+        paymentIdempotencyKeyRef.current = crypto.randomUUID()
+      }
+      const paymentOrder = await paymentService.createPayment(
+        token,
+        {
+          amount: totalAmount,
+          currency: 'usd',
+          product_code: apiRecipients[0]?.product_code || 'kyc',
+          pay_currency: payCurrency,
+          recipients: apiRecipients,
+        },
+        paymentIdempotencyKeyRef.current
+      )
 
       setPayment(paymentOrder)
       setStep('payment')
@@ -432,6 +441,7 @@ export function PaymentDialog({
 
   // Reset state and close
   const resetAndClose = () => {
+    paymentIdempotencyKeyRef.current = null
     // Clear polling interval
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current)
@@ -794,10 +804,12 @@ export function PaymentDialog({
               <Button
                 variant="outline"
                 onClick={addRecipient}
+                disabled
+                title="Third-party purchases require item-level payer and beneficiary accounting"
                 className="w-full border-dashed border-2 h-12 hover:border-myhigh5-primary hover:text-myhigh5-primary"
               >
                 <Plus className="w-5 h-5 mr-2" />
-                {t('payment.add_other_user') || 'Ajouter un autre utilisateur'}
+                {t('payment.add_other_user_unavailable') || 'Third-party purchases temporarily unavailable'}
               </Button>
 
               {/* Total */}

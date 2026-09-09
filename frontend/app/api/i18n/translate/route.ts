@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { extractStringMapFromModelJson } from "@/lib/i18n-parse-model-json"
+import { hasValidBackendBearer } from "@/lib/server-auth"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -23,6 +24,9 @@ function resolveModel() {
 }
 
 export async function POST(req: Request) {
+  if (!(await hasValidBackendBearer(req))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   const key = resolveApiKey()
   if (!key) {
     return NextResponse.json(
@@ -101,13 +105,14 @@ ${userPayload}`
         { role: "user", content: prompt },
       ],
     }),
+    signal: AbortSignal.timeout(30_000),
   })
 
   if (!res.ok) {
-    const t = await res.text()
-    console.error("[api/i18n/translate]", res.status, t.slice(0, 500))
+    await res.body?.cancel()
+    console.error("[api/i18n/translate] provider status", res.status)
     return NextResponse.json(
-      { error: "Translation provider error", detail: t.slice(0, 300) },
+      { error: "Translation provider error" },
       { status: 502 },
     )
   }

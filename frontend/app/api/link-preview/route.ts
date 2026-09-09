@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { assertSafeRemoteUrl } from '@/lib/safe-remote-url'
 
 function cleanUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim()
@@ -51,16 +52,6 @@ function getYouTubeVideoId(url: string): string | undefined {
   return undefined
 }
 
-function isPrivateHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase()
-  return (
-    lower === 'localhost' ||
-    lower === '127.0.0.1' ||
-    lower === '0.0.0.0' ||
-    lower.endsWith('.local')
-  )
-}
-
 function buildJsonResponse(payload: Record<string, unknown>, maxAgeSeconds: number = 3600) {
   return NextResponse.json(payload, {
     headers: {
@@ -86,17 +77,48 @@ function isFacebookHost(hostname: string): boolean {
 }
 
 async function fetchRemote(url: string) {
-  return fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
-      Accept: 'text/html,application/xhtml+xml,application/json',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache',
-      Pragma: 'no-cache',
-    },
-    redirect: 'follow',
-    next: { revalidate: 3600 },
-  })
+  let current = new URL(url)
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    await assertSafeRemoteUrl(current)
+    const response = await fetch(current, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
+        Accept: 'text/html,application/xhtml+xml,application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8_000),
+      next: { revalidate: 3600 },
+    })
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response
+    const location = response.headers.get('location')
+    if (!location || redirects === 3) throw new Error('Unsafe redirect chain')
+    current = new URL(location, current)
+  }
+  throw new Error('Unsafe redirect chain')
+}
+
+async function readLimitedText(response: Response, maxBytes = 1_048_576): Promise<string> {
+  const declared = Number(response.headers.get('content-length') || 0)
+  if (declared > maxBytes) throw new Error('Preview response too large')
+  if (!response.body) return ''
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new Error('Preview response too large')
+    }
+    chunks.push(value)
+  }
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
+  return new TextDecoder().decode(body)
 }
 
 function extractPreviewFromHtml(html: string, normalizedUrl: string, fallbackSiteName: string) {
@@ -161,7 +183,7 @@ async function fetchHtmlPreview(normalizedUrl: string, targetUrl: URL, fallbackS
     }
   }
 
-  const html = await response.text()
+  const html = await readLimitedText(response)
   const preview = extractPreviewFromHtml(html, normalizedUrl, fallbackSiteName)
 
   return {
@@ -184,7 +206,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ detail: 'Invalid URL' }, { status: 400 })
   }
 
-  if (!['http:', 'https:'].includes(targetUrl.protocol) || isPrivateHost(targetUrl.hostname)) {
+  try {
+    await assertSafeRemoteUrl(targetUrl)
+  } catch {
     return NextResponse.json({ detail: 'URL not allowed' }, { status: 400 })
   }
 
@@ -200,6 +224,7 @@ export async function GET(request: NextRequest) {
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
           },
+          signal: AbortSignal.timeout(6_000),
           next: { revalidate: 3600 },
         }
       )
@@ -241,6 +266,7 @@ export async function GET(request: NextRequest) {
             'User-Agent': 'Mozilla/5.0 (compatible; MyHigh5LinkPreview/1.0)',
             Accept: 'application/json',
           },
+          signal: AbortSignal.timeout(6_000),
           next: { revalidate: 3600 },
         }
       )

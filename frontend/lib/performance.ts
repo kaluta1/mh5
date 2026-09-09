@@ -91,7 +91,7 @@ export function preloadCriticalResources() {
   if (typeof window === 'undefined') return
 
   // Preload API endpoint
-  const apiUrl = resolvePublicApiBase() || 'https://myhigh5.com'
+  const apiUrl = resolvePublicApiBase() || 'https://kalutafoundation.com'
   const link = document.createElement('link')
   link.rel = 'preconnect'
   link.href = apiUrl

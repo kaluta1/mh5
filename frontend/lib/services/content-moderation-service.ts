@@ -86,7 +86,7 @@ export async function moderateImage(imageUrl: string): Promise<ModerationResult>
   if (!SIGHTENGINE_API_USER || !SIGHTENGINE_API_SECRET) {
     console.warn('Sightengine API keys not configured, skipping moderation')
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: [],
       details: {}
@@ -112,7 +112,7 @@ export async function moderateImage(imageUrl: string): Promise<ModerationResult>
     console.error('Image moderation error:', error)
     // En cas d'erreur, on approuve par défaut mais avec confidence 0
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: [],
       details: {}
@@ -127,7 +127,7 @@ export async function moderateVideo(videoUrl: string): Promise<ModerationResult>
   if (!SIGHTENGINE_API_USER || !SIGHTENGINE_API_SECRET) {
     console.warn('Sightengine API keys not configured, skipping moderation')
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: [],
       details: {}
@@ -167,7 +167,7 @@ export async function moderateVideo(videoUrl: string): Promise<ModerationResult>
     }
 
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: [],
       details: {}
@@ -175,7 +175,7 @@ export async function moderateVideo(videoUrl: string): Promise<ModerationResult>
   } catch (error) {
     console.error('Video moderation error:', error)
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: [],
       details: {}
@@ -210,7 +210,7 @@ async function pollVideoResult(requestId: string, maxAttempts = 10): Promise<Mod
 
   // Timeout - approuver par défaut
   return {
-    isApproved: true,
+    isApproved: false,
     confidence: 0,
     flags: [],
     details: {}
@@ -319,7 +319,7 @@ export async function moderateAudio(audioUrl: string): Promise<AudioModerationRe
   if (!ASSEMBLYAI_API_KEY) {
     console.warn('AssemblyAI API key not configured, skipping audio moderation')
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: []
     }
@@ -355,7 +355,7 @@ export async function moderateAudio(audioUrl: string): Promise<AudioModerationRe
   } catch (error) {
     console.error('Audio moderation error:', error)
     return {
-      isApproved: true,
+      isApproved: false,
       confidence: 0,
       flags: []
     }

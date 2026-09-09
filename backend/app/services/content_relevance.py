@@ -375,7 +375,7 @@ La candidature est-elle pertinente pour ce concours?"""
                     "temperature": 0.3,
                     "max_tokens": 500
                 },
-                timeout=30
+                timeout=(5, 30)
             )
             
             if response.status_code == 200:

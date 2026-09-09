@@ -1,0 +1,8 @@
+node_modules
+.next
+.env.local
+npm-debug.log*
+coverage
+e2e
+*.test.ts
+*.test.tsx

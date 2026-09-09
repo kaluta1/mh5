@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime
 
 from app.core.security_validators import sanitize_username, validate_password_strength
@@ -7,10 +7,6 @@ from app.core.security_validators import sanitize_username, validate_password_st
 
 # Schémas de base
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None
-    is_active: Optional[bool] = True
-    is_verified: bool = False
-    is_admin: bool = False
     username: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -18,6 +14,8 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
     password: str
     continent: Optional[str] = None
@@ -41,7 +39,8 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(UserBase):
-    password: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
     gender: Optional[str] = None
     date_of_birth: Optional[datetime] = None
     continent: Optional[str] = None
@@ -64,14 +63,6 @@ class UserUpdate(UserBase):
             return v
         return sanitize_username(v)
 
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        return validate_password_strength(v)
-
-
 # Schéma pour afficher un rôle
 class RoleBase(BaseModel):
     id: int
@@ -85,6 +76,10 @@ class RoleBase(BaseModel):
 # Schéma pour afficher un utilisateur
 class User(UserBase):
     id: int
+    email: EmailStr
+    is_active: bool = True
+    is_verified: bool = False
+    is_admin: bool = False
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     gender: Optional[str] = None

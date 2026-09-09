@@ -160,15 +160,26 @@ export function TransactionTable({
     onPaymentCompleted?.()
   }
 
-  const openInvoice = (transaction: Transaction) => {
+  const openInvoice = async (transaction: Transaction) => {
     const token = localStorage.getItem('access_token')
     const apiUrl = getEffectiveApiUrl()
     
     // Extract deposit ID from transaction id (format: "dep_123")
     const depositId = transaction.deposit_id || transaction.id.replace('dep_', '')
     
-    // Open invoice in new tab with language parameter
-    window.open(`${apiUrl}/api/v1/payments/invoice/${depositId}?token=${token}&lang=en`, '_blank')
+    const invoiceWindow = window.open('', '_blank')
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/payments/invoice/${depositId}?lang=en`, {
+        headers: { Authorization: `Bearer ${token || ''}` },
+      })
+      if (!response.ok) throw new Error('Invoice unavailable')
+      const blobUrl = URL.createObjectURL(await response.blob())
+      if (invoiceWindow) invoiceWindow.location.href = blobUrl
+      else window.open(blobUrl, '_blank')
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+    } catch {
+      invoiceWindow?.close()
+    }
   }
 
   if (transactions.length === 0) {

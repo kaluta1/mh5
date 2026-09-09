@@ -3,7 +3,6 @@ import { API_URL, getEffectiveApiUrl } from "@/lib/config"
 function mediaApiOrigin(): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname
-    // Same-origin avoids broken cross-host media when NEXT_PUBLIC_API_URL ≠ page host.
     if (host !== "localhost" && host !== "127.0.0.1") {
       return window.location.origin.replace(/\/+$/, "")
     }
@@ -12,73 +11,84 @@ function mediaApiOrigin(): string {
   return String(API_URL || "").replace(/\/+$/, "")
 }
 
-/** Extract portable path stored in DB (host-agnostic). */
+function safeSegment(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value)
+    if (!decoded || decoded.includes("/") || decoded.includes("\\") || decoded.includes("\0")) return null
+    return encodeURIComponent(decoded)
+  } catch {
+    return null
+  }
+}
+
+function canonicalFilePath(raw: string): string | null {
+  const apiFile = raw.match(/\/api\/v1\/media\/file\/(\d+)\/([^/?#\\]+)/i)
+  if (apiFile) {
+    const filename = safeSegment(apiFile[2])
+    return filename ? `/api/v1/media/file/${apiFile[1]}/${filename}` : null
+  }
+  const legacy = raw.match(/^\/media\/(\d+)\/([^/?#\\]+)(?:[?#].*)?$/i)
+  if (legacy) {
+    const filename = safeSegment(legacy[2])
+    return filename ? `/api/v1/media/file/${legacy[1]}/${filename}` : null
+  }
+  const uploaded = raw.match(/\/uploads\/(\d+)\/([^/?#\\]+)(?:[?#].*)?$/i)
+  if (uploaded) {
+    const filename = safeSegment(uploaded[2])
+    return filename ? `/api/v1/media/file/${uploaded[1]}/${filename}` : null
+  }
+  return null
+}
+
+/** Extract a portable, host-agnostic value suitable for database storage. */
 export function toStoredMediaUrl(url?: string | null): string {
   const raw = String(url || "").trim()
   if (!raw) return ""
-
-  const apiFile = raw.match(/\/api\/v1\/media\/file\/\d+\/[^?#]+/)
-  if (apiFile) return apiFile[0]
-
-  const legacy = raw.match(/^\/media\/([^/]+)\/(.+)$/)
-  if (legacy) {
-    return `/api/v1/media/file/${legacy[1]}/${legacy[2]}`
-  }
-
-  const s3 = raw.match(/\/uploads\/(\d+)\/([^/?#]+)$/)
-  if (s3) {
-    return `/api/v1/media/file/${s3[1]}/${s3[2]}`
-  }
-
-  return raw
+  const canonical = canonicalFilePath(raw)
+  if (/\/api\/v1\/media\/file\//i.test(raw) && !canonical) return ""
+  return canonical || raw
 }
 
 /**
- * Normalize legacy media paths to a publicly reachable API file endpoint.
- * Always uses the same API origin as login/upload (myhigh5.com or api.myhigh5.com).
+ * Resolve current and historical media references without rewriting stored data.
+ * Unsafe schemes and host filesystem paths fail closed. Legacy localhost URLs are
+ * rebound to the current public origin so old seed/demo references never target a
+ * visitor's own machine.
  */
 export function normalizeMediaUrl(url?: string | null): string {
   const raw = String(url || "").trim()
-  if (!raw) return ""
+  if (!raw || /[\u0000-\u001f]/.test(raw)) return ""
+  if (/^(javascript|vbscript|file):/i.test(raw) || /^[a-z]:[\\/]/i.test(raw)) return ""
 
   const origin = mediaApiOrigin()
-  const stored = toStoredMediaUrl(raw)
-  if (stored.startsWith("/api/v1/media/file/")) {
-    return `${origin}${stored}`
-  }
+  const canonical = canonicalFilePath(raw)
+  if (canonical) return `${origin}${canonical}`
+  if (/\/api\/v1\/media\/file\//i.test(raw)) return ""
 
-  if (raw.startsWith("data:")) {
-    return raw
-  }
-
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    const apiFileAbs = raw.match(/^https?:\/\/[^/]+(\/api\/v1\/media\/file\/\d+\/[^?#]+)/i)
-    if (apiFileAbs) {
-      return `${origin}${apiFileAbs[1]}`
-    }
-    const s3Match = raw.match(/\/uploads\/([^/]+)\/([^/?#]+)$/)
-    if (s3Match) {
-      const [, userId, filename] = s3Match
-      return `${origin}/api/v1/media/file/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`
-    }
-    return raw
-  }
-
-  if (raw.startsWith("/api/v1/media/file/")) {
-    return `${origin}${raw}`
-  }
-
-  const legacyMatch = raw.match(/^\/media\/([^/]+)\/(.+)$/)
-  if (legacyMatch) {
-    const [, userId, filename] = legacyMatch
-    return `${origin}/api/v1/media/file/${encodeURIComponent(userId)}/${encodeURIComponent(filename)}`
-  }
+  if (/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(raw)) return raw
+  if (raw.startsWith("blob:") && typeof window !== "undefined") return raw
+  if (/^data:/i.test(raw)) return ""
 
   if (raw.startsWith("/")) {
+    if (raw.startsWith("//")) return ""
     return `${origin}${raw}`
   }
 
-  return raw
+  if (/^(?:storage|uploads|media)\//i.test(raw)) {
+    return `${origin}/${raw}`
+  }
+
+  try {
+    const parsed = new URL(raw)
+    if (parsed.username || parsed.password) return ""
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return ""
+    const localhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1"
+    if (localhost) return `${origin}${parsed.pathname}${parsed.search}`
+    if (parsed.protocol === "http:") parsed.protocol = "https:"
+    return parsed.toString()
+  } catch {
+    return ""
+  }
 }
 
 export function withMediaCacheBust(url: string, token?: string | number): string {

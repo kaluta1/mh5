@@ -1,5 +1,6 @@
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, JSON
+from decimal import Decimal
+from sqlalchemy import Integer, String, ForeignKey, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -13,6 +14,8 @@ class AdCampaignStatus(str, enum.Enum):
     PAUSED = "paused"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    REJECTED = "rejected"
+    REMOVED = "removed"
 
 
 class AdFormat(str, enum.Enum):
@@ -28,6 +31,7 @@ class CostModel(str, enum.Enum):
     CPC = "cpc"  # Cost Per Click
     CPM = "cpm"  # Cost Per Mille (1000 impressions)
     CPA = "cpa"  # Cost Per Action
+    FLAT = "flat"
 
 
 class AdCampaign(Base):
@@ -38,12 +42,12 @@ class AdCampaign(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Budget et coûts
-    remaining_budget: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    daily_budget: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
-    spent_amount: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    remaining_budget: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    daily_budget: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    spent_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     cost_model: Mapped[CostModel] = mapped_column(SQLEnum(CostModel), nullable=False)
-    budget_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)  # Montant d'enchère
+    budget_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)  # Montant d'enchère
     
     # Ciblage
     targeting_criteria: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -100,8 +104,8 @@ class AdPlacement(Base):
     targeting_criteria: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     
     # Tarification
-    base_cpm: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
-    base_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    base_cpm: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
+    base_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -124,7 +128,7 @@ class AdImpression(Base):
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
     # Coût de l'impression
-    cost: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    cost: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
@@ -141,13 +145,13 @@ class AdClick(Base):
     impression_id: Mapped[int] = mapped_column(Integer, ForeignKey("ad_impressions.id"), nullable=False, unique=True)
     
     # Coût du clic
-    cost: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    cost: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     # Suivi de conversion
     conversion_tracked: Mapped[bool] = mapped_column(Boolean, default=False)
-    cost_per_impression: Mapped[Optional[float]] = mapped_column(Numeric(10, 6), nullable=True)
+    cost_per_impression: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 6), nullable=True)
     
     # Relations
     impression: Mapped["AdImpression"] = relationship("AdImpression", back_populates="click")
@@ -162,13 +166,13 @@ class AdRevenueShare(Base):
     source_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # ID du concours, profil, etc.
     
     # Revenus générés
-    total_revenue: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    total_revenue: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     
     # Distribution (selon les règles: 40% participant, 10% sponsor direct, 1% x 10 niveaux)
-    participant_share: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # 40%
-    direct_sponsor_share: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # 10%
-    affiliate_share: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # 10% total (1% x 10)
-    platform_share: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # Reste
+    participant_share: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # 40%
+    direct_sponsor_share: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # 10%
+    affiliate_share: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # 10% total (1% x 10)
+    platform_share: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # Reste
     
     # Période
     period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -186,11 +190,11 @@ class AdBudgetTransaction(Base):
     campaign_id: Mapped[int] = mapped_column(Integer, ForeignKey("ad_campaigns.id"), nullable=False)
     
     transaction_type: Mapped[str] = mapped_column(String(50), nullable=False)  # deposit, spend, refund
-    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     
     # Solde avant et après
-    balance_before: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    balance_after: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    balance_before: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    balance_after: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -212,13 +216,13 @@ class AdPerformanceMetrics(Base):
     conversions: Mapped[int] = mapped_column(Integer, default=0)
     
     # Coûts
-    total_spent: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
-    cost_per_click: Mapped[Optional[float]] = mapped_column(Numeric(10, 4), nullable=True)
-    avg_cpm: Mapped[Optional[float]] = mapped_column(Numeric(8, 4), nullable=True)
+    total_spent: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
+    cost_per_click: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
+    avg_cpm: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 4), nullable=True)
     
     # Taux calculés
-    ctr: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # Click Through Rate
-    conversion_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)
+    ctr: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)  # Click Through Rate
+    conversion_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
     
     # Période des métriques
     date: Mapped[datetime] = mapped_column(DateTime, nullable=False)

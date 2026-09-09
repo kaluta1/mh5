@@ -14,6 +14,7 @@ from app.services.nowpayments_service import (
     finalize_deposit_from_nowpayments,
     verify_ipn_signature,
 )
+from app.services.financial_integrity import FinancialIntegrityError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,15 +42,30 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
 
     deposit = None
     if order_id:
-        deposit = crud_deposit.deposit.get_by_order_id(db, order_id=str(order_id))
+        deposit = (
+            db.query(Deposit)
+            .filter(Deposit.order_id == str(order_id))
+            .with_for_update()
+            .first()
+        )
     if not deposit and payment_id:
-        deposit = db.query(Deposit).filter(Deposit.external_payment_id == payment_id).first()
+        deposit = (
+            db.query(Deposit)
+            .filter(Deposit.external_payment_id == payment_id)
+            .with_for_update()
+            .first()
+        )
 
     if not deposit:
         logger.warning("NOWPayments IPN for unknown order=%s payment=%s", order_id, payment_id)
         return {"ok": True}
 
-    ok = finalize_deposit_from_nowpayments(db, deposit, body, defer_commit=True)
+    try:
+        ok = finalize_deposit_from_nowpayments(db, deposit, body, defer_commit=True)
+    except FinancialIntegrityError as exc:
+        db.rollback()
+        logger.error("NOWPayments IPN financial identity rejected for deposit %s", deposit.id)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not ok:
         db.rollback()
         raise HTTPException(

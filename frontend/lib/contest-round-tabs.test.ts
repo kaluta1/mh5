@@ -75,7 +75,7 @@ describe('contest-round-tabs March-start calendar', () => {
     const juneRound = { ...round(26, 'Round June 2026'), is_submission_open: true } as Round
     const mayRound = { ...round(21, 'Round May 2026'), is_voting_open: true } as Round
     const all = [...rounds.slice(0, 4), mayRound, juneRound]
-    const tabs = computeDisplayRounds(all)
+    const tabs = computeDisplayRounds(all, juneNow)
     expect(tabs.map((t) => t.tabKey)).toEqual(['nominate:26', 'vote:26'])
   })
 })

@@ -27,14 +27,17 @@ TRC20_PATTERN = re.compile(r"^T[a-zA-Z0-9]{33}$")
 
 
 def normalize_payout_currency(code: Optional[str]) -> str:
-    raw = (code or "usdtbsc").strip().lower()
+    raw = (code or "usdtbsc").strip().lower().replace("-", "").replace("_", "")
     aliases = {
         "usdtbep20": "usdtbsc",
         "usdtbep": "usdtbsc",
-        "usdt_eth": "usdterc20",
-        "usdt_trx": "usdttrc20",
+        "usdteth": "usdterc20",
+        "usdttrx": "usdttrc20",
     }
-    return aliases.get(raw, raw if raw in PAYOUT_CURRENCY_OPTIONS else "usdtbsc")
+    normalized = aliases.get(raw, raw)
+    if normalized not in PAYOUT_CURRENCY_OPTIONS:
+        raise ValueError("Unsupported payout currency/network.")
+    return normalized
 
 
 def validate_payout_address(address: str, currency: Optional[str] = None) -> str:

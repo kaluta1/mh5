@@ -1,5 +1,6 @@
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
+from decimal import Decimal
+from sqlalchemy import Integer, String, ForeignKey, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -40,8 +41,8 @@ class FanClub(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Tarification
-    premium_fee: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
-    annual_discount_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=20.00)  # 20% par défaut
+    premium_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    annual_discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20.00"))  # 20% par défaut
     
     # Configuration
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -90,9 +91,9 @@ class ClubMembership(Base):
     end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     
     # Paiement
-    amount_paid: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    fee_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant payé en DSP
-    payment_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # Montant payé en monnaie fiduciaire
+    amount_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    fee_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant payé en DSP
+    payment_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)  # Montant payé en monnaie fiduciaire
     
     auto_renewal: Mapped[bool] = mapped_column(Boolean, default=True)
     
@@ -106,12 +107,12 @@ class ClubWallet(Base):
     club_id: Mapped[int] = mapped_column(Integer, ForeignKey("fan_clubs.id"), nullable=False, unique=True)
     
     # Soldes
-    balance_cad: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
-    fiat_balance: Mapped[float] = mapped_column(Numeric(15, 2), default=0.00)
+    balance_cad: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
+    fiat_balance: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     # Revenus accumulés
-    total_membership_fee: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
-    total_ad_revenue: Mapped[float] = mapped_column(Numeric(15, 2), default=0.00)
+    total_membership_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"))
+    total_ad_revenue: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0.00"))
     
     last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
@@ -125,7 +126,7 @@ class ClubTransaction(Base):
     wallet_id: Mapped[int] = mapped_column(Integer, ForeignKey("club_wallets.id"), nullable=False)
     
     transaction_type: Mapped[str] = mapped_column(String(50), nullable=False)  # deposit, withdrawal, fee, revenue
-    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False)  # DSP, USD, EUR, etc.
     
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

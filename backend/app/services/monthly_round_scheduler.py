@@ -13,7 +13,12 @@ from sqlalchemy import select, insert
 from app.db.session import SessionLocal
 from app.models.round import Round, RoundStatus, round_contests
 from app.models.contest import Contest
+from app.models.contests import SeasonLevel
 from app.scripts.generate_monthly_rounds import generate_monthly_round
+from app.services.contest_context import (
+    ContestContextNotFound,
+    contest_context_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,25 +92,10 @@ def ensure_nomination_cohort_rounds(db: Session, today: Optional[date] = None) -
     while date(y, m, 1) <= date(today.year, today.month, 1):
         target = date(y, m, 1)
         month_name = target.strftime("%B %Y")
-        existing = (
-            db.query(Round)
-            .filter(
-                Round.status != RoundStatus.CANCELLED,
-                Round.submission_start_date == target,
-            )
-            .order_by(Round.id.desc())
-            .first()
-        )
-        if not existing:
-            existing = (
-                db.query(Round)
-                .filter(
-                    Round.name == f"Round {month_name}",
-                    Round.status != RoundStatus.CANCELLED,
-                )
-                .order_by(Round.id.desc())
-                .first()
-            )
+        try:
+            existing = contest_context_service.resolve_submission_round(db, target)
+        except ContestContextNotFound:
+            existing = None
         if existing:
             sync_round_calendar_flags(db, existing)
             link_active_contests_to_round(db, existing.id)
@@ -130,19 +120,12 @@ def resolve_live_nomination_vote_round(db: Session, today: Optional[date] = None
     On 2026-06-01 that is May (not April with a stale is_voting_open flag).
     """
     today = today or date.today()
-    rows = (
-        db.query(Round)
-        .filter(
-            Round.is_voting_open == True,
-            Round.status != RoundStatus.COMPLETED,
-            Round.submission_end_date.isnot(None),
-            Round.submission_end_date < today,
+    try:
+        return contest_context_service.resolve_vote_round(
+            db, SeasonLevel.COUNTRY, today=today
         )
-        .all()
-    )
-    if not rows:
+    except ContestContextNotFound:
         return None
-    return max(rows, key=lambda r: (r.submission_end_date, r.id))
 
 
 def close_stale_voting_rounds(db: Session, today: Optional[date] = None) -> int:
@@ -479,27 +462,14 @@ class MonthlyRoundScheduler:
 
         db = SessionLocal()
         try:
-            dedupe_submission_month_rounds(db, today)
             close_stale_voting_rounds(db, today)
 
-            month_start = date(today.year, today.month, 1)
-            existing = (
-                db.query(Round)
-                .filter(
-                    Round.name.ilike(f"%{month_name}%"),
-                    Round.status != RoundStatus.CANCELLED,
-                    Round.submission_start_date == month_start,
+            try:
+                existing = contest_context_service.resolve_current_submission_round(
+                    db, today=today
                 )
-                .order_by(Round.id.desc())
-                .first()
-            )
-            if not existing:
-                existing = (
-                    db.query(Round)
-                    .filter(Round.name == round_name, Round.status != RoundStatus.CANCELLED)
-                    .order_by(Round.id.desc())
-                    .first()
-                )
+            except ContestContextNotFound:
+                existing = None
             if existing:
                 logger.info(f"Round '{round_name}' already exists (id={existing.id})")
                 sync_round_calendar_flags(db, existing)

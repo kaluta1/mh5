@@ -238,7 +238,7 @@ export function Footer() {
           {/* Categories */}
           <div className="space-y-4">
             <Link
-              href="https://myhigh5.com/contests"
+              href="/contests"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider hover:text-myhigh5-primary dark:hover:text-myhigh5-cyan-400 transition-colors"

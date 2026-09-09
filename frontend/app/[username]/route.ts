@@ -55,7 +55,7 @@ export async function GET(
     return new NextResponse('Not Found', { status: 404 })
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'https://myhigh5.com'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'https://kalutafoundation.com'
   const redirectUrl = new URL(`/s/u/${encodeURIComponent(username)}`, appUrl)
   request.nextUrl.searchParams.forEach((value, key) => {
     redirectUrl.searchParams.set(key, value)

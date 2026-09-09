@@ -11,6 +11,7 @@ from app.models.affiliate import (
 )
 from app.models.user import User
 from app.core.commission_config import level_rate, MAX_LEVELS
+from app.services.affiliate_hierarchy import AffiliateHierarchyError, validate_sponsor_assignment
 
 
 class CRUDAffiliateTree:
@@ -213,6 +214,11 @@ class CRUDAffiliateTree:
             return {"success": False, "error": "Vous ne pouvez pas vous parrainer vous-même"}
         
         # Récupérer l'arbre du parrain pour calculer le path
+        try:
+            user = validate_sponsor_assignment(db, user_id=user_id, sponsor_id=sponsor.id)
+        except AffiliateHierarchyError as exc:
+            return {"success": False, "error": str(exc)}
+
         sponsor_tree = self.get_by_user(db, sponsor.id)
         
         if sponsor_tree:
@@ -232,6 +238,8 @@ class CRUDAffiliateTree:
             is_active=True
         )
         
+        user.sponsor_id = sponsor.id
+        db.add(user)
         db.add(new_tree)
         db.commit()
         db.refresh(new_tree)
@@ -242,7 +250,9 @@ class CRUDAffiliateTree:
         """Récupère la généalogie sur X niveaux."""
         user = db.query(User).filter(User.id == user_id).first()
         
-        def build_tree(uid: int, current_level: int) -> dict:
+        def build_tree(uid: int, current_level: int, ancestors: frozenset[int]) -> dict:
+            if uid in ancestors:
+                return None
             u = db.query(User).filter(User.id == uid).first()
             if not u:
                 return None
@@ -254,7 +264,7 @@ class CRUDAffiliateTree:
                 ).all()
                 
                 for d in direct:
-                    child = build_tree(d.user_id, current_level + 1)
+                    child = build_tree(d.user_id, current_level + 1, ancestors | {uid})
                     if child:
                         children.append(child)
             
@@ -273,7 +283,7 @@ class CRUDAffiliateTree:
                 "commissions": float(commissions)
             }
         
-        return build_tree(user_id, 0)
+        return build_tree(user_id, 0, frozenset())
 
 
 class CRUDAffiliateCommission:
@@ -326,6 +336,9 @@ class CRUDAffiliateCommission:
         reference_id: str = None,
         reference_type: str = None
     ) -> List[AffiliateCommission]:
+        raise RuntimeError(
+            "Legacy reference-based commission creation is disabled; use deposit-backed distribution"
+        )
         """
         Crée des commissions pour tous les sponsors dans la hiérarchie.
         Retourne la liste des commissions créées.

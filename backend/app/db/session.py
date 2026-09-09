@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 import logging
+import os
 
 from app.core.config import settings
 
@@ -11,20 +12,36 @@ logger = logging.getLogger(__name__)
 database_url = settings.SQLALCHEMY_DATABASE_URI
 # Keep postgresql:// for psycopg2-binary (no need to change)
 
-# Engine configuration optimized for Neon PostgreSQL with SSL
-# Reduced timeouts to avoid blocking
-engine = create_engine(
-    database_url,
-    pool_pre_ping=True,  # Check connection before use
-    pool_recycle=300,    # Recycle connections after 5 minutes (Neon timeout ~10 min)
-    pool_size=10,         # Connection pool size
-    max_overflow=20,     # Maximum number of additional connections
-    pool_timeout=10,     # Timeout to get a connection from the pool (10 seconds)
-    connect_args={
-        "connect_timeout": 10,  # Initial connection timeout (10 seconds)
-    },
-    echo=False
-)
+# PostgreSQL pool tuning is not accepted by SQLite's default pool. Keeping the
+# options dialect-specific lets the application import cleanly in tests and in
+# local SQLite utilities without weakening the Neon production configuration.
+engine_options = {
+    "pool_pre_ping": True,
+    "echo": False,
+}
+statement_timeout_ms = 20000
+if database_url.lower().startswith("sqlite"):
+    engine_options["connect_args"] = {"check_same_thread": False}
+else:
+    # No statement_timeout previously meant a runaway/unindexed query could
+    # hold a pooled connection indefinitely, contributing to pool exhaustion
+    # and 504s under load. Bounded, admin-configurable via env var.
+    statement_timeout_ms = max(
+        1000, min(int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "20000")), 120000)
+    )
+    engine_options.update(
+        {
+            "pool_recycle": 300,  # Neon timeout is approximately 10 minutes.
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 10,
+            "connect_args": {
+                "connect_timeout": 10,
+            },
+        }
+    )
+
+engine = create_engine(database_url, **engine_options)
 
 # Event handler for connection errors
 @event.listens_for(engine, "connect")
@@ -35,6 +52,15 @@ def set_ssl_mode(dbapi_conn, connection_record):
         # SSL configuration is managed via connection URL (sslmode=require)
         if hasattr(dbapi_conn, 'info'):
             logger.debug("Database connection established")
+            # Neon pooled endpoints can reject libpq startup `options`. Apply
+            # the bounded statement timeout after connecting, then close the
+            # setup transaction before the connection enters the pool.
+            cursor = dbapi_conn.cursor()
+            try:
+                cursor.execute(f"SET statement_timeout = {statement_timeout_ms}")
+                dbapi_conn.commit()
+            finally:
+                cursor.close()
     except Exception as e:
         logger.warning(f"Error configuring connection: {e}")
 

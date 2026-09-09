@@ -30,6 +30,14 @@ def get_db():
     return db
 
 
+def _require_graphql_admin(info: strawberry.Info) -> User:
+    """Fail closed for financial GraphQL fields."""
+    user = (info.context or {}).get("user")
+    if not user or not user.is_active or not user.is_admin:
+        raise PermissionError("Administrator privileges required")
+    return user
+
+
 def map_user_to_type(user: User) -> UserType:
     """Convert SQLAlchemy User to GraphQL UserType"""
     return UserType(
@@ -920,8 +928,9 @@ class Query:
 
 
     @strawberry.field
-    def chart_of_accounts(self) -> List[ChartOfAccountsType]:
+    def chart_of_accounts(self, info: strawberry.Info) -> List[ChartOfAccountsType]:
         """Get flattened chart of accounts"""
+        _require_graphql_admin(info)
         db = get_db()
         try:
              accounts = db.query(ChartOfAccounts).filter(ChartOfAccounts.is_active == True).order_by(ChartOfAccounts.account_code).all()
@@ -931,7 +940,8 @@ class Query:
 
     @strawberry.field
     def journal_entries(
-        self, 
+        self,
+        info: strawberry.Info,
         skip: int = 0, 
         limit: int = 20,
         start_date: Optional[datetime] = None,
@@ -939,6 +949,9 @@ class Query:
         min_amount: Optional[float] = None
     ) -> List[JournalEntryType]:
         """Get journal entries with pagination and filters"""
+        _require_graphql_admin(info)
+        skip = max(0, skip)
+        limit = min(max(1, limit), 100)
         db = get_db()
         try:
              query = db.query(JournalEntry).order_by(JournalEntry.entry_date.desc())

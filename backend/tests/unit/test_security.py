@@ -28,14 +28,19 @@ def test_password_hash_and_verify_roundtrip():
 
 def test_access_token_encodes_subject():
     token = create_access_token("42", expires_delta=timedelta(minutes=5))
-    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    payload = jwt.decode(
+        token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
+        issuer=settings.JWT_ISSUER, audience=settings.JWT_AUDIENCE,
+    )
     assert payload["sub"] == "42"
     assert "exp" in payload
 
 
 def test_password_reset_token_roundtrip():
-    token = create_password_reset_token("user@example.com")
-    assert verify_password_reset_token(token) == "user@example.com"
+    password_hash = get_password_hash("OldPassword123!")
+    token = create_password_reset_token("user@example.com", password_hash)
+    assert verify_password_reset_token(token, password_hash) == "user@example.com"
+    assert verify_password_reset_token(token, get_password_hash("NewPassword123!")) is None
 
 
 def test_email_verification_token_roundtrip():
@@ -45,4 +50,4 @@ def test_email_verification_token_roundtrip():
 
 def test_password_reset_token_rejects_wrong_type():
     token = create_access_token("user@example.com")
-    assert verify_password_reset_token(token) is None
+    assert verify_password_reset_token(token, get_password_hash("Anything123!")) is None

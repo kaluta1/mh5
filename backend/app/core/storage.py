@@ -2,17 +2,113 @@ import os
 import shutil
 import uuid
 import mimetypes
+from io import BytesIO
 from typing import Dict, Any, Optional, Tuple, Iterator
 import logging
 import aiofiles
 from fastapi import UploadFile
+from starlette.concurrency import run_in_threadpool
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
+from functools import lru_cache
 from PIL import Image
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+MEDIA_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+MEDIA_VIDEO_MAX_BYTES = 32 * 1024 * 1024
+MEDIA_MAX_PIXELS = 50_000_000
+
+_S3_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=10,
+    retries={"max_attempts": 2, "mode": "standard"},
+    max_pool_connections=10,
+)
+
+
+@lru_cache(maxsize=1)
+def _s3_client():
+    """Reuse the bounded botocore connection pool across media requests."""
+    return boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.S3_REGION,
+        config=_S3_CONFIG,
+    )
+
+_IMAGE_SIGNATURES = (
+    ("jpeg", ".jpg", "image/jpeg", lambda data: data.startswith(b"\xff\xd8\xff")),
+    ("png", ".png", "image/png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
+    ("gif", ".gif", "image/gif", lambda data: data.startswith((b"GIF87a", b"GIF89a"))),
+    ("webp", ".webp", "image/webp", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"),
+)
+
+
+def validate_media_content(filename: str, declared_content_type: str, content: bytes) -> Dict[str, Any]:
+    """Validate filename, size, extension, MIME declaration, and file signature."""
+    raw_name = str(filename or "")
+    if not raw_name or raw_name != os.path.basename(raw_name) or "\\" in raw_name or "\x00" in raw_name:
+        raise ValueError("Invalid upload filename")
+    extension = os.path.splitext(raw_name)[1].lower()
+    declared = str(declared_content_type or "").split(";", 1)[0].strip().lower()
+
+    detected = None
+    for kind, canonical_extension, content_type, matches in _IMAGE_SIGNATURES:
+        if matches(content):
+            detected = (kind, canonical_extension, content_type)
+            break
+    if detected is None and len(content) >= 12 and content[4:8] == b"ftyp":
+        is_quicktime = content[8:12] == b"qt  "
+        detected = ("video", ".mov" if is_quicktime else ".mp4", "video/quicktime" if is_quicktime else "video/mp4")
+    if detected is None and content.startswith(b"\x1aE\xdf\xa3"):
+        detected = ("video", ".webm", "video/webm")
+    if detected is None:
+        raise ValueError("Unsupported or malformed media content")
+
+    kind, canonical_extension, detected_type = detected
+    media_type = "image" if kind != "video" else "video"
+    max_bytes = MEDIA_IMAGE_MAX_BYTES if media_type == "image" else MEDIA_VIDEO_MAX_BYTES
+    if not content:
+        raise ValueError("Upload is empty")
+    if len(content) > max_bytes:
+        raise ValueError(f"File too large (maximum {max_bytes // (1024 * 1024)} MB)")
+
+    allowed_extensions = {canonical_extension}
+    if canonical_extension == ".jpg":
+        allowed_extensions.add(".jpeg")
+    if extension not in allowed_extensions:
+        raise ValueError("Filename extension does not match media content")
+    allowed_declared = {detected_type}
+    if detected_type == "image/jpeg":
+        allowed_declared.add("image/jpg")
+    if declared not in allowed_declared:
+        raise ValueError("Declared MIME type does not match media content")
+
+    metadata: Dict[str, Any] = {
+        "file_size": len(content),
+        "content_type": detected_type,
+        "extension": canonical_extension,
+        "media_type": media_type,
+    }
+    if media_type == "image":
+        try:
+            with Image.open(BytesIO(content)) as image:
+                if image.width * image.height > MEDIA_MAX_PIXELS:
+                    raise ValueError("Image dimensions are too large")
+                image.verify()
+            with Image.open(BytesIO(content)) as image:
+                metadata["width"] = image.width
+                metadata["height"] = image.height
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError("Malformed image content") from exc
+    return metadata
 
 
 def media_s3_key(user_id: int, filename: str) -> str:
@@ -64,6 +160,8 @@ def resolve_media_for_serving(
     Returns (source, ref, content_type) where source is 'local' or 's3'.
     """
     safe_name = os.path.basename(filename)
+    if not safe_name or safe_name != filename or "\\" in filename or "\x00" in filename:
+        return None, None, "application/octet-stream"
     content_type, _ = mimetypes.guess_type(safe_name)
     content_type = content_type or "application/octet-stream"
 
@@ -76,12 +174,7 @@ def resolve_media_for_serving(
     if bucket and settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
         s3_key = media_s3_key(user_id, safe_name)
         try:
-            s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.S3_REGION,
-            )
+            s3_client = _s3_client()
             s3_client.head_object(Bucket=bucket, Key=s3_key)
             return "s3", s3_key, content_type
         except ClientError as e:
@@ -93,12 +186,7 @@ def resolve_media_for_serving(
 
 
 def iter_s3_object(bucket: str, key: str) -> Iterator[bytes]:
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.S3_REGION,
-    )
+    s3_client = _s3_client()
     obj = s3_client.get_object(Bucket=bucket, Key=key)
     body = obj["Body"]
     while True:
@@ -150,14 +238,10 @@ async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]
     filename = f"kyc_poa_{file_uuid}{extension}"
 
     if settings.STORAGE_TYPE == "s3":
-        s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-            region_name=settings.S3_REGION,
-        )
+        s3_client = _s3_client()
         s3_path = f"uploads/{user_id}/{filename}"
-        s3_client.put_object(
+        await run_in_threadpool(
+            s3_client.put_object,
             Bucket=settings.S3_BUCKET_NAME,
             Key=s3_path,
             Body=content,
@@ -191,24 +275,35 @@ async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:
     Stocke un fichier média (image ou vidéo) et retourne les informations nécessaires
     """
     # Créer un nom de fichier unique
-    extension = os.path.splitext(file.filename)[1].lower()
+    content = await file.read(MEDIA_VIDEO_MAX_BYTES + 1)
+    validation = await run_in_threadpool(
+        validate_media_content,
+        file.filename or "",
+        file.content_type or "",
+        content,
+    )
+    extension = validation["extension"]
     file_uuid = str(uuid.uuid4())
     filename = f"{file_uuid}{extension}"
     
     # Déterminer le chemin du fichier selon le type de stockage
     if settings.STORAGE_TYPE == "s3":
         try:
-            return await store_in_s3(file, filename, user_id)
+            return await store_in_s3(
+                content, filename, user_id, validation["content_type"], validation
+            )
         except Exception as e:
-            # Production safety: if S3 is misconfigured, do not block user uploads.
-            logger.exception("S3 upload failed, falling back to local storage: %s", e)
-            await file.seek(0)
-            return await store_locally(file, filename, user_id)
+            if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+                raise
+            logger.exception("S3 upload failed; using local storage outside production: %s", e)
+            return await store_locally(content, filename, user_id, validation)
     # local par défaut
-    return await store_locally(file, filename, user_id)
+    return await store_locally(content, filename, user_id, validation)
 
 
-async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[str, Any]:
+async def store_locally(
+    content: bytes, filename: str, user_id: int, metadata: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Stocke un fichier localement
     """
@@ -221,7 +316,6 @@ async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[s
     
     # Stocker le fichier
     async with aiofiles.open(file_path, "wb") as out_file:
-        content = await file.read()
         await out_file.write(content)
 
     _mirror_local_media_file(user_id, filename, file_path)
@@ -230,24 +324,22 @@ async def store_locally(file: UploadFile, filename: str, user_id: int) -> Dict[s
     url = _build_public_media_url(user_id, filename)
     
     # Récupérer les métadonnées pour les images
-    metadata = {}
-    if file.content_type.startswith("image/"):
-        try:
-            with Image.open(file_path) as img:
-                metadata["width"] = img.width
-                metadata["height"] = img.height
-                metadata["file_size"] = os.path.getsize(file_path)
-        except Exception:
-            pass
-    
     return {
         "path": file_path,
         "url": url,
-        "metadata": metadata
+        "metadata": dict(metadata),
+        "content_type": metadata["content_type"],
+        "media_type": metadata["media_type"],
     }
 
 
-async def store_in_s3(file: UploadFile, filename: str, user_id: int) -> Dict[str, Any]:
+async def store_in_s3(
+    content: bytes,
+    filename: str,
+    user_id: int,
+    content_type: str,
+    metadata: Dict[str, Any],
+) -> Dict[str, Any]:
     """
     Stocke un fichier sur AWS S3
     """
@@ -256,21 +348,15 @@ async def store_in_s3(file: UploadFile, filename: str, user_id: int) -> Dict[str
     if not bucket:
         raise ValueError("S3 bucket is not configured")
 
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.S3_REGION,
-    )
+    s3_client = _s3_client()
 
     s3_path = media_s3_key(user_id, filename)
-    content = await file.read()
-
-    s3_client.put_object(
+    await run_in_threadpool(
+        s3_client.put_object,
         Bucket=bucket,
         Key=s3_path,
         Body=content,
-        ContentType=file.content_type
+        ContentType=content_type,
     )
     
     # Always expose the API file route (works for private S3 buckets).
@@ -279,5 +365,7 @@ async def store_in_s3(file: UploadFile, filename: str, user_id: int) -> Dict[str
     return {
         "path": s3_path,
         "url": url,
-        "metadata": {}
+        "metadata": dict(metadata),
+        "content_type": content_type,
+        "media_type": metadata["media_type"],
     }

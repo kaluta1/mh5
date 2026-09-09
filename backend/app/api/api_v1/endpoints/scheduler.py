@@ -6,9 +6,13 @@ routes) or by any other authorized HTTP cron service. They are protected by a
 shared CRON_SECRET that must be provided in the request header.
 """
 import logging
+import hmac
 from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import Depends
 
+from app.api import deps
 from app.core.config import settings
+from app.models.user import User
 from app.services.scheduler_manager import scheduler_manager
 
 router = APIRouter()
@@ -22,7 +26,7 @@ def _verify_cron_secret(x_cron_secret: str | None):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Cron authentication is not configured",
         )
-    if not x_cron_secret or x_cron_secret != settings.CRON_SECRET:
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.CRON_SECRET):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid cron secret",
@@ -52,6 +56,8 @@ async def run_scheduler_task(
 
 
 @router.get("/tasks")
-async def list_scheduler_tasks():
+async def list_scheduler_tasks(
+    current_user: User = Depends(deps.get_current_admin_user),
+):
     """List available scheduler task names."""
     return {"tasks": scheduler_manager.list_tasks()}

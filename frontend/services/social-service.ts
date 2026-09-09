@@ -214,7 +214,7 @@ function getApiOrigin(): string {
   } catch {
     /* fall through */
   }
-  return 'https://myhigh5.com'
+  return 'https://kalutafoundation.com'
 }
 
 function normalizeMediaUrl(rawUrl: unknown): string {

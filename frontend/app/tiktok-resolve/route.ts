@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { assertSafeTikTokUrl } from '@/lib/tiktok-url-policy'
 
 /**
  * Frontend route to resolve TikTok URLs and fetch oEmbed metadata.
@@ -41,7 +42,7 @@ function extractVideoIdFromText(value: string | null | undefined): string | null
 }
 
 async function followRedirects(startUrl: string, maxHops = 6): Promise<string> {
-  let current = startUrl
+  let current = assertSafeTikTokUrl(startUrl).toString()
 
   for (let i = 0; i < maxHops; i++) {
     let location: string | null = null
@@ -71,10 +72,7 @@ async function followRedirects(startUrl: string, maxHops = 6): Promise<string> {
       }
     }
 
-    if (location.startsWith('/')) {
-      const base = new URL(current)
-      location = `${base.protocol}//${base.host}${location}`
-    }
+    location = assertSafeTikTokUrl(new URL(location, current).toString()).toString()
 
     if (extractVideoId(location)) return location
     current = location
@@ -91,9 +89,9 @@ async function resolveTikTokUrl(startUrl: string): Promise<{ resolvedUrl: string
   }
 
   try {
-    const response = await fetch(startUrl, {
+    const response = await fetch(redirectResolvedUrl, {
       method: 'GET',
-      redirect: 'follow',
+      redirect: 'manual',
       signal: AbortSignal.timeout(12000),
       headers: BROWSER_HEADERS,
     })
@@ -125,6 +123,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    assertSafeTikTokUrl(url)
     let resolvedUrl = url
     const directId = extractVideoId(url)
     let resolvedVideoId = directId
@@ -181,9 +180,6 @@ export async function GET(request: NextRequest) {
     )
   } catch (err: any) {
     console.error('TikTok resolve error:', err.message)
-    return NextResponse.json(
-      { error: err.message || 'Resolution failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Invalid or unresolved TikTok URL' }, { status: 400 })
   }
 }

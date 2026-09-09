@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { Percent, BookOpen, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 type FmpMe = {
+  detail?: string
   user_fmp: string | number
   global_fmp: string | number
   fmr: string | number

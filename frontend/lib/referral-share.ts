@@ -14,7 +14,15 @@ type ReferralShareOptions = {
 }
 
 function hostsFromAppOrigin(): string[] {
-  const hosts = new Set<string>(['myhigh5.com', 'www.myhigh5.com', 'localhost', '127.0.0.1'])
+  const hosts = new Set<string>([
+    'kalutafoundation.com',
+    'www.kalutafoundation.com',
+    // Preserve already-issued legacy links while the public-domain migration is reviewed.
+    'myhigh5.com',
+    'www.myhigh5.com',
+    'localhost',
+    '127.0.0.1',
+  ])
   try {
     const origin = getEffectiveAppUrl()
     const parsed = new URL(origin)

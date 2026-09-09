@@ -26,7 +26,6 @@ interface TikTokMeta {
 }
 
 function TikTokOEmbed({
-  embedHtml,
   originalUrl,
   title,
   className,
@@ -40,44 +39,19 @@ function TikTokOEmbed({
   width: string | number
   height: string | number
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const fallbackHtml = `
-      <blockquote
-        class="tiktok-embed"
-        cite="${originalUrl || ''}"
-        style="max-width: 605px; min-width: 325px; margin: 0 auto;"
-      >
-        <section>
-          <a target="_blank" href="${originalUrl || '#'}">${title || 'Watch this video on TikTok'}</a>
-        </section>
-      </blockquote>
-    `
-
-    const sanitizedHtml = (embedHtml || fallbackHtml).replace(/<script[\s\S]*?<\/script>/gi, '').trim()
-    container.innerHTML = sanitizedHtml
-
-    const script = document.createElement('script')
-    script.src = 'https://www.tiktok.com/embed.js'
-    script.async = true
-    script.setAttribute('data-tiktok-embed', 'true')
-    container.appendChild(script)
-
-    return () => {
-      container.innerHTML = ''
-    }
-  }, [embedHtml, originalUrl, title])
-
   return (
     <div
-      className={`${className} bg-black rounded-xl overflow-auto`}
+      className={`${className} bg-black rounded-xl flex items-center justify-center p-6`}
       style={{ width, height, minHeight: '500px' }}
     >
-      <div ref={containerRef} className="w-full h-full flex items-center justify-center" />
+      <a
+        href={originalUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black hover:bg-gray-100"
+      >
+        {title || 'Watch this video on TikTok'}
+      </a>
     </div>
   )
 }
@@ -346,19 +320,7 @@ export function VideoEmbed({
       )
     }
 
-    return (
-      <div ref={containerRef} className={`relative h-full w-full min-h-0 ${className}`}>
-        <iframe
-          src={videoInfo.originalUrl}
-          className="absolute inset-0 h-full w-full rounded-xl border-0"
-          style={{ maxHeight: '100%' }}
-          frameBorder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen={allowFullscreen}
-          title="YouTube video"
-        />
-      </div>
-    )
+    return null
   }
 
   // ── Vimeo ──

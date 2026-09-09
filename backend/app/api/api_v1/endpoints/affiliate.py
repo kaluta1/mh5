@@ -1,5 +1,5 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -48,8 +48,8 @@ def get_affiliate_tree(
 def get_direct_referrals(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 10
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
 ):
     """
     Récupérer les filleuls directs de l'utilisateur (via User.sponsor_id).
@@ -64,8 +64,8 @@ def get_direct_referrals(
 def get_referrals_with_commissions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 10
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
 ):
     """
     Récupérer les filleuls avec les commissions générées et statut KYC.
@@ -91,8 +91,8 @@ def get_referrals_count(
 def get_all_referrals_multilevel(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     level: int = None,
     status: str = None,
     search: str = None,
@@ -143,8 +143,8 @@ def get_my_sponsor(
 def get_commissions(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     commission_type: Optional[str] = None,
     product_type: Optional[str] = None,
     sort_by: Optional[str] = "date",  # date, amount, type
@@ -235,8 +235,8 @@ def create_referral_link(
 def get_revenue_shares(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 50
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100)
 ):
     """
     Récupérer les partages de revenus de l'utilisateur.

@@ -3,7 +3,7 @@ import { createMetadata } from "../metadata"
 import { getMetadataTranslations, detectLanguageFromHeaders } from "@/lib/metadata-translations"
 import { headers } from "next/headers"
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://myhigh5.com"
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kalutafoundation.com"
 const defaultImage = `${appUrl}/logo.png`
 
 export async function generateMetadata(): Promise<Metadata> {

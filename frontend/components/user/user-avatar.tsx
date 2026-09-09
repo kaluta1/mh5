@@ -28,6 +28,8 @@ export function UserAvatar({
   fallback 
 }: UserAvatarProps) {
   const avatarSrc = normalizeMediaUrl(src || user?.avatar_url)
+  const [imageFailed, setImageFailed] = React.useState(false)
+  React.useEffect(() => setImageFailed(false), [avatarSrc])
   const avatarAlt = alt || user?.full_name || user?.username || "User avatar"
   const avatarFallback = fallback || user?.username?.[0]?.toUpperCase() || user?.full_name?.[0]?.toUpperCase() || "U"
   const sizeClasses = {
@@ -52,11 +54,12 @@ export function UserAvatar({
         className
       )}
     >
-      {avatarSrc ? (
+      {avatarSrc && !imageFailed ? (
         <img
           src={avatarSrc}
           alt={avatarAlt}
           className="h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
         />
       ) : avatarFallback ? (
         <span className="text-sm font-medium text-muted-foreground">

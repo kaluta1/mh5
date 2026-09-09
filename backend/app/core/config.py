@@ -2,6 +2,7 @@ from typing import List, Union, Optional
 from pathlib import Path
 from pydantic import BaseModel, field_validator, ConfigDict
 import os
+from decimal import Decimal
 
 from app.core.env_loader import BACKEND_DIR, load_backend_env
 
@@ -29,6 +30,8 @@ class Settings(BaseModel):
     # SECURITY
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    JWT_ISSUER: str = os.getenv("JWT_ISSUER", "myhigh5-api")
+    JWT_AUDIENCE: str = os.getenv("JWT_AUDIENCE", "myhigh5-clients")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 7)))  # Default: 7 jours
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
     
@@ -153,7 +156,7 @@ class Settings(BaseModel):
     NOWPAYMENTS_SANDBOX: bool = os.getenv("NOWPAYMENTS_SANDBOX", "false").lower() == "true"
     NOWPAYMENTS_DEFAULT_PAY_CURRENCY: str = os.getenv("NOWPAYMENTS_DEFAULT_PAY_CURRENCY", "usdtbsc")
     # Accept partially_paid invoices when received fiat is within this USD shortfall (e.g. $9.50 on $10).
-    NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD: float = float(
+    NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD: Decimal = Decimal(
         os.getenv("NOWPAYMENTS_UNDERPAYMENT_TOLERANCE_USD", "0.5")
     )
     # Payout API (affiliate commission auto-pay)
@@ -207,3 +210,20 @@ class Settings(BaseModel):
 
 # Initialize settings - will load from .env file via load_dotenv() at top
 settings = Settings()
+
+if (
+    os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+    and "NOWPAYMENTS_SANDBOX" not in os.environ
+):
+    raise RuntimeError(
+        "NOWPAYMENTS_SANDBOX must be explicitly set to true or false in production"
+    )
+
+if not settings.SECRET_KEY and os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    # An unset SECRET_KEY silently defaults to "", so JWTs would be signed
+    # (and accepted) with an empty key. Fail fast in production instead of
+    # running with tokens anyone could forge; dev/test/unset environments are
+    # left alone since they may intentionally run without one configured.
+    raise RuntimeError(
+        "SECRET_KEY is not set. Refusing to start in production with an empty JWT signing key."
+    )

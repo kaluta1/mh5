@@ -17,9 +17,10 @@ import logging
 import time
 from typing import Any
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from jose import jwt
 from pydantic import BaseModel
@@ -28,6 +29,8 @@ from app.core.config import settings
 from app.services.accounting_service import accounting_service, AccountingError
 from app.models.accounting import ChartOfAccounts, AccountType, JournalEntry
 from app.models.user import User
+from app.services.financial_integrity import FinancialIntegrityError, money, positive_money
+from app.services.nowpayments_service import normalize_pay_currency
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,7 @@ class SsoTokenResponse(BaseModel):
 
 @sso_router.get("/sso-token", response_model=SsoTokenResponse)
 def get_sponsor_sso_token(
+    response: Response,
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Sign a short-lived HS256 JWT for Annual Ads iframe SSO (same shape as their docs)."""
@@ -72,6 +76,8 @@ def get_sponsor_sso_token(
         "exp": int(time.time()) + 3600,
     }
     token = str(jwt.encode(payload, secret, algorithm="HS256"))
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
     return SsoTokenResponse(
         token=token,
         tenant_api_key=api_key,
@@ -149,7 +155,15 @@ async def sponsor_payment_webhook(
         list(payload.keys()),
     )
 
+    if not isinstance(effective_event, str) or len(effective_event) > 100:
+        raise HTTPException(status_code=400, detail="Invalid webhook event")
     if effective_event != "sponsor_payment_confirmed":
+        if any(word in effective_event.lower() for word in ("refund", "reverse", "cancel", "chargeback")):
+            # Never acknowledge an unsupported compensating financial event as applied.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Sponsor reversal events are not configured",
+            )
         return {"ok": True, "received": True, "event": effective_event}
 
     data_block = payload.get("data") if isinstance(payload.get("data"), dict) else {}
@@ -159,37 +173,34 @@ async def sponsor_payment_webhook(
         or data_block
         or {}
     )
+    payload_tenant = str(
+        payload.get("tenant_id") or data_block.get("tenant_id") or payment.get("tenant_id") or ""
+    ).strip()
+    configured_tenant = str(getattr(settings, "ANNUALADS_TENANT_ID", "") or "").strip()
+    if payload_tenant and configured_tenant and payload_tenant != configured_tenant:
+        raise HTTPException(status_code=401, detail="Webhook tenant does not match")
     tx_hash = str(
         payment.get("tx_hash")
         or payment.get("transaction_hash")
         or data_block.get("tx_hash")
         or ""
     ).strip().lower()
-    if not tx_hash:
+    if not tx_hash or len(tx_hash) > 255 or any(ch.isspace() for ch in tx_hash):
         raise HTTPException(status_code=400, detail="Missing payment.tx_hash")
+
+    if db.get_bind().dialect.name == "postgresql":
+        # Serialize identical provider events even before a dedicated event table exists.
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:event_key))"), {"event_key": f"annualads:{tx_hash}"})
 
     # CoA accounts from AnnualAds integration spec:
     # 1030 Crypto Wallet USDT, 2310 Deferred Sponsor Revenue, 4010 Sponsor Revenue Net, 7110 FX loss.
     def _ensure_account(code: str, name: str, account_type: AccountType, parent_code: str | None = None) -> None:
         existing = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == code).first()
-        if existing:
-            return
-        parent_id = None
-        if parent_code:
-            parent = db.query(ChartOfAccounts).filter(ChartOfAccounts.account_code == parent_code).first()
-            if parent:
-                parent_id = parent.id
-        db.add(
-            ChartOfAccounts(
-                account_code=code,
-                account_name=name,
-                account_type=account_type,
-                parent_id=parent_id,
-                is_active=True,
-                description="Auto-created by AnnualAds sponsor payment integration.",
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Sponsor accounting account {code} is not configured",
             )
-        )
-        db.flush()
 
     _ensure_account("1030", "Crypto Wallet — USDT (BSC)", AccountType.ASSET, "1000")
     _ensure_account("1210", "Receivable from AnnualAds", AccountType.ASSET, "1000")
@@ -197,23 +208,29 @@ async def sponsor_payment_webhook(
     _ensure_account("4010", "Sponsor Advertising Revenue — Net", AccountType.REVENUE, "4000")
     _ensure_account("7110", "FX / Crypto Conversion Loss", AccountType.EXPENSE, "5000")
 
-    def _to_decimal(value: Any) -> Decimal:
-        try:
-            return Decimal(str(value or "0"))
-        except (InvalidOperation, TypeError, ValueError):
-            return Decimal("0")
-
-    gross = _to_decimal(payment.get("amount") or payment.get("gross_amount"))
-    platform_fee = _to_decimal(payment.get("platform_fee"))
-    client_revenue = _to_decimal(
-        payment.get("client_revenue")
-        or payment.get("net_amount")
-        or data_block.get("client_revenue")
-    )
-    if client_revenue <= 0:
-        client_revenue = gross - platform_fee
-    if client_revenue <= 0:
-        raise HTTPException(status_code=400, detail="Invalid payment amounts for sponsor accounting")
+    try:
+        gross = positive_money(payment.get("amount") or payment.get("gross_amount"))
+        platform_fee = money(payment.get("platform_fee") or 0)
+        if platform_fee < 0 or platform_fee >= gross:
+            raise FinancialIntegrityError("Invalid sponsor platform fee")
+        expected_client_revenue = money(gross - platform_fee)
+        submitted_client_revenue = (
+            payment.get("client_revenue")
+            or payment.get("net_amount")
+            or data_block.get("client_revenue")
+        )
+        client_revenue = (
+            money(submitted_client_revenue)
+            if submitted_client_revenue is not None
+            else expected_client_revenue
+        )
+        if client_revenue != expected_client_revenue:
+            raise FinancialIntegrityError("Sponsor net amount does not equal gross minus fee")
+        asset = normalize_pay_currency(payment.get("currency") or payment.get("pay_currency") or "usdtbsc")
+        if asset != "usdtbsc":
+            raise FinancialIntegrityError("Sponsor settlement must be USDT on BSC")
+    except FinancialIntegrityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     entry_description = f"AnnualAds sponsor payment received (deferred) tx:{tx_hash}"
     existing_entry = (
@@ -240,19 +257,20 @@ async def sponsor_payment_webhook(
             lines=[
                 {
                     "account_code": "1030",
-                    "debit": float(client_revenue),
-                    "credit": 0.0,
+                    "debit": client_revenue,
+                    "credit": 0,
                     "description": f"AnnualAds net sponsor inflow tx:{tx_hash}",
                 },
                 {
                     "account_code": "2310",
-                    "debit": 0.0,
-                    "credit": float(client_revenue),
+                    "debit": 0,
+                    "credit": client_revenue,
                     "description": f"AnnualAds deferred sponsor revenue tx:{tx_hash}",
                 },
             ],
-            commit=True,
+            commit=False,
         )
+        db.commit()
     except AccountingError as e:
         logger.error("AnnualAds accounting posting failed for tx=%s: %s", tx_hash, e)
         raise HTTPException(status_code=500, detail=f"Accounting posting failed: {str(e)}")
@@ -266,9 +284,9 @@ async def sponsor_payment_webhook(
         "event": effective_event,
         "status": "recorded",
         "tx_hash": tx_hash,
-        "gross_amount": float(gross),
-        "platform_fee": float(platform_fee),
-        "client_revenue": float(client_revenue),
+        "gross_amount": str(gross),
+        "platform_fee": str(platform_fee),
+        "client_revenue": str(client_revenue),
         "journal_entry_id": je.id,
         "entry_number": je.entry_number,
     }

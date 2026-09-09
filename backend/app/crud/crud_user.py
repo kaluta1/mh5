@@ -43,9 +43,9 @@ class CRUDUser:
             hashed_password=get_password_hash(obj_in.password),
             username=obj_in.username,
             full_name=obj_in.full_name,
-            is_active=obj_in.is_active,
-            is_verified=obj_in.is_verified,
-            is_admin=obj_in.is_admin,
+            is_active=True,
+            is_verified=False,
+            is_admin=False,
             avatar_url=obj_in.avatar_url,
             bio=obj_in.bio,
             first_name=obj_in.first_name,
@@ -84,7 +84,7 @@ class CRUDUser:
         sponsor_id = None
         if sponsor_code:
             sponsor = self.get_by_referral_code(db, sponsor_code)
-            if sponsor:
+            if sponsor and sponsor.is_active is not False and sponsor.is_deleted is not True:
                 sponsor_id = sponsor.id
         
         # Récupérer le rôle par défaut 'user', créer s'il n'existe pas
@@ -99,9 +99,9 @@ class CRUDUser:
             hashed_password=get_password_hash(obj_in.password),
             username=obj_in.username,
             full_name=obj_in.full_name,
-            is_active=obj_in.is_active,
-            is_verified=obj_in.is_verified,
-            is_admin=obj_in.is_admin,
+            is_active=True,
+            is_verified=False,
+            is_admin=False,
             avatar_url=obj_in.avatar_url,
             bio=obj_in.bio,
             first_name=obj_in.first_name,
@@ -126,9 +126,16 @@ class CRUDUser:
             return None
         
         sponsor = self.get_by_referral_code(db, sponsor_code)
-        if not sponsor or sponsor.id == user_id:
+        if not sponsor:
             return None
-        
+
+        from app.services.affiliate_hierarchy import AffiliateHierarchyError, validate_sponsor_assignment
+        try:
+            user = validate_sponsor_assignment(db, user_id=user_id, sponsor_id=sponsor.id)
+        except AffiliateHierarchyError:
+            db.rollback()
+            return None
+
         user.sponsor_id = sponsor.id
         db.add(user)
         db.commit()

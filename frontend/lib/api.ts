@@ -293,16 +293,12 @@ export const authService = {
 
   // Déconnexion
   async logout(): Promise<void> {
-    try {
-      await api.post('/api/v1/auth/logout')
-    } catch (error) {
-      logger.error('Erreur lors de la déconnexion', error)
-    } finally {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      // Supprimer tout le cache lors de la déconnexion
-      cacheService.clear()
-    }
+    // The API uses self-contained bearer tokens and does not expose a logout
+    // mutation. Logout is therefore a local credential/cache purge until a
+    // server-side revocation/refresh-token store is deliberately introduced.
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    cacheService.clear()
   },
 
   // Demande de réinitialisation de mot de passe

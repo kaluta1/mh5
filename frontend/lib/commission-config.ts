@@ -4,9 +4,9 @@
  */
 export const COMMISSION_CONFIG = {
   kyc: {
-    priceCents: 100,
+    priceCents: 1000,
     platformRatePercent: 10,
-    payoutCents: 90,
+    payoutCents: 900,
     currency: 'USD',
   },
   founding_membership: {

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import time
+import os
+import ipaddress
 from collections import defaultdict
 from typing import Callable
 
@@ -15,6 +17,14 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/auth/password-reset-request": (5, 3600),
     "/api/v1/auth/password-reset-confirm": (10, 3600),
     "/api/v1/share-links": (60, 60),
+    "/api/v1/kyc/initiate": (10, 3600),
+    "/api/v1/kyc/webhook": (300, 60),
+    "/api/v1/payments": (20, 60),
+    "/api/v1/wallet": (30, 60),
+    "/api/v1/votes": (120, 60),
+    "/api/v1/comments": (30, 60),
+    "/api/v1/media/upload": (20, 60),
+    "/api/v1/search": (60, 60),
 }
 
 # Global fallback: 200 requests per minute per IP
@@ -25,11 +35,18 @@ _MAX_BUCKET_KEYS = 50_000
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
+    peer = request.client.host if request.client else "unknown"
+    trusted = {item.strip() for item in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",") if item.strip()}
+    if peer in trusted:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            candidate = forwarded.split(",")[0].strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    if peer:
+        return peer
     return "unknown"
 
 

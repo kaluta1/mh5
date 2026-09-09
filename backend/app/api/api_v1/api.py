@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import os
+
+from fastapi import APIRouter, Depends
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,8 @@ except Exception as e:
     logger.error(f"Error registering categories router: {e}", exc_info=True)
     raise
 api_router.include_router(suggested_contests.router, prefix="/suggested-contests", tags=["Suggestions de concours"])
-api_router.include_router(votes.router, prefix="/votes", tags=["Votes"])
+# Legacy contest-entry score voting is intentionally not registered. Production
+# has no contest_votes rows; the contextual contestant route is the sole writer.
 api_router.include_router(voting_types.router, prefix="/voting-types", tags=["Voting Types"])
 api_router.include_router(kyc.router, prefix="/kyc", tags=["Vérification KYC"])
 api_router.include_router(verifications.router, prefix="/verifications", tags=["Vérifications utilisateur"])
@@ -38,7 +41,12 @@ api_router.include_router(geography.router, prefix="/geography", tags=["Géograp
 api_router.include_router(favorites.router, prefix="/favorites", tags=["Favoris"])
 api_router.include_router(search.router, tags=["Recherche"])
 api_router.include_router(search_history.router, tags=["Historique de recherche"])
-api_router.include_router(admin.router, prefix="/admin", tags=["Administration"])
+api_router.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["Administration"],
+    dependencies=[Depends(admin.require_admin)],
+)
 api_router.include_router(season_migration.router, prefix="/seasons", tags=["Migrations de saisons"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
@@ -76,7 +84,11 @@ def build_info():
     }
 
 
-@api_router.get("/health/db-schema", tags=["Status"])
+@api_router.get(
+    "/health/db-schema",
+    tags=["Status"],
+    dependencies=[Depends(admin.require_admin)],
+)
 def health_db_schema():
     """Report missing users columns (helps debug login 503). No secrets."""
     from sqlalchemy import inspect, text
@@ -89,7 +101,12 @@ def health_db_schema():
         model_cols = {c.key for c in User.__table__.columns}
         missing = sorted(model_cols - db_cols)
         with engine.connect() as conn:
-            who = conn.execute(text("SELECT current_user, current_database()")).fetchone()
+            if conn.dialect.name == "postgresql":
+                who = conn.execute(text("SELECT current_user, current_database()")).fetchone()
+            else:
+                # The test suite and lightweight local installations use
+                # SQLite, which has no current_user/current_database functions.
+                who = (None, conn.dialect.name)
         return {
             "ok": len(missing) == 0,
             "db_user": who[0] if who else None,
@@ -101,11 +118,12 @@ def health_db_schema():
         return {"ok": False, "error": str(exc)[:500]}
 
 # TEMPORARY: Debug endpoint for continental issue — remove after fix verified
-try:
-    from app.api.api_v1.endpoints import debug_continental
-    api_router.include_router(debug_continental.router, prefix="/debug", tags=["Debug"])
-except Exception:
-    pass
+if os.getenv("ENVIRONMENT", "development").strip().lower() != "production":
+    try:
+        from app.api.api_v1.endpoints import debug_continental
+        api_router.include_router(debug_continental.router, prefix="/debug", tags=["Debug"])
+    except Exception:
+        pass
 
 # Feed System Endpoints (merged from microservice)
 api_router.include_router(feed_groups.router, prefix="/feed/groups", tags=["Feed Groups"])

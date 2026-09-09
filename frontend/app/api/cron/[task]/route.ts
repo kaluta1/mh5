@@ -34,6 +34,7 @@ export async function POST(
         'x-cron-secret': cronSecret,
       },
       cache: 'no-store',
+      signal: AbortSignal.timeout(55_000),
     })
 
     const bodyText = await res.text()

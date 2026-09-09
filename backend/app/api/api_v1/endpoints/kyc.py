@@ -1,5 +1,5 @@
 from typing import List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body, Query
 from fastapi.responses import RedirectResponse
@@ -466,9 +466,10 @@ async def shufti_redirect(
     Redirige vers le frontend après la vérification.
     """
     frontend_url = settings.FRONTEND_URL
-    redirect_target = f"{frontend_url}/dashboard/kyc?status={status or 'completed'}"
+    query = {"status": (status or "completed")[:40]}
     if reference:
-        redirect_target += f"&reference={reference}"
+        query["reference"] = reference[:200]
+    redirect_target = f"{frontend_url}/dashboard/kyc?{urlencode(query)}"
     return RedirectResponse(url=redirect_target)
 
 
@@ -1111,14 +1112,26 @@ async def submit_proof_of_address(
 
 # Webhook pour Shufti Pro
 @router.post("/webhook/shufti-pro", response_model=KYCWebhookResponse)
-def shufti_pro_webhook(
+async def shufti_pro_webhook(
     *,
+    request: Request,
     db: Session = Depends(deps.get_db),
-    webhook_data: ShuftiProWebhookData
 ):
     """
     Webhook pour recevoir les résultats de Shufti Pro
     """
+    if active_kyc_provider() != "shufti_pro":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not enabled")
+
+    raw = await request.body()
+    signature = request.headers.get("signature", "")
+    if not shufti_pro_service.verify_webhook_signature(raw, signature):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+    try:
+        webhook_data = ShuftiProWebhookData.model_validate_json(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook payload") from exc
+
     # Trouver la vérification par référence
     verification = crud_kyc.kyc_verification.get_by_reference(
         db, reference_id=webhook_data.reference
@@ -1132,6 +1145,8 @@ def shufti_pro_webhook(
     
     # Traiter les résultats selon l'événement
     if webhook_data.event == "verification.accepted":
+        if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            return KYCWebhookResponse(success=True, message="Webhook already processed", verification_id=verification.id)
         wh_raw = webhook_data.model_dump()
         flags = kyc_flags_from_shufti_payload(wh_raw, overall_accepted=True)
         crud_kyc.kyc_verification.apply_shufti_identity_accepted(
@@ -1144,6 +1159,10 @@ def shufti_pro_webhook(
         )
 
     elif webhook_data.event == "verification.declined":
+        if verification.status == KYCStatus.REJECTED:
+            return KYCWebhookResponse(success=True, message="Webhook already processed", verification_id=verification.id)
+        if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            return KYCWebhookResponse(success=True, message="Stale webhook ignored", verification_id=verification.id)
         # Rejeter automatiquement
         reason = webhook_data.declined_reason or "Vérification échouée"
         crud_kyc.kyc_verification.reject_verification(
@@ -1201,7 +1220,7 @@ async def kaluta_kyc_webhook(
 @router.get("/deployment/kaluta-urls")
 def get_kaluta_deployment_urls(
     *,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.get_current_admin_user),
 ):
     """Debug: Kaluta webhook/redirect URLs this server uses (no secrets)."""
     webhook, redirect = kaluta_kyc_service.webhook_url, kaluta_kyc_service.redirect_url

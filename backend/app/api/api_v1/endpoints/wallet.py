@@ -3,8 +3,8 @@ Wallet API Endpoints
 """
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, case
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -31,44 +31,16 @@ def get_wallet_balance(
 ):
     """
     Récupère le solde du portefeuille de l'utilisateur.
-    Available = PAID commissions; pending = PENDING + APPROVED (accrued, not yet sent).
+    Available = unreserved APPROVED commissions; paid rows are historical payouts.
     """
-    # Actually paid out via NOWPayments
-    available_balance = db.query(
-        func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
-    ).filter(
-        and_(
-            AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.status == CommissionStatus.PAID,
-        )
-    ).scalar() or Decimal(0)
+    from app.services.financial_balances import get_commission_balance
 
-    # Accrued but not yet paid (waiting for wallet or payout retry)
-    pending_balance = db.query(
-        func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
-    ).filter(
-        and_(
-            AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.status.in_([CommissionStatus.PENDING, CommissionStatus.APPROVED]),
-        )
-    ).scalar() or Decimal(0)
-
-    # When payout API is not configured, treat APPROVED as available for display
-    from app.services.nowpayments_service import payouts_configured
-
-    if not payouts_configured() and pending_balance > 0:
-        available_balance = available_balance + pending_balance
-        pending_balance = Decimal(0)
+    balance = get_commission_balance(db, current_user.id)
+    available_balance = balance.available
+    pending_balance = balance.pending
     
     # Total des gains (toutes les commissions non annulées)
-    total_earnings = db.query(
-        func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
-    ).filter(
-        and_(
-            AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.status != CommissionStatus.CANCELLED
-        )
-    ).scalar() or Decimal(0)
+    total_earnings = balance.earned_lifetime
     
     # Gains ce mois-ci
     now = datetime.utcnow()
@@ -107,6 +79,7 @@ def get_wallet_balance(
     return {
         "available_balance": float(available_balance),
         "pending_balance": float(pending_balance),
+        "reserved_balance": float(balance.reserved),
         "total_earnings": float(total_earnings),
         "this_month": float(this_month_earnings),
         "last_month": float(last_month_earnings),
@@ -118,8 +91,8 @@ def get_wallet_balance(
 def get_wallet_transactions(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     transaction_type: Optional[str] = None  # commission, deposit, withdrawal
 ):
     """
@@ -150,17 +123,22 @@ def get_wallet_transactions(
         out: List[dict] = []
 
         # --- Level 1: detail rows (direct referrals)
+        direct_limit = limit if transaction_type == "commission" else max(1, limit // 2)
+        direct_skip = skip if transaction_type == "commission" else 0
         l1_rows = (
             db.query(AffiliateCommission)
+            .options(joinedload(AffiliateCommission.source_user))
             .filter(
                 AffiliateCommission.user_id == current_user.id,
                 AffiliateCommission.level == 1,
             )
             .order_by(AffiliateCommission.transaction_date.desc())
+            .offset(direct_skip)
+            .limit(direct_limit)
             .all()
         )
         for c in l1_rows:
-            source_user = db.query(User).filter(User.id == c.source_user_id).first()
+            source_user = c.source_user
             referral_username = (
                 (source_user.username or source_user.full_name or "User").strip()
                 if source_user
@@ -260,14 +238,16 @@ def get_wallet_transactions(
     
     # Récupérer les dépôts (uniquement en attente et validés)
     if transaction_type in [None, "deposit"]:
-        deposits = db.query(Deposit).filter(
+        deposit_limit = limit if transaction_type == "deposit" else max(1, limit // 2)
+        deposit_skip = skip if transaction_type == "deposit" else 0
+        deposits = db.query(Deposit).options(joinedload(Deposit.product_type)).filter(
             Deposit.user_id == current_user.id,
             Deposit.status.in_([DepositStatus.PENDING, DepositStatus.VALIDATED])
-        ).order_by(Deposit.created_at.desc()).limit(limit // 2 if not transaction_type else limit).all()
+        ).order_by(Deposit.created_at.desc()).offset(deposit_skip).limit(deposit_limit).all()
         
         for d in deposits:
             # Récupérer le type de produit
-            product = db.query(ProductType).filter(ProductType.id == d.product_type_id).first()
+            product = d.product_type
             product_name = product.name if product else "Produit"
             
             # Mapping des statuts de dépôt (seuls PENDING et VALIDATED sont affichés)
@@ -359,6 +339,7 @@ def request_withdrawal(
     body: WithdrawRequest,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """
     Manual batch withdrawal from APPROVED commissions.
@@ -367,8 +348,20 @@ def request_withdrawal(
     from app.services.commission_payout_service import process_manual_withdrawal_sync
 
     try:
-        result = process_manual_withdrawal_sync(db, current_user, body.amount)
+        result = process_manual_withdrawal_sync(
+            db,
+            current_user,
+            body.amount,
+            idempotency_key=idempotency_key,
+        )
+        if result.get("status") != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Payout is already in progress or requires provider reconciliation",
+            )
         db.commit()
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:

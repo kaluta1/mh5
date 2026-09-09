@@ -219,7 +219,7 @@ export default function AboutMobilePage() {
                         className="w-full h-full object-cover object-top"
                       />
                     ) : (
-                      member.emoji
+                      member.name.charAt(0)
                     )}
                   </div>
                   <h3 className="font-bold text-gray-900 dark:text-white">

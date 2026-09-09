@@ -196,10 +196,18 @@ def process_kaluta_webhook_event(db: Session, *, crud_kyc, payload: Dict[str, An
         logger.warning("Kaluta webhook: verification not found external_id=%s session_id=%s", external_id, session_id)
         return False
 
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    bound_user_id = metadata.get("user_id")
+    if bound_user_id is not None and str(bound_user_id) != str(verification.user_id):
+        logger.warning("Kaluta webhook user binding mismatch for verification_id=%s", verification.id)
+        return False
+
     wh_raw = json.dumps(payload)
     flags = kyc_flags_from_kaluta_session(session)
 
     if event in ("session.approved", "session.verified"):
+        if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            return True
         apply_provider_identity_accepted(
             db,
             crud_kyc=crud_kyc,
@@ -226,6 +234,11 @@ def process_kaluta_webhook_event(db: Session, *, crud_kyc, payload: Dict[str, An
         return True
 
     if event == "session.rejected":
+        if verification.status == KYCStatus.REJECTED:
+            return True
+        if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            logger.warning("Ignoring stale Kaluta rejection for verification_id=%s", verification.id)
+            return True
         reason = session.get("rejection_reason") or "Verification rejected"
         apply_provider_rejected(
             db,
@@ -240,6 +253,8 @@ def process_kaluta_webhook_event(db: Session, *, crud_kyc, payload: Dict[str, An
         return True
 
     if event == "session.expired":
+        if verification.status in (KYCStatus.EXPIRED, KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            return True
         crud_kyc.kyc_verification.mark_as_expired(db, verification_id=verification.id)
         return True
 

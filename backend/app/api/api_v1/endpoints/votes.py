@@ -24,6 +24,14 @@ def cast_vote(
     Chaque utilisateur peut voter pour 5 participants max avec des scores de 5 à 1.
     """
     # Vérifier si le concours existe et est en phase de vote
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "legacy_vote_endpoint",
+            "message": "Use POST /api/v1/contestants/{contestant_id}/vote with contest_id and round_id.",
+        },
+    )
+
     contest = crud_contest.get(db=db, id=contest_id)
     if not contest:
         raise HTTPException(
@@ -112,6 +120,14 @@ def get_my_votes(
     """
     Récupérer les votes de l'utilisateur pour un concours spécifique
     """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "legacy_vote_endpoint",
+            "message": "Use GET /api/v1/contestants/user/my-votes with explicit contest context.",
+        },
+    )
+
     votes = db.query(ContestVote).join(ContestEntry).filter(
         ContestEntry.contest_id == contest_id,
         ContestVote.user_id == current_user.id

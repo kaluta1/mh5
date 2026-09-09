@@ -14,6 +14,7 @@ from app.models.social_group import (
 from app.models.feed import Feed
 from app.models.user import User
 from app.models.follow import Follow
+from app.models.media import Media
 from app.schemas.social import (
     PostCreate, PostUpdate, PostCommentCreate, PostReactionCreate,
     PostCommentReactionCreate, PostShareCreate, SocialGroupCreate,
@@ -79,6 +80,15 @@ class CRUDPost:
         return query.order_by(desc(Post.created_at)).offset(skip).limit(limit).all()
     
     def create(self, db: Session, obj_in: PostCreate, author_id: int) -> Post:
+        media_ids = list(dict.fromkeys(obj_in.media_ids or []))
+        if len(media_ids) != len(obj_in.media_ids or []):
+            raise ValueError("A media item can be attached only once")
+        if media_ids:
+            owned_count = db.query(Media.id).filter(
+                Media.id.in_(media_ids), Media.user_id == author_id
+            ).count()
+            if owned_count != len(media_ids):
+                raise ValueError("Media not found or not owned by the post author")
         """Crée un nouveau post"""
         db_obj = Post(
             author_id=author_id,
@@ -93,8 +103,8 @@ class CRUDPost:
         db.flush()
         
         # Ajouter les médias si fournis
-        if obj_in.media_ids:
-            for idx, media_id in enumerate(obj_in.media_ids):
+        if media_ids:
+            for idx, media_id in enumerate(media_ids):
                 post_media = PostMedia(
                     post_id=db_obj.id,
                     media_id=media_id,

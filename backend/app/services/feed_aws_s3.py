@@ -3,6 +3,7 @@ AWS S3 Service for File Storage
 Handles upload, download, and deletion of media files
 """
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
 import logging
@@ -20,7 +21,13 @@ if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
             's3',
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.S3_REGION or "us-east-1"
+            region_name=settings.S3_REGION or "us-east-1",
+            config=Config(
+                connect_timeout=3,
+                read_timeout=10,
+                retries={"max_attempts": 2, "mode": "standard"},
+                max_pool_connections=10,
+            ),
         )
     except Exception as e:
         logger.warning(f"⚠️ Failed to initialize S3 client: {e}")

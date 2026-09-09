@@ -13,12 +13,13 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
 from sqlalchemy.orm import Session, defer
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, text
 from typing import Optional
 
 from app.db.session import SessionLocal
 from app.models.round import Round, RoundStatus, round_contests
 from app.models.contest import Contest
+from app.services.contest_context import ContestContextNotFound, contest_context_service
 
 
 def get_month_start(year: int, month: int) -> date:
@@ -61,23 +62,22 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     
     month_start = get_month_start(year, month)
 
+    # Serialize creation of one calendar identity. The lock is transaction
+    # scoped, so it is released automatically on the existing commit/rollback.
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:identity))"),
+            {"identity": f"monthly-round:{month_start.isoformat()}"},
+        )
+
     # Vérifier si un round existe déjà pour ce mois (name + submission_start; highest id wins)
-    existing_round = (
-        db.query(Round)
-        .filter(
-            Round.submission_start_date == month_start,
-            Round.status != RoundStatus.CANCELLED,
+    try:
+        existing_round = contest_context_service.resolve_submission_round(
+            db, month_start
         )
-        .order_by(Round.id.desc())
-        .first()
-    )
-    if not existing_round:
-        existing_round = (
-            db.query(Round)
-            .filter(Round.name == round_name, Round.status != RoundStatus.CANCELLED)
-            .order_by(Round.id.desc())
-            .first()
-        )
+    except ContestContextNotFound:
+        existing_round = None
 
     if existing_round:
         print(f"Round '{round_name}' déjà existant (id={existing_round.id})")

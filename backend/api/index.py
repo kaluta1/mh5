@@ -19,18 +19,20 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").strip().lower() == "production"
+
 # Create FastAPI app WITHOUT lifespan (serverless doesn't support long-running tasks)
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="API pour MyHigh5 - Plateforme de concours modernes multi-langues",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
     redirect_slashes=True,
 )
 
 # CORS Configuration
-cors_origins = [
+cors_origins = [] if IS_PRODUCTION else [
     "http://localhost:3000",
     "http://localhost:8000",
     "http://127.0.0.1:3000",
@@ -48,11 +50,11 @@ cors_origins = list(set([origin.strip() for origin in cors_origins if origin]))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
+    allow_origin_regex=None if IS_PRODUCTION else r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=[],
     max_age=86400,
 )
 

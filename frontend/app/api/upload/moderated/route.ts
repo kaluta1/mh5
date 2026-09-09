@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerApiBase } from '@/lib/share-preview-server'
 import { UTApi } from 'uploadthing/server'
+import { validateUploadMetadata, validateUploadSignature } from '@/lib/upload-validation'
 
 // Configuration Sightengine
 const SIGHTENGINE_API_USER = process.env.SLIGTHENGINE_API_USER || ''
@@ -43,7 +44,8 @@ export async function POST(request: NextRequest) {
     const apiUrl = getServerApiBase()
     
     const authResponse = await fetch(`${apiUrl}/api/v1/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
     })
     
     if (!authResponse.ok) {
@@ -61,6 +63,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 })
     }
 
+    const metadataError = validateUploadMetadata(file)
+    if (metadataError) {
+      return NextResponse.json({ error: metadataError }, { status: 400 })
+    }
+
     // Vérifier le type de fichier
     const isImage = file.type.startsWith('image/')
     const isVideo = file.type.startsWith('video/')
@@ -73,6 +80,10 @@ export async function POST(request: NextRequest) {
 
     // Convertir en base64 pour Sightengine (seulement pour images/vidéos)
     const bytes = await file.arrayBuffer()
+    const signatureError = validateUploadSignature(file, new Uint8Array(bytes))
+    if (signatureError) {
+      return NextResponse.json({ error: signatureError }, { status: 400 })
+    }
     const base64 = Buffer.from(bytes).toString('base64')
 
     // ============================================
@@ -179,20 +190,27 @@ async function moderateContent(base64: string, mimeType: string, isVideo: boolea
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData
+      body: formData,
+      signal: AbortSignal.timeout(30_000),
     })
 
     if (!response.ok) {
       console.error('Sightengine API error:', response.status)
-      // En cas d'erreur API, on laisse passer (fail-open)
-      return { isApproved: true, flags: [] }
+      // Moderation is configured, so provider failure must fail closed.
+      return {
+        isApproved: false,
+        flags: [{ type: 'moderation_unavailable', severity: 'high', confidence: 1, description: 'Moderation service unavailable' }]
+      }
     }
 
     const data = await response.json()
     return processModerationResponse(data)
   } catch (error) {
     console.error('Moderation error:', error)
-    return { isApproved: true, flags: [] }
+    return {
+      isApproved: false,
+      flags: [{ type: 'moderation_unavailable', severity: 'high', confidence: 1, description: 'Moderation service unavailable' }]
+    }
   }
 }
 
@@ -286,7 +304,8 @@ async function verifyOwnership(base64: string, referenceUrl: string): Promise<{
     const response = await fetch('https://api.sightengine.com/1.0/face/check.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData
+      body: formData,
+      signal: AbortSignal.timeout(30_000),
     })
 
     if (!response.ok) {

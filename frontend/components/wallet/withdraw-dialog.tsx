@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [preview, setPreview] = useState<WithdrawPreview | null>(null)
   const [amount, setAmount] = useState('')
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   const loadPreview = useCallback(async () => {
     setLoading(true)
@@ -60,7 +61,11 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
   }, [addToast, t])
 
   useEffect(() => {
-    if (open) void loadPreview()
+    if (open) {
+      void loadPreview()
+    } else {
+      idempotencyKeyRef.current = null
+    }
   }, [open, loadPreview])
 
   const parsedAmount = parseFloat(amount) || 0
@@ -83,10 +88,14 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
     setSubmitting(true)
     try {
       const token = localStorage.getItem('access_token')
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = crypto.randomUUID()
+      }
       const res = await fetch(`${getEffectiveApiUrl()}/api/v1/wallet/withdraw`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKeyRef.current,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ amount: parsedAmount }),
@@ -101,6 +110,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
         'success'
       )
       onOpenChange(false)
+      idempotencyKeyRef.current = null
       onSuccess?.()
     } catch (e) {
       addToast(e instanceof Error ? e.message : t('common.error') || 'Error', 'error')
@@ -166,7 +176,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">
-                {t('dashboard.wallet.min_withdrawal_hint') || `Minimum $${min}. Auto-payout also sends each commission instantly when configured.`}
+                {t('dashboard.wallet.min_withdrawal_hint') || `Minimum $${min}. Only exact whole-commission totals can currently be withdrawn.`}
               </p>
             </div>
 

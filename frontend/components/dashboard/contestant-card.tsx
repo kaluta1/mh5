@@ -28,6 +28,7 @@ import { ShareDialog } from './share-dialog'
 import { ContestantActionsMenu } from './contestant-actions-menu'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { MediaImage } from '@/components/ui/media-image'
 
 // Composant pour afficher une description tronquée avec popover au hover
 function DescriptionWithPopover({ description, maxLength = 150 }: { description: string; maxLength?: number }) {
@@ -576,9 +577,10 @@ export function ContestantCard({
             >
               {/* Current Image - Smaller size with 16:9 aspect ratio */}
               <div className="relative w-full aspect-[16/9]">
-                <img
+                <MediaImage
                   src={images[currentImageIndex].url}
                   alt={`${name} - Image ${currentImageIndex + 1}`}
+                  fill
                   className="w-full h-full object-cover"
                 />
 
@@ -640,11 +642,11 @@ export function ContestantCard({
             <div className="flex-shrink-0 relative cursor-pointer" onClick={() => userId && router.push(`/dashboard/users/${userId}`)}>
               {avatar && avatar !== '/default-avatar.png' && (avatar.startsWith('http') || avatar.startsWith('/')) ? (
                 <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-myhigh5-primary to-myhigh5-secondary ring-2 ring-gray-200 dark:ring-gray-700 hover:ring-myhigh5-primary transition-all">
-                  <img
+                  <MediaImage
                     src={avatar}
                     alt=""
+                    fill
                     className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 </div>
               ) : (

@@ -252,7 +252,7 @@ class ShuftiProService:
                         "Authorization": self._get_auth_header(),
                         "Content-Type": "application/json"
                     },
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=30, connect=5, sock_read=20)
                 ) as response:
                     result = await response.json()
                     
@@ -414,7 +414,7 @@ class ShuftiProService:
                         "Authorization": self._get_auth_header(),
                         "Content-Type": "application/json"
                     },
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=30, connect=5, sock_read=20)
                 ) as response:
                     result = await response.json()
                     
@@ -426,7 +426,7 @@ class ShuftiProService:
                             svc = err.get("service", "") if isinstance(err, dict) else ""
                             key = err.get("key", "") if isinstance(err, dict) else ""
                             hint = f" ({svc}/{key})" if svc or key else ""
-                            logger.error("Shufti Pro request.invalid for %s: %s", reference, result)
+                            logger.error("Shufti Pro request.invalid reference=%s service=%s key=%s", reference, svc, key)
                             return {
                                 "success": False,
                                 "error": f"{msg}{hint}",
@@ -434,7 +434,7 @@ class ShuftiProService:
                             }
                         url = result.get("verification_url")
                         if not url:
-                            logger.error("Shufti Pro 200 but no verification_url: %s", result)
+                            logger.error("Shufti Pro response missing verification_url reference=%s", reference)
                             return {
                                 "success": False,
                                 "error": "Shufti did not return a verification URL",
@@ -449,7 +449,7 @@ class ShuftiProService:
                             "data": result
                         }
                     else:
-                        logger.error(f"Shufti Pro error: {result}")
+                        logger.error("Shufti Pro request failed reference=%s status=%s", reference, response.status)
                         err_raw = result.get("error")
                         if isinstance(err_raw, dict):
                             msg = err_raw.get("message", "Unknown error")
@@ -499,7 +499,7 @@ class ShuftiProService:
                         "Authorization": self._get_auth_header(),
                         "Content-Type": "application/json"
                     },
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=30, connect=5, sock_read=20)
                 ) as response:
                     result = await response.json()
                     
@@ -524,7 +524,7 @@ class ShuftiProService:
                 "error": str(e)
             }
     
-    def verify_webhook_signature(self, payload: str, signature: str) -> bool:
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """
         Vérifier la signature d'un webhook Shufti Pro
         
@@ -535,8 +535,17 @@ class ShuftiProService:
         Returns:
             bool: True si la signature est valide
         """
-        expected_signature = self._generate_signature(payload)
-        return hmac.compare_digest(expected_signature, signature)
+        secret = (self.secret_key or "").strip()
+        supplied = (signature or "").strip().lower()
+        if not secret or not supplied:
+            return False
+
+        # Shufti signs the exact response bytes. Current accounts hash the
+        # account secret first; legacy accounts used the unhashed secret.
+        modern_secret = hashlib.sha256(secret.encode("utf-8")).hexdigest()
+        modern = hashlib.sha256(payload + modern_secret.encode("ascii")).hexdigest()
+        legacy = hashlib.sha256(payload + secret.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(modern, supplied) or hmac.compare_digest(legacy, supplied)
     
     def parse_webhook_event(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """

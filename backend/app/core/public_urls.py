@@ -13,12 +13,28 @@ def _is_dev_environment() -> bool:
     return os.getenv("ENVIRONMENT", "").strip().lower() in ("development", "dev", "local")
 
 
+def _configured_public_domain() -> str | None:
+    """Best non-loopback public domain currently configured, if any.
+
+    Used as the rewrite target when a stored URL points at localhost/127.0.0.1
+    in production, instead of a hardcoded domain that can drift out of sync
+    with whatever domain this deployment is actually configured for.
+    """
+    for raw in (settings.BACKEND_PUBLIC_URL, settings.FRONTEND_URL):
+        cleaned = (raw or "").strip().rstrip("/")
+        if cleaned and not _LOOPBACK.match(cleaned):
+            return cleaned
+    return None
+
+
 def _sanitize_public_base(url: str, *, dev_fallback: str) -> str:
     cleaned = (url or "").strip().rstrip("/")
     if not cleaned:
-        return dev_fallback if _is_dev_environment() else "https://myhigh5.com"
+        if _is_dev_environment():
+            return dev_fallback
+        return _configured_public_domain() or "https://myhigh5.com"
     if _LOOPBACK.match(cleaned) and not _is_dev_environment():
-        return "https://myhigh5.com"
+        return _configured_public_domain() or "https://myhigh5.com"
     return cleaned
 
 
@@ -49,7 +65,8 @@ def absolutize_media_path(path: str | None) -> str | None:
         return None
     if value.startswith("http://") or value.startswith("https://"):
         if _LOOPBACK.match(value) and not _is_dev_environment():
-            return _LOOPBACK.sub("https://myhigh5.com", value, count=1)
+            target = _configured_public_domain() or "https://myhigh5.com"
+            return _LOOPBACK.sub(target, value, count=1)
         return value
     if value.startswith("/"):
         return f"{public_api_base()}{value}"

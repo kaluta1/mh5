@@ -122,10 +122,13 @@ class ContestStage(Base):
 class Contestant(Base):
     __tablename__ = "contestants"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    # contest_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest.id"), nullable=True)  # Optional if linked via round
     round_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rounds.id"), nullable=True)
-    season_id: Mapped[int] = mapped_column(Integer, nullable=True)  # Legacy/Transition: Can be Contest ID or ContestSeason ID
+    # Production enforces contestants.season_id -> contest_seasons.id. It must
+    # never be interpreted as a contest ID; contestants currently have no
+    # direct contest foreign key.
+    season_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("contest_seasons.id"), nullable=True
+    )
     
     # Submission details
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -160,7 +163,6 @@ class Contestant(Base):
     submissions: Mapped[List["ContestSubmission"]] = relationship("ContestSubmission", back_populates="contestant")
     rankings: Mapped[List["ContestantRanking"]] = relationship("ContestantRanking", back_populates="contestant")
     comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="contestant")
-    seasons: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="contestant")
     seasons: Mapped[List["ContestantSeason"]] = relationship("ContestantSeason", back_populates="contestant")
     verifications: Mapped[List["ContestantVerification"]] = relationship("ContestantVerification", back_populates="contestant")
     round: Mapped[Optional["Round"]] = relationship("Round", back_populates="contestants")

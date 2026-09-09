@@ -60,6 +60,7 @@ function getTopHigh5EmptyMessage(level: TopHigh5Level, t: (key: string) => strin
 
 const topHigh5Cache = new Map<string, { data: TopHigh5Response; timestamp: number }>()
 const TOP_HIGH5_CACHE_TTL = 30 * 1000
+const TOP_HIGH5_BACKGROUND_REFRESH_MS = 15 * 1000
 
 function topHigh5LevelToVoteGeo(level: TopHigh5Level): VoteGeographyLevel | null {
   switch (level) {
@@ -228,6 +229,14 @@ export default function TopHigh5Page() {
       const trimmedCountry = opts.country.trim()
       const cacheKey = topHigh5CacheKey(isGlobal ? "" : trimmedCountry, opts.level, opts.roundId, opts.regionQuery)
       const cached = topHigh5Cache.get(cacheKey)
+      if (
+        opts.silent &&
+        cached &&
+        Date.now() - cached.timestamp < TOP_HIGH5_BACKGROUND_REFRESH_MS
+      ) {
+        setIsAutoRefreshing(false)
+        return
+      }
       if (!opts.silent && cached && Date.now() - cached.timestamp < TOP_HIGH5_CACHE_TTL) {
         setData(cached.data)
         setActiveCountry(isGlobal ? "" : trimmedCountry)
@@ -334,7 +343,8 @@ export default function TopHigh5Page() {
     )
   }, [contestsByCategory, categorySearch])
 
-  // Near real-time refresh loop: poll every 5s when tab is visible and page is active.
+  // Near real-time refresh loop. Fifteen seconds keeps rankings fresh while
+  // avoiding a continuous expensive request every five seconds per open tab.
   useEffect(() => {
     if (!isAuthenticated) return
     // Non-global levels require a country context to refresh; global does not.
@@ -355,7 +365,7 @@ export default function TopHigh5Page() {
       void refresh()
     }
 
-    intervalId = setInterval(tick, 5000)
+    intervalId = setInterval(tick, TOP_HIGH5_BACKGROUND_REFRESH_MS)
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") void refresh()

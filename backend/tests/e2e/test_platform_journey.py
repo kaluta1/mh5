@@ -9,7 +9,7 @@ pytestmark = pytest.mark.e2e
 
 def test_full_member_onboarding_journey(client, test_user_data):
     """
-    Register → login → profile → wallet → KYC config probe → wallet balance.
+    Register → login → profile → KYC diagnostics isolation → wallet → balance.
     """
     reg = client.post("/api/v1/auth/register", json=test_user_data)
     assert reg.status_code == 201
@@ -24,9 +24,8 @@ def test_full_member_onboarding_journey(client, test_user_data):
     me = client.get("/api/v1/users/me", headers=headers)
     assert me.status_code == 200
 
-    kyc_urls = client.get("/api/v1/kyc/deployment/kaluta-urls")
-    assert kyc_urls.status_code == 200
-    assert kyc_urls.json()["provider"] == "kaluta"
+    kyc_urls = client.get("/api/v1/kyc/deployment/kaluta-urls", headers=headers)
+    assert kyc_urls.status_code == 403
 
     wallet = client.patch(
         "/api/v1/users/me/wallet",
@@ -39,5 +38,4 @@ def test_full_member_onboarding_journey(client, test_user_data):
     assert balance.status_code == 200
 
     schema = client.get("/api/v1/health/db-schema")
-    assert schema.status_code == 200
-    assert schema.json()["ok"] is True
+    assert schema.status_code == 401

@@ -48,8 +48,8 @@ export function UploadButton({
       'participationDocumentUploader': '8MB',
       'contestantMedia': '8MB',
       'verificationMedia': '8MB',
-      'imageUploader': '30MB',
-      'videoUploader': '1GB'
+      'imageUploader': '8MB',
+      'videoUploader': '32MB'
     }
     return sizes[endpoint] || '10MB'
   }
@@ -108,7 +108,11 @@ export function UploadButton({
     ? content.button({})
     : (t('profile_setup.choose_photo') || 'Choose photo')
 
-  const acceptedTypes = endpoint === 'videoUploader' ? 'video/*' : 'image/*'
+  const acceptedTypes = endpoint === 'videoUploader'
+    ? 'video/mp4,video/webm,video/quicktime'
+    : endpoint === 'contestantMedia'
+      ? 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime'
+      : 'image/jpeg,image/png,image/gif,image/webp'
 
   const handlePickFile = () => {
     if (isUploading) return
@@ -120,12 +124,11 @@ export function UploadButton({
     if (!files.length) return
     try {
       setIsUploading(true)
-      const maxSizeLabel = getMaxFileSize(endpoint)
-      const maxSizeBytes = toBytes(maxSizeLabel)
-
-      if (maxSizeBytes > 0) {
-        const oversizedFile = files.find((file) => file.size > maxSizeBytes)
-        if (oversizedFile) {
+      let maxSizeLabel = getMaxFileSize(endpoint)
+      for (const candidate of files) {
+        if (candidate.type.startsWith('video/')) maxSizeLabel = '32MB'
+        const maxSizeBytes = toBytes(maxSizeLabel)
+        if (maxSizeBytes > 0 && candidate.size > maxSizeBytes) {
           throw new Error(
             `${t('verification.file_too_large_with_size') || 'File is too large. Maximum size allowed'}: ${maxSizeLabel}`
           )

@@ -65,24 +65,34 @@ function ContestsPageContent() {
 
   // Extraire les types de contests disponibles depuis les données du backend
   const contestTypes = React.useMemo(() => {
-    const types = new Set<string>()
+    const types = new Map<string, { label: string; categoryId: number | null; legacyType: string }>()
 
     // Parcourir tous les contests pour extraire les types uniques
     allContests.forEach(contest => {
-      if (contest.contestType) {
-        types.add(contest.contestType)
+      if (contest.categoryId != null) {
+        types.set(`category:${contest.categoryId}`, {
+          label: contest.categoryName || contest.categorySlug || contest.contestType || `Category ${contest.categoryId}`,
+          categoryId: contest.categoryId,
+          legacyType: contest.contestType || '',
+        })
+      } else if (contest.contestType) {
+        types.set(`legacy:${contest.contestType.toLowerCase().trim()}`, {
+          label: contest.contestType,
+          categoryId: null,
+          legacyType: contest.contestType,
+        })
       }
     })
 
     // Créer la liste des types avec "Tout" en premier
-    const typeList: Array<{ id: string, label: string, value: string | null }> = [
-      { id: 'all', label: t('dashboard.contests.all') || 'Tout', value: null }
+    const typeList: Array<{ id: string, label: string, categoryId: number | null, legacyType: string | null }> = [
+      { id: 'all', label: t('dashboard.contests.all') || 'Tout', categoryId: null, legacyType: null }
     ]
 
     // Ajouter chaque type unique trouvé
-    Array.from(types).sort().forEach(type => {
+    Array.from(types.entries()).sort((a, b) => a[1].label.localeCompare(b[1].label)).forEach(([id, item]) => {
       // Normaliser le type en minuscules pour la traduction
-      const normalizedType = type.toLowerCase()
+      const normalizedType = item.legacyType.toLowerCase()
       // Chercher la traduction avec le type normalisé
       const translationKey = `dashboard.contests.contest_type.${normalizedType}`
       let label = t(translationKey)
@@ -91,10 +101,10 @@ function ContestsPageContent() {
       // ou si le label contient "dashboard.contests.contest_type" (signe qu'il n'a pas été trouvé)
       if (!label || label === translationKey || label.includes('dashboard.contests.contest_type')) {
         // Utiliser le type original formaté
-        label = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
+        label = item.label.charAt(0).toUpperCase() + item.label.slice(1).replace(/_/g, ' ')
       }
 
-      typeList.push({ id: type, label, value: type })
+      typeList.push({ id, label, categoryId: item.categoryId, legacyType: item.legacyType })
     })
 
     return typeList
@@ -173,8 +183,10 @@ function ContestsPageContent() {
     // Filtrer par type si un onglet est sélectionné (mais pas "all")
     if (activeTab !== 'all') {
       const selectedType = contestTypes.find(t => t.id === activeTab)
-      if (selectedType && selectedType.value) {
-        categoryFiltered = categoryFiltered.filter(contest => contest.contestType === selectedType.value)
+      if (selectedType) {
+        categoryFiltered = categoryFiltered.filter(contest => selectedType.categoryId != null
+          ? contest.categoryId === selectedType.categoryId
+          : contest.categoryId == null && (contest.contestType || '').toLowerCase().trim() === selectedType.legacyType?.toLowerCase().trim())
       }
     }
 

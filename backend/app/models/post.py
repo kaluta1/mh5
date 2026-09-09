@@ -80,6 +80,14 @@ class PostMedia(Base):
     post: Mapped["Post"] = relationship("Post", back_populates="media")
     media: Mapped["Media"] = relationship("Media")
 
+    @property
+    def media_url(self) -> Optional[str]:
+        return self.media.url if self.media is not None else None
+
+    @property
+    def media_type(self) -> Optional[str]:
+        return self.media.media_type if self.media is not None else None
+
 
 class PostComment(Base):
     """Commentaires sur les posts"""

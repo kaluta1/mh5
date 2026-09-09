@@ -134,6 +134,11 @@ export default function ClubsPage() {
       <Header />
       
       <main className="pt-24 pb-16">
+        <div className="container px-4 md:px-6 pt-4">
+          <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+            Club preview only. Memberships, payments, and club creation are not currently available.
+          </div>
+        </div>
         {/* Hero Section */}
         <section className="relative py-16 bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
@@ -280,8 +285,8 @@ export default function ClubsPage() {
                           {cl.free}
                         </Badge>
                       )}
-                      <Button className="bg-myhigh5-primary hover:bg-myhigh5-primary-dark">
-                        {club.isPrivate ? cl.join : cl.access}
+                      <Button disabled aria-label="Club membership unavailable" className="bg-myhigh5-primary hover:bg-myhigh5-primary-dark">
+                        Coming soon
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </div>
@@ -325,10 +330,12 @@ export default function ClubsPage() {
                 </ul>
                 <Button 
                   size="lg"
+                  disabled
+                  aria-label="Club creation unavailable"
                   className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-8 py-6 text-lg"
                 >
                   <Crown className="w-5 h-5 mr-2" />
-                  {t('pages.clubs.cta.button') || "Créer mon Club"}
+                  Coming soon
                 </Button>
               </div>
               <div className="hidden md:flex justify-center">

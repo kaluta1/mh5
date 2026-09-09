@@ -1,11 +1,11 @@
 /**
  * Frontend configuration.
  * On your VPS (or any host), set NEXT_PUBLIC_API_URL to the public API origin
- * (e.g. https://myhigh5.com or https://api.myhigh5.com — match nginx / reverse proxy).
+ * (e.g. https://kalutafoundation.com — match the reverse proxy).
  */
 
 /** Default API origin when NEXT_PUBLIC_* is unset at build time (production self-hosted). */
-export const DEFAULT_PUBLIC_API_URL = 'https://myhigh5.com'
+export const DEFAULT_PUBLIC_API_URL = 'https://kalutafoundation.com'
 
 const normalizeApiUrl = (url: string): string => {
   if (!url) return ''
@@ -18,7 +18,7 @@ const normalizeApiUrl = (url: string): string => {
 
 /**
  * Some .env files mistakenly list two origins separated by a comma.
- * `new URL("http://localhost:8000,https://myhigh5.com")` throws — pick one explicit origin.
+ * A comma-separated URL accidentally supplied by an environment file is not a valid URL.
  */
 function parseNextPublicApiUrl(raw: string, nodeEnv: string | undefined): string {
   const trimmed = (raw || '').trim()
@@ -116,6 +116,7 @@ const annualAdsEmbedUrlFromBase = (() => {
   if (!annualAdsEmbedBase || !annualAdsApiKey) return ''
   try {
     const url = new URL(annualAdsEmbedBase)
+    if (url.protocol !== 'https:' && (isProduction || !['localhost', '127.0.0.1'].includes(url.hostname))) return ''
     url.searchParams.set('key', annualAdsApiKey)
     return url.toString()
   } catch {
@@ -123,12 +124,33 @@ const annualAdsEmbedUrlFromBase = (() => {
   }
 })()
 
-export const ANNUALADS_EMBED_URL =
-  stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL || '') || annualAdsEmbedUrlFromBase
+function safeExternalUrl(raw: string): string {
+  if (!raw) return ''
+  try {
+    const url = new URL(raw)
+    const localDev = !isProduction && ['localhost', '127.0.0.1'].includes(url.hostname)
+    return url.protocol === 'https:' || (localDev && url.protocol === 'http:') ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
 
-export const ANNUALADS_SSO_TARGET_ORIGIN = stripEnvQuotes(
-  process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN || 'https://www.annualads.com'
+export const ANNUALADS_EMBED_URL = safeExternalUrl(
+  stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_EMBED_URL || '') || annualAdsEmbedUrlFromBase
 )
+
+const configuredAnnualAdsTargetOrigin = safeExternalUrl(
+  stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_SSO_TARGET_ORIGIN || 'https://www.annualads.com')
+)
+export const ANNUALADS_SSO_TARGET_ORIGIN = (() => {
+  try {
+    const embedOrigin = ANNUALADS_EMBED_URL ? new URL(ANNUALADS_EMBED_URL).origin : ''
+    const configuredOrigin = configuredAnnualAdsTargetOrigin ? new URL(configuredAnnualAdsTargetOrigin).origin : ''
+    return embedOrigin || configuredOrigin || 'https://www.annualads.com'
+  } catch {
+    return 'https://www.annualads.com'
+  }
+})()
 
 /** Partner id for Annual Ads rotator.js (`data-partner-id`). */
 const annualAdsPartnerIdFromEmbedBase = (() => {
@@ -145,19 +167,19 @@ export const ANNUALADS_PARTNER_ID =
   stripEnvQuotes(process.env.NEXT_PUBLIC_ANNUALADS_PARTNER_ID || '') ||
   annualAdsPartnerIdFromEmbedBase
 
-export const ANNUALADS_ROTATOR_SCRIPT_URL = stripEnvQuotes(
+export const ANNUALADS_ROTATOR_SCRIPT_URL = safeExternalUrl(stripEnvQuotes(
   process.env.NEXT_PUBLIC_ANNUALADS_ROTATOR_SCRIPT_URL || 'https://www.annualads.com/rotator.js'
-)
+))
 
 /** Default public site origin when NEXT_PUBLIC_APP_URL is unset at build time. */
-export const DEFAULT_PUBLIC_APP_URL = 'https://myhigh5.com'
+export const DEFAULT_PUBLIC_APP_URL = 'https://kalutafoundation.com'
 
 const rawAppUrl = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/+$/, '')
 export const APP_URL = rawAppUrl || (isProduction ? DEFAULT_PUBLIC_APP_URL : 'http://localhost:3001')
 
 /**
  * Effective site origin for share links, referrals, and wallet metadata.
- * In the browser on myhigh5.com (or any public host), always use the current origin.
+ * In the browser on any public host, always use the current origin.
  */
 export function getEffectiveAppUrl(): string {
   if (typeof window !== 'undefined') {
@@ -173,7 +195,7 @@ const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i
 
 /**
  * Rewrite absolute URLs that still point at localhost (stale API rows or bad builds).
- * On myhigh5.com in the browser, uses the current origin; on the server, production default.
+ * In a public browser, uses the current origin; on the server, the production default.
  */
 export function rewriteLocalhostUrl(url: string): string {
   const value = (url || '').trim()
@@ -205,7 +227,7 @@ export const API_ORIGIN = (() => {
   try {
     return new URL(API_URL).origin
   } catch {
-    return 'https://myhigh5.com'
+    return DEFAULT_PUBLIC_API_URL
   }
 })()
 
@@ -222,7 +244,7 @@ export const assertApiUrl = (): void => {
 export const config = {
   api: {
     url: API_URL,
-    timeout: 0,
+    timeout: 30_000,
     retries: 3
   },
   app: {

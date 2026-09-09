@@ -108,7 +108,7 @@ class ContentModerationService:
         if not self.is_configured():
             logger.info("Content moderation not configured, skipping image moderation")
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
                 details={"skipped": True, "reason": "not_configured"}
@@ -125,17 +125,17 @@ class ContentModerationService:
                     "api_user": self.api_user,
                     "api_secret": self.api_secret
                 },
-                timeout=15  # Réduit de 30 à 15 secondes
+                timeout=(5, 15)
             )
             
             if response.status_code != 200:
                 logger.error(f"Sightengine API error: {response.status_code} - {response.text[:200]}")
                 # En cas d'erreur API, on laisse passer (fail-open)
                 return ModerationResult(
-                    is_approved=True,
+                    is_approved=False,
                     confidence=0,
                     flags=[],
-                    details={"error": f"API error: {response.status_code}", "fail_open": True}
+                    details={"error": f"API error: {response.status_code}", "fail_closed": True}
                 )
             
             data = response.json()
@@ -146,19 +146,19 @@ class ContentModerationService:
             logger.warning(f"Image moderation timeout for: {image_url[:100]}")
             # En cas de timeout, on laisse passer (fail-open)
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
-                details={"error": "timeout", "fail_open": True}
+                details={"error": "timeout", "fail_closed": True}
             )
         except Exception as e:
             logger.error(f"Image moderation error: {type(e).__name__}: {e}")
             # En cas d'erreur, on laisse passer (fail-open)
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
-                details={"error": str(e), "fail_open": True}
+                details={"error": type(e).__name__, "fail_closed": True}
             )
     
     def moderate_video(self, video_url: str) -> ModerationResult:
@@ -166,7 +166,7 @@ class ContentModerationService:
         if not self.is_configured():
             logger.info("Content moderation not configured, skipping video moderation")
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
                 details={"skipped": True, "reason": "not_configured"}
@@ -184,17 +184,17 @@ class ContentModerationService:
                     "api_secret": self.api_secret,
                     "interval": "2.0"
                 },
-                timeout=30  # Réduit de 60 à 30 secondes
+                timeout=(5, 30)
             )
             
             if response.status_code != 200:
                 logger.error(f"Sightengine Video API error: {response.status_code} - {response.text[:200]}")
                 # En cas d'erreur API, on laisse passer (fail-open)
                 return ModerationResult(
-                    is_approved=True,
+                    is_approved=False,
                     confidence=0,
                     flags=[],
-                    details={"error": f"API error: {response.status_code}", "fail_open": True}
+                    details={"error": f"API error: {response.status_code}", "fail_closed": True}
                 )
             
             data = response.json()
@@ -205,26 +205,26 @@ class ContentModerationService:
             logger.warning(f"Video moderation timeout for: {video_url[:100]}")
             # En cas de timeout, on laisse passer (fail-open)
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
-                details={"error": "timeout", "fail_open": True}
+                details={"error": "timeout", "fail_closed": True}
             )
         except Exception as e:
             logger.error(f"Video moderation error: {type(e).__name__}: {e}")
             # En cas d'erreur, on laisse passer (fail-open)
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=0,
                 flags=[],
-                details={"error": str(e), "fail_open": True}
+                details={"error": type(e).__name__, "fail_closed": True}
             )
     
     def moderate_text(self, text: str) -> ModerationResult:
         """Modère un texte (commentaires, descriptions)"""
         if not text:
             return ModerationResult(
-                is_approved=True,
+                is_approved=False,
                 confidence=1.0,
                 flags=[],
                 details={}

@@ -22,9 +22,9 @@ MAX_LEVELS = 10
 
 COMMISSION_CONFIG: dict[str, ProductCommission] = {
     "kyc": {
-        "price_cents": 100,
+        "price_cents": 1000,
         "platform_rate_percent": 10.0,
-        "payout_cents": 90,
+        "payout_cents": 900,
         "currency": "USD",
     },
     "founding_membership": {
