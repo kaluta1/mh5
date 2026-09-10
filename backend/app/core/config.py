@@ -105,6 +105,12 @@ class Settings(BaseModel):
     
     # Annual Ads — sponsor embed / SSO / webhooks (secrets only via env)
     ANNUALADS_SSO_SECRET: str = _first_nonempty_env("ANNUALADS_SSO_SECRET", "annualads_sso_secret")
+    # Fail-safe default: disabled unless explicitly enabled. This integration has
+    # never run with valid production secrets, and no deployment process is
+    # guaranteed to carry an explicit override forward into a future release --
+    # see KALUTASOCIETY_WEBHOOK_FLAG_DEFAULT_RISK. A missing flag must mean
+    # "disabled", never "enabled".
+    ANNUALADS_ENABLED: bool = os.getenv("ANNUALADS_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
     ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env(
         "ANNUALADS_TENANT_API_KEY",
@@ -138,6 +144,9 @@ class Settings(BaseModel):
 
     # Kaluta KYC (default)
     KALUTA_API_KEY: str = _first_nonempty_env("KALUTA_API_KEY", "kaluta_api_key")
+    # Fail-safe default: disabled unless explicitly enabled -- same reasoning as
+    # ANNUALADS_ENABLED above.
+    KALUTA_KYC_ENABLED: bool = os.getenv("KALUTA_KYC_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     KALUTA_WEBHOOK_SECRET: str = _first_nonempty_env("KALUTA_WEBHOOK_SECRET", "kaluta_webhook_secret")
     KALUTA_WEBHOOK_URL: str = _first_nonempty_env("KALUTA_WEBHOOK_URL", "kaluta_webhook_url")
     KALUTA_REDIRECT_URL: str = _first_nonempty_env("KALUTA_REDIRECT_URL", "kaluta_redirect_url")

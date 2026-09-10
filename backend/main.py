@@ -69,19 +69,36 @@ def validate_critical_settings():
         if not settings.FRONTEND_URL.startswith("https://") or not settings.BACKEND_PUBLIC_URL.startswith("https://"):
             critical_errors.append("Public frontend/backend URLs must use HTTPS in production.")
         active_kyc = (settings.KYC_PROVIDER or "kaluta").strip().lower()
-        if active_kyc == "kaluta" and (not settings.KALUTA_API_KEY or not settings.KALUTA_WEBHOOK_SECRET):
+        if active_kyc == "kaluta" and settings.KALUTA_KYC_ENABLED and (not settings.KALUTA_API_KEY or not settings.KALUTA_WEBHOOK_SECRET):
             critical_errors.append("Active Kaluta KYC requires its API key and webhook secret.")
         if active_kyc in {"shufti", "shufti_pro"} and (not settings.SHUFTI_CLIENT_ID or not settings.SHUFTI_SECRET_KEY):
             critical_errors.append("Active Shufti KYC requires its client ID and secret.")
-        for name, value in {
-            "KALUTA_WEBHOOK_SECRET": settings.KALUTA_WEBHOOK_SECRET,
+        url_shaped_checks = {
             "SHUFTI_SECRET_KEY": settings.SHUFTI_SECRET_KEY,
             "NOWPAYMENTS_IPN_SECRET": settings.NOWPAYMENTS_IPN_SECRET,
-            "ANNUALADS_WEBHOOK_SECRET": settings.ANNUALADS_WEBHOOK_SECRET,
-        }.items():
+        }
+        if settings.KALUTA_KYC_ENABLED:
+            url_shaped_checks["KALUTA_WEBHOOK_SECRET"] = settings.KALUTA_WEBHOOK_SECRET
+        if settings.ANNUALADS_ENABLED:
+            url_shaped_checks["ANNUALADS_WEBHOOK_SECRET"] = settings.ANNUALADS_WEBHOOK_SECRET
+        for name, value in url_shaped_checks.items():
             if value and str(value).strip().lower().startswith(("http://", "https://")):
                 critical_errors.append(f"{name} has URL-shaped content instead of a secret.")
 
+    if not settings.KALUTA_KYC_ENABLED:
+        payment_warnings.append(
+            "KALUTA KYC DISABLED — REAL WEBHOOK SECRET REQUIRED. Re-enable only after: "
+            "(1) obtaining the real whsec_... webhook secret from the Kaluta Dashboard, "
+            "(2) setting KALUTA_WEBHOOK_SECRET to that value, (3) verifying signature checks "
+            "work safely, (4) setting KALUTA_KYC_ENABLED=true, then restarting."
+        )
+    if not settings.ANNUALADS_ENABLED:
+        payment_warnings.append(
+            "ANNUALADS DISABLED — REAL WEBHOOK SECRET REQUIRED. Re-enable only after: "
+            "(1) obtaining the real webhook secret from the AnnualAds tenant dashboard, "
+            "(2) setting ANNUALADS_WEBHOOK_SECRET to that value, (3) verifying provider-side "
+            "webhook configuration, (4) setting ANNUALADS_ENABLED=true, then restarting."
+        )
     if not settings.NOWPAYMENTS_API_KEY:
         payment_warnings.append(
             "NOWPAYMENTS_API_KEY is missing. Crypto checkout will not work."

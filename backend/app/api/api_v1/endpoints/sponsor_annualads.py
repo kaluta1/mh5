@@ -58,6 +58,11 @@ def get_sponsor_sso_token(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Sign a short-lived HS256 JWT for Annual Ads iframe SSO (same shape as their docs)."""
+    if not getattr(settings, "ANNUALADS_ENABLED", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Annual Ads integration is temporarily disabled.",
+        )
     if not _sso_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -115,6 +120,12 @@ async def sponsor_payment_webhook(
     Receives POST from Annual Ads when a sponsor payment is confirmed.
     Register this URL in the tenant: .../api/v1/webhooks/sponsor-payment
     """
+    if not getattr(settings, "ANNUALADS_ENABLED", True):
+        logger.warning("AnnualAds webhook received while ANNUALADS_ENABLED=false — rejecting")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Annual Ads integration is temporarily disabled.",
+        )
     secret = getattr(settings, "ANNUALADS_WEBHOOK_SECRET", None) or ""
     if not secret:
         logger.error("ANNUALADS_WEBHOOK_SECRET is not set; refusing webhook")

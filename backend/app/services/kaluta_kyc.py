@@ -89,18 +89,22 @@ def _parse_dob(user_dob: Optional[datetime]) -> Optional[str]:
 
 class KalutaKYCService:
     def __init__(self) -> None:
+        self.enabled = bool(getattr(settings, "KALUTA_KYC_ENABLED", True))
         self.api_key = (settings.KALUTA_API_KEY or "").strip()
         self.webhook_secret = (settings.KALUTA_WEBHOOK_SECRET or "").strip()
         self.webhook_url, self.redirect_url = resolve_kaluta_urls()
 
     def configured(self) -> bool:
-        return bool(self.api_key)
+        return self.enabled and bool(self.api_key)
 
     def generate_reference(self, user_id: int) -> str:
         suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
         return f"mh5_{user_id}_{suffix}"
 
     def verify_webhook_signature(self, raw_body: bytes, signature_header: str) -> bool:
+        if not self.enabled:
+            logger.warning("Kaluta KYC is disabled (KALUTA_KYC_ENABLED=false) — webhook rejected, not verified")
+            return False
         if not self.webhook_secret:
             logger.warning("KALUTA_WEBHOOK_SECRET not set — webhook signature not verified")
             return os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local", "test")
@@ -140,6 +144,8 @@ class KalutaKYCService:
         country_iso: Optional[str] = None,
         residential_address: Optional[str] = None,
     ) -> Dict[str, Any]:
+        if not self.enabled:
+            return {"success": False, "error": "Kaluta KYC is temporarily disabled."}
         if not self.configured():
             return {"success": False, "error": "Kaluta KYC is not configured (KALUTA_API_KEY missing)."}
 
@@ -196,6 +202,8 @@ class KalutaKYCService:
             return {"success": False, "error": f"Kaluta API error: {exc}"}
 
     async def get_session(self, session_id: str) -> Dict[str, Any]:
+        if not self.enabled:
+            return {"success": False, "error": "Kaluta KYC is temporarily disabled."}
         if not self.configured():
             return {"success": False, "error": "Kaluta not configured"}
 
@@ -215,6 +223,8 @@ class KalutaKYCService:
         Poll Kaluta for session state. Uses external_verification_id (Kaluta session_id).
         Falls back to reference_id as external_id lookup via list if needed.
         """
+        if not self.enabled:
+            return {"is_valid": False, "is_completed": False, "data": {}}
         session_id = (verification.external_verification_id or "").strip()
         if not session_id:
             url = (verification.verification_url or "").strip()

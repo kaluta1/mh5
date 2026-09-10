@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 import json
+import logging
 
 from app.api import deps
 from app.core.config import settings
@@ -46,6 +47,8 @@ from app.services.proof_of_address_match import (
     evaluate_proof_of_address,
 )
 from app.core.storage import store_kyc_proof_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 KYC_PRICE_USD = 10.00  # keep in sync with product_types.price for code "kyc"
@@ -393,7 +396,7 @@ async def initiate_shufti_verification(
         err = result.get("error", "Erreur lors de l'initialisation de la vérification")
         err_l = (err or "").lower()
         if is_kaluta_active():
-            if "not configured" in err_l or "kaluta_api_key" in err_l:
+            if "not configured" in err_l or "kaluta_api_key" in err_l or "disabled" in err_l:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail=err,
@@ -1199,6 +1202,12 @@ async def kaluta_kyc_webhook(
     Kaluta KYC webhook (session.approved, session.rejected, session.expired, …).
     Verifies X-Kaluta-Signature when KALUTA_WEBHOOK_SECRET is set.
     """
+    if not settings.KALUTA_KYC_ENABLED:
+        logger.warning("Kaluta KYC webhook received while KALUTA_KYC_ENABLED=false — rejecting")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Kaluta KYC integration is temporarily disabled.",
+        )
     raw = await request.body()
     signature = request.headers.get("x-kaluta-signature") or request.headers.get("X-Kaluta-Signature") or ""
 

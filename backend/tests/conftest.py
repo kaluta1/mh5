@@ -19,6 +19,15 @@ os.environ["ENCRYPTION_KEY_DERIVATION_SALT"] = "test-encryption-salt-value"
 os.environ["KYC_PROVIDER"] = "kaluta"
 os.environ["KALUTA_API_KEY"] = "klt_test_key"
 os.environ["KALUTA_WEBHOOK_SECRET"] = "whsec_test_webhook_secret"
+# Pin these deterministic to "enabled" as the test baseline so existing tests
+# do not depend on whichever real deployment .env happens to be in the cwd
+# (KALUTA_KYC_ENABLED / ANNUALADS_ENABLED). Individual tests may monkeypatch
+# them false to test the disabled path explicitly.
+os.environ["KALUTA_KYC_ENABLED"] = "true"
+os.environ["ANNUALADS_ENABLED"] = "true"
+os.environ.setdefault("ANNUALADS_WEBHOOK_SECRET", "annualads_test_webhook_secret")
+os.environ.setdefault("ANNUALADS_SSO_SECRET", "annualads_test_sso_secret")
+os.environ.setdefault("ANNUALADS_TENANT_ID", "test_tenant")
 
 # SQLite compat for PostgreSQL JSONB/ARRAY — MUST run before model import.
 from sqlalchemy import JSON, create_engine
