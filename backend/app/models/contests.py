@@ -129,7 +129,18 @@ class Contestant(Base):
     season_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("contest_seasons.id"), nullable=True
     )
-    
+
+    # Added 2026-09-10: dedicated, unambiguous contest link. NULL for rows created before this
+    # field existed; populated on staging for the 955 legacy rows where season_id actually held a
+    # Contest.id (see KALUTASOCIETY_ORPHAN_SEASON_INVESTIGATION.md /
+    # KALUTASOCIETY_LEGACY_CONTEST_LINK_MIGRATION.sql). The resolution helpers below in
+    # contestant.py prefer this field when present and fall back to the legacy season_id-as-
+    # Contest.id convention only when it is NULL. Does not replace season_id's real purpose (the
+    # FK to contest_seasons.id for genuine season references) — both columns coexist.
+    contest_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("contest.id"), nullable=True
+    )
+
     # Submission details
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

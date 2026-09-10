@@ -55,6 +55,7 @@ from app.models.contests import (
     ContestStatus
 )
 from app.models.user import User
+from app.services.contestant_contest_resolution import contestant_belongs_to_contest_clause
 from app.models.voting import ContestantVoting
 from app.models.voting import ContestantShare, ContestLike, ContestComment, PageView, ContestantReaction
 from app.models.round import Round, RoundStatus
@@ -643,7 +644,7 @@ class SeasonMigrationService:
             ContestantSeason.season_id == season_id,
             Contestant.is_active == True,
             Contestant.is_deleted == False,
-            Contestant.season_id == contest_id,
+            contestant_belongs_to_contest_clause(contest_id),
         ]
         if active_only:
             filters.append(ContestantSeason.is_active == True)
@@ -669,8 +670,15 @@ class SeasonMigrationService:
             contest_id=contest_id,
         )
         if voted_ids:
+            # voted_ids alone is not authoritative: _contestant_ids_from_votes only
+            # checks "did they vote in this contest", not whether they also voted in
+            # a DIFFERENT contest (conflicting evidence). AND with the resolver clause
+            # so a genuine season-linked contestant with conflicting votes (Case D's
+            # distinct_voted_contests != 1) is not silently rescued here. Legacy rows
+            # (Case A/B) are unaffected, since voting history plays no part in those.
             vote_filters = [
                 Contestant.id.in_(voted_ids),
+                contestant_belongs_to_contest_clause(contest_id),
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
             ]
@@ -704,7 +712,7 @@ class SeasonMigrationService:
 
         # Last resort for legacy data: keep the contest scope. Never return the
         # whole shared season because that mixes categories in TopHigh5/migration.
-        fallback_filters.append(Contestant.season_id == contest_id)
+        fallback_filters.append(contestant_belongs_to_contest_clause(contest_id))
         return db.query(Contestant).join(
             ContestantSeason, ContestantSeason.contestant_id == Contestant.id
         ).filter(and_(*fallback_filters)).all()
@@ -1360,7 +1368,12 @@ class SeasonMigrationService:
         strict_contest_scope = bool(contest_id is not None)
         if strict_contest_scope:
             # Preferred scope for clean data: contestant belongs to the current contest.
-            contestants_query = contestants_query.filter(Contestant.season_id == contest_id)
+            # See contestant_belongs_to_contest_clause for the full precedence (contest_id ->
+            # legacy season_id -> unique season-link -> validated single-vote). Genuine
+            # season-linked contestants whose season maps to several contests with no vote
+            # evidence remain unresolved by design (65/118, see
+            # KALUTASOCIETY_TOP_HIGH5_MULTICONTEST_INVESTIGATION) -- not guessed here.
+            contestants_query = contestants_query.filter(contestant_belongs_to_contest_clause(contest_id))
         if country_filter:
             raw = country_filter.strip().lower()
             alias_map = {
@@ -1451,9 +1464,15 @@ class SeasonMigrationService:
             if qualified_only:
                 fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
             if voted_ids:
-                fallback_filters.append(Contestant.id.in_(voted_ids))
+                # voted_ids alone is not authoritative -- see the matching comment in
+                # _contestants_for_contest_in_season. AND with the resolver clause so
+                # conflicting vote evidence (votes in >1 contest) cannot bypass Case D's
+                # distinct_voted_contests == 1 guard via this rescue path.
+                fallback_filters.append(
+                    and_(Contestant.id.in_(voted_ids), contestant_belongs_to_contest_clause(contest_id))
+                )
             else:
-                fallback_filters.append(Contestant.season_id == contest_id)
+                fallback_filters.append(contestant_belongs_to_contest_clause(contest_id))
             contestants_query = db.query(Contestant).options(
                 joinedload(Contestant.user)
             ).filter(and_(*fallback_filters))
@@ -1543,7 +1562,7 @@ class SeasonMigrationService:
                 ContestantSeason
             ).filter(and_(*season_filters))
             if strict_contest_scope:
-                base_q = base_q.filter(Contestant.season_id == contest_id)
+                base_q = base_q.filter(contestant_belongs_to_contest_clause(contest_id))
 
             contestants_without_location = base_q.count()
             
@@ -1560,7 +1579,7 @@ class SeasonMigrationService:
                 ContestantSeason
             ).filter(and_(*not_qualified_filters))
             if strict_contest_scope:
-                not_qualified_q = not_qualified_q.filter(Contestant.season_id == contest_id)
+                not_qualified_q = not_qualified_q.filter(contestant_belongs_to_contest_clause(contest_id))
             contestants_not_qualified = not_qualified_q.count()
             
             if diagnostics:

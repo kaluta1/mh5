@@ -11,6 +11,7 @@ import threading
 
 from app.api import deps
 from app.services.season_migration import SeasonMigrationService, season_migration_service
+from app.services.contestant_contest_resolution import contestant_belongs_to_contest_clause
 from app.tasks.season_migration import (
     process_season_migrations,
     migrate_contest_to_city,
@@ -409,7 +410,10 @@ def get_top_high5_by_country(
                         ),
                         Contestant.is_active == True,
                         Contestant.is_deleted == False,
-                        Contestant.season_id == contest.id,
+                        # See contestant_belongs_to_contest_clause for the full precedence.
+                        # Genuine season-linked contestants with multiple linked contests and
+                        # no vote evidence remain unresolved by design (not guessed).
+                        contestant_belongs_to_contest_clause(contest.id),
                         Contestant.round_id == rnd.id,
                         *nomination_cohort_created_at_filters(rnd),
                     ]
@@ -472,7 +476,7 @@ def get_top_high5_by_country(
                                     ),
                                     Contestant.is_active == True,
                                     Contestant.is_deleted == False,
-                                    Contestant.season_id == contest.id,
+                                    contestant_belongs_to_contest_clause(contest.id),
                                 )
                             )
                             .all()

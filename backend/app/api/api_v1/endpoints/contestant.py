@@ -451,11 +451,19 @@ def _contestant_belongs_to_contest(
     from app.models.contests import ContestSeasonLink
     from app.models.round import Round, round_contests
 
-    # Legacy: Contestant.season_id is often the Contest.id (see model on Contestant).
-    # GET /contest/{contest_id} lists rows with Contestant.season_id == contest_id.
-    # Do not require ContestSeasonLink for that case — the link row is sometimes missing
-    # in migrated data while the contestant row still points at the contest.
-    if contestant.season_id is not None and contestant.season_id == contest_id:
+    # Preferred (added 2026-09-10): dedicated, unambiguous contest_id field. Checked
+    # first so any row that has it populated never falls through to the legacy heuristic.
+    if contestant.contest_id is not None and contestant.contest_id == contest_id:
+        if db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first():
+            return True
+
+    # Legacy fallback: Contestant.season_id is often the Contest.id (see model on
+    # Contestant), for rows created before contest_id existed. GET /contest/{contest_id}
+    # lists rows with Contestant.season_id == contest_id. Do not require ContestSeasonLink
+    # for that case — the link row is sometimes missing in migrated data while the
+    # contestant row still points at the contest. Only reached when contest_id is NULL,
+    # so genuine season references (contest_id always NULL for those) are unaffected.
+    if contestant.contest_id is None and contestant.season_id is not None and contestant.season_id == contest_id:
         if db.query(Contest).filter(Contest.id == contest_id, Contest.is_deleted == False).first():
             return True
 
@@ -521,8 +529,26 @@ def _resolve_contest_for_contestant_vote(
 
     season_cids = [L.contest_id for L in links]
 
-    # 1) Primary: legacy column Contestant.season_id == contest.id for this contestant
-    if contestant.season_id is not None:
+    # 1) Preferred (added 2026-09-10): dedicated, unambiguous contest_id field.
+    if contestant.contest_id is not None:
+        link = db.query(ContestSeasonLink).filter(
+            ContestSeasonLink.season_id == season.id,
+            ContestSeasonLink.contest_id == contestant.contest_id,
+            ContestSeasonLink.is_active == True,
+        ).first()
+        if link:
+            contest = db.query(Contest).filter(
+                Contest.id == contestant.contest_id,
+                Contest.is_deleted == False,
+            ).first()
+            if contest:
+                return contest
+
+    # 1b) Legacy fallback: Contestant.season_id == contest.id, for rows created before
+    # contest_id existed. Only reached when contest_id is NULL, so genuine season
+    # references (contest_id always NULL for those 118 rows) fall through here exactly
+    # as before this change.
+    if contestant.contest_id is None and contestant.season_id is not None:
         link = db.query(ContestSeasonLink).filter(
             ContestSeasonLink.season_id == season.id,
             ContestSeasonLink.contest_id == contestant.season_id,
