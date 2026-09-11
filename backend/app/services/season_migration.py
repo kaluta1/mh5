@@ -1320,11 +1320,21 @@ class SeasonMigrationService:
         uncapped: bool = False,
         cohort_round_id: Optional[int] = None,
         ranking_bucket_key: Optional[str] = None,
+        require_votes: bool = True,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
         Utilise les votes depuis ContestantVoting (par season_id) au lieu des stages.
         Retourne un dictionnaire {location_value: [contestants]}
+
+        `require_votes` (default True, unchanged for every existing caller):
+        when True, a resolved candidate with zero vote rows is dropped from
+        the grouped result entirely -- the long-standing behavior that
+        promotion (`promote_to_next_level`) and prior-stage ranking rely on.
+        The live Top High5 display endpoint passes `require_votes=False`
+        explicitly: its candidates are already round/season/roster-resolved
+        before this function ranks them, so a zero-vote candidate is a
+        genuine contestant to display (with a zero score), not a row to hide.
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -1700,7 +1710,7 @@ class SeasonMigrationService:
                     else None
                 )
             ),
-            require_votes=True,
+            require_votes=require_votes,
         )
         rank_order = {row.contestant_id: row.rank for row in ranking_rows}
         points_by_contestant = {
@@ -1726,6 +1736,9 @@ class SeasonMigrationService:
         for location_value, location_contestants in grouped.items():
             # Business winner order:
             # 1) total stars(points), 2) shares, 3) likes, 4) comments, 5) views, 6) first contestant
+            # Name reflects the require_votes=True default (every other caller):
+            # when require_votes=False, ranking_rows already covers every
+            # candidate with a zero score, so this is just "ranked_contestants".
             vote_backed_contestants = [
                 candidate
                 for candidate in location_contestants

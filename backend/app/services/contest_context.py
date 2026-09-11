@@ -450,6 +450,27 @@ class ContestContextService:
         )
         evidence = ["explicit contestant_voting contest_id + season_id"] if ids else []
 
+        # Case A of contestant_contest_resolution.contestant_belongs_to_contest_clause
+        # (the dedicated contestant.contest_id field) is authoritative there
+        # regardless of how many contests share the season; this roster check
+        # must not be stricter than that already-validated resolution rule, or
+        # a correctly-resolved, simply zero-vote contestant would be dropped
+        # here even though nothing about their contest mapping is ambiguous.
+        direct_ids = {
+            int(row[0])
+            for row in db.query(Contestant.id)
+            .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
+            .filter(
+                ContestantSeason.season_id == season.id,
+                Contestant.contest_id == int(contest_id),
+            )
+            .distinct()
+            .all()
+        }
+        if direct_ids:
+            ids.update(direct_ids)
+            evidence.append("contestant.contest_id direct match")
+
         if candidates == (int(contest_id),):
             ids.update(
                 int(row[0])

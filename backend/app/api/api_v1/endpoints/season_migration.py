@@ -447,6 +447,7 @@ def get_top_high5_by_country(
                         strict_season_scope=True,
                         active_links_only=al,
                         ranking_bucket_key=_top_high5_bucket_key_for_contest(contest),
+                        require_votes=False,
                     )
                     matched_key = None
                     for key in grouped.keys():
@@ -505,6 +506,7 @@ def get_top_high5_by_country(
                         active_links_only=al,
                         cohort_round_id=rnd.id,
                         ranking_bucket_key=_top_high5_bucket_key_for_contest(contest),
+                        require_votes=False,
                     )
                     regional_vote_backed_members: list[Contestant] = []
                     selected_regional_pool_id = None
@@ -663,13 +665,18 @@ def get_top_high5_by_country(
             # legacy stage rows within this contest/location roster.
             from app.services.voting_ranking import aggregate_rankings
 
+            # require_votes=False: `ranked` is already the fully-resolved,
+            # round/season/roster-scoped candidate set (see per_location_groups
+            # above) -- a zero-vote member of that set is still a genuine
+            # contestant, not a data error, so it must stay visible with a
+            # zero score rather than being dropped by the ranking step.
             canonical_rows = aggregate_rankings(
                 db,
                 season_ids=points_season_ids,
                 contestant_ids=contestant_ids,
                 contest_id=contest.id,
                 bucket_key=bucket_key,
-                require_votes=True,
+                require_votes=False,
             )
             candidate_by_id = {candidate.id: candidate for candidate in ranked}
             sorted_ranked = [
@@ -716,10 +723,15 @@ def get_top_high5_by_country(
                     author_name = c.user.full_name or c.user.username or c.user.email
                     author_email = c.user.email
                 e = engagement_by_id.get(c.id, {})
+                # A zero-vote contestant can now occupy a top-5 slot (see the
+                # require_votes=False change above) purely so the round's real
+                # roster stays visible -- that is display-only and must not be
+                # reported as an actual advancement signal.
+                has_votes = votes_by_id.get(c.id, 0) > 0
                 rows.append(
                     {
                         "rank": idx,
-                        "migrates_next_stage": idx <= 5,
+                        "migrates_next_stage": idx <= 5 and has_votes,
                         "contestant_id": c.id,
                         "contestant_title": c.title,
                         "author_name": author_name,
