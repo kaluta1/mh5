@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
@@ -20,8 +19,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Search, ArrowRightCircle, ExternalLink } from "lucide-react"
+import { Trophy, Search, ArrowRightCircle } from "lucide-react"
 import { GeographyLevelIcon, type GeographyLevelIconKey } from "@/components/dashboard/geography-level-icons"
+import { TopHigh5ContestRows } from "./top-high5-rows"
 
 const LEVEL_OPTIONS: Array<{
   value: TopHigh5Level
@@ -36,11 +36,6 @@ const LEVEL_OPTIONS: Array<{
   { value: "continent", label: "Continent", geographyIcon: "continent", requiresCountry: true, helper: "Top 5 per continent (filtered by country)" },
   { value: "global", label: "Global", geographyIcon: "global", requiresCountry: false, helper: "Top 5 worldwide - no country filter" },
 ]
-
-/** Anchor for deep links: `/dashboard/top-high5#th5-<contestId>-<contestantId>` scrolls to the row. */
-function topHigh5DomId(contestId: number, contestantId: number) {
-  return `th5-${contestId}-${contestantId}`
-}
 
 function getTopHigh5EmptyMessage(level: TopHigh5Level, t: (key: string) => string) {
   switch (level) {
@@ -602,41 +597,7 @@ export default function TopHigh5Page() {
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.views") || "Views"}</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {/*
-                            Only show the "Top High5" — i.e. the nominators who would migrate
-                            to the next stage. Anything outside the top 5 is excluded.
-                          */}
-                          {contest.rows
-                            .filter((row) => row.migrates_next_stage)
-                            .map((row) => (
-                              <tr
-                                key={row.contestant_id}
-                                id={topHigh5DomId(contest.contest_id, row.contestant_id)}
-                                className="bg-emerald-50/70 dark:bg-emerald-900/10 scroll-mt-20"
-                              >
-                                <td className="px-3 py-2 font-semibold">{row.rank}</td>
-                                <td className="px-3 py-2">
-                                  <Link
-                                    href={`/dashboard/contests/${contest.contest_id}/contestant/${row.contestant_id}?entryType=nomination`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-gray-900 dark:text-white font-medium hover:text-myhigh5-primary transition-colors"
-                                    title={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
-                                    aria-label={t("dashboard.myhigh5.open_top_entry") || "Watch this entry"}
-                                  >
-                                    <span>{row.contestant_title || `Content #${row.contestant_id}`}</span>
-                                    <ExternalLink className="h-4 w-4 text-myhigh5-primary" />
-                                  </Link>
-                                </td>
-                                <td className="px-3 py-2">{row.stars_points}</td>
-                                <td className="px-3 py-2">{row.shares}</td>
-                                <td className="px-3 py-2">{row.likes}</td>
-                                <td className="px-3 py-2">{row.comments}</td>
-                                <td className="px-3 py-2">{row.views}</td>
-                              </tr>
-                            ))}
-                        </tbody>
+                        <TopHigh5ContestRows contestId={contest.contest_id} rows={contest.rows} t={t} />
                       </table>
                     </div>
                   </div>
