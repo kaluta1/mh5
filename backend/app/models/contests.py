@@ -238,6 +238,64 @@ class ContestantSeason(Base):
     )
 
 
+class TopHigh5Result(Base):
+    """
+    Frozen historical Top High5 result: one row per (contest, level,
+    jurisdiction, round) x rank. Written once, at the moment that level's
+    voting closes, by SeasonMigrationService's freeze hook — never recomputed
+    from live votes. The Top High5 display endpoint reads only from this
+    table; it must never derive "top 5" from current contestant_voting rows.
+    """
+    __tablename__ = "top_high5_results"
+
+    contestant_id: Mapped[int] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=False)
+    contest_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest.id"), nullable=False)
+    category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True)
+
+    level: Mapped[SeasonLevel] = mapped_column(SQLEnum(SeasonLevel, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    # Location value for this group: a city/country/region/continent string,
+    # or the literal "Global" for the worldwide level. Matches the
+    # location_field grouping already used by get_top_contestants_by_location.
+    jurisdiction: Mapped[str] = mapped_column(String(150), nullable=False)
+
+    round_id: Mapped[int] = mapped_column(Integer, ForeignKey("rounds.id"), nullable=False)
+    from_season_id: Mapped[int] = mapped_column(Integer, ForeignKey("contest_seasons.id"), nullable=False)
+    # Null for the GLOBAL level, which has no further destination.
+    to_season_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contest_seasons.id"), nullable=True)
+
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_votes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    shares: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    likes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    comments: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    views: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Whether this specific contestant actually ended up active in
+    # to_season_id after promotion. Always False for GLOBAL rows (no further
+    # level). Not implied by rank alone: Continental->Global promotion pools
+    # every continent together, so a continent's own rank-5 may not advance.
+    migrated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Relations
+    contestant: Mapped["Contestant"] = relationship("Contestant")
+    contest: Mapped["Contest"] = relationship("Contest")
+    category: Mapped[Optional["Category"]] = relationship(
+        "Category", primaryjoin="TopHigh5Result.category_id == Category.id", viewonly=True
+    )
+    round: Mapped["Round"] = relationship("Round")
+    from_season: Mapped["ContestSeason"] = relationship("ContestSeason", foreign_keys=[from_season_id])
+    to_season: Mapped[Optional["ContestSeason"]] = relationship("ContestSeason", foreign_keys=[to_season_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "contest_id", "level", "jurisdiction", "round_id", "rank",
+            name="uq_top_high5_results_group_rank",
+        ),
+        {"comment": "Frozen (write-once) Top High5 results, one row per finalized rank."},
+    )
+
+
 class ContestSeasonLink(Base):
     """
     Modèle de liaison entre les contests et les seasons.

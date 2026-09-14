@@ -5,7 +5,7 @@ from .kyc import KYCVerification, KYCDocument, KYCAuditLog
 from .voting import Vote, VoteSession, MyFavorites, ContestComment, ContestLike, PageView, ContestantReaction, ContestantShare, ReactionType
 from .geography import Continent, Region, Country, City
 from .dsp import DSPWallet, DSPTransaction, DSPExchangeRate, DigitalProduct, DigitalPurchase, ProductReview
-from .contests import ContestType, ContestCategory, ContestSeason, ContestStage, Contestant, ContestSubmission, ContestantRanking, ContestantSeason, ContestSeasonLink
+from .contests import ContestType, ContestCategory, ContestSeason, ContestStage, Contestant, ContestSubmission, ContestantRanking, ContestantSeason, ContestSeasonLink, TopHigh5Result
 from .clubs import FanClub, ClubAdmin, ClubMembership, ClubWallet, ClubTransaction, TransactionApproval, ClubContent, ClubContentComment, ClubContentLike
 from .affiliate import AffiliateTree, CommissionRate, AffiliateCommission, ReferralLink, ReferralClick, FoundingMember, RevenueShare
 from .advertising import AdCampaign, AdCreative, AdPlacement, AdImpression, AdClick, AdRevenueShare, AdBudgetTransaction, AdPerformanceMetrics
@@ -40,7 +40,7 @@ __all__ = [
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",
     "Continent", "Region", "Country", "City",
     "DSPWallet", "DSPTransaction", "DSPExchangeRate", "DigitalProduct", "DigitalPurchase", "ProductReview",
-    "ContestType", "ContestCategory", "ContestSeason", "ContestStage", "Contestant", "ContestSubmission", "ContestantRanking", "ContestantSeason", "ContestSeasonLink",
+    "ContestType", "ContestCategory", "ContestSeason", "ContestStage", "Contestant", "ContestSubmission", "ContestantRanking", "ContestantSeason", "ContestSeasonLink", "TopHigh5Result",
     "FanClub", "ClubAdmin", "ClubMembership", "ClubWallet", "ClubTransaction", "TransactionApproval", "ClubContent", "ClubContentComment", "ClubContentLike",
     "AffiliateTree", "CommissionRate", "AffiliateCommission", "ReferralLink", "ReferralClick", "FoundingMember", "RevenueShare",
     "AdCampaign", "AdCreative", "AdPlacement", "AdImpression", "AdClick", "AdRevenueShare", "AdBudgetTransaction", "AdPerformanceMetrics",

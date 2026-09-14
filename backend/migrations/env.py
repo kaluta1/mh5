@@ -49,8 +49,9 @@ from app.models.contest import Contest, ContestTemplate, Location, ContestEntry,
 # Import all new MyFav models
 from app.models.geography import Continent, Region, Country, City
 from app.models.contests import (
-    ContestType, ContestCategory, ContestSeason, ContestStage, 
-    Contestant, ContestSubmission, ContestantRanking, SeasonLevel
+    ContestType, ContestCategory, ContestSeason, ContestStage,
+    Contestant, ContestSubmission, ContestantRanking, SeasonLevel,
+    ContestantSeason, ContestSeasonLink, TopHigh5Result
 )
 from app.models.voting import (
     Vote as VoteModel, VoteSession, MyFavorites, ContestComment, 

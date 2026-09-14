@@ -52,7 +52,8 @@ from app.models.contests import (
     ContestantRanking,
     SeasonLevel,
     ContestStageLevel,
-    ContestStatus
+    ContestStatus,
+    TopHigh5Result,
 )
 from app.models.user import User
 from app.services.contestant_contest_resolution import contestant_belongs_to_contest_clause
@@ -311,6 +312,141 @@ class SeasonMigrationService:
         if start_d and start_d <= today:
             return True
         return False
+
+    @staticmethod
+    def _global_finalization_due(round_obj: Round, contest_mode: str, today: date) -> bool:
+        """
+        Whether GLOBAL voting for this round/contest has closed. GLOBAL has no
+        next level, so nothing else gates finalizing (freezing, not promoting)
+        its own Top High5 result.
+        """
+        mode = (contest_mode or "").strip().lower()
+        if mode == "nomination":
+            vote_close = SeasonMigrationService._nomination_vote_close_date_for_level(
+                round_obj, SeasonLevel.GLOBAL
+            )
+            return bool(vote_close and today > vote_close)
+        return bool(
+            getattr(round_obj, "global_end_date", None)
+            and round_obj.global_end_date <= today
+        )
+
+    @staticmethod
+    def _finalize_global_top_high5(
+        db: Session,
+        season: ContestSeason,
+        round_obj: Round,
+        today: date,
+    ) -> List[dict]:
+        """
+        GLOBAL never gets promoted further, so it never runs through
+        promote_to_next_level. Freeze its own Top High5 here once voting has
+        closed, reusing the same canonical ranking helper
+        (rank_contestant_ids_like_top_high5) the Continental->Global
+        promotion path already trusts.
+        """
+        outcomes: List[dict] = []
+        contest_links = (
+            db.query(ContestSeasonLink)
+            .filter(
+                ContestSeasonLink.season_id == season.id,
+                ContestSeasonLink.is_active == True,
+            )
+            .order_by(ContestSeasonLink.contest_id.asc())
+            .all()
+        )
+        for link in contest_links:
+            contest = db.query(Contest).filter(Contest.id == link.contest_id).first()
+            if not contest:
+                continue
+
+            contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
+            if not SeasonMigrationService._global_finalization_due(round_obj, contest_mode, today):
+                continue
+
+            already_frozen = (
+                db.query(TopHigh5Result.id)
+                .filter(
+                    TopHigh5Result.contest_id == contest.id,
+                    TopHigh5Result.level == SeasonLevel.GLOBAL,
+                    TopHigh5Result.jurisdiction == "Global",
+                    TopHigh5Result.round_id == season.round_id,
+                )
+                .first()
+            )
+            if already_frozen:
+                continue
+
+            # Same GLOBAL-season member filter promote_to_next_level's own
+            # Continental->Global branch uses (including its known
+            # Contestant.season_id==contest_id legacy comparison) -- kept
+            # identical on purpose so finalization sees the same roster
+            # promotion would have. Not this task's scope to change.
+            global_filters = [
+                ContestantSeason.season_id == season.id,
+                ContestantSeason.is_active == True,
+                Contestant.is_active == True,
+                Contestant.is_deleted == False,
+                Contestant.season_id == contest.id,
+                Contestant.round_id == season.round_id,
+                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
+            ]
+            if season.round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+                global_filters.extend(nomination_cohort_created_at_filters(season.round))
+
+            members = (
+                db.query(Contestant)
+                .join(ContestantSeason)
+                .filter(and_(*global_filters))
+                .all()
+            )
+            if not members:
+                continue
+
+            ranked_ids = SeasonMigrationService.rank_contestant_ids_like_top_high5(
+                db, contest, season, members
+            )
+            members_by_id = {c.id: c for c in members if c.id is not None}
+            ranked_contestants = [
+                members_by_id[cid] for cid in ranked_ids[:5] if cid in members_by_id
+            ]
+            if not ranked_contestants:
+                continue
+
+            written = SeasonMigrationService._freeze_top_high5_results(
+                db,
+                level=SeasonLevel.GLOBAL,
+                jurisdiction="Global",
+                contest=contest,
+                from_season=season,
+                to_season=None,
+                ranked_contestants=ranked_contestants,
+            )
+            if not written:
+                continue
+            try:
+                db.commit()
+            except Exception as e:
+                logger.error(
+                    f"Error finalizing GLOBAL Top High5 for contest {contest.id}: {e}",
+                    exc_info=True,
+                )
+                db.rollback()
+                continue
+            outcomes.append(
+                {
+                    "contest_id": contest.id,
+                    "round_id": season.round_id,
+                    "action": "finalize_global_top_high5",
+                    "result": {
+                        "message": f"Froze {written} GLOBAL Top High5 row(s)",
+                        "frozen_count": written,
+                    },
+                }
+            )
+        return outcomes
 
     # Named macro blocs for regional nomination / voting (disjoint country key sets).
     # Keys are lowercase: ISO2 and normalized country tokens from _country_key / aliases.
@@ -953,6 +1089,113 @@ class SeasonMigrationService:
             seen_user_ids.add(uid)
             deduped.append(candidate)
         return [c.id for c in deduped if c.id is not None]
+
+    @staticmethod
+    def _freeze_top_high5_results(
+        db: Session,
+        *,
+        level: SeasonLevel,
+        jurisdiction: str,
+        contest: Contest,
+        from_season: ContestSeason,
+        to_season: Optional[ContestSeason],
+        ranked_contestants: List[Contestant],
+    ) -> int:
+        """
+        Persist an already-ranked (<=5) group as this level's official,
+        frozen Top High5 result. Called once, at the moment this level's
+        voting closes (from promote_to_next_level, or from the GLOBAL
+        finalization step for the terminal level).
+
+        Write-once: if rows already exist for this exact
+        (contest, level, jurisdiction, round) group, this is a no-op — a
+        finalized result must never be silently rewritten. Does not re-sort
+        ``ranked_contestants``; callers must pass it in the exact order that
+        was actually used for promotion, so the frozen rank can never diverge
+        from what was migrated.
+        """
+        if not ranked_contestants or not from_season.round_id:
+            return 0
+
+        contestant_ids = [c.id for c in ranked_contestants if c.id is not None]
+        if not contestant_ids:
+            return 0
+
+        already_frozen = (
+            db.query(TopHigh5Result.id)
+            .filter(
+                TopHigh5Result.contest_id == contest.id,
+                TopHigh5Result.level == level,
+                TopHigh5Result.jurisdiction == jurisdiction,
+                TopHigh5Result.round_id == from_season.round_id,
+            )
+            .first()
+        )
+        if already_frozen:
+            logger.info(
+                "  - Top High5 freeze skipped (already finalized): contest=%s level=%s "
+                "jurisdiction=%s round=%s",
+                contest.id, level.value, jurisdiction, from_season.round_id,
+            )
+            return 0
+
+        from app.services.voting_ranking import aggregate_rankings
+
+        bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
+        ranking_rows = aggregate_rankings(
+            db,
+            season_ids=[from_season.id],
+            contestant_ids=contestant_ids,
+            contest_id=contest.id,
+            bucket_key=bucket_key,
+            require_votes=False,
+        )
+        scores_by_id = {row.contestant_id: row for row in ranking_rows}
+
+        migrated_ids: set = set()
+        if to_season is not None:
+            # Explicit flush: the caller may be running with autoflush
+            # disabled, and this must see promotion's own pending
+            # ContestantSeason inserts for `to_season`, not just committed
+            # state, so `migrated` is never wrong within the same call.
+            db.flush()
+            migrated_ids = {
+                row[0]
+                for row in db.query(ContestantSeason.contestant_id)
+                .filter(
+                    ContestantSeason.season_id == to_season.id,
+                    ContestantSeason.is_active == True,
+                )
+                .all()
+            }
+
+        written = 0
+        for idx, candidate in enumerate(ranked_contestants, start=1):
+            if candidate.id is None:
+                continue
+            score = scores_by_id.get(candidate.id)
+            db.add(
+                TopHigh5Result(
+                    contestant_id=candidate.id,
+                    contest_id=contest.id,
+                    category_id=contest.category_id,
+                    level=level,
+                    jurisdiction=jurisdiction,
+                    round_id=from_season.round_id,
+                    from_season_id=from_season.id,
+                    to_season_id=to_season.id if to_season is not None else None,
+                    rank=idx,
+                    total_points=score.total_points if score else 0,
+                    total_votes=score.total_votes if score else 0,
+                    shares=score.shares if score else 0,
+                    likes=score.likes if score else 0,
+                    comments=score.comments if score else 0,
+                    views=score.views if score else 0,
+                    migrated=candidate.id in migrated_ids,
+                )
+            )
+            written += 1
+        return written
 
     @staticmethod
     def prior_stage_rank_map(
@@ -2304,7 +2547,15 @@ class SeasonMigrationService:
         
         # Sélectionner les contestants selon le niveau (sans dépendre des stages)
         selected_contestants = []
-        
+
+        # Top High5 freeze groups for `from_level` (jurisdiction -> ranked
+        # contestants), captured here and written to top_high5_results once
+        # to_season/promotion membership are known, further down. Kept
+        # separate from `selected_contestants` because the CONTINENT level
+        # needs its own per-continent grouping distinct from the worldwide
+        # Continental->Global promotion pool (see below).
+        freeze_groups: List[tuple] = []
+
         if to_level == SeasonLevel.GLOBAL:
             # GLOBAL must preserve the canonical Past/Top High5 winner order from
             # the continental season. Reuse the same ranking helper so promotion
@@ -2346,6 +2597,26 @@ class SeasonMigrationService:
                 selected_contestants = []
 
             logger.info(f"  - {len(selected_contestants)} contestants selected for GLOBAL")
+
+            # Freeze CONTINENT's own Top High5 (per continent) separately from
+            # the worldwide promotion pool above: Continental->Global pools
+            # every continent together, so a continent's own top 5 may not
+            # all be part of `selected_contestants`.
+            continent_groups = SeasonMigrationService.get_top_contestants_by_location(
+                db,
+                from_season.id,
+                'continent',
+                contest_id=contest_id,
+                limit=5,
+                stage_id=None,
+                diagnostics=False,
+                qualified_only=False,
+                strict_season_scope=True,
+                require_votes=False,
+            )
+            for jurisdiction, location_contestants in continent_groups.items():
+                if location_contestants:
+                    freeze_groups.append((jurisdiction, location_contestants))
         else:
             # Pour les autres niveaux : prendre les 5 premiers par localisation
             location_field_map = {
@@ -2389,7 +2660,36 @@ class SeasonMigrationService:
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
             for location, contestants in grouped_contestants.items():
                 logger.info(f"    - {location}: {len(contestants)} contestants")
-            
+
+            # Freeze from a *separate* require_votes=False call, not
+            # `grouped_contestants` above (which stays require_votes=True,
+            # unchanged, since it drives actual promotion). This mirrors the
+            # already-shipped Top High5 zero-vote-inclusion product decision
+            # (require_votes=False, display-only, never a promotion signal):
+            # a zero-vote roster member is frozen (rank shown, migrated will
+            # correctly read False since it never gets promoted) rather than
+            # the whole jurisdiction silently having no Top High5 record.
+            freeze_grouped = SeasonMigrationService.get_top_contestants_by_location(
+                db,
+                from_season.id,
+                location_field,
+                contest_id=contest_id,
+                limit=limit,
+                stage_id=None,
+                diagnostics=False,
+                qualified_only=pool_qualified,
+                strict_season_scope=strict_scope,
+                uncapped=contest_mode == "nomination",
+                require_votes=False,
+            )
+            # Keyed by the FROM-level's own jurisdiction field (e.g. city for
+            # CITY->COUNTRY, country for COUNTRY->REGIONAL) -- exactly what
+            # should be frozen as that level's Top High5, captured before any
+            # destination-pool relabeling below.
+            for jurisdiction, location_contestants in freeze_grouped.items():
+                if location_contestants:
+                    freeze_groups.append((jurisdiction, location_contestants))
+
             # Flatten la liste. COUNTRY -> REGIONAL nomination is grouped by
             # country; stamp the canonical regional bloc from country so stale
             # profile regions cannot mix East/West/Southern Africa rosters.
@@ -2460,6 +2760,18 @@ class SeasonMigrationService:
                         uncapped=True,
                         cohort_round_id=int(from_season.round_id),
                     )
+                    # Only backfill freeze_groups from this retry if the
+                    # earlier require_votes=False freeze pass also found
+                    # nothing (e.g. membership itself needed the sync, not
+                    # just votes) -- don't clobber an already-correct freeze
+                    # capture with this require_votes=True retry, which would
+                    # silently drop zero-vote members from the frozen result.
+                    if not freeze_groups:
+                        freeze_groups = [
+                            (jurisdiction, location_contestants)
+                            for jurisdiction, location_contestants in grouped_retry.items()
+                            if location_contestants
+                        ]
                     selected_contestants = []
                     if from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL:
                         for country, location_contestants in grouped_retry.items():
@@ -2487,6 +2799,30 @@ class SeasonMigrationService:
             msg = f"No contestants to promote from {from_level.value} (season_id: {from_season.id})"
             logger.warning(msg)
             print(f"[Migration] WARNING: {msg}")
+
+            # Still freeze whatever was ranked at from_level, even though
+            # nothing ended up migrating (e.g. every group's jurisdiction
+            # lacks a configured next-level pool). Top High5 for this level
+            # must not depend on whether the NEXT level's grouping succeeded.
+            frozen_rows = 0
+            for jurisdiction, location_contestants in freeze_groups:
+                frozen_rows += SeasonMigrationService._freeze_top_high5_results(
+                    db,
+                    level=from_level,
+                    jurisdiction=jurisdiction,
+                    contest=contest,
+                    from_season=from_season,
+                    to_season=None,
+                    ranked_contestants=location_contestants,
+                )
+            if frozen_rows:
+                try:
+                    db.commit()
+                    logger.info(f"  - Froze {frozen_rows} Top High5 result row(s) for {from_level.value} (no promotion)")
+                except Exception as e:
+                    logger.error(f"  - Error committing Top High5 freeze: {e}", exc_info=True)
+                    db.rollback()
+
             return {
                 "message": msg,
                 "skipped": True,
@@ -2644,7 +2980,24 @@ class SeasonMigrationService:
             logger.info(f"  - Réactivation du lien ContestSeasonLink existant pour contest {contest_id} et saison {to_season.id} (date mise à jour)")
         
         # Pas besoin de créer de stage - on utilise directement les saisons
-        
+
+        # Freeze this level's Top High5 results now that to_season/promotion
+        # membership are known, in the same transaction as the promotion
+        # itself so the frozen ranking and the migrated set can never diverge.
+        frozen_rows = 0
+        for jurisdiction, location_contestants in freeze_groups:
+            frozen_rows += SeasonMigrationService._freeze_top_high5_results(
+                db,
+                level=from_level,
+                jurisdiction=jurisdiction,
+                contest=contest,
+                from_season=from_season,
+                to_season=to_season,
+                ranked_contestants=location_contestants,
+            )
+        if frozen_rows:
+            logger.info(f"  - Froze {frozen_rows} Top High5 result row(s) for {from_level.value}")
+
         try:
             db.commit()
             logger.info(f"  - Commit successful")
@@ -2885,6 +3238,15 @@ class SeasonMigrationService:
                 next_level = SeasonLevel.CONTINENT
             elif season.level == SeasonLevel.CONTINENT:
                 next_level = SeasonLevel.GLOBAL
+            elif season.level == SeasonLevel.GLOBAL:
+                # Terminal level: nothing to promote to, but its own Top
+                # High5 still needs freezing once its voting closes.
+                results.extend(
+                    SeasonMigrationService._finalize_global_top_high5(
+                        db, season, round_obj, today
+                    )
+                )
+                continue
 
             if not next_level:
                 continue
