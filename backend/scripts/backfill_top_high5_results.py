@@ -26,17 +26,26 @@ this stage closed"). Per the functional spec's own section 24 guidance
   by promotion). This is exact, not a recomputation, because at these hops
   "top N per jurisdiction" IS "who advanced" -- the two sets are the same by
   construction (see season_migration.py's location_field_map).
-- CONTINENT: no such destination to read from -- Continental->Global pools
-  every continent together for a single worldwide cut, so most of a
-  continent's own top 5 never appear in the Global season at all. This falls
-  back to recomputing per-continent rankings from currently-visible votes
-  (the same call the live freeze hook uses), which can still diverge from
-  the real historical result if continent-level votes changed since the
-  stage actually closed -- there is no better signal available without a
-  point-in-time snapshot, which was never taken. Treat backfilled CONTINENT
-  `migrated` flags as lower-confidence than COUNTRY/REGIONAL; going-forward
-  data (frozen live, in promote_to_next_level's own transaction) doesn't
-  have this limitation regardless of level.
+- CONTINENT: prefer the same destination-membership method as COUNTRY/
+  REGIONAL (see _groups_for_continent) -- a 2026-09-15 production audit
+  found real GLOBAL-destination evidence, <=5 per continent, for every
+  contest checked, contradicting this script's original assumption that
+  Continental->Global pooling usually leaves a continent's own membership
+  empty. Falls back to recomputing per-continent rankings from
+  currently-visible votes (the same call the live freeze hook uses) only
+  for a jurisdiction with genuinely no destination evidence at all, which
+  can still diverge from the real historical result if continent-level
+  votes changed since the stage actually closed -- there is no better
+  signal available for that specific case without a point-in-time
+  snapshot, which was never taken. Treat any CONTINENT `migrated` flag
+  produced by the recompute fallback as lower-confidence than the
+  membership-based result; going-forward data (frozen live, in
+  promote_to_next_level's own transaction) doesn't have this limitation
+  regardless of level. A jurisdiction with membership evidence but more
+  than 5 real candidates still falls back to the recompute+cap here,
+  matching prior behavior -- the separate, stricter historical repair
+  utility (scripts/repair_continent_top_high5.py) refuses outright in that
+  case instead of guessing.
 
 A stage only qualifies for backfill if the contest has already moved past
 it (a link exists at the next level for that specific contest+round), so
@@ -124,12 +133,27 @@ def _contest_linked_season_for_level(db, contest_id: int, round_id: int, level: 
     return None
 
 
-def _groups_from_actual_migration(db, contest: Contest, dest_season: ContestSeason, jurisdiction_field: str):
+def _groups_from_actual_migration(
+    db,
+    contest: Contest,
+    dest_season: ContestSeason,
+    jurisdiction_field: str,
+    *,
+    cap: "int | None" = 5,
+):
     """
-    COUNTRY/REGIONAL reconstruction: the destination season's own active
-    membership for this contest, in real promotion order (joined_at),
-    grouped back to this level's jurisdiction and capped at 5 per group.
-    Exact, not a guess -- these contestants are who actually migrated.
+    COUNTRY/REGIONAL (and, where evidence exists, CONTINENT) reconstruction:
+    the destination season's own active membership for this contest, in real
+    promotion order (joined_at), grouped back to this level's jurisdiction
+    and capped at 5 per group. Exact, not a guess -- these contestants are
+    who actually migrated.
+
+    `cap`: defaults to 5 (existing, unchanged behavior for every current
+    caller). Pass `cap=None` to get the full, uncapped membership per
+    jurisdiction instead -- used by the separate historical repair utility
+    (scripts/repair_continent_top_high5.py), which must be able to tell "more
+    than 5 real candidates" apart from "exactly 5" rather than have that
+    distinction silently hidden by truncation.
     """
     members = (
         db.query(Contestant)
@@ -148,13 +172,16 @@ def _groups_from_actual_migration(db, contest: Contest, dest_season: ContestSeas
         if not key:
             continue
         groups.setdefault(key, []).append(m)
-    return {k: v[:5] for k, v in groups.items()}
+    if cap is None:
+        return groups
+    return {k: v[:cap] for k, v in groups.items()}
 
 
 def _groups_from_recomputed_ranking(db, contest: Contest, source_season: ContestSeason, location_field: str):
-    """CONTINENT fallback: no destination to read from (see module docstring),
-    so recompute from currently-visible votes, same call the live freeze
-    hook uses -- best available signal, not an exact reconstruction."""
+    """CONTINENT fallback: no destination evidence to read (see
+    _groups_for_continent), so recompute from currently-visible votes, same
+    call the live freeze hook uses -- best available signal, not an exact
+    reconstruction."""
     return SeasonMigrationService.get_top_contestants_by_location(
         db,
         source_season.id,
@@ -165,6 +192,42 @@ def _groups_from_recomputed_ranking(db, contest: Contest, source_season: Contest
         qualified_only=False,
         strict_season_scope=True,
         require_votes=False,
+    )
+
+
+def _groups_for_continent(
+    db, contest: Contest, source_season: ContestSeason, dest_season: ContestSeason, jurisdiction_field: str
+):
+    """
+    CONTINENT reconstruction: prefer the same exact, destination-membership
+    method already proven for COUNTRY/REGIONAL whenever the GLOBAL
+    destination season actually has evidence for this contest -- a
+    2026-09-15 production audit (see KALUTASOCIETY memory: Top High5
+    reconciliation audit) found this evidence exists and is <=5 per
+    continent for every real case checked, contradicting this script's
+    original assumption that Continental->Global pooling usually leaves a
+    continent's own membership empty. Falls back to the current-vote
+    recompute only when there is genuinely no destination evidence at all
+    for a given jurisdiction (empty group) -- never as a first choice, and
+    never for a jurisdiction that has evidence but more than 5 members
+    (still handled by the existing recompute+cap fallback here, matching
+    prior behavior; the separate repair utility is stricter and refuses
+    outright rather than guessing in that case).
+
+    Returns (grouped, method_label) for reporting.
+    """
+    from_membership = _groups_from_actual_migration(db, contest, dest_season, jurisdiction_field)
+    if from_membership:
+        recomputed = _groups_from_recomputed_ranking(db, contest, source_season, jurisdiction_field)
+        # Fill in any jurisdiction with real evidence missing from the
+        # membership-based pass (e.g. a continent whose own top 5 never
+        # reached this destination season) using the recompute fallback,
+        # without ever overriding a jurisdiction membership already proved.
+        for jurisdiction, ranked in recomputed.items():
+            from_membership.setdefault(jurisdiction, ranked)
+        return from_membership, "actual destination membership (recompute fallback for jurisdictions with no evidence)"
+    return _groups_from_recomputed_ranking(db, contest, source_season, jurisdiction_field), (
+        "recomputed from current votes (no destination evidence for any jurisdiction)"
     )
 
 
@@ -235,6 +298,7 @@ def main() -> None:
         total_no_source_season = 0
         total_not_yet_closed = 0
         report_rows = []
+        methods_used: set[str] = set()
 
         for contest in contests:
             source_season = _contest_linked_season_for_level(db, contest.id, rnd.id, level)
@@ -265,7 +329,10 @@ def main() -> None:
                 continue
 
             if level == SeasonLevel.CONTINENT:
-                grouped = _groups_from_recomputed_ranking(db, contest, source_season, jurisdiction_field)
+                grouped, method_used = _groups_for_continent(
+                    db, contest, source_season, dest_season, jurisdiction_field
+                )
+                methods_used.add(method_used)
             else:
                 grouped = _groups_from_actual_migration(db, contest, dest_season, jurisdiction_field)
 
@@ -296,7 +363,11 @@ def main() -> None:
             db.commit()
 
         print(f"Round: {rnd.name} (id={rnd.id}), level={level.value}")
-        print(f"Reconstruction method: {'actual destination membership' if level != SeasonLevel.CONTINENT else 'recomputed from current votes (see docstring caveat)'}")
+        if level == SeasonLevel.CONTINENT:
+            method_desc = "; ".join(sorted(methods_used)) if methods_used else "n/a (no contests reached this stage)"
+        else:
+            method_desc = "actual destination membership"
+        print(f"Reconstruction method: {method_desc}")
         print(f"Contests scanned: {len(contests)}")
         print(f"  no source season for this level: {total_no_source_season}")
         print(f"  stage not yet closed (no higher-level link found): {total_not_yet_closed}")
