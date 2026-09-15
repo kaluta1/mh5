@@ -6,15 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
 import { contestService, TopHigh5Contest, TopHigh5Level, TopHigh5Response } from "@/services/contest-service"
-import ApiService, { Round } from "@/lib/api-service"
-import { isRoundVotingLive } from "@/lib/is-round-voting-live"
-import {
-  cohortAnchorDate,
-  cohortMonthForVoteGeographyLevel,
-  cohortRoundForVoteGeographyLevel,
-  resolveVoteCalendarAnchorRound,
-  type VoteGeographyLevel,
-} from "@/lib/contest-round-tabs"
+import { nextRoundIdOnLevelChange, resolveTopHigh5RequestRoundId } from "@/lib/top-high5-round-selection"
+// `isRoundVotingLive` and the contest-round-tabs vote-calendar helpers are
+// deliberately NOT imported here -- they answer "which cohort is voting
+// right now" for the live Vote page, not "which round has finalized
+// results", which is what Top High5 needs. See top-high5-round-selection.ts.
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -57,50 +53,6 @@ const topHigh5Cache = new Map<string, { data: TopHigh5Response; timestamp: numbe
 const TOP_HIGH5_CACHE_TTL = 30 * 1000
 const TOP_HIGH5_BACKGROUND_REFRESH_MS = 15 * 1000
 
-function topHigh5LevelToVoteGeo(level: TopHigh5Level): VoteGeographyLevel | null {
-  switch (level) {
-    case "country":
-      return "country"
-    case "regional":
-      return "regional"
-    case "continent":
-      return "continental"
-    case "global":
-      return "global"
-    default:
-      return null
-  }
-}
-
-function resolveTopHigh5RoundId(level: TopHigh5Level, rounds: Round[]): number | undefined {
-  if (!rounds.length) return undefined
-  const voteAnchor = resolveVoteCalendarAnchorRound(rounds)
-  const geo = topHigh5LevelToVoteGeo(level)
-  if (voteAnchor && geo) {
-    const cohort = cohortRoundForVoteGeographyLevel(voteAnchor, geo, rounds)
-    if (cohort?.id) return Number(cohort.id)
-    const cohortMonth = cohortMonthForVoteGeographyLevel(voteAnchor, geo)
-    if (cohortMonth) {
-      const byMonth = rounds.find((r) => {
-        const anchor = cohortAnchorDate(r)
-        return (
-          anchor &&
-          anchor.getFullYear() === cohortMonth.getFullYear() &&
-          anchor.getMonth() === cohortMonth.getMonth()
-        )
-      })
-      if (byMonth?.id) return Number(byMonth.id)
-    }
-    // Pooled nomination levels must not fall back to the live vote round — that
-    // shows the wrong cohort month (e.g. April on Global when March is expected).
-    if (geo === "regional" || geo === "continental" || geo === "global") {
-      return undefined
-    }
-  }
-  const live = rounds.find((r) => isRoundVotingLive(r, rounds))
-  return live?.id ? Number(live.id) : Number(rounds[0]?.id)
-}
-
 function topHigh5CacheKey(country: string, level: TopHigh5Level, roundId?: number, regionQuery?: string) {
   return `${level}-${roundId || "auto"}-${country.trim().toLowerCase() || "global"}-${(regionQuery || "").trim().toLowerCase()}`
 }
@@ -134,8 +86,6 @@ export default function TopHigh5Page() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
   const [showDiagnostics, setShowDiagnostics] = useState(false)
-  const [defaultCountryRoundId, setDefaultCountryRoundId] = useState<number | undefined>(undefined)
-  const [defaultRegionalRoundId, setDefaultRegionalRoundId] = useState<number | undefined>(undefined)
   // Flag so we only seed the country input from the signed-in user once, never
   // overwriting whatever the user has typed afterwards.
   const [didSeedCountry, setDidSeedCountry] = useState(false)
@@ -177,29 +127,20 @@ export default function TopHigh5Page() {
         const urlRoundIdRaw = searchParams?.get("round_id") || searchParams?.get("roundId") || ""
         const urlLevelRaw = (searchParams?.get("level") || "").toLowerCase() as TopHigh5Level
         const urlCountryRaw = searchParams?.get("country") || ""
-        let parsedRoundId = urlRoundIdRaw && !Number.isNaN(Number(urlRoundIdRaw)) ? Number(urlRoundIdRaw) : undefined
+        // No explicit round (deep link or otherwise): defer entirely to the
+        // backend's own resolution, which finds the latest round with real
+        // finalized results for this level -- see top-high5-round-selection.ts.
+        const resolvedRoundId = resolveTopHigh5RequestRoundId({ explicitRoundId: urlRoundIdRaw })
         const initialLevel: TopHigh5Level = LEVEL_OPTIONS.some((o) => o.value === urlLevelRaw)
           ? urlLevelRaw
           : "country"
         const initialCountry = urlCountryRaw || fallbackCountry
         setCountryInput(initialCountry)
-        setRoundIdInput(parsedRoundId ? String(parsedRoundId) : urlRoundIdRaw)
+        setRoundIdInput(resolvedRoundId ? String(resolvedRoundId) : "")
         setActiveLevel(initialLevel)
         setDidSeedCountry(true)
 
-        try {
-          const rounds = (await ApiService.getRounds({ contestLimit: 1, limit: 24 })) as Round[]
-          const cohortRoundId = resolveTopHigh5RoundId(initialLevel, rounds)
-          parsedRoundId = cohortRoundId ?? parsedRoundId
-          setDefaultCountryRoundId(resolveTopHigh5RoundId("country", rounds))
-          setDefaultRegionalRoundId(resolveTopHigh5RoundId("regional", rounds))
-          if (parsedRoundId) {
-            setRoundIdInput(String(parsedRoundId))
-          }
-          void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
-        } catch {
-          void fetchData({ country: initialCountry, roundId: parsedRoundId, level: initialLevel })
-        }
+        void fetchData({ country: initialCountry, roundId: resolvedRoundId, level: initialLevel })
       }
       void seed()
     }
@@ -273,21 +214,17 @@ export default function TopHigh5Page() {
     }
   }
 
-  const handleLevelChange = async (next: string) => {
+  const handleLevelChange = (next: string) => {
     const nextLevel = next as TopHigh5Level
     if (nextLevel === activeLevel) return
     setActiveLevel(nextLevel)
-    try {
-      const rounds = (await ApiService.getRounds({ contestLimit: 1, limit: 24 })) as Round[]
-      const parsed = resolveTopHigh5RoundId(nextLevel, rounds)
-      if (parsed) {
-        setRoundIdInput(String(parsed))
-      }
-      fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
-    } catch {
-      const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
-      fetchData({ country: countryInput, level: nextLevel, roundId: parsed })
-    }
+    // A round finalized for the previous level is not necessarily finalized
+    // for this one (e.g. Country closed for round 27 does not mean Regional
+    // has closed for round 27 too) -- always re-resolve fresh via the
+    // backend rather than carrying the old round over.
+    const nextRoundId = nextRoundIdOnLevelChange()
+    setRoundIdInput("")
+    fetchData({ country: countryInput, level: nextLevel, roundId: nextRoundId })
   }
 
   const isLikelyRegionalSearch = (value: string) => {
@@ -297,7 +234,7 @@ export default function TopHigh5Page() {
   }
 
   const handleSearch = () => {
-    const parsed = roundIdInput && !Number.isNaN(Number(roundIdInput)) ? Number(roundIdInput) : undefined
+    const parsed = resolveTopHigh5RequestRoundId({ explicitRoundId: roundIdInput })
     if (activeLevel === "regional") {
       const raw = countryInput.trim()
       const fallbackCountry = (activeCountry || (user as any)?.country || (user as any)?.author_country || "").trim()
