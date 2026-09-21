@@ -786,8 +786,24 @@ class SeasonMigrationService:
             filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        # Defense in depth against pre-existing corrupted ContestantSeason
+        # rows (see KALUTASOCIETY_CONTESTANTSEASON_MULTIROUND_INTEGRITY_AUDIT):
+        # a contestant's round_id is set once, at submission, and stays
+        # constant across every level of their genuine progression (proven
+        # extensively by the TopHigh5 historical repair, which used this same
+        # field as its authoritative signal) -- so even an ACTIVE
+        # ContestantSeason at the exact requested season is only trusted here
+        # when it also matches the contestant's own round. When no explicit
+        # cohort_round_id is given, derive it from the season being queried;
+        # every ContestSeason belongs to exactly one Round.
+        effective_round_id = cohort_round_id
+        if effective_round_id is None:
+            effective_round_id = db.query(ContestSeason.round_id).filter(
+                ContestSeason.id == season_id
+            ).scalar()
+        if effective_round_id is not None:
+            filters.append(Contestant.round_id == effective_round_id)
         if cohort_round_id is not None:
-            filters.append(Contestant.round_id == cohort_round_id)
             cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
             if cohort_round is not None:
                 from app.core.nomination_calendar import nomination_cohort_created_at_filters
@@ -868,8 +884,13 @@ class SeasonMigrationService:
             fallback_filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        # Same defense-in-depth as the primary query above -- this tier is a
+        # season-scoped read identical in shape to the primary one, so it
+        # needs the same round check (effective_round_id was already
+        # resolved above, from cohort_round_id or derived from season_id).
+        if effective_round_id is not None:
+            fallback_filters.append(Contestant.round_id == effective_round_id)
         if cohort_round_id is not None:
-            fallback_filters.append(Contestant.round_id == cohort_round_id)
             cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
             if cohort_round is not None:
                 from app.core.nomination_calendar import nomination_cohort_created_at_filters
@@ -1384,6 +1405,91 @@ class SeasonMigrationService:
         )
 
     @staticmethod
+    def _activate_contestant_season_link(
+        db: Session,
+        contestant_id: int,
+        season_id: int,
+        *,
+        joined_at: Optional[datetime] = None,
+    ) -> "ContestantSeason":
+        """
+        Create or reactivate a contestant's membership at `season_id`, while
+        enforcing the one-active-membership-per-level invariant: a
+        contestant must never hold two simultaneously ACTIVE
+        ContestantSeason rows whose seasons share the same logical level,
+        even across different rounds/cohorts (see
+        KALUTASOCIETY_CONTESTANTSEASON_MULTIROUND_INTEGRITY_AUDIT).
+        Memberships at OTHER levels are never touched -- a contestant is
+        expected to be simultaneously active at, e.g., its current
+        Continental season and (until deactivated by that same promotion)
+        its prior Regional one; only *same-level* multiplicity is invalid.
+
+        This is the single place every write path that activates a
+        destination ContestantSeason link must go through -- centralizing
+        it here means no caller has to remember the invariant, the same
+        principle already applied to the round-scoping fix in
+        _contestants_for_contest_in_season.
+
+        Idempotent: reactivating an already-active target link only
+        updates `joined_at`.
+        """
+        target_season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+        if target_season is None:
+            raise ValueError(f"ContestSeason {season_id} not found")
+        when = joined_at or datetime.utcnow()
+
+        # Deactivate any OTHER active same-level membership this contestant
+        # holds -- already-flushed rows first.
+        conflicting = (
+            db.query(ContestantSeason)
+            .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+            .filter(
+                ContestantSeason.contestant_id == contestant_id,
+                ContestantSeason.is_active == True,
+                ContestantSeason.season_id != season_id,
+                ContestSeason.level == target_season.level,
+            )
+            .all()
+        )
+        for link in conflicting:
+            link.is_active = False
+
+        # This app's session runs with autoflush disabled, so a same-batch
+        # pending insert at a conflicting same-level season (not yet
+        # flushed) would not appear in the query above -- catch those too,
+        # matching the existing pending-object pattern this module already
+        # uses elsewhere (_ensure_source_season_links).
+        existing_pending = None
+        for obj in db.new:
+            if not isinstance(obj, ContestantSeason) or obj.contestant_id != contestant_id:
+                continue
+            if obj.season_id == season_id:
+                existing_pending = obj
+                continue
+            if obj.is_active:
+                obj_season = db.query(ContestSeason).filter(ContestSeason.id == obj.season_id).first()
+                if obj_season is not None and obj_season.level == target_season.level:
+                    obj.is_active = False
+
+        existing = existing_pending or db.query(ContestantSeason).filter(
+            ContestantSeason.contestant_id == contestant_id,
+            ContestantSeason.season_id == season_id,
+        ).first()
+
+        if existing is None:
+            existing = ContestantSeason(
+                contestant_id=contestant_id,
+                season_id=season_id,
+                joined_at=when,
+                is_active=True,
+            )
+            db.add(existing)
+        else:
+            existing.is_active = True
+            existing.joined_at = when
+        return existing
+
+    @staticmethod
     def _ensure_source_season_links(db: Session, contest_id: int, season_id: int) -> int:
         """
         Repair missing contestant-season links for a source season.
@@ -1452,19 +1558,11 @@ class SeasonMigrationService:
                     )
                 ).first()
                 if existing and not existing.is_active:
-                    existing.is_active = True
-                    existing.joined_at = datetime.utcnow()
+                    SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
                     repaired += 1
                 continue
 
-            db.add(
-                ContestantSeason(
-                    contestant_id=cid,
-                    season_id=season_id,
-                    joined_at=datetime.utcnow(),
-                    is_active=True,
-                )
-            )
+            SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
             already_linked.add(cid)
             repaired += 1
         try:
@@ -1638,8 +1736,19 @@ class SeasonMigrationService:
             season_filters.append(ContestantSeason.is_active == True)
         if qualified_only:
             season_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
+        # Same defense-in-depth as _contestants_for_contest_in_season (see
+        # KALUTASOCIETY_CONTESTANTSEASON_MULTIROUND_INTEGRITY_AUDIT): trust an
+        # active ContestantSeason at this exact season only when it also
+        # matches the contestant's own round, derived from the season itself
+        # when not explicitly supplied.
+        effective_round_id = cohort_round_id
+        if effective_round_id is None:
+            effective_round_id = db.query(ContestSeason.round_id).filter(
+                ContestSeason.id == season_id
+            ).scalar()
+        if effective_round_id is not None:
+            season_filters.append(Contestant.round_id == effective_round_id)
         if cohort_round_id is not None:
-            season_filters.append(Contestant.round_id == cohort_round_id)
             cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
             if cohort_round is not None:
                 from app.core.nomination_calendar import nomination_cohort_created_at_filters
@@ -2117,29 +2226,9 @@ class SeasonMigrationService:
         migrated_contestant_ids = []
         for contestant in contestants:
             contestant.is_qualified = True
-            # Créer le lien contestant-season
-            existing_contestant_season = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == contestant.id,
-                    ContestantSeason.season_id == city_season.id
-                )
-            ).first()
-            
-            if not existing_contestant_season:
-                contestant_season = ContestantSeason(
-                    contestant_id=contestant.id,
-                    season_id=city_season.id,
-                    joined_at=datetime.utcnow(),
-                    is_active=True
-                )
-                db.add(contestant_season)
-                logger.info(f"  - Création du lien ContestantSeason pour contestant {contestant.id} dans saison CITY {city_season.id}")
-                migrated_contestant_ids.append(contestant.id)
-            else:
-                existing_contestant_season.is_active = True
-                existing_contestant_season.joined_at = datetime.utcnow()  # Mettre à jour la date de migration
-                logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} (date mise à jour)")
-                migrated_contestant_ids.append(contestant.id)
+            SeasonMigrationService._activate_contestant_season_link(db, contestant.id, city_season.id)
+            logger.info(f"  - Lien ContestantSeason actif pour contestant {contestant.id} dans saison CITY {city_season.id}")
+            migrated_contestant_ids.append(contestant.id)
         
         logger.info(f"Contestants migrés vers CITY ({len(migrated_contestant_ids)}): {migrated_contestant_ids}")
         
@@ -2264,36 +2353,10 @@ class SeasonMigrationService:
                 continue
 
             contestant.is_qualified = True
-            existing_contestant_season = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == contestant.id,
-                    ContestantSeason.season_id == target_season_id,
-                )
-            ).first()
-            if not existing_contestant_season:
-                # Skip if already pending in this session (avoid uq_contestant_season).
-                pending = any(
-                    isinstance(obj, ContestantSeason)
-                    and obj.contestant_id == contestant.id
-                    and obj.season_id == target_season_id
-                    for obj in db.new
-                )
-                if pending:
-                    synced.append(contestant.id)
-                    continue
-                db.add(
-                    ContestantSeason(
-                        contestant_id=contestant.id,
-                        season_id=target_season_id,
-                        joined_at=datetime.utcnow(),
-                        is_active=True,
-                    )
-                )
-                synced.append(contestant.id)
-            else:
-                existing_contestant_season.is_active = True
-                existing_contestant_season.joined_at = datetime.utcnow()
-                synced.append(contestant.id)
+            SeasonMigrationService._activate_contestant_season_link(
+                db, contestant.id, target_season_id
+            )
+            synced.append(contestant.id)
         return synced
 
     @staticmethod
@@ -2969,31 +3032,19 @@ class SeasonMigrationService:
             if old_link:
                 old_link.is_active = False
                 logger.info(f"  - Désactivation du lien ContestantSeason pour contestant {contestant.id} dans saison {from_season.id}")
-            
-            # Créer le nouveau lien ContestantSeason
-            existing_new_link = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == contestant.id,
-                    ContestantSeason.season_id == to_season.id
-                )
-            ).first()
-            
-            if not existing_new_link:
-                new_link = ContestantSeason(
-                    contestant_id=contestant.id,
-                    season_id=to_season.id,
-                    joined_at=promotion_time,
-                    is_active=True
-                )
-                db.add(new_link)
-                logger.info(f"  - Création du lien ContestantSeason pour contestant {contestant.id} dans saison {to_season.id}")
-                promoted_contestant_ids.append(contestant.id)
-            else:
-                # Réactiver le lien s'il existe déjà et mettre à jour la date
-                existing_new_link.is_active = True
-                existing_new_link.joined_at = promotion_time
-                logger.info(f"  - Réactivation du lien ContestantSeason existant pour contestant {contestant.id} dans saison {to_season.id} (date mise à jour)")
-                promoted_contestant_ids.append(contestant.id)
+
+            # Créer/réactiver le lien ContestantSeason de destination. Passe par
+            # le helper partagé pour garantir qu'aucune autre saison de même
+            # niveau (round différent) ne reste active simultanément -- c'est
+            # exactement le défaut confirmé par
+            # KALUTASOCIETY_CONTESTANTSEASON_MULTIROUND_INTEGRITY_AUDIT: cette
+            # étape ne désactivait auparavant que `from_season`, jamais une
+            # autre saison du même niveau appartenant à un round différent.
+            SeasonMigrationService._activate_contestant_season_link(
+                db, contestant.id, to_season.id, joined_at=promotion_time
+            )
+            logger.info(f"  - Lien ContestantSeason actif pour contestant {contestant.id} dans saison {to_season.id}")
+            promoted_contestant_ids.append(contestant.id)
         
         logger.info(f"Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
         print(f"[Migration] Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
