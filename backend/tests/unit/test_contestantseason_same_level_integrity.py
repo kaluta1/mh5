@@ -152,15 +152,18 @@ def _active_seasons(db, contestant_id: int, level: SeasonLevel) -> list[int]:
 
 
 def test_activate_link_deactivates_foreign_round_same_level(db):
-    """TEST 1: contestant has active Continental in Round A. Activating
-    Continental in Round B must leave B active and A inactive -- no two
-    simultaneously active same-level memberships."""
+    """TEST 1: contestant's own round is B but a historical corrupted ACTIVE
+    Continental membership exists at foreign Round A. Activating the
+    contestant's genuine Continental in Round B must leave B active and A
+    inactive -- no two simultaneously active same-level memberships. (The
+    reverse -- activating a FOREIGN round -- is refused; see
+    test_contestantseason_activation_round_guard.py.)"""
     contest = _contest(db, "t1")
     round_a = _round(db, "t1-a")
     round_b = _round(db, "t1-b")
     season_a = _season(db, round_a, contest, SeasonLevel.CONTINENT, "t1-a")
     season_b = _season(db, round_b, contest, SeasonLevel.CONTINENT, "t1-b")
-    contestant = _contestant(db, suffix="t1", rnd=round_a, contest=contest)
+    contestant = _contestant(db, suffix="t1", rnd=round_b, contest=contest)
     _membership(db, contestant=contestant, season=season_a, is_active=True)
     db.commit()
 
@@ -210,15 +213,15 @@ def test_activate_link_is_idempotent(db):
 
 
 def test_activate_link_reactivates_and_clears_foreign_conflicts(db):
-    """TEST 4: destination link exists but inactive; activating it must
-    reactivate it AND clear any other active same-level foreign-round
-    membership."""
+    """TEST 4: the contestant's own destination link exists but inactive;
+    activating it must reactivate it AND clear any other active same-level
+    foreign-round membership."""
     contest = _contest(db, "t4")
     round_a = _round(db, "t4-a")
     round_b = _round(db, "t4-b")
     season_a = _season(db, round_a, contest, SeasonLevel.CONTINENT, "t4-a")
     season_b = _season(db, round_b, contest, SeasonLevel.CONTINENT, "t4-b")
-    contestant = _contestant(db, suffix="t4", rnd=round_a, contest=contest)
+    contestant = _contestant(db, suffix="t4", rnd=round_b, contest=contest)
     _membership(db, contestant=contestant, season=season_a, is_active=True)
     _membership(db, contestant=contestant, season=season_b, is_active=False)
     db.commit()
@@ -261,7 +264,7 @@ def test_activate_link_does_not_affect_other_contestants(db):
     round_b = _round(db, "t6-b")
     season_a = _season(db, round_a, contest, SeasonLevel.CONTINENT, "t6-a")
     season_b = _season(db, round_b, contest, SeasonLevel.CONTINENT, "t6-b")
-    contestant_x = _contestant(db, suffix="t6-x", rnd=round_a, contest=contest)
+    contestant_x = _contestant(db, suffix="t6-x", rnd=round_b, contest=contest)
     contestant_y = _contestant(db, suffix="t6-y", rnd=round_a, contest=contest)
     _membership(db, contestant=contestant_x, season=season_a, is_active=True)
     _membership(db, contestant=contestant_y, season=season_a, is_active=True)

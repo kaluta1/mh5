@@ -2241,18 +2241,19 @@ async def update_contestant(
     Met à jour un candidat et sa liaison avec les saisons (admin uniquement)
     """
     check_admin(current_user)
-    
+    from app.services.season_migration import ForeignRoundActivationError, SeasonMigrationService
+
     contestant = db.query(Contestant).filter(
         Contestant.id == contestant_id,
         Contestant.is_deleted == False
     ).first()
-    
+
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Candidat non trouvé"
         )
-    
+
     try:
         # Mettre à jour les champs du candidat
         if contestant_data.title is not None:
@@ -2279,6 +2280,21 @@ async def update_contestant(
                     detail="Saison non trouvée"
                 )
             
+            # Integrity guard, evaluated BEFORE anything is mutated: a
+            # contestant may only be activated in a season of its own
+            # authoritative round (an unknown round on either side fails
+            # closed). Without this, changing the season to one of a foreign
+            # round -- including one whose membership was deliberately
+            # deactivated -- silently reactivated it.
+            round_conflict = SeasonMigrationService.contestant_season_round_conflict(
+                contestant.round_id, season.round_id
+            )
+            if round_conflict is not None:
+                raise ForeignRoundActivationError(
+                    f"contestant {contestant_id} (round {contestant.round_id}) cannot be "
+                    f"activated in season {season.id} (round {season.round_id}): {round_conflict}"
+                )
+
             # Désactiver l'ancienne liaison
             old_link = db.query(ContestantSeason).filter(
                 ContestantSeason.contestant_id == contestant_id,
@@ -2286,30 +2302,27 @@ async def update_contestant(
             ).first()
             if old_link:
                 old_link.is_active = False
-            
+
             # Vérifier si une liaison existe déjà pour la nouvelle saison
             existing_link = db.query(ContestantSeason).filter(
                 ContestantSeason.contestant_id == contestant_id,
                 ContestantSeason.season_id == contestant_data.season_id
             ).first()
-            
-            if existing_link:
-                # Réactiver la liaison existante
-                existing_link.is_active = True
-            else:
-                # Créer une nouvelle liaison
-                new_link = ContestantSeason(
-                    contestant_id=contestant_id,
-                    season_id=contestant_data.season_id,
-                    is_active=True
-                )
-                db.add(new_link)
-            
+
+            # Créer/réactiver via le helper partagé: the one implementation of
+            # the one-active-membership-per-level and round invariants.
+            SeasonMigrationService._activate_contestant_season_link(
+                db,
+                contestant_id,
+                contestant_data.season_id,
+                joined_at=existing_link.joined_at if existing_link is not None else None,
+            )
+
             contestant.season_id = contestant_data.season_id
-        
+
         db.commit()
         db.refresh(contestant)
-        
+
         return {
             "id": contestant.id,
             "user_id": contestant.user_id,
@@ -2319,6 +2332,12 @@ async def update_contestant(
             "verification_status": contestant.verification_status,
             "message": "Candidat mis à jour avec succès"
         }
+    except ForeignRoundActivationError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Activation refusée: {str(e)}"
+        )
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(

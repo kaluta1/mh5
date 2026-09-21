@@ -63,8 +63,37 @@ from app.models.round import Round, RoundStatus
 from app.models.comment import Comment
 
 
+class ForeignRoundActivationError(ValueError):
+    """A ContestantSeason activation was refused because the contestant's
+    authoritative cohort round does not match (or cannot be compared with)
+    the destination season's round."""
+
+
 class SeasonMigrationService:
     """Service pour gérer les migrations de saisons"""
+
+    @staticmethod
+    def contestant_season_round_conflict(
+        contestant_round_id: Optional[int],
+        season_round_id: Optional[int],
+    ) -> Optional[str]:
+        """
+        Single authoritative rule for whether a contestant may hold an ACTIVE
+        membership in a season: the contestant's own round (set once at
+        submission, constant across every level of genuine progression) must
+        equal the season's round.
+
+        Returns None when the membership is allowed, otherwise a reason code.
+        Fails CLOSED: when either round is unknown the cohort cannot be
+        established, so activation is refused rather than guessed.
+        """
+        if contestant_round_id is None:
+            return "CONTESTANT_ROUND_UNKNOWN"
+        if season_round_id is None:
+            return "SEASON_ROUND_UNKNOWN"
+        if int(contestant_round_id) != int(season_round_id):
+            return "ROUND_MISMATCH"
+        return None
 
     @staticmethod
     def _add_months(base: date, months: int) -> date:
@@ -1432,10 +1461,29 @@ class SeasonMigrationService:
 
         Idempotent: reactivating an already-active target link only
         updates `joined_at`.
+
+        Round guard (defense in depth): a contestant's round is fixed at
+        submission and constant across every level of genuine progression,
+        so no legitimate caller ever activates a season of a DIFFERENT
+        round. That case -- and any case where either round is unknown --
+        is refused with ForeignRoundActivationError BEFORE anything is
+        mutated, so a refused activation can never deactivate the
+        contestant's valid home-round membership.
         """
         target_season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
         if target_season is None:
             raise ValueError(f"ContestSeason {season_id} not found")
+        owner = db.query(Contestant.id, Contestant.round_id).filter(Contestant.id == contestant_id).first()
+        if owner is None:
+            raise ValueError(f"Contestant {contestant_id} not found")
+        round_conflict = SeasonMigrationService.contestant_season_round_conflict(
+            owner.round_id, target_season.round_id
+        )
+        if round_conflict is not None:
+            raise ForeignRoundActivationError(
+                f"Refusing to activate contestant {contestant_id} (round {owner.round_id}) "
+                f"in season {season_id} (round {target_season.round_id}): {round_conflict}"
+            )
         when = joined_at or datetime.utcnow()
 
         # Deactivate any OTHER active same-level membership this contestant
@@ -1495,7 +1543,26 @@ class SeasonMigrationService:
         Repair missing contestant-season links for a source season.
         This handles data states where votes/contestants exist but ContestantSeason links are missing.
         Returns number of links created/reactivated.
+
+        Only contestants whose own round equals the source season's round are
+        ever linked or reactivated -- whether they were found through votes or
+        through the legacy Contestant.season_id fallback (which spans every
+        round of the contest). A contestant of another round is skipped and
+        left completely untouched, so this repair can neither recreate a
+        foreign-round membership that was deliberately deactivated nor, via
+        _activate_contestant_season_link, displace a valid home-round
+        membership. Fails closed when the season's round is unknown.
         """
+        source_season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+        if source_season is None or source_season.round_id is None:
+            logger.warning(
+                "_ensure_source_season_links: season %s has no authoritative round; "
+                "no links repaired (fail closed)",
+                season_id,
+            )
+            return 0
+        source_round_id = int(source_season.round_id)
+
         # Prefer contestants that already have votes in this contest/season.
         voted_ids_rows = db.query(ContestantVoting.contestant_id).filter(
             and_(
@@ -1525,6 +1592,33 @@ class SeasonMigrationService:
         if not candidate_ids:
             return 0
 
+        candidate_rounds = {
+            row[0]: row[1]
+            for row in db.query(Contestant.id, Contestant.round_id)
+            .filter(Contestant.id.in_(candidate_ids))
+            .all()
+        }
+        cohort_candidate_ids = [
+            cid
+            for cid in candidate_ids
+            if SeasonMigrationService.contestant_season_round_conflict(
+                candidate_rounds.get(cid), source_round_id
+            )
+            is None
+        ]
+        if len(cohort_candidate_ids) != len(candidate_ids):
+            logger.info(
+                "_ensure_source_season_links: skipped %s candidate(s) outside round %s "
+                "for season %s (contest %s)",
+                len(candidate_ids) - len(cohort_candidate_ids),
+                source_round_id,
+                season_id,
+                contest_id,
+            )
+        candidate_ids = cohort_candidate_ids
+        if not candidate_ids:
+            return 0
+
         already_linked = {
             row[0]
             for row in db.query(ContestantSeason.contestant_id)
@@ -1550,19 +1644,23 @@ class SeasonMigrationService:
             if not contestant:
                 continue
             contestant.is_qualified = True
-            if cid in already_linked:
-                existing = db.query(ContestantSeason).filter(
-                    and_(
-                        ContestantSeason.contestant_id == cid,
-                        ContestantSeason.season_id == season_id,
-                    )
-                ).first()
-                if existing and not existing.is_active:
-                    SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
-                    repaired += 1
-                continue
+            try:
+                if cid in already_linked:
+                    existing = db.query(ContestantSeason).filter(
+                        and_(
+                            ContestantSeason.contestant_id == cid,
+                            ContestantSeason.season_id == season_id,
+                        )
+                    ).first()
+                    if existing and not existing.is_active:
+                        SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
+                        repaired += 1
+                    continue
 
-            SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
+                SeasonMigrationService._activate_contestant_season_link(db, cid, season_id)
+            except ForeignRoundActivationError as exc:
+                logger.warning("_ensure_source_season_links: %s", exc)
+                continue
             already_linked.add(cid)
             repaired += 1
         try:
@@ -2210,23 +2308,32 @@ class SeasonMigrationService:
             round_id=round_id
         )
         
-        # Récupérer tous les contestants actifs du contest
+        # Récupérer tous les contestants actifs du contest POUR CE ROUND: the
+        # legacy Contestant.season_id == contest_id comparison spans every
+        # round of the contest, so without the round filter a later round's
+        # CITY migration linked (and re-qualified) contestants of all earlier
+        # rounds into this round's season.
         contestants = db.query(Contestant).filter(
             and_(
                 Contestant.season_id == contest_id,
+                Contestant.round_id == round_id,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False
             )
         ).all()
-        
+
         import logging
         logger = logging.getLogger(__name__)
-        
+
         # Tous les contestants sont qualifiés par défaut
         migrated_contestant_ids = []
         for contestant in contestants:
+            try:
+                SeasonMigrationService._activate_contestant_season_link(db, contestant.id, city_season.id)
+            except ForeignRoundActivationError as exc:
+                logger.warning("migrate_to_city_season: %s", exc)
+                continue
             contestant.is_qualified = True
-            SeasonMigrationService._activate_contestant_season_link(db, contestant.id, city_season.id)
             logger.info(f"  - Lien ContestantSeason actif pour contestant {contestant.id} dans saison CITY {city_season.id}")
             migrated_contestant_ids.append(contestant.id)
         
@@ -2352,10 +2459,14 @@ class SeasonMigrationService:
                     stale.is_active = False
                 continue
 
+            try:
+                SeasonMigrationService._activate_contestant_season_link(
+                    db, contestant.id, target_season_id
+                )
+            except ForeignRoundActivationError as exc:
+                logger.warning("_sync_contestants_to_season: %s", exc)
+                continue
             contestant.is_qualified = True
-            SeasonMigrationService._activate_contestant_season_link(
-                db, contestant.id, target_season_id
-            )
             synced.append(contestant.id)
         return synced
 
@@ -3018,20 +3129,6 @@ class SeasonMigrationService:
         promotion_base = datetime.utcnow()
         for rank_idx, contestant in enumerate(selected_contestants):
             promotion_time = promotion_base + timedelta(seconds=rank_idx)
-            # Marquer comme qualifié
-            contestant.is_qualified = True
-            
-            old_link = db.query(ContestantSeason).filter(
-                and_(
-                    ContestantSeason.contestant_id == contestant.id,
-                    ContestantSeason.season_id == from_season.id,
-                    ContestantSeason.is_active == True
-                )
-            ).first()
-            
-            if old_link:
-                old_link.is_active = False
-                logger.info(f"  - Désactivation du lien ContestantSeason pour contestant {contestant.id} dans saison {from_season.id}")
 
             # Créer/réactiver le lien ContestantSeason de destination. Passe par
             # le helper partagé pour garantir qu'aucune autre saison de même
@@ -3040,10 +3137,33 @@ class SeasonMigrationService:
             # KALUTASOCIETY_CONTESTANTSEASON_MULTIROUND_INTEGRITY_AUDIT: cette
             # étape ne désactivait auparavant que `from_season`, jamais une
             # autre saison du même niveau appartenant à un round différent.
-            SeasonMigrationService._activate_contestant_season_link(
-                db, contestant.id, to_season.id, joined_at=promotion_time
-            )
+            # Done BEFORE the source link is deactivated: a refused (foreign or
+            # unknown round) destination must leave the contestant exactly as
+            # it was, not stranded without any active membership.
+            try:
+                SeasonMigrationService._activate_contestant_season_link(
+                    db, contestant.id, to_season.id, joined_at=promotion_time
+                )
+            except ForeignRoundActivationError as exc:
+                logger.warning(f"  - Promotion skipped for contestant {contestant.id}: {exc}")
+                continue
             logger.info(f"  - Lien ContestantSeason actif pour contestant {contestant.id} dans saison {to_season.id}")
+
+            # Marquer comme qualifié
+            contestant.is_qualified = True
+
+            old_link = db.query(ContestantSeason).filter(
+                and_(
+                    ContestantSeason.contestant_id == contestant.id,
+                    ContestantSeason.season_id == from_season.id,
+                    ContestantSeason.is_active == True
+                )
+            ).first()
+
+            if old_link:
+                old_link.is_active = False
+                logger.info(f"  - Désactivation du lien ContestantSeason pour contestant {contestant.id} dans saison {from_season.id}")
+
             promoted_contestant_ids.append(contestant.id)
         
         logger.info(f"Promoted contestants ({len(promoted_contestant_ids)}): {promoted_contestant_ids}")
