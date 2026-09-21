@@ -800,33 +800,63 @@ class SeasonMigrationService:
         if scoped:
             return scoped
 
-        voted_ids = SeasonMigrationService._contestant_ids_from_votes(
-            db,
-            season_id=season_id,
-            contest_id=contest_id,
-        )
+        # Authoritative round for everything below this point. A contestant
+        # from another round must never be rescued into this season's result
+        # merely for sharing a contest_id -- see
+        # KALUTASOCIETY_TOP_HIGH5_SYSTEMIC_DUPLICATE_FREEZE_AUDIT. Prefer an
+        # explicit caller-supplied cohort_round_id; otherwise derive it from
+        # the season being processed itself (every ContestSeason belongs to
+        # exactly one Round) so this holds even for the several call sites
+        # that don't pass cohort_round_id today, including the live
+        # promote_to_next_level path -- centralizing the guard here means no
+        # caller has to remember to opt in.
+        authoritative_round_id = cohort_round_id
+        authoritative_round = None
+        if authoritative_round_id is not None:
+            authoritative_round = db.query(Round).filter(Round.id == authoritative_round_id).first()
+        else:
+            derived_round_id = (
+                db.query(ContestSeason.round_id).filter(ContestSeason.id == season_id).scalar()
+            )
+            if derived_round_id is not None:
+                authoritative_round_id = int(derived_round_id)
+                authoritative_round = db.query(Round).filter(Round.id == authoritative_round_id).first()
+
+        # Fail closed: without a known round, the vote-rescue tier below
+        # cannot be safely constrained, so it must not run at all rather than
+        # silently return every historical voter for this contest_id.
+        if authoritative_round_id is None:
+            voted_ids = []
+        else:
+            voted_ids = SeasonMigrationService._contestant_ids_from_votes(
+                db,
+                season_id=season_id,
+                contest_id=contest_id,
+            )
         if voted_ids:
             # voted_ids alone is not authoritative: _contestant_ids_from_votes only
             # checks "did they vote in this contest", not whether they also voted in
-            # a DIFFERENT contest (conflicting evidence). AND with the resolver clause
-            # so a genuine season-linked contestant with conflicting votes (Case D's
-            # distinct_voted_contests != 1) is not silently rescued here. Legacy rows
-            # (Case A/B) are unaffected, since voting history plays no part in those.
+            # a DIFFERENT contest (conflicting evidence), nor which round that vote
+            # belongs to -- its own second-tier query drops season scoping entirely
+            # to rescue legacy data. AND with the resolver clause plus the
+            # authoritative round so a genuine season-linked contestant with
+            # conflicting votes (Case D's distinct_voted_contests != 1), or a
+            # contestant genuinely belonging to a DIFFERENT round, is never
+            # silently rescued here. Legacy rows (Case A/B) are unaffected,
+            # since voting history plays no part in those.
             vote_filters = [
                 Contestant.id.in_(voted_ids),
                 contestant_belongs_to_contest_clause(contest_id),
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
+                Contestant.round_id == authoritative_round_id,
             ]
             if qualified_only:
                 vote_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
-            if cohort_round_id is not None:
-                vote_filters.append(Contestant.round_id == cohort_round_id)
-                cohort_round = db.query(Round).filter(Round.id == cohort_round_id).first()
-                if cohort_round is not None:
-                    from app.core.nomination_calendar import nomination_cohort_created_at_filters
+            if authoritative_round is not None:
+                from app.core.nomination_calendar import nomination_cohort_created_at_filters
 
-                    vote_filters.extend(nomination_cohort_created_at_filters(cohort_round))
+                vote_filters.extend(nomination_cohort_created_at_filters(authoritative_round))
             return db.query(Contestant).filter(and_(*vote_filters)).all()
 
         fallback_filters = [
@@ -1704,16 +1734,42 @@ class SeasonMigrationService:
                     "  - Strict contest scope returned 0 contestants; retrying with contest vote scope"
                 )
                 print("[Migration]   Strict contest scope empty; retry with contest vote scope")
-            voted_ids = SeasonMigrationService._contestant_ids_from_votes(
-                db,
-                season_id=season_id,
-                contest_id=contest_id,
+            # Authoritative round for this rescue tier -- same guard as
+            # _contestants_for_contest_in_season (see
+            # KALUTASOCIETY_TOP_HIGH5_SYSTEMIC_DUPLICATE_FREEZE_AUDIT): a
+            # contestant from another round must never be rescued in here
+            # merely for sharing a contest_id. Prefer an explicit
+            # cohort_round_id; otherwise derive it from the season being
+            # processed, since every ContestSeason belongs to exactly one
+            # Round.
+            fallback_round_id = cohort_round_id
+            if fallback_round_id is None:
+                derived_round_id = (
+                    db.query(ContestSeason.round_id).filter(ContestSeason.id == season_id).scalar()
+                )
+                if derived_round_id is not None:
+                    fallback_round_id = int(derived_round_id)
+
+            # Fail closed: without a known round, this vote-rescue tier
+            # cannot be safely constrained, so treat it as if no votes were
+            # found rather than silently return every historical voter for
+            # this contest_id.
+            voted_ids = (
+                SeasonMigrationService._contestant_ids_from_votes(
+                    db,
+                    season_id=season_id,
+                    contest_id=contest_id,
+                )
+                if fallback_round_id is not None
+                else []
             )
             strict_contest_scope = False
             fallback_filters = [
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
             ]
+            if fallback_round_id is not None:
+                fallback_filters.append(Contestant.round_id == fallback_round_id)
             if qualified_only:
                 fallback_filters.append(or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)))
             if voted_ids:
