@@ -1,6 +1,7 @@
 """
 Endpoints pour gérer les migrations de saisons
 """
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import joinedload
 from functools import wraps
@@ -15,10 +16,10 @@ from app.tasks.season_migration import (
     promote_contest_level
 )
 from app.models.user import User
-from app.models.round import Round
+from app.models.round import Round, RoundStatus
 from app.models.contest import Contest
 from app.models.contests import SeasonLevel, TopHigh5Result, Contestant
-from sqlalchemy import text
+from sqlalchemy import text, and_, or_
 
 router = APIRouter()
 
@@ -120,6 +121,22 @@ _LEVEL_MAP = {
     "global": SeasonLevel.GLOBAL,
 }
 
+# The Round column that carries the *actual calendar close date* for each
+# level's voting -- the one authoritative "did this cohort's voting for this
+# level really finish" signal. Neither TopHigh5Result.round_id (a bare
+# autoincrement PK -- an admin can generate a round for an out-of-sequence
+# past month via POST /rounds/generate-monthly?year=&month=) nor
+# TopHigh5Result.created_at (stamped at INSERT time, and repeatedly proven to
+# be rewritten out of order by backfill/repair maintenance) can be trusted
+# for this; the Round's own level-specific end date is what the rest of the
+# system's calendar actually means by "this level closed".
+_LEVEL_END_DATE_COL = {
+    SeasonLevel.COUNTRY: Round.country_season_end_date,
+    SeasonLevel.REGIONAL: Round.regional_end_date,
+    SeasonLevel.CONTINENT: Round.continental_end_date,
+    SeasonLevel.GLOBAL: Round.global_end_date,
+}
+
 
 @router.get("/top-high5")
 @_singleflight_top_high5
@@ -194,10 +211,42 @@ def get_top_high5_by_country(
             # Business rule: City Top High5 is reserved for participation flow
             # and is never displayed (see below) -- don't bother resolving a
             # round for it.
+            #
+            # "Latest" must mean the most recently *closed* calendar cohort
+            # for this level -- never merely the most recently written row.
+            # Neither `round_id` (an admin can backfill a past month's round
+            # out of numeric sequence via /rounds/generate-monthly) nor
+            # `created_at` (repeatedly rewritten out of order by
+            # backfill_top_high5_results.py / repair_continent_top_high5.py)
+            # is safe here. The Round's own level-specific end date is the
+            # actual calendar signal the rest of the system means by "this
+            # level's voting closed" -- and, proven against production data,
+            # a frozen row existing is *not* by itself proof the level really
+            # closed (maintenance tooling has written premature CONTINENT
+            # rows for a round still 9 days from its own continental close).
+            # So eligibility is gated on the date, not just sorted by it.
+            #
+            # A handful of legacy rounds (e.g. round 3) have this date column
+            # NULL despite being genuinely finished (`Round.status ==
+            # COMPLETED`) -- a population gap, not an open cohort -- so those
+            # fall back to the status flag instead of being excluded.
+            level_end_date = _LEVEL_END_DATE_COL[requested_level]
+            today = date.today()
             latest = (
                 db.query(TopHigh5Result.round_id)
-                .filter(TopHigh5Result.level == requested_level)
-                .order_by(TopHigh5Result.created_at.desc(), TopHigh5Result.round_id.desc())
+                .join(Round, Round.id == TopHigh5Result.round_id)
+                .filter(
+                    TopHigh5Result.level == requested_level,
+                    or_(
+                        and_(level_end_date.isnot(None), level_end_date <= today),
+                        and_(level_end_date.is_(None), Round.status == RoundStatus.COMPLETED),
+                    ),
+                )
+                .order_by(
+                    level_end_date.desc().nullslast(),
+                    TopHigh5Result.round_id.desc(),
+                    TopHigh5Result.created_at.desc(),
+                )
                 .first()
             )
             if latest:
