@@ -281,7 +281,10 @@ export interface TopHigh5Row {
   country?: string | null
   region?: string | null
   continent?: string | null
+  /** Original registration/entry timestamp (Contestant.registration_date), ISO 8601. Never a promotion/ranking/freeze date. */
+  registered_at?: string | null
   stars_points: number
+  votes_count?: number
   shares: number
   likes: number
   comments: number
@@ -298,6 +301,16 @@ export interface TopHigh5Contest {
   country_group: string
   promotion_limit: number
   rows: TopHigh5Row[]
+  /** This card's own resolved cohort/stage -- may differ from the page-level round_id/round_name when contests span multiple modes/cohorts (see TopHigh5Response.mixed_cohorts). Debug/verification metadata, not required for rendering. */
+  round_id?: number
+  round_name?: string | null
+  contest_mode?: string
+  cohort_round_id?: number
+  cohort_round_name?: string | null
+  cohort_month?: string | null
+  stage_month?: string | null
+  stage_open_date?: string | null
+  stage_close_date?: string | null
 }
 
 export type TopHigh5Level = 'city' | 'country' | 'regional' | 'continent' | 'global'
@@ -308,6 +321,8 @@ export interface TopHigh5Response {
   country: string
   level?: TopHigh5Level
   contests: TopHigh5Contest[]
+  /** True when contests in this response legitimately span more than one round/cohort (e.g. participation vs nomination each closing at different months) -- round_id/round_name above is only the freshest one represented, not a claim every card shares it. See each card's own round_id/cohort_month/stage_month. */
+  mixed_cohorts?: boolean
   fallback_applied?: boolean
   diagnostics?: {
     round_id: number

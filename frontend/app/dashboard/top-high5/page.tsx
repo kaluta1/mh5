@@ -70,7 +70,7 @@ function TopHigh5Skeleton() {
 
 export default function TopHigh5Page() {
   const { user, isAuthenticated, isLoading } = useAuth()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [countryInput, setCountryInput] = useState("")
@@ -412,7 +412,15 @@ export default function TopHigh5Page() {
 
         {data && (
           <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-2">
-            <span>Round: {data.round_name} (id {data.round_id})</span>
+            <span title={data.mixed_cohorts ? "Freshest cohort represented below -- individual contests may show an older cohort; see each contest's own stage line." : undefined}>
+              {data.mixed_cohorts ? "Freshest round shown: " : "Round: "}
+              {data.round_name} (id {data.round_id})
+            </span>
+            {data.mixed_cohorts && (
+              <span className="text-amber-700 dark:text-amber-400">
+                (results below span multiple cohorts -- each contest shows its own)
+              </span>
+            )}
             <span>|</span>
             <span>{t("dashboard.contests.filter_level") || "Stage"}: {(data.level || activeLevel).toUpperCase()}</span>
             {activeLevel !== "global" && (
@@ -519,6 +527,12 @@ export default function TopHigh5Page() {
                           <span className="ml-1">(final stage)</span>
                         )}
                         {" | "}Top {contest.promotion_limit} migrate
+                        {contest.round_name && (
+                          <span className="ml-1">
+                            {" | "}Cohort: {contest.round_name}
+                            {contest.contest_mode ? ` (${contest.contest_mode})` : ""}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="overflow-x-auto">
@@ -527,6 +541,7 @@ export default function TopHigh5Page() {
                           <tr>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.rank") || "Rank"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.content") || "Content"}</th>
+                            <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.registered_on") || "Registered On"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.points") || "Points"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.shares") || "Shares"}</th>
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.likes") || "Likes"}</th>
@@ -534,7 +549,7 @@ export default function TopHigh5Page() {
                             <th className="px-3 py-2 text-left">{t("dashboard.myhigh5.views") || "Views"}</th>
                           </tr>
                         </thead>
-                        <TopHigh5ContestRows contestId={contest.contest_id} rows={contest.rows} t={t} />
+                        <TopHigh5ContestRows contestId={contest.contest_id} rows={contest.rows} t={t} language={language} />
                       </table>
                     </div>
                   </div>

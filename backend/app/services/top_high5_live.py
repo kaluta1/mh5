@@ -113,6 +113,13 @@ _PARTICIPATION_END_DATE_ATTR = {
     SeasonLevel.CONTINENT: "continental_end_date",
     SeasonLevel.GLOBAL: "global_end_date",
 }
+_PARTICIPATION_START_DATE_ATTR = {
+    SeasonLevel.CITY: "city_season_start_date",
+    SeasonLevel.COUNTRY: "country_season_start_date",
+    SeasonLevel.REGIONAL: "regional_start_date",
+    SeasonLevel.CONTINENT: "continental_start_date",
+    SeasonLevel.GLOBAL: "global_start_date",
+}
 
 # Each level's own jurisdiction grouping field, mirroring exactly how
 # `promote_to_next_level._freeze_top_high5_results` groups a level's own
@@ -138,6 +145,27 @@ def _level_close_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mod
         return SeasonMigrationService._nomination_vote_close_date_for_level(round_obj, level)
     attr = _PARTICIPATION_END_DATE_ATTR.get(level)
     return getattr(round_obj, attr, None) if attr else None
+
+
+def _level_open_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mode: str):
+    """Debug/metadata only -- not used for any eligibility decision. The
+    voting-window START date for this (round, level, mode), distinct from
+    the round's own COHORT month (see cohort_month in the response), which
+    is what PART 2/6 of the cohort-vs-stage confusion this responds to asks
+    to be made explicit."""
+    mode = (contest_mode or "").strip().lower()
+    if mode == "nomination":
+        return SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, level)
+    attr = _PARTICIPATION_START_DATE_ATTR.get(level)
+    return getattr(round_obj, attr, None) if attr else None
+
+
+def _cohort_month(round_obj: Round) -> Optional[date]:
+    """The round's OWN submission/nomination month ("M" in the M/M+1/M+2..
+    lifecycle notation) -- the contest's original cohort, never a later
+    stage's month. A June cohort stays a June cohort forever; only the
+    *stage* date (see _level_close_date_for_mode) moves with the level."""
+    return SeasonMigrationService._round_month_start(round_obj)
 
 
 def _stage_fully_completed(round_obj: Round, level: SeasonLevel, contest_mode: str, today: date) -> bool:
@@ -203,6 +231,15 @@ def _row_dict(contest: Contest, contestant: Contestant, rank: int, ranking_row, 
     if user is not None:
         author_name = user.full_name or user.username or user.email
         author_email = user.email
+    # Authoritative original registration/entry timestamp. NOT
+    # TopHigh5Result.created_at / ContestantSeason.created_at / any
+    # promotion or ranking timestamp -- Contestant.registration_date is the
+    # purpose-built field, set once at submission/nomination time (verified
+    # against production: populated for every row, 0 nulls; matches
+    # Contestant.created_at to the millisecond, confirming it is genuinely
+    # stamped at row-creation/entry time, not backfilled or rewritten later
+    # the way top_high5_results rows have repeatedly been proven to be).
+    registered_at = contestant.registration_date
     return {
         "rank": rank,
         "migrates_next_stage": bool(migrated),
@@ -214,6 +251,7 @@ def _row_dict(contest: Contest, contestant: Contestant, rank: int, ranking_row, 
         "country": contestant.country,
         "region": contestant.region,
         "continent": contestant.continent,
+        "registered_at": registered_at.isoformat() if registered_at else None,
         "stars_points": ranking_row.total_points,
         "votes_count": ranking_row.total_votes,
         "shares": ranking_row.shares,
@@ -468,6 +506,10 @@ def resolve_live_top_high5(
             _row_dict(contest, c, idx, rank_by_id[c.id], c.id in migrated_ids)
             for idx, c in enumerate(top, start=1)
         ]
+        mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
+        cohort_month = _cohort_month(round_obj) if round_obj else None
+        stage_open = _level_open_date_for_mode(round_obj, level, mode) if round_obj else None
+        stage_close = _level_close_date_for_mode(round_obj, level, mode) if round_obj else None
         contests_out.append({
             "contest_id": contest.id,
             "contest_name": contest.name,
@@ -481,7 +523,21 @@ def resolve_live_top_high5(
             "rows": rows,
             "round_id": round_id,
             "round_name": round_obj.name if round_obj else None,
-            "contest_mode": (getattr(contest, "contest_mode", "") or "").strip().lower(),
+            "contest_mode": mode,
+            # Debug/verification metadata (PART 6): explicit cohort-vs-stage
+            # split so "which month is this card actually about" is never
+            # ambiguous. cohort_* is the contest's ORIGINAL submission/
+            # nomination month -- it never moves. stage_* is when THIS
+            # level's own voting window opens/closes for that cohort, per
+            # this contest's own mode -- these are two different months by
+            # design (e.g. a June cohort's nomination Country stage is
+            # July), not an off-by-one error.
+            "cohort_round_id": round_id,
+            "cohort_round_name": round_obj.name if round_obj else None,
+            "cohort_month": cohort_month.isoformat() if cohort_month else None,
+            "stage_month": stage_close.replace(day=1).isoformat() if stage_close else None,
+            "stage_open_date": stage_open.isoformat() if stage_open else None,
+            "stage_close_date": stage_close.isoformat() if stage_close else None,
         })
     contests_out.sort(key=lambda c: (c["country_group"] or "").lower())
 
@@ -493,6 +549,14 @@ def resolve_live_top_high5(
         "round_name": top_round.name if top_round else None,
         "country": selected_country,
         "level": level.value,
+        # True when the cards in `contests` legitimately span more than one
+        # round -- expected whenever participation and nomination contests
+        # (different lifecycle offsets) or contests at different real
+        # progress both appear in the same response. The single top-level
+        # round_id/round_name above is only the freshest one represented,
+        # NEVER a claim that every card shares it -- see each card's own
+        # round_id/cohort_month/stage_month for its actual cohort.
+        "mixed_cohorts": len(rounds_used) > 1,
         "contests": contests_out,
         "fallback_applied": False,
         "diagnostics": {

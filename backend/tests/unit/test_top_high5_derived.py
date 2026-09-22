@@ -18,7 +18,7 @@ rows directly -- no TopHigh5Result anywhere in this file.
 from __future__ import annotations
 
 import calendar as _calendar
-from datetime import date
+from datetime import date, datetime
 
 from app.models.contest import Contest
 from app.models.contests import (
@@ -733,3 +733,170 @@ def test_mixed_mode_each_contest_resolves_its_own_round_derived(db):
     assert nom_contest.id in by_contest
     assert part_contest.id not in by_contest
     assert by_contest[nom_contest.id]["contest_mode"] == "nomination"
+
+
+# ---------------------------------------------------------------------------
+# PART 1-3/9 (2026-09-23 cohort-vs-stage confusion): reproduces, and proves
+# NOT a bug, the reported "Country/Tanzania shows July instead of June"
+# production observation. Root cause: a nomination contest's July cohort
+# reaches Country (M+1, closes Aug 31) before a participation contest's own
+# July cohort does (M+2, closes Sep 30) -- both are correct, independent
+# results for DIFFERENT contests sharing one page; the page-level banner
+# showing only the freshest represented round was the actual source of
+# confusion, not the cohort calculation. See cohort_month/stage_month below
+# and mixed_cohorts on the top-level response.
+# ---------------------------------------------------------------------------
+
+def test_cohort_month_is_independent_of_stage_month(db):
+    """PART 9 TEST 1: cohort_month (the round's own submission/nomination
+    month) must never equal the level's stage_month when the level has a
+    nonzero offset -- proves the two are tracked separately, not conflated."""
+    june = _month_start(date(2026, 6, 1))
+    rnd = _round_for_month(db, "cohortstage", submission_month_start=june)
+    contest = _contest(db, "cohortstage", mode="nomination")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="cohortstage")
+    contestant = _contestant(db, suffix="cohortstage", rnd=rnd, contest=contest, country="Tanzania")
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="cohortstage")
+    db.commit()
+
+    # Nomination Country = M+1: June cohort's Country stage is July.
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
+    )
+    card = result["contests"][0]
+    assert card["cohort_month"] == "2026-06-01"   # the ORIGINAL cohort, unchanged
+    assert card["stage_month"] == "2026-07-01"     # when Country actually votes
+    assert card["cohort_month"] != card["stage_month"]
+    assert card["cohort_round_id"] == rnd.id
+    assert card["cohort_round_name"] == rnd.name
+
+
+def test_country_does_not_shift_cohort_forward_a_month(db):
+    """PART 9 TEST 2: a June cohort must be reported as cohort_month=June,
+    never July, regardless of which month Country's own voting falls in."""
+    june = _month_start(date(2026, 6, 1))
+    rnd = _round_for_month(db, "noshift", submission_month_start=june)
+    contest = _contest(db, "noshift", mode="participation")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="noshift")
+    contestant = _contestant(db, suffix="noshift", rnd=rnd, contest=contest, country="Tanzania")
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="noshift")
+    db.commit()
+
+    # Participation Country = M+2: closes Aug 31, well passed by Nov 1.
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+    )
+    card = result["contests"][0]
+    assert card["cohort_month"] == "2026-06-01"
+    assert card["round_name"] == rnd.name
+    assert "July" not in (card["round_name"] or "")
+
+
+def test_mixed_cohorts_flag_set_when_multiple_rounds_represented(db):
+    """The exact production shape that looked like a bug: a nomination
+    contest's fresher cohort and a participation contest's older cohort
+    both legitimately appear in the same Country/Tanzania response.
+    mixed_cohorts must be True, and each card must carry its own correct
+    round -- the page-level round_id is only the freshest of the two."""
+    june = _month_start(date(2026, 6, 1))
+    july = _month_start(date(2026, 7, 1))
+    june_round = _round_for_month(db, "mixedjune", submission_month_start=june)
+    july_round = _round_for_month(db, "mixedjuly", submission_month_start=july)
+
+    part_contest = _contest(db, "mixedpart", mode="participation")
+    nom_contest = _contest(db, "mixednom", mode="nomination")
+    part_season = _season(db, june_round, level=SeasonLevel.COUNTRY, suffix="mixedpart")
+    nom_season = _season(db, july_round, level=SeasonLevel.COUNTRY, suffix="mixednom")
+    part_c = _contestant(db, suffix="mixedpartc", rnd=june_round, contest=part_contest, country="Tanzania")
+    nom_c = _contestant(db, suffix="mixednomc", rnd=july_round, contest=nom_contest, country="Tanzania")
+    _member(db, contestant=part_c, season=part_season)
+    _member(db, contestant=nom_c, season=nom_season)
+    _vote(db, contestant=part_c, contest=part_contest, season=part_season, suffix="mixedpartc")
+    _vote(db, contestant=nom_c, contest=nom_contest, season=nom_season, suffix="mixednomc")
+    db.commit()
+
+    # Participation June Country closes Aug 31 (passed); nomination July
+    # Country closes Aug 31 too (M+1) -- both eligible by Sep 22.
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 9, 22),
+    )
+    assert result["mixed_cohorts"] is True
+    by_contest = {c["contest_id"]: c for c in result["contests"]}
+    assert by_contest[part_contest.id]["round_id"] == june_round.id
+    assert by_contest[part_contest.id]["cohort_month"] == "2026-06-01"
+    assert by_contest[nom_contest.id]["round_id"] == july_round.id
+    assert by_contest[nom_contest.id]["cohort_month"] == "2026-07-01"
+    # Page-level banner is the freshest represented -- July -- but that is
+    # diagnostic only; it must not be read as "every card's cohort".
+    assert result["round_id"] == july_round.id
+
+
+def test_no_older_or_newer_cohort_fallback_when_expected_cohort_has_no_data(db):
+    """PART 9 TEST 6: if the only round with real cohort data for a contest
+    is NOT yet closed, the resolver must return empty for that contest --
+    never substitute an older or newer round's data instead."""
+    july = _month_start(date(2026, 7, 1))
+    rnd = _round_for_month(db, "nosubstitute", submission_month_start=july)
+    contest = _contest(db, "nosubstitute", mode="participation")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="nosubstitute")
+    contestant = _contestant(db, suffix="nosubstitute", rnd=rnd, contest=contest, country="Tanzania")
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="nosubstitute")
+    db.commit()
+
+    # Participation July Country closes Sep 30 -- not yet passed on Sep 22.
+    # This contest has NO other round's data at all to fall back to.
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 9, 22),
+    )
+    assert result["contests"] == []
+
+
+def test_registered_at_is_the_authoritative_registration_timestamp(db):
+    """PART 9 TEST 7: the API's registered_at must be
+    Contestant.registration_date -- never a TopHigh5Result, ContestantSeason,
+    or promotion timestamp."""
+    july = _month_start(date(2026, 7, 1))
+    rnd = _round_for_month(db, "registeredat", submission_month_start=july)
+    contest = _contest(db, "registeredat", mode="participation")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="registeredat")
+    contestant = _contestant(db, suffix="registeredat", rnd=rnd, contest=contest, country="Tanzania")
+    contestant.registration_date = datetime(2026, 7, 3, 14, 30, 0)
+    db.add(contestant)
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="registeredat")
+    db.commit()
+
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
+    )
+    row_out = result["contests"][0]["rows"][0]
+    assert row_out["registered_at"] == "2026-07-03T14:30:00"
+
+
+def test_topHigh5result_still_not_required_after_metadata_change(db):
+    """PART 9 TEST 9: the metadata/registered_at additions must not have
+    reintroduced any TopHigh5Result dependency."""
+    assert db.query(TopHigh5Result).count() == 0
+    july = _month_start(date(2026, 7, 1))
+    rnd = _round_for_month(db, "stillnotreq", submission_month_start=july)
+    contest = _contest(db, "stillnotreq", mode="nomination")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="stillnotreq")
+    contestant = _contestant(db, suffix="stillnotreq", rnd=rnd, contest=contest, country="Tanzania")
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="stillnotreq")
+    db.commit()
+
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
+    )
+    assert db.query(TopHigh5Result).count() == 0
+    assert len(result["contests"]) == 1

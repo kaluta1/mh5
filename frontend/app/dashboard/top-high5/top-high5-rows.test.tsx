@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { topHigh5RowClassName, TopHigh5ContestRows } from "./top-high5-rows"
+import { topHigh5RowClassName, TopHigh5ContestRows, formatRegisteredOn } from "./top-high5-rows"
 import type { TopHigh5Row } from "@/services/contest-service"
 
 const identityT = (key: string) => key
@@ -137,6 +137,61 @@ describe("TopHigh5ContestRows", () => {
       </table>,
     )
     expect(screen.getByRole("row").className).toContain("emerald")
+  })
+})
+
+describe("formatRegisteredOn", () => {
+  // PART 9 / TEST 7-8: registered_at is the API's own authoritative field
+  // (Contestant.registration_date), rendered as a short, scannable date
+  // ("23 Jun 2026" style) with the full timestamp only in the tooltip.
+  it("formats a real ISO timestamp as a short human-readable date", () => {
+    const { label } = formatRegisteredOn("2026-06-23T10:15:00", "en")
+    expect(label).toBe("Jun 23, 2026")
+  })
+
+  it("puts the full date+time in the tooltip title, not the visible label", () => {
+    const { label, title } = formatRegisteredOn("2026-06-23T10:15:00", "en")
+    expect(title).toContain("2026")
+    expect(title.length).toBeGreaterThan(label.length)
+  })
+
+  it("renders a placeholder, not a crash, for a missing registered_at", () => {
+    expect(formatRegisteredOn(null, "en").label).toBe("—")
+    expect(formatRegisteredOn(undefined, "en").label).toBe("—")
+  })
+
+  it("renders a placeholder for an unparseable value instead of 'Invalid Date'", () => {
+    expect(formatRegisteredOn("not-a-date", "en").label).toBe("—")
+  })
+})
+
+describe("TopHigh5ContestRows: Registered On column", () => {
+  it("renders each row's registered_at as a short formatted date", () => {
+    render(
+      <table>
+        <TopHigh5ContestRows
+          contestId={1}
+          t={identityT}
+          language="en"
+          rows={[row({ contestant_id: 1, contestant_title: "Entry A", registered_at: "2026-06-23T10:15:00" })]}
+        />
+      </table>,
+    )
+    expect(screen.getByText("Jun 23, 2026")).toBeInTheDocument()
+  })
+
+  it("does not throw and shows a placeholder when registered_at is missing", () => {
+    render(
+      <table>
+        <TopHigh5ContestRows
+          contestId={1}
+          t={identityT}
+          rows={[row({ contestant_id: 1, contestant_title: "Entry B" })]}
+        />
+      </table>,
+    )
+    expect(screen.getByText("Entry B")).toBeInTheDocument()
+    expect(screen.getByText("—")).toBeInTheDocument()
   })
 })
 
