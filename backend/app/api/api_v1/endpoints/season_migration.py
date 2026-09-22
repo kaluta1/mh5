@@ -10,6 +10,7 @@ import threading
 
 from app.api import deps
 from app.services.season_migration import SeasonMigrationService, season_migration_service
+from app.services.top_high5_live import resolve_live_top_high5
 from app.tasks.season_migration import (
     process_season_migrations,
     migrate_contest_to_city,
@@ -392,6 +393,14 @@ def _get_top_high5_mode_aware(
     db, *, requested_level: SeasonLevel, selected_country: str, variants: set, today: date,
 ) -> dict:
     """
+    Not called by the default route since the 2026 derived-architecture
+    change (see app.services.top_high5_live) -- the default path no longer
+    reads top_high5_results at all. Kept, with its existing test coverage
+    (test_top_high5_mode_aware_resolver.py) unmodified, as mode-aware
+    frozen-snapshot resolution logic that predates and remains independent
+    of the live derivation, in case a future explicit "historical mode-aware
+    view" is ever needed; not wired into any current endpoint path.
+
     COUNTRY / REGIONAL / CONTINENT, auto-resolved (no explicit round_id):
     mode-aware round selection (2026 fix). Participation and nomination
     contests keep their own independent calendars -- there is no single
@@ -505,26 +514,37 @@ def get_top_high5_by_country(
     current_user: User | None = Depends(deps.get_current_active_user_optional),
 ):
     """
-    Top High5: the finalized top 5 per stage, read from frozen historical
-    results (top_high5_results) -- never recomputed from live votes.
+    Top High5: the current top 5 per stage, DERIVED LIVE from authoritative
+    lifecycle + cohort membership + voting/ranking data (see
+    app.services.top_high5_live for the full architecture and rationale).
+    `top_high5_results` (the historical frozen snapshot table) is no longer
+    in the path of this default display -- it is never read here. A
+    missing or stale frozen snapshot can no longer hide or corrupt a
+    current, otherwise-valid result.
 
     - `level=country` (default): top 5 for the selected country.
     - `level=regional` / `continent`: top 5 for the country's regional
       voting pool / one leaderboard per continent.
+    - `level=city`: top 5 per city (participation only -- nomination has no
+      City stage and never appears here).
     - `level=global`: top 5 worldwide, no country filter.
 
-    A level/round whose voting hasn't closed yet has no frozen rows, so it
-    returns `contests: []` -- that means "not finalized yet", not an error;
-    it must never fall back to live vote counts (see
-    KALUTASOCIETY_TOP_HIGH5_FIX_DESIGN and the functional spec this
-    implements).
+    A level/round whose voting hasn't closed yet is never shown, so it
+    returns `contests: []` for that group -- that means "not finalized
+    yet", not an error; an in-progress stage is never displayed as final.
 
-    2026 mode-aware fix: for COUNTRY/REGIONAL/CONTINENT auto-resolution (no
-    explicit round_id), there is no longer one single "the round" for the
-    whole response -- participation and nomination contests each resolve
-    to their own freshest genuinely-eligible round under their own
-    calendar (see _get_top_high5_mode_aware). An explicit ?round_id=, CITY,
-    and GLOBAL keep the original single-round resolver unchanged.
+    Each contest resolves independently to its own freshest fully-completed
+    round under its own contest_mode's lifecycle calendar (participation
+    and nomination each have their own offsets -- see
+    app.services.top_high5_live). There is therefore no longer one single
+    "the round" for the whole response; each card also carries its own
+    `round_id` / `round_name` / `contest_mode`.
+
+    An explicit `?round_id=` bypasses all of this and reads the frozen
+    historical snapshot for that exact round instead (see
+    _get_top_high5_single_round) -- this is the one remaining consumer of
+    `top_high5_results` for the live API, preserved for explicit
+    historical-round viewing so existing links/features keep working.
     """
     from app.db.session import SessionLocal
 
@@ -563,7 +583,10 @@ def get_top_high5_by_country(
         variants = _country_variants(selected_country) if selected_country else set()
         today = date.today()
 
-        if round_id is not None or requested_level in (SeasonLevel.CITY, SeasonLevel.GLOBAL):
+        if round_id is not None:
+            # Explicit historical-round request: read the frozen snapshot
+            # for that exact round, unchanged. The only remaining default
+            # consumer of top_high5_results.
             return _get_top_high5_single_round(
                 db,
                 round_id=round_id,
@@ -573,9 +596,9 @@ def get_top_high5_by_country(
                 today=today,
             )
 
-        return _get_top_high5_mode_aware(
+        return resolve_live_top_high5(
             db,
-            requested_level=requested_level,
+            level=requested_level,
             selected_country=selected_country,
             variants=variants,
             today=today,

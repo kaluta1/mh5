@@ -40,15 +40,30 @@ genuinely closed -- is unchanged and still fully enforced; only the mode
 label was corrected to match what is actually being exercised. Nomination's
 own, independent, earlier calendar is covered separately in
 test_top_high5_mode_aware_resolver.py.
+
+2026 derived-architecture update: the default (no explicit round_id) path
+no longer reads top_high5_results at all (see
+app.services.top_high5_live.resolve_live_top_high5 and
+KALUTASOCIETY_DERIVED_TOPHIGH5_FINAL_IMPLEMENTATION). Fixtures for the
+default-resolution tests below now also create real ContestantSeason
+membership + a vote for each round's contestant -- what the derived
+resolver actually reads -- alongside the pre-existing frozen rows (kept in
+place specifically to prove frozen data no longer has any influence). The
+close-date gating behavior itself (never auto-select a round before its own
+level has genuinely closed; among closed rounds, prefer the freshest) is
+unchanged, just now enforced by resolve_live_top_high5 instead of the old
+_get_top_high5_mode_aware. Only `?round_id=` (explicit) still reads
+top_high5_results, exercised by test_explicit_round_id_bypasses_close_date_gate.
 """
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
 from app.models.contest import Contest
-from app.models.contests import ContestSeason, Contestant, SeasonLevel, TopHigh5Result
+from app.models.contests import ContestantSeason, ContestSeason, Contestant, SeasonLevel, TopHigh5Result
 from app.models.round import Round, RoundStatus, round_contests
 from app.models.user import User
+from app.models.voting import ContestantVoting
 
 
 def _round(
@@ -84,6 +99,7 @@ def _contestant(db, *, suffix: str, rnd: Round, contest: Contest, **extra) -> Co
         user_id=owner.id,
         round_id=rnd.id,
         contest_id=contest.id,
+        season_id=contest.id,
         is_active=True,
         is_deleted=False,
         is_qualified=True,
@@ -121,6 +137,31 @@ def _frozen_row(
         total_votes=1,
         migrated=False,
         created_at=created_at,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _member(db, *, contestant: Contestant, season: ContestSeason) -> ContestantSeason:
+    row = ContestantSeason(contestant_id=contestant.id, season_id=season.id, is_active=True)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _vote(db, *, contestant: Contestant, contest: Contest, season: ContestSeason, suffix: str) -> ContestantVoting:
+    voter = User(email=f"th5rr-voter-{suffix}@example.test", hashed_password="unused")
+    db.add(voter)
+    db.flush()
+    row = ContestantVoting(
+        user_id=voter.id,
+        contestant_id=contestant.id,
+        contest_id=contest.id,
+        season_id=season.id,
+        vote_bucket_key=f"ty:{contest.contest_type or ''}:{contest.contest_mode or ''}",
+        position=1,
+        points=10,
     )
     db.add(row)
     db.flush()
@@ -174,6 +215,14 @@ def _setup_two_rounds_one_level(
 
     old_contestant = _contestant(db, suffix="old", rnd=old_round, contest=contest, continent="Africa", country="Kenya")
     new_contestant = _contestant(db, suffix="new", rnd=new_round, contest=contest, continent="Africa", country="Kenya")
+
+    # Real cohort membership + a vote each -- what the derived resolver
+    # actually reads (see module docstring). The frozen rows below remain,
+    # specifically to prove they no longer influence the default result.
+    _member(db, contestant=old_contestant, season=old_season)
+    _member(db, contestant=new_contestant, season=new_season)
+    _vote(db, contestant=old_contestant, contest=contest, season=old_season, suffix="old")
+    _vote(db, contestant=new_contestant, contest=contest, season=new_season, suffix="new")
 
     _frozen_row(
         db, contest=contest, level=level, jurisdiction=jurisdiction, rnd=new_round,
@@ -300,6 +349,8 @@ def test_global_resolution_null_date_completed_round(db, client):
     db.add(season)
     db.flush()
     contestant = _contestant(db, suffix="legacy-g", rnd=rnd, contest=contest)
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="legacy-g")
     _frozen_row(
         db, contest=contest, level=SeasonLevel.GLOBAL, jurisdiction="Global", rnd=rnd,
         season=season, contestant=contestant, created_at=datetime.utcnow(),
@@ -328,12 +379,16 @@ def test_no_eligible_round_returns_empty_not_an_error(db, client):
     db.add(season)
     db.flush()
     contestant = _contestant(db, suffix="open-only", rnd=rnd, contest=contest, continent="Africa")
+    _member(db, contestant=contestant, season=season)
+    _vote(db, contestant=contestant, contest=contest, season=season, suffix="open-only")
     _frozen_row(
         db, contest=contest, level=SeasonLevel.CONTINENT, jurisdiction="Africa", rnd=rnd,
         season=season, contestant=contestant, created_at=datetime.utcnow(),
     )
     db.commit()
 
+    # Real cohort membership exists, but the stage genuinely hasn't closed
+    # yet -- must still return empty, not the in-progress round.
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "continent", "country": "Kenya"})
     assert resp.status_code == 200
     body = resp.json()
