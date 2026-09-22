@@ -19,6 +19,9 @@
  * should defer to that backend resolution entirely.
  */
 
+import { formatDate } from "./date-utils"
+import type { Language } from "./locale-registry"
+
 export interface TopHigh5RoundSelectionInput {
   /** Raw round_id from the URL (deep link) or the user's round-id text input, if any. */
   explicitRoundId?: string | number | null
@@ -51,4 +54,35 @@ export function resolveTopHigh5RequestRoundId({
  */
 export function nextRoundIdOnLevelChange(): undefined {
   return undefined
+}
+
+/**
+ * Placeholder text for the optional round-id override input, showing the
+ * exact month + year the CURRENTLY SELECTED level defaults to when the
+ * field is left blank -- e.g. "Round id (optional — showing June 2026)"
+ * on the Country tab, "...showing May 2026" on Regional, etc. Per the
+ * 2026-09-23 calendar-month fix, each level now targets exactly one
+ * calendar-derived month (current month minus a fixed per-level offset --
+ * never "per contest", never mixed), returned by the backend as
+ * `target_month` (an ISO date, always the 1st of that month) on every
+ * response for that level.
+ *
+ * `targetMonth` must be the target_month from a response that actually
+ * matches the currently active level (callers are responsible for that --
+ * see page.tsx, which only passes it through when `data.level ===
+ * activeLevel`) so this never shows a stale month left over from a
+ * level the user has already switched away from. Falls back to a plain
+ * label when no matching response has been fetched yet (e.g. right after
+ * switching levels, before the new request resolves).
+ */
+export function topHigh5RoundIdPlaceholder(
+  targetMonth: string | null | undefined,
+  language: Language,
+): string {
+  const fallback = "Round id (optional)"
+  if (!targetMonth) return fallback
+  const parsed = new Date(targetMonth)
+  if (Number.isNaN(parsed.getTime())) return fallback
+  const monthYear = formatDate(parsed, language, { month: "long", year: "numeric" })
+  return `Round id (optional — showing ${monthYear})`
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { nextRoundIdOnLevelChange, resolveTopHigh5RequestRoundId } from "./top-high5-round-selection"
+import { nextRoundIdOnLevelChange, resolveTopHigh5RequestRoundId, topHigh5RoundIdPlaceholder } from "./top-high5-round-selection"
 
 describe("resolveTopHigh5RequestRoundId", () => {
   it("returns undefined (auto) when nothing was explicitly selected", () => {
@@ -42,5 +42,45 @@ describe("nextRoundIdOnLevelChange", () => {
     // GLOBAL -> COUNTRY (Phase 6) all re-resolve fresh instead of carrying a
     // round that may not be finalized at the newly-selected level.
     expect(nextRoundIdOnLevelChange()).toBeUndefined()
+  })
+})
+
+describe("topHigh5RoundIdPlaceholder", () => {
+  // Exact worked example from KALUTASOCIETY_TOPHIGH5_CALENDAR_MONTH_FIX:
+  // current month = September 2026 -> City=Jul, Country=Jun, Regional=May,
+  // Continental=Apr, Global=Mar. Each level's own target_month must show
+  // its OWN right month/year, not a generic or hardcoded example.
+  it("shows the right month/year for City's target_month", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-07-01", "en")).toBe("Round id (optional — showing July 2026)")
+  })
+
+  it("shows the right month/year for Country's target_month", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-06-01", "en")).toBe("Round id (optional — showing June 2026)")
+  })
+
+  it("shows the right month/year for Regional's target_month", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-05-01", "en")).toBe("Round id (optional — showing May 2026)")
+  })
+
+  it("shows the right month/year for Continental's target_month", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-04-01", "en")).toBe("Round id (optional — showing April 2026)")
+  })
+
+  it("shows the right month/year for Global's target_month", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-03-01", "en")).toBe("Round id (optional — showing March 2026)")
+  })
+
+  it("rolls over the year boundary correctly (January target)", () => {
+    expect(topHigh5RoundIdPlaceholder("2026-11-01", "en")).toBe("Round id (optional — showing November 2026)")
+  })
+
+  it("falls back to a plain label when no target_month is available yet", () => {
+    expect(topHigh5RoundIdPlaceholder(undefined, "en")).toBe("Round id (optional)")
+    expect(topHigh5RoundIdPlaceholder(null, "en")).toBe("Round id (optional)")
+    expect(topHigh5RoundIdPlaceholder("", "en")).toBe("Round id (optional)")
+  })
+
+  it("falls back to a plain label rather than 'Invalid Date' for an unparseable value", () => {
+    expect(topHigh5RoundIdPlaceholder("not-a-date", "en")).toBe("Round id (optional)")
   })
 })

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
 import { contestService, TopHigh5Contest, TopHigh5Level, TopHigh5Response } from "@/services/contest-service"
-import { nextRoundIdOnLevelChange, resolveTopHigh5RequestRoundId } from "@/lib/top-high5-round-selection"
+import { nextRoundIdOnLevelChange, resolveTopHigh5RequestRoundId, topHigh5RoundIdPlaceholder } from "@/lib/top-high5-round-selection"
 // `isRoundVotingLive` and the contest-round-tabs vote-calendar helpers are
 // deliberately NOT imported here -- they answer "which cohort is voting
 // right now" for the live Vote page, not "which round has finalized
@@ -93,6 +93,14 @@ export default function TopHigh5Page() {
   const currentLevelMeta = useMemo(
     () => LEVEL_OPTIONS.find((opt) => opt.value === activeLevel) ?? LEVEL_OPTIONS[1],
     [activeLevel],
+  )
+  // Only trust `data.target_month` when it's actually a response for the
+  // level currently showing -- otherwise a stale month from a level the
+  // user just switched away from would flash before the new request
+  // resolves. See topHigh5RoundIdPlaceholder's own doc comment.
+  const roundIdPlaceholder = useMemo(
+    () => topHigh5RoundIdPlaceholder(data?.level === activeLevel ? data?.target_month : undefined, language),
+    [data, activeLevel, language],
   )
   const levelOptions = useMemo(
     () =>
@@ -391,7 +399,7 @@ export default function TopHigh5Page() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSearch()
             }}
-            placeholder={t("dashboard.contests.round_id") || "Round id (optional, e.g. 3 = March 2026)"}
+            placeholder={roundIdPlaceholder}
             className="md:w-72"
             inputMode="numeric"
           />
