@@ -60,9 +60,24 @@ export const BACKEND_PUBLIC_PORT =
 
 /**
  * Effective API origin for browser requests.
- * When the UI is opened via a public hostname/IP but NEXT_PUBLIC_API_URL still points at
- * localhost (common on VPS mistakes), callers must use same host + BACKEND_PUBLIC_PORT or
- * login hits the user's own PC and axios reports "Network Error".
+ *
+ * Two ways NEXT_PUBLIC_API_URL can be wrong for the page actually being
+ * served, both fixed the same way (this deployment's own reverse proxy
+ * always forwards /api to its local backend, on every domain this app
+ * runs behind -- so the current page's own origin is always correct):
+ *
+ * 1. It still points at localhost (common on VPS mistakes) -- callers must
+ *    use same host + BACKEND_PUBLIC_PORT or login hits the user's own PC
+ *    and axios reports "Network Error".
+ * 2. It's a real, different domain than the one actually serving this page
+ *    (e.g. baked to https://myhigh5.com at build time, but this exact
+ *    build is deployed behind kalutasociety.com -- confirmed live
+ *    2026-09-23: myhigh5.com now resolves to an entirely different,
+ *    unrelated server running stale backend code, so every browser
+ *    request -- including login -- silently went there instead and
+ *    failed with "Network error. Please check your connection and try
+ *    again."). Never assumed intentional: this codebase has no scenario
+ *    where the API is meant to live on a different origin than the page.
  */
 export function getEffectiveApiUrl(): string {
   let base = API_URL.replace(/\/+$/, '')
@@ -75,8 +90,8 @@ export function getEffectiveApiUrl(): string {
   try {
     const parsed = new URL(base)
     const apiLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
-    // Remote browser accessing UI on LAN/VPS URL while env still says localhost → fix server target
-    if (!pageIsLocal && apiLoopback) {
+    const hostMismatch = parsed.hostname !== pageHost
+    if (!pageIsLocal && (apiLoopback || hostMismatch)) {
       const port = window.location.port
       const defaultWebPort = port === '' || port === '443' || port === '80'
       // Production behind nginx on 443/80: API is same host (e.g. /api/v1 → uvicorn), not :8001 in the browser
