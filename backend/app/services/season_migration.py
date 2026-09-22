@@ -124,6 +124,17 @@ class SeasonMigrationService:
         - REGIONAL: M+2 — country winners pool for regional vote (e.g. May 1 for March round)
         - CONTINENT: M+3 — regional winners → continental (e.g. June 1)
         - GLOBAL: M+4
+
+        Client-clarified 2026 business rule: nomination mode intentionally
+        SKIPS City and keeps its own, independent (faster) calendar —
+        distinct from participation's Submission(M) -> City(M+1) ->
+        Country(M+2) -> Regional(M+3) -> Continental(M+4) -> Global(M+5).
+        Nomination and participation contests share one Round row per
+        calendar month, so nomination cannot read participation's
+        city_season_*/country_season_*/etc. columns for its own dates (those
+        now hold participation's schedule) — it computes its own offsets
+        from the round's submission month instead, exactly as before the
+        short-lived "unified calendar" experiment that this restores.
         """
         month_start = SeasonMigrationService._round_month_start(round_obj)
         if not month_start:
@@ -3259,7 +3270,7 @@ class SeasonMigrationService:
         """
         Vérifie et traite toutes les migrations nécessaires pour tous les rounds actifs.
         Utilise round_contests (N:N) car Round.contest_id est toujours NULL.
-        
+
         Lifecycle d'un round (nomination) :
         1. M (ex. March) → submission/nomination at COUNTRY; no voting
         2. M+1 (April) → country voting for M nominees; new M+1 nominations at country
@@ -3369,7 +3380,7 @@ class SeasonMigrationService:
         # STEP 1: Init seasons - PARTICIPATION → CITY, NOMINATION → COUNTRY
         # Utilise round_contests (N:N) pour trouver les contests liés aux rounds
         # ============================================================
-        
+
         # Init seasons per contest mode: nomination from submission month (M), participation from city start (M+1)
         rounds_for_init = db.query(Round).filter(
             Round.status != RoundStatus.CANCELLED
@@ -3382,14 +3393,14 @@ class SeasonMigrationService:
                 select(rc_table.c.contest_id).where(rc_table.c.round_id == round_obj.id)
             ).fetchall()
             contest_ids = [r[0] for r in contest_ids_result]
-            
+
             for cid in contest_ids:
                 contest = db.query(Contest).filter(Contest.id == cid).first()
                 if not contest:
                     continue
-                
+
                 contest_mode = getattr(contest, 'contest_mode', None)
-                
+
                 if contest_mode == "participation":
                     if not round_obj.city_season_start_date or round_obj.city_season_start_date > today:
                         continue
@@ -3401,7 +3412,7 @@ class SeasonMigrationService:
                             ContestSeason.level == SeasonLevel.CITY
                         )
                     ).first()
-                    
+
                     if not existing_link:
                         try:
                             result = SeasonMigrationService.migrate_to_city_season(db, cid, round_obj.id)
@@ -3409,11 +3420,24 @@ class SeasonMigrationService:
                         except Exception as e:
                             logger.error(f"Error migrating contest {cid} to city: {e}")
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": {"error": str(e)}})
-                
+
                 elif contest_mode == "nomination":
-                    if not SeasonMigrationService._nomination_country_init_ready(round_obj, today):
+                    # Country ContestSeason/link *definition* may exist from month M
+                    # (create_contestant's ensure_active_country_round_link_for_nomination
+                    # already does this at submission time, independent of this gate) --
+                    # but ACTIVE ContestantSeason membership (what migrate_to_country_start
+                    # actually grants, via _sync_contestants_to_season) must wait for
+                    # Country's own vote-open date (M+1). Client-clarified rule: a nominee
+                    # is not actively "in Country voting" merely because it is Nomination
+                    # month M -- My Applications, ranking, and every other consumer that
+                    # joins through ContestantSeason.is_active would otherwise show it as
+                    # already-active a full month early.
+                    country_vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                        round_obj, SeasonLevel.COUNTRY
+                    )
+                    if not country_vote_open or today < country_vote_open:
                         continue
-                    # NOMINATION → init COUNTRY (from round month M, not city_season M+1)
+                    # NOMINATION → init COUNTRY (active membership from vote-open M+1)
                     existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
                         and_(
                             ContestSeasonLink.contest_id == cid,
@@ -3421,7 +3445,7 @@ class SeasonMigrationService:
                             ContestSeason.level == SeasonLevel.COUNTRY
                         )
                     ).first()
-                    
+
                     if not existing_link:
                         try:
                             result = SeasonMigrationService.migrate_to_country_start(db, cid, round_obj.id)
@@ -3444,6 +3468,15 @@ class SeasonMigrationService:
         # contest+round, while still allowing the same contest to be processed
         # independently in another calendar round.
         promoted_contests_this_run = set()
+        # Observability only: under each mode's own canonical calendar
+        # (participation's shared round-stage columns; nomination's
+        # independent per-level offsets), at most one transition should
+        # ever be due for a given (contest, round) on a normal day.
+        # allow_multi_hop's day-1 catch-up escape hatch is intentionally
+        # kept (it has a legitimate purpose if the scheduler was ever down
+        # across a month boundary), but a real multi-hop happening is
+        # unusual enough to be worth a visible warning rather than silence.
+        hop_count_this_run: Dict[tuple, int] = {}
         
         for season in active_seasons:
             if not season.round:
@@ -3605,6 +3638,16 @@ class SeasonMigrationService:
                     })
                     if isinstance(result, dict) and not result.get("error") and not result.get("skipped"):
                         promoted_contests_this_run.add(promotion_key)
+                        hop_count_this_run[promotion_key] = hop_count_this_run.get(promotion_key, 0) + 1
+                        if hop_count_this_run[promotion_key] > 1:
+                            logger.warning(
+                                "Multi-hop promotion: contest=%s round=%s advanced %s times in one "
+                                "scheduler pass (now at %s->%s). Expected only with allow_multi_hop=%s "
+                                "genuinely catching up a real backlog -- otherwise the canonical "
+                                "calendar has a gap and should be investigated.",
+                                contest_id, round_obj.id, hop_count_this_run[promotion_key],
+                                season.level.value, next_level.value, allow_multi_hop,
+                            )
                 except Exception as e:
                     logger.error(
                         f"Error promoting contest {contest_id} "

@@ -2949,9 +2949,28 @@ def create_contestant(
                 round_id=target_round_id,
                 contest_id=real_contest_id,
             )
-            SeasonMigrationService.ensure_active_country_round_link_for_nomination(
-                db, real_contest_id, target_round_id
+            # ensure_active_country_round_link_for_nomination does more than
+            # define the ContestSeasonLink: it also calls
+            # _sync_contestants_to_season, which immediately activates every
+            # matching contestant's ContestantSeason. Client-clarified rule:
+            # a nominee is not "actively in Country voting" merely because
+            # it is still Nomination month M -- so this call (and the
+            # per-contestant activation below) must wait for Country's own
+            # vote-open date (M+1), just like the ContestantSeason insert
+            # further down. get_or_create_season above is harmless to call
+            # immediately: it only ensures the ContestSeason *definition*
+            # exists, with no per-contestant side effect.
+            country_vote_open_for_link = SeasonMigrationService._nomination_vote_open_date_for_level(
+                (
+                    db.query(Round).filter(Round.id == target_round_id).first()
+                    if target_round_id else None
+                ),
+                SeasonLevel.COUNTRY,
             )
+            if country_vote_open_for_link and country_vote_open_for_link <= datetime.utcnow().date():
+                SeasonMigrationService.ensure_active_country_round_link_for_nomination(
+                    db, real_contest_id, target_round_id
+                )
         else:
             entry_season = SeasonMigrationService.get_or_create_season(
                 db,
@@ -2979,8 +2998,41 @@ def create_contestant(
             ContestantSeason.contestant_id == contestant.id,
             ContestantSeason.season_id == entry_season.id
         ).first()
-        
-        if not existing_link:
+
+        # A contestant must NOT receive an ACTIVE geographic ContestantSeason
+        # while merely in its own Submission/Nomination month (M) -- only
+        # once that level's own canonical window has actually opened is an
+        # immediate activation here correct. In the normal case (submitting
+        # any day within M), this deliberately does NOT create the
+        # ContestantSeason row here at all: the scheduler's STEP-1 init
+        # creates and activates it once the level genuinely opens.
+        #
+        # Participation: City opens M+1 (city_season_start_date).
+        # Nomination: Country opens M+1 too, but via nomination's own,
+        # independent vote-open calendar (_nomination_vote_open_date_for_level),
+        # not city_season_start_date -- only the ContestSeason *definition*
+        # (get_or_create_season, above) exists unconditionally from month M;
+        # both ensure_active_country_round_link_for_nomination (above) and
+        # this insert are gated on the same M+1 date, since every consumer
+        # that joins through ContestantSeason.is_active (My Applications,
+        # ranking, ...) would otherwise show the contestant as already
+        # active a full month early.
+        level_already_open = False
+        if entry_season.round_id:
+            entry_round = db.query(Round).filter(Round.id == entry_season.round_id).first()
+            if entry_round:
+                if submission_entry_type == "nomination":
+                    country_vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(
+                        entry_round, SeasonLevel.COUNTRY
+                    )
+                    level_already_open = bool(
+                        country_vote_open and country_vote_open <= datetime.utcnow().date()
+                    )
+                else:
+                    city_start = getattr(entry_round, "city_season_start_date", None)
+                    level_already_open = bool(city_start and city_start <= datetime.utcnow().date())
+
+        if not existing_link and level_already_open:
             contestant_season_link = ContestantSeason(
                 contestant_id=contestant.id,
                 season_id=entry_season.id,

@@ -42,25 +42,33 @@ class CRUDRound:
         """
         Calcule toutes les dates pour un round donné (mois/année).
         Logique: Les dates sont fixées par le calendrier.
-        
-        Participation:
+
+        Participation (canonical, matches app/scripts/generate_monthly_rounds.py):
         - Submission: 1er au dernier jour du mois M
-        - Voting: 1er au dernier jour du mois M+1
-        - City Season: 1er au dernier jour du mois M+2
-        - Country Season: 1er au dernier jour du mois M+3
-        - Regional Season: 1er au dernier jour du mois M+4
-        - Global Season: 1er au dernier jour du mois M+5 (Skip Continent)
-        
-        Nomination:
-        - Submission: 1er au dernier jour du mois M
-        - Voting: 1er au dernier jour du mois M+1
-        - Country Season (Start): 1er au dernier jour du mois M+1 ou M+2 (selon logique, ici disons M+2 pour aligner)
-          (NOTE: Nomination starts at Country directly after voting/submission)
-        - Regional Season: M+3
-        - Continent Season: M+4
-        - Global Season: M+5
+        - City Season: 1er au dernier jour du mois M+1 (= voting_start_date)
+        - Country Season: 1er au dernier jour du mois M+2
+        - Regional Season: 1er au dernier jour du mois M+3
+        - Continental Season: 1er au dernier jour du mois M+4
+        - Global Season: 1er au dernier jour du mois M+5
+
+        `is_nomination` is accepted for call-site compatibility but does NOT
+        change this calculation. This function has no nomination-specific
+        output; nomination mode intentionally has its own, independent,
+        faster calendar (no City, Country at M+1) computed separately by
+        SeasonMigrationService._nomination_vote_open_date_for_level et al.
+        from a Round's submission month, never from these columns (which
+        this function -- and generate_monthly_rounds.py -- only ever
+        populate with participation's schedule).
+
+        (Pre-existing note: before this fix, this function's own date math
+        was already off by one month relative to the canonical participation
+        calendar above -- City/Country/Regional/Continental/Global were each
+        computed one month later than they should be, a bug that predates
+        and is independent of the 2026 lifecycle-unification work. Corrected
+        here as part of the same "review every Round-date generator"
+        instruction.)
         """
-        
+
         def get_month_range(m, y):
             # Gérer le débordement d'année
             while m > 12:
@@ -70,45 +78,45 @@ class CRUDRound:
             return date(y, m, 1), date(y, m, last_day)
 
         dates = {}
-        
+
         # Submission (Mois M)
         s_start, s_end = get_month_range(month, year)
         dates["submission_start_date"] = s_start
         # Add 32 days to submission end date for both nominations and participations
         s_end = s_end + timedelta(days=32)
         dates["submission_end_date"] = s_end
-        
-        # Voting (Mois M+1)
+
+        # Voting (Mois M+1) = City's own start
         v_start, v_end = get_month_range(month + 1, year)
         dates["voting_start_date"] = v_start
         dates["voting_end_date"] = v_end
-        
+
         # Seasons
-        # City (M+2) - Participation Only
-        c_start, c_end = get_month_range(month + 2, year)
+        # City (M+1) - Participation Only
+        c_start, c_end = get_month_range(month + 1, year)
         dates["city_season_start_date"] = c_start
         dates["city_season_end_date"] = c_end
-        
-        # Country (M+3)
-        cty_start, cty_end = get_month_range(month + 3, year)
+
+        # Country (M+2)
+        cty_start, cty_end = get_month_range(month + 2, year)
         dates["country_season_start_date"] = cty_start
         dates["country_season_end_date"] = cty_end
 
-        # Regional (M+4)
-        reg_start, reg_end = get_month_range(month + 4, year)
+        # Regional (M+3)
+        reg_start, reg_end = get_month_range(month + 3, year)
         dates["regional_start_date"] = reg_start
         dates["regional_end_date"] = reg_end
 
-        # Continent (M+5)
-        cont_start, cont_end = get_month_range(month + 5, year)
+        # Continent (M+4)
+        cont_start, cont_end = get_month_range(month + 4, year)
         dates["continental_start_date"] = cont_start
         dates["continental_end_date"] = cont_end
-        
-        # Global (M+6)
-        glob_start, glob_end = get_month_range(month + 6, year)
+
+        # Global (M+5)
+        glob_start, glob_end = get_month_range(month + 5, year)
         dates["global_start_date"] = glob_start
         dates["global_end_date"] = glob_end
-        
+
         return dates
 
     def create_with_contest(self, db: Session, obj_in: RoundCreate, contest_id: int = None) -> Round:

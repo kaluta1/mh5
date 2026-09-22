@@ -92,33 +92,42 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
             print(f"Linked {linked} active contest(s) to existing round")
         return existing_round
     
-    # Calculer les dates
-    # Submission: 1er au dernier jour du mois courant
+    # Calculer les dates. These columns are PARTICIPATION's canonical
+    # calendar (Submission M -> City M+1 -> Country M+2 -> Regional M+3 ->
+    # Continental M+4 -> Global M+5). Nomination contests are linked to this
+    # same shared Round row below, but never read these per-level columns
+    # for their own dates -- nomination has its own, independent, faster
+    # calendar (Nomination M -> Country M+1 -> Regional M+2 -> Continental
+    # M+3 -> Global M+4), computed separately from the round's submission
+    # month by SeasonMigrationService._nomination_vote_open_date_for_level
+    # et al. There is no separate "Start Voting" month/column for either
+    # mode; voting_start_date below marks the actual first voting day
+    # (participation's City open), not a placeholder phase of its own.
+    # Submission: 1er au dernier jour du mois courant (M)
     submission_start = get_month_start(year, month)
     submission_end = get_month_end(year, month)
-    
-    # Voting commence le mois suivant (M+1)
-    next_year, next_month = get_next_month(submission_end)
-    
-    # City Season (M+1) - Participation commence ici
-    city_start = get_month_start(next_year, next_month)
-    city_end = get_month_end(next_year, next_month)
-    
-    # Country Season (M+2) - Participation 2e mois
+
+    # City Season (M+1) - participation's first geographic stage, and the
+    # round's actual first voting day (voting_start_date, below).
+    m1_year, m1_month = get_next_month(submission_end)
+    city_start = get_month_start(m1_year, m1_month)
+    city_end = get_month_end(m1_year, m1_month)
+
+    # Country Season (M+2)
     m2_year, m2_month = get_next_month(city_end)
     country_start = get_month_start(m2_year, m2_month)
     country_end = get_month_end(m2_year, m2_month)
-    
+
     # Regional Season (M+3)
     m3_year, m3_month = get_next_month(country_end)
     regional_start = get_month_start(m3_year, m3_month)
     regional_end = get_month_end(m3_year, m3_month)
-    
+
     # Continental Season (M+4)
     m4_year, m4_month = get_next_month(regional_end)
     continental_start = get_month_start(m4_year, m4_month)
     continental_end = get_month_end(m4_year, m4_month)
-    
+
     # Global Season (M+5)
     m5_year, m5_month = get_next_month(continental_end)
     global_start = get_month_start(m5_year, m5_month)
@@ -142,6 +151,11 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
         date_fields = {
             'submission_start_date': submission_start,
             'submission_end_date': submission_end,
+            # voting_start_date = City's own start (M+1, participation's
+            # first real voting day). voting_end_date intentionally stays
+            # the whole-round span end (= global_end), not City's own end --
+            # sync_round_calendar_flags and the scheduler's STEP 0 both use
+            # it to know when the *entire* round is done, not just City.
             'voting_start_date': city_start,
             'voting_end_date': global_end,
             'city_season_start_date': city_start,
@@ -289,7 +303,8 @@ def generate_monthly_round(db: Session, target_date: Optional[date] = None) -> R
     print(f"   - ID: {new_round.id}")
     print(f"   - Contests liés: {len(active_contests)}")
     print(f"   - Submission: {submission_start} → {submission_end}")
-    print(f"   - City/Country: {city_start} → {city_end}")
+    print(f"   - City: {city_start} → {city_end}")
+    print(f"   - Country: {country_start} → {country_end}")
     print(f"   - Regional: {regional_start} → {regional_end}")
     print(f"   - Continental: {continental_start} → {continental_end}")
     print(f"   - Global: {global_start} → {global_end}")

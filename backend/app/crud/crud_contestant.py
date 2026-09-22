@@ -1588,9 +1588,53 @@ class CRUDContestant:
         
         # Récupérer les infos du contest (titre, image) pour chaque contestant
         # Cela nécessite de remonter à la saison/contest
-        from app.models.contests import ContestSeasonLink, ContestSeason
+        from app.models.contests import ContestSeasonLink, ContestSeason, ContestantSeason as _ContestantSeason
         from app.models.contest import Contest as MyfavContest
-        
+
+        # Each contestant's OWN current lifecycle stage, resolved from their
+        # OWN active ContestantSeason scoped to their OWN submission round
+        # (Contestant.round_id) -- never from Contest.level, a single scalar
+        # shared by an entire contest across every round/contestant (found,
+        # 2026 lifecycle fix, to be displaying the same wrong stage to
+        # ~every nominee of ~every nomination contest). Scoping to the
+        # contestant's own round_id also means a foreign-round
+        # ContestantSeason row (the still-partially-unrepaired cross-round
+        # contamination defect) cannot leak into this field, since such
+        # rows belong to a different round than Contestant.round_id by
+        # definition. If more than one active row exists on the
+        # contestant's own round (should not normally happen, but is not
+        # schema-guaranteed impossible), the most recently joined one wins --
+        # the same most-recent-wins tiebreak already used elsewhere in this
+        # codebase for the identical ambiguity (see
+        # app/api/api_v1/endpoints/contestant.py's vote/vote-replace
+        # endpoints). A contestant still in Submission or Start Voting (no
+        # own-round active season yet) simply has no entry here, and the
+        # field is correctly absent/None below.
+        own_round_level_by_contestant: Dict[int, str] = {}
+        own_round_joined_at_by_contestant: Dict[int, Any] = {}
+        own_round_rows = (
+            db.query(
+                Contestant.id.label("contestant_id"),
+                ContestSeason.level.label("level"),
+                _ContestantSeason.joined_at.label("joined_at"),
+            )
+            .join(_ContestantSeason, _ContestantSeason.contestant_id == Contestant.id)
+            .join(ContestSeason, ContestSeason.id == _ContestantSeason.season_id)
+            .filter(
+                Contestant.id.in_(contestant_ids),
+                _ContestantSeason.is_active == True,
+                ContestSeason.round_id == Contestant.round_id,
+            )
+            .all()
+        )
+        for row in own_round_rows:
+            prev_joined = own_round_joined_at_by_contestant.get(row.contestant_id)
+            if prev_joined is not None and row.joined_at and row.joined_at <= prev_joined:
+                continue
+            own_round_joined_at_by_contestant[row.contestant_id] = row.joined_at
+            level_val = row.level.value if hasattr(row.level, "value") else str(row.level)
+            own_round_level_by_contestant[row.contestant_id] = level_val
+
         contest_info_by_season = {}
         # Note: contestants.season_id contient le contest_id (pas l'id de la saison)
         contestant_season_ids = list(set([c.season_id for c in contestants]))
@@ -1716,7 +1760,11 @@ class CRUDContestant:
                 "shares_count": shares_count,
                 # Infos du contest
                 "contest_title": contest_info.get("contest_title"),
-                "contest_level": contest_info.get("contest_level"),
+                # Contestant-specific current stage (2026 lifecycle fix) --
+                # NOT the contest-wide Contest.level scalar. Absent/None
+                # when the contestant has no own-round active season yet
+                # (still in Submission or Start Voting).
+                "contest_level": own_round_level_by_contestant.get(contestant.id),
                 "contest_image_url": contest_info.get("contest_image_url"),
                 "contest_id": contest_info.get("contest_id", contestant.season_id),
                 "total_participants": 0, # Not calculating total participants per contest here
