@@ -48,12 +48,20 @@ KALUTASOCIETY_DERIVED_TOPHIGH5_FINAL_IMPLEMENTATION). Fixtures for the
 default-resolution tests below now also create real ContestantSeason
 membership + a vote for each round's contestant -- what the derived
 resolver actually reads -- alongside the pre-existing frozen rows (kept in
-place specifically to prove frozen data no longer has any influence). The
-close-date gating behavior itself (never auto-select a round before its own
-level has genuinely closed; among closed rounds, prefer the freshest) is
-unchanged, just now enforced by resolve_live_top_high5 instead of the old
-_get_top_high5_mode_aware. Only `?round_id=` (explicit) still reads
-top_high5_results, exercised by test_explicit_round_id_bypasses_close_date_gate.
+place specifically to prove frozen data no longer has any influence). Only
+`?round_id=` (explicit) still reads top_high5_results, exercised by
+test_explicit_round_id_bypasses_close_date_gate.
+
+2026-09-23 calendar-month-filter update: the close-date-based "has this
+round's own level genuinely finished" gating described above has been
+replaced by an exact calendar-month target (target_month = current month
+minus a fixed per-level offset -- see app.services.top_high5_live's module
+docstring). There is no longer a "closed vs not yet closed" pair to choose
+between; there is exactly one target month per level, and a round either
+is or is not that month's round. Fixtures below now give each round a real
+`submission_start_date` (its cohort month) instead of manipulating the
+`_end_date` columns, which the calendar rule no longer reads for
+selection (they remain informational stage_open/close_date metadata only).
 """
 from __future__ import annotations
 
@@ -64,12 +72,14 @@ from app.models.contests import ContestantSeason, ContestSeason, Contestant, Sea
 from app.models.round import Round, RoundStatus, round_contests
 from app.models.user import User
 from app.models.voting import ContestantVoting
+from app.services.top_high5_live import target_cohort_month
 
 
 def _round(
     db,
     suffix: str,
     *,
+    submission_month_start: date,
     country_season_end_date=None,
     regional_end_date=None,
     continental_end_date=None,
@@ -77,10 +87,10 @@ def _round(
     status: RoundStatus = RoundStatus.ACTIVE,
 ) -> Round:
     rnd = Round(
-        name=f"Round {suffix}",
+        name=f"Round {submission_month_start.strftime('%B %Y')} {suffix}",
         status=status,
-        submission_start_date=date(2026, 1, 1),
-        submission_end_date=date(2026, 1, 31),
+        submission_start_date=submission_month_start,
+        submission_end_date=submission_month_start,
         country_season_end_date=country_season_end_date,
         regional_end_date=regional_end_date,
         continental_end_date=continental_end_date,
@@ -168,18 +178,20 @@ def _vote(db, *, contestant: Contestant, contest: Contest, season: ContestSeason
     return row
 
 
-def _setup_two_rounds_one_level(
+def _setup_target_and_other_month(
     db,
     *,
     level: SeasonLevel,
-    date_field: str,
-    old_end_date,
-    new_end_date,
-    old_created_at=None,
-    new_created_at=None,
+    today: date,
+    other_month_start: date,
 ):
-    """Two rounds, one frozen row each at `level`, in the same jurisdiction
-    ("Africa"/continent style contest) so they compete for auto-selection."""
+    """One contest with real cohort data in the level's EXACT calendar
+    target month for `today` (see target_cohort_month), and a second round
+    for a DIFFERENT month, in the same jurisdiction, so they compete for
+    auto-selection. Only the target month's round must ever be picked."""
+    target_month_start = target_cohort_month(level, today)
+    assert target_month_start != other_month_start, "test fixture must use two genuinely different months"
+
     contest = Contest(
         name=f"Contest {level.value}-resolution",
         contest_type="t",
@@ -189,14 +201,14 @@ def _setup_two_rounds_one_level(
     db.add(contest)
     db.flush()
 
-    old_round = _round(db, "old", **{date_field: old_end_date})
-    new_round = _round(db, "new", **{date_field: new_end_date})
-    for rnd in (old_round, new_round):
+    target_round = _round(db, "target", submission_month_start=target_month_start)
+    other_round = _round(db, "other", submission_month_start=other_month_start)
+    for rnd in (target_round, other_round):
         db.execute(round_contests.insert().values(round_id=rnd.id, contest_id=contest.id))
 
-    old_season = ContestSeason(round_id=old_round.id, title="old season", level=level)
-    new_season = ContestSeason(round_id=new_round.id, title="new season", level=level)
-    db.add_all([old_season, new_season])
+    target_season = ContestSeason(round_id=target_round.id, title="target season", level=level)
+    other_season = ContestSeason(round_id=other_round.id, title="other season", level=level)
+    db.add_all([target_season, other_season])
     db.flush()
 
     # REGIONAL jurisdiction must be a region-pool label ("East Africa"), not
@@ -213,137 +225,121 @@ def _setup_two_rounds_one_level(
     else:
         jurisdiction = "Kenya"
 
-    old_contestant = _contestant(db, suffix="old", rnd=old_round, contest=contest, continent="Africa", country="Kenya")
-    new_contestant = _contestant(db, suffix="new", rnd=new_round, contest=contest, continent="Africa", country="Kenya")
+    target_contestant = _contestant(db, suffix="target", rnd=target_round, contest=contest, continent="Africa", country="Kenya")
+    other_contestant = _contestant(db, suffix="other", rnd=other_round, contest=contest, continent="Africa", country="Kenya")
 
     # Real cohort membership + a vote each -- what the derived resolver
     # actually reads (see module docstring). The frozen rows below remain,
-    # specifically to prove they no longer influence the default result.
-    _member(db, contestant=old_contestant, season=old_season)
-    _member(db, contestant=new_contestant, season=new_season)
-    _vote(db, contestant=old_contestant, contest=contest, season=old_season, suffix="old")
-    _vote(db, contestant=new_contestant, contest=contest, season=new_season, suffix="new")
+    # specifically to prove they no longer influence the default result
+    # (neither which round is picked, nor being required at all).
+    _member(db, contestant=target_contestant, season=target_season)
+    _member(db, contestant=other_contestant, season=other_season)
+    _vote(db, contestant=target_contestant, contest=contest, season=target_season, suffix="target")
+    _vote(db, contestant=other_contestant, contest=contest, season=other_season, suffix="other")
 
     _frozen_row(
-        db, contest=contest, level=level, jurisdiction=jurisdiction, rnd=new_round,
-        season=new_season, contestant=new_contestant,
-        created_at=new_created_at or (datetime.utcnow() - timedelta(days=30)),
+        db, contest=contest, level=level, jurisdiction=jurisdiction, rnd=other_round,
+        season=other_season, contestant=other_contestant,
+        created_at=datetime.utcnow(),  # written LAST -- must not matter at all
     )
     _frozen_row(
-        db, contest=contest, level=level, jurisdiction=jurisdiction, rnd=old_round,
-        season=old_season, contestant=old_contestant,
-        created_at=old_created_at or datetime.utcnow(),
+        db, contest=contest, level=level, jurisdiction=jurisdiction, rnd=target_round,
+        season=target_season, contestant=target_contestant,
+        created_at=datetime.utcnow() - timedelta(days=30),
     )
     db.commit()
-    return old_round, new_round, old_contestant, new_contestant
+    return target_round, other_round, target_contestant, other_contestant
 
 
-def test_continent_resolution_uses_close_date_not_stale_created_at(db, client):
-    """A later `created_at` on an OLDER (but still-closed) round's row --
-    simulating a repair/backfill run -- must not override a genuinely newer,
-    also-closed round's frozen result."""
+def test_continent_resolution_ignores_created_at_and_uses_calendar_target(db, client):
+    """A later `created_at` on the OTHER-month round's frozen row --
+    simulating a repair/backfill run -- must have zero effect. Only the
+    exact calendar target month's round is ever selected."""
     today = date.today()
-    old_round, new_round, _old_c, new_c = _setup_two_rounds_one_level(
-        db,
-        level=SeasonLevel.CONTINENT,
-        date_field="continental_end_date",
-        old_end_date=today - timedelta(days=200),
-        new_end_date=today - timedelta(days=20),
-        old_created_at=datetime.utcnow(),  # written LAST, like a repair tool
-        new_created_at=datetime.utcnow() - timedelta(days=30),
+    continent_target = target_cohort_month(SeasonLevel.CONTINENT, today)
+    other_month = date(continent_target.year - 1, continent_target.month, 1)  # a year off, unambiguous
+    target_round, _other_round, target_c, _other_c = _setup_target_and_other_month(
+        db, level=SeasonLevel.CONTINENT, today=today, other_month_start=other_month,
     )
 
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "continent", "country": "Kenya"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["round_id"] == new_round.id, (
-        "picked the stale, later-written OLD round instead of the "
-        "chronologically newer, also-closed round"
+    assert body["round_id"] == target_round.id, (
+        "picked the stale, later-written OTHER-month round instead of the "
+        "exact calendar target month"
     )
     contestant_ids = {row["contestant_id"] for c in body["contests"] for row in c["rows"]}
-    assert contestant_ids == {new_c.id}
+    assert contestant_ids == {target_c.id}
 
 
-def test_continent_resolution_excludes_not_yet_closed_round(db, client):
-    """A round whose CONTINENTAL window has not actually closed yet must
-    never be auto-selected, even if it already has a frozen row (as
+def test_continent_resolution_excludes_non_target_month_round(db, client):
+    """A round for a month other than the exact calendar target must never
+    be auto-selected, even though it already has a frozen row (as
     maintenance tooling has, in production, written prematurely) and even
     though it has the highest round_id / most recent created_at."""
     today = date.today()
-    closed_round, _open_round, _closed_c, open_c = _setup_two_rounds_one_level(
-        db,
-        level=SeasonLevel.CONTINENT,
-        date_field="continental_end_date",
-        old_end_date=today - timedelta(days=20),   # genuinely closed
-        new_end_date=today + timedelta(days=9),    # NOT closed yet
-        old_created_at=datetime.utcnow() - timedelta(days=30),
-        new_created_at=datetime.utcnow(),  # highest round_id AND newest created_at
+    other_month = target_cohort_month(SeasonLevel.GLOBAL, today)  # a different, safely-distinct month
+    target_round, _other_round, _target_c, other_c = _setup_target_and_other_month(
+        db, level=SeasonLevel.CONTINENT, today=today, other_month_start=other_month,
     )
 
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "continent", "country": "Kenya"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["round_id"] == closed_round.id, (
-        "auto-selected a round whose continental voting has not closed yet -- "
-        "this is the exact production bug (round with the highest round_id/"
-        "created_at picked over the genuinely latest CLOSED round)"
+    assert body["round_id"] == target_round.id, (
+        "auto-selected a round for the wrong calendar month -- the exact "
+        "production-shaped defect this file guards against"
     )
     contestant_ids = {row["contestant_id"] for c in body["contests"] for row in c["rows"]}
-    assert open_c.id not in contestant_ids
+    assert other_c.id not in contestant_ids
 
 
-def test_country_resolution_excludes_not_yet_closed_round(db, client):
+def test_country_resolution_excludes_non_target_month_round(db, client):
     today = date.today()
-    closed_round, _open_round, _closed_c, _open_c = _setup_two_rounds_one_level(
-        db,
-        level=SeasonLevel.COUNTRY,
-        date_field="country_season_end_date",
-        old_end_date=today - timedelta(days=10),
-        new_end_date=today + timedelta(days=5),
+    other_month = target_cohort_month(SeasonLevel.GLOBAL, today)
+    target_round, _other_round, _target_c, _other_c = _setup_target_and_other_month(
+        db, level=SeasonLevel.COUNTRY, today=today, other_month_start=other_month,
     )
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "country", "country": "Kenya"})
     assert resp.status_code == 200
-    assert resp.json()["round_id"] == closed_round.id
+    assert resp.json()["round_id"] == target_round.id
 
 
-def test_regional_resolution_excludes_not_yet_closed_round(db, client):
+def test_regional_resolution_excludes_non_target_month_round(db, client):
     today = date.today()
-    closed_round, _open_round, _closed_c, _open_c = _setup_two_rounds_one_level(
-        db,
-        level=SeasonLevel.REGIONAL,
-        date_field="regional_end_date",
-        old_end_date=today - timedelta(days=10),
-        new_end_date=today + timedelta(days=5),
+    other_month = target_cohort_month(SeasonLevel.GLOBAL, today)
+    target_round, _other_round, _target_c, _other_c = _setup_target_and_other_month(
+        db, level=SeasonLevel.REGIONAL, today=today, other_month_start=other_month,
     )
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "regional", "country": "Kenya"})
     assert resp.status_code == 200
-    assert resp.json()["round_id"] == closed_round.id
+    assert resp.json()["round_id"] == target_round.id
 
 
-def test_global_resolution_excludes_not_yet_closed_round(db, client):
+def test_global_resolution_excludes_non_target_month_round(db, client):
     today = date.today()
-    closed_round, _open_round, _closed_c, _open_c = _setup_two_rounds_one_level(
-        db,
-        level=SeasonLevel.GLOBAL,
-        date_field="global_end_date",
-        old_end_date=today - timedelta(days=10),
-        new_end_date=today + timedelta(days=5),
+    other_month = target_cohort_month(SeasonLevel.CITY, today)
+    target_round, _other_round, _target_c, _other_c = _setup_target_and_other_month(
+        db, level=SeasonLevel.GLOBAL, today=today, other_month_start=other_month,
     )
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "global"})
     assert resp.status_code == 200
-    assert resp.json()["round_id"] == closed_round.id
+    assert resp.json()["round_id"] == target_round.id
 
 
-def test_global_resolution_null_date_completed_round(db, client):
-    """A legacy round with its level end-date column NULL but
-    Round.status == COMPLETED (matches production round 3 -- a population
-    gap, not an open cohort) must still resolve, not silently return an
-    empty result."""
+def test_global_resolution_works_with_null_participation_end_date_columns(db, client):
+    """The calendar rule never reads Round.<level>_end_date for selection
+    (only for informational stage_open/close_date metadata) -- a round
+    with those columns NULL must still resolve normally, purely from its
+    submission_start_date (cohort month) matching the calendar target."""
+    today = date.today()
+    target_month = target_cohort_month(SeasonLevel.GLOBAL, today)
     contest = Contest(name="Contest global-null-date", contest_type="t", contest_mode="participation", level="global")
     db.add(contest)
     db.flush()
 
-    rnd = _round(db, "legacy-completed", status=RoundStatus.COMPLETED, global_end_date=None)
+    rnd = _round(db, "legacy-completed", submission_month_start=target_month, status=RoundStatus.COMPLETED, global_end_date=None)
     db.execute(round_contests.insert().values(round_id=rnd.id, contest_id=contest.id))
     season = ContestSeason(round_id=rnd.id, title="legacy global season", level=SeasonLevel.GLOBAL)
     db.add(season)
@@ -366,14 +362,17 @@ def test_global_resolution_null_date_completed_round(db, client):
 
 
 def test_no_eligible_round_returns_empty_not_an_error(db, client):
-    """A level with only a not-yet-closed round's frozen row (no closed
-    round exists at all yet) must return an empty result, not fall back to
-    the not-yet-closed round and not error."""
+    """A level with only a NON-target-month round's frozen row (no round
+    for the exact calendar target month exists at all) must return an
+    empty result, not fall back to the wrong-month round, and not error."""
     contest = Contest(name="Contest none-eligible", contest_type="t", contest_mode="participation", level="continent")
     db.add(contest)
     db.flush()
 
-    rnd = _round(db, "still-open", continental_end_date=date.today() + timedelta(days=5))
+    today = date.today()
+    # Deliberately a month that is NOT this level's calendar target.
+    wrong_month = target_cohort_month(SeasonLevel.CITY, today)
+    rnd = _round(db, "still-open", submission_month_start=wrong_month)
     db.execute(round_contests.insert().values(round_id=rnd.id, contest_id=contest.id))
     season = ContestSeason(round_id=rnd.id, title="open season", level=SeasonLevel.CONTINENT)
     db.add(season)
@@ -387,8 +386,8 @@ def test_no_eligible_round_returns_empty_not_an_error(db, client):
     )
     db.commit()
 
-    # Real cohort membership exists, but the stage genuinely hasn't closed
-    # yet -- must still return empty, not the in-progress round.
+    # Real cohort membership exists, but for the wrong calendar month --
+    # must still return empty, never substitute it.
     resp = client.get("/api/v1/seasons/top-high5", params={"level": "continent", "country": "Kenya"})
     assert resp.status_code == 200
     body = resp.json()
@@ -398,14 +397,15 @@ def test_no_eligible_round_returns_empty_not_an_error(db, client):
 
 def test_explicit_round_id_bypasses_close_date_gate(db, client):
     """Explicit ?round_id=... must still return that exact round's frozen
-    data even if its level has not closed yet -- the close-date gate only
-    applies to automatic ("latest") resolution, per the existing contract
+    data even when it is NOT the calendar target month -- the target-month
+    gate only applies to automatic resolution, per the existing contract
     that explicit/manual selection is always honored exactly."""
     contest = Contest(name="Contest explicit-open", contest_type="t", contest_mode="participation", level="continent")
     db.add(contest)
     db.flush()
 
-    rnd = _round(db, "explicit-open", continental_end_date=date.today() + timedelta(days=5))
+    wrong_month = target_cohort_month(SeasonLevel.CITY, date.today())
+    rnd = _round(db, "explicit-open", submission_month_start=wrong_month)
     db.execute(round_contests.insert().values(round_id=rnd.id, contest_id=contest.id))
     season = ContestSeason(round_id=rnd.id, title="open season", level=SeasonLevel.CONTINENT)
     db.add(season)

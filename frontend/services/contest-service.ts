@@ -321,7 +321,9 @@ export interface TopHigh5Response {
   country: string
   level?: TopHigh5Level
   contests: TopHigh5Contest[]
-  /** True when contests in this response legitimately span more than one round/cohort (e.g. participation vs nomination each closing at different months) -- round_id/round_name above is only the freshest one represented, not a claim every card shares it. See each card's own round_id/cohort_month/stage_month. */
+  /** The single calendar-derived cohort month (YYYY-MM-DD, always the 1st) this level targeted for this response -- current month minus a fixed per-level offset. Every card's own cohort_month matches this. */
+  target_month?: string | null
+  /** Always false under the calendar-month targeting rule (one target round per level) -- kept so a client checking this flag degrades harmlessly. */
   mixed_cohorts?: boolean
   fallback_applied?: boolean
   diagnostics?: {

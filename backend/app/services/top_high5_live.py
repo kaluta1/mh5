@@ -28,33 +28,39 @@ correctness is hostage to whether every historical freeze happened to
 succeed, which has now been proven false more than once.
 
 ============================================================================
-WHAT THIS MODULE DOES INSTEAD
+THE CALENDAR-MONTH TARGETING RULE (2026-09-23)
 ============================================================================
-For each level (CITY / COUNTRY / REGIONAL / CONTINENT / GLOBAL), this
-derives "who is the current Top 5" LIVE, straight from the same
-authoritative sources `promote_to_next_level` itself reads to decide who
-gets promoted:
+An earlier version of this module let each contest independently pick its
+own "freshest fully-completed round" per level. That correctly avoided
+in-progress data, but two different contests (participation vs nomination,
+different lifecycle offsets) could legitimately land on two different
+cohort months in the same response -- which, while not a data bug (traced
+and proven correct, see git history), was confusing on the page and is
+explicitly disallowed going forward.
 
-  CURRENT DATE
-      -> CONTEST MODE (participation / nomination; own lifecycle calendar)
-      -> per-contest COHORT/ROUND (each contest's own freshest fully
-         completed round at this level -- never in-progress)
-      -> ELIGIBLE CONTESTANTS for that (contest, round, level): existence
-         of a ContestantSeason row (active OR inactive -- see "why not
-         is_active" below) in this level's own ContestSeason for this
-         round, whose Contestant.round_id matches the round (cohort
-         integrity guard, same defense-in-depth already used by
-         `_contestants_for_contest_in_season` / `get_top_contestants_by_location`)
-      -> `aggregate_rankings` (the one authoritative ranking/tie-break
-         service every promotion and every existing Top High5 freeze
-         already uses) for the real vote/points/engagement data
-      -> grouped by this level's own jurisdiction field, deduped by
-         nominator (`dedupe_contestants_by_nominator`), Top N
+The rule now is a single, uniform calendar calculation with **no
+per-contest search and no fallback**:
 
-`TopHigh5Result` is never read or written here. It remains exactly what it
-was for explicit-round / historical / audit purposes (see
-`_get_top_high5_single_round` for an explicit `?round_id=`), just no longer
-in the path of the *default* display.
+    target_month(level) = current_calendar_month - offset(level)
+    offset = {CITY: 2, COUNTRY: 3, REGIONAL: 4, CONTINENT: 5, GLOBAL: 6}
+
+This offset is anchored to PARTICIPATION's own City=M+1..Global=M+5
+lifecycle so that, for participation, target_month's own stage month for
+this level is always exactly one full calendar month in the past --
+genuinely closed, not merely closed as of today. NOMINATION reaches every
+level faster (City-less, Country=M+1..Global=M+4), so the identical
+target_month is closed for nomination with extra safety margin. Both modes
+are therefore queried against the SAME one target round -- there is no
+longer a separate target month per mode, which is exactly why a level's
+response now contains exactly one cohort month, never a mix.
+
+    current_month -> target_month -> the ONE Round whose own cohort month
+    equals target_month -> contests/contestants that genuinely belong to
+    THAT round's cohort at this level -> rank -> display.
+
+If no Round exists for target_month, or no contest has real membership
+there, the level returns empty. Never substitutes an older or newer month.
+CITY remains participation-only (nomination has no City stage at all).
 
 ============================================================================
 WHY NOT `ContestantSeason.is_active` ALONE, OR `ContestSeasonLink` ALONE
@@ -73,12 +79,13 @@ signal of "did this contestant genuinely reach this level":
     earlier level's result was ever wrong (same audit, Phase 3).
 
 The minimum authoritative combination used here is: EXISTENCE of a
-ContestantSeason row at this exact level for this exact round (not
+ContestantSeason row at this exact level for the target round's season (not
 "currently active"), combined with the contestant's own immutable
-`round_id` matching that round (cohort integrity -- prevents a different
-round's contestant riding in on a shared/pooled season), combined with the
-lifecycle's own mode-aware close date (prevents showing an in-progress
-stage). No single field is trusted alone.
+`round_id` equalling the target round (cohort integrity -- proven, by a
+2026-09-23 live trace, to be exactly what prevents a contestant who also
+has stray ContestantSeason rows at other rounds -- e.g. from repeated
+re-sync activity -- from leaking into the wrong cohort's card). No single
+field is trusted alone.
 """
 from __future__ import annotations
 
@@ -103,9 +110,23 @@ _LEVEL_ORDER = [
     SeasonLevel.GLOBAL,
 ]
 
-# PARTICIPATION's own calendar close date column for each level (City=M+1
-# .. Global=M+5, see generate_monthly_rounds.py). Nomination never uses
-# these columns -- see _level_close_date_for_mode.
+# Fixed calendar offset (in months, subtracted from the current month) used
+# to compute the single target cohort month for each level. See the
+# "CALENDAR-MONTH TARGETING RULE" section above for the exact rationale.
+_TARGET_MONTH_OFFSET = {
+    SeasonLevel.CITY: 2,
+    SeasonLevel.COUNTRY: 3,
+    SeasonLevel.REGIONAL: 4,
+    SeasonLevel.CONTINENT: 5,
+    SeasonLevel.GLOBAL: 6,
+}
+
+# PARTICIPATION's own calendar close/open date columns for each level (City
+# =M+1 .. Global=M+5, see generate_monthly_rounds.py). Nomination never uses
+# these columns -- see _level_close_date_for_mode/_level_open_date_for_mode.
+# Debug/metadata only in this module: no longer used to decide eligibility
+# (see module docstring), only to populate stage_open_date/stage_close_date
+# on each card for verification purposes.
 _PARTICIPATION_END_DATE_ATTR = {
     SeasonLevel.CITY: "city_season_end_date",
     SeasonLevel.COUNTRY: "country_season_end_date",
@@ -139,6 +160,51 @@ def next_level(level: SeasonLevel) -> Optional[SeasonLevel]:
     return _LEVEL_ORDER[idx + 1] if idx < len(_LEVEL_ORDER) - 1 else None
 
 
+def _add_months(base_year: int, base_month: int, delta: int) -> tuple[int, int]:
+    """1-indexed (year, month) shifted by `delta` months (may be negative),
+    correct across year boundaries in either direction."""
+    index = base_year * 12 + (base_month - 1) + delta
+    year, month0 = divmod(index, 12)
+    return year, month0 + 1
+
+
+def target_cohort_month(level: SeasonLevel, today: date) -> date:
+    """
+    The ONE cohort month this level displays right now, computed directly
+    from the CURRENT calendar month via a fixed offset -- see the
+    CALENDAR-MONTH TARGETING RULE section in the module docstring. No
+    per-contest search, no mode branching in the offset, no fallback to any
+    other month. Correct across year boundaries (verified by tests).
+    """
+    offset = _TARGET_MONTH_OFFSET[level]
+    year, month = _add_months(today.year, today.month, -offset)
+    return date(year, month, 1)
+
+
+def _cohort_month(round_obj: Round) -> Optional[date]:
+    """The round's OWN submission/nomination month ("M" in the M/M+1/M+2..
+    lifecycle notation) -- the contest's original cohort, never a later
+    stage's month."""
+    return SeasonMigrationService._round_month_start(round_obj)
+
+
+def find_round_for_month(db: Session, target_month: date) -> Optional[Round]:
+    """
+    The one Round whose own cohort month equals `target_month` -- reuses
+    `_cohort_month` (SeasonMigrationService._round_month_start), the same
+    authoritative month-derivation already used throughout this codebase.
+    Never a CANCELLED round. If several somehow match the same month
+    (not expected -- each calendar month has exactly one real round), the
+    highest id wins as a defensive, deterministic tie-break.
+    """
+    candidates = db.query(Round).filter(Round.status != RoundStatus.CANCELLED).all()
+    matches = [r for r in candidates if _cohort_month(r) == target_month]
+    if not matches:
+        return None
+    matches.sort(key=lambda r: r.id, reverse=True)
+    return matches[0]
+
+
 def _level_close_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mode: str):
     mode = (contest_mode or "").strip().lower()
     if mode == "nomination":
@@ -148,44 +214,13 @@ def _level_close_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mod
 
 
 def _level_open_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mode: str):
-    """Debug/metadata only -- not used for any eligibility decision. The
-    voting-window START date for this (round, level, mode), distinct from
-    the round's own COHORT month (see cohort_month in the response), which
-    is what PART 2/6 of the cohort-vs-stage confusion this responds to asks
-    to be made explicit."""
+    """Debug/metadata only -- see module docstring. Not used for any
+    eligibility decision; the target month itself is the only gate."""
     mode = (contest_mode or "").strip().lower()
     if mode == "nomination":
         return SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, level)
     attr = _PARTICIPATION_START_DATE_ATTR.get(level)
     return getattr(round_obj, attr, None) if attr else None
-
-
-def _cohort_month(round_obj: Round) -> Optional[date]:
-    """The round's OWN submission/nomination month ("M" in the M/M+1/M+2..
-    lifecycle notation) -- the contest's original cohort, never a later
-    stage's month. A June cohort stays a June cohort forever; only the
-    *stage* date (see _level_close_date_for_mode) moves with the level."""
-    return SeasonMigrationService._round_month_start(round_obj)
-
-
-def _stage_fully_completed(round_obj: Round, level: SeasonLevel, contest_mode: str, today: date) -> bool:
-    """
-    True only when this (round, level) voting window has genuinely closed
-    for this contest's mode -- never an in-progress or future stage. A
-    CANCELLED round is never eligible regardless of its date columns (same
-    guard as the frozen-result resolver). Nomination has no CITY offset at
-    all (see _nomination_vote_close_date_for_level), so a nomination
-    contest can only reach this level's date branch via the COMPLETED-status
-    fallback below, which nomination's own CITY-less lifecycle never
-    satisfies for a CITY level in the first place -- in practice enforced
-    upstream anyway (see resolve_live_top_high5's explicit mode check).
-    """
-    if round_obj.status == RoundStatus.CANCELLED:
-        return False
-    close = _level_close_date_for_mode(round_obj, level, contest_mode)
-    if close is not None:
-        return close <= today
-    return round_obj.status == RoundStatus.COMPLETED
 
 
 def _location_value(level: SeasonLevel, contestant: Contestant) -> Optional[str]:
@@ -207,19 +242,25 @@ def _location_value(level: SeasonLevel, contestant: Contestant) -> Optional[str]
     return "Global"
 
 
-def _empty_response(level: SeasonLevel, selected_country: str, *, reason: str = "no_eligible_data") -> dict:
+def _empty_response(
+    level: SeasonLevel, selected_country: str, *, target_month: Optional[date] = None,
+    reason: str = "no_eligible_data",
+) -> dict:
     return {
         "round_id": None,
         "round_name": None,
         "country": selected_country,
         "level": level.value,
+        "target_month": target_month.isoformat() if target_month else None,
+        "mixed_cohorts": False,
         "contests": [],
         "fallback_applied": False,
         "diagnostics": {
             "requested_level": level.value,
-            "message": "No contestants currently satisfy the lifecycle/ranking conditions for this level.",
+            "message": "No contestants currently satisfy the target calendar month for this level.",
             "source": "derived",
             "reason": reason,
+            "target_month": target_month.isoformat() if target_month else None,
         },
     }
 
@@ -271,64 +312,60 @@ def resolve_live_top_high5(
     limit: int = 5,
 ) -> dict:
     """
-    Derive Top High5 for one level, live, from current authoritative
-    lifecycle + membership + voting data. Never reads or writes
-    TopHigh5Result. See module docstring for the full rationale.
+    Derive Top High5 for one level, live, for the SINGLE calendar-derived
+    target cohort month (see module docstring). Never reads or writes
+    TopHigh5Result.
 
-    Batched (no N+1): eligibility/cohort data is fetched in a small,
-    bounded number of queries covering every round at this level at once;
-    only contests that survive every filter (completed stage + real cohort
-    + jurisdiction match) get a final per-contest ranking query.
+    Batched (no N+1): exactly one target round is resolved per call; every
+    contest/contestant query below is scoped to that one round's season, so
+    cost is bounded by the number of contests genuinely in that cohort, not
+    by the whole system's history.
     """
-    # ---- Batch: every ContestSeason at this level, across all rounds.
-    level_seasons = (
+    target_month = target_cohort_month(level, today)
+    target_round = find_round_for_month(db, target_month)
+    if target_round is None:
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_round_for_target_month")
+
+    target_season = (
         db.query(ContestSeason)
-        .options(joinedload(ContestSeason.round))
-        .filter(ContestSeason.level == level, ContestSeason.is_deleted == False)
-        .all()
+        .filter(
+            ContestSeason.level == level,
+            ContestSeason.round_id == target_round.id,
+            ContestSeason.is_deleted == False,
+        )
+        .first()
     )
-    season_by_round: dict[int, ContestSeason] = {
-        s.round_id: s for s in level_seasons if s.round_id is not None
-    }
-    if not season_by_round:
-        return _empty_response(level, selected_country, reason="no_seasons_at_level")
+    if target_season is None:
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_season_for_target_round")
 
-    season_ids = [s.id for s in level_seasons if s.round_id is not None]
-    season_round_id = {s.id: s.round_id for s in level_seasons}
-
-    # ---- Batch: existence-based cohort membership across ALL those rounds
-    # in one query (active or not -- see module docstring).
+    # ---- Existence-based cohort membership, scoped to the ONE target
+    # season (active or not -- see module docstring), plus the
+    # cohort-integrity guard: only a contestant whose own immutable
+    # round_id equals the target round is trusted, regardless of how many
+    # other ContestantSeason rows they may have at other rounds.
     member_rows = (
-        db.query(ContestantSeason.season_id, Contestant)
-        .join(Contestant, Contestant.id == ContestantSeason.contestant_id)
+        db.query(Contestant)
+        .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
         .options(joinedload(Contestant.user))
         .filter(
-            ContestantSeason.season_id.in_(season_ids),
+            ContestantSeason.season_id == target_season.id,
             Contestant.is_active == True,
             Contestant.is_deleted == False,
+            Contestant.round_id == target_round.id,
         )
         .all()
     )
 
-    by_contest: dict[int, dict[int, list[Contestant]]] = {}
-    for season_id, contestant in member_rows:
-        round_id = season_round_id.get(season_id)
-        # Cohort-integrity guard: only trust a membership row whose season
-        # and the contestant's own fixed round agree (defense-in-depth
-        # already used by _contestants_for_contest_in_season /
-        # get_top_contestants_by_location) -- prevents a different round's
-        # contestant riding in on a shared/pooled season.
-        if round_id is None or contestant.round_id != round_id:
-            continue
+    by_contest: dict[int, list[Contestant]] = {}
+    for contestant in member_rows:
         contest_id = contestant.season_id
         if contest_id is None:
             continue
-        by_contest.setdefault(contest_id, {}).setdefault(round_id, []).append(contestant)
+        by_contest.setdefault(contest_id, []).append(contestant)
 
     if not by_contest:
-        return _empty_response(level, selected_country, reason="no_cohort_membership")
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_cohort_membership_for_target_month")
 
-    # ---- Batch: contest_mode / category for every contest involved.
     contest_ids = list(by_contest.keys())
     contests = (
         db.query(Contest)
@@ -338,41 +375,22 @@ def resolve_live_top_high5(
     )
     contest_by_id = {c.id: c for c in contests}
 
-    eligibility_cache: dict[tuple, bool] = {}
-
-    def _eligible(round_id: int, mode: str) -> bool:
-        key = (round_id, mode)
-        cached = eligibility_cache.get(key)
-        if cached is not None:
-            return cached
-        season = season_by_round.get(round_id)
-        round_obj = season.round if season else None
-        result = bool(round_obj) and _stage_fully_completed(round_obj, level, mode, today)
-        eligibility_cache[key] = result
-        return result
-
-    # ---- Each contest picks its own freshest fully-completed round.
-    chosen: dict[int, int] = {}
-    for contest_id, rounds_map in by_contest.items():
+    # ---- CITY is participation-only; nomination has no City stage at all.
+    ranked_contest_ids = []
+    for contest_id in by_contest:
         contest = contest_by_id.get(contest_id)
         if not contest:
             continue
         mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
         if level == SeasonLevel.CITY and mode != "participation":
-            # Nomination has no City stage (see _nomination_*_for_level,
-            # which never defines a CITY offset) -- explicit guard here as
-            # well, not relying only on the absence of CITY seasons upstream.
             continue
-        eligible_rounds = [r for r in rounds_map if _eligible(r, mode)]
-        if not eligible_rounds:
-            continue
-        chosen[contest_id] = max(eligible_rounds)
+        ranked_contest_ids.append(contest_id)
 
-    if not chosen:
-        return _empty_response(level, selected_country, reason="no_fully_completed_stage")
+    if not ranked_contest_ids:
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_eligible_contests_for_target_month")
 
-    def _passes_prefilter(contest_id: int, round_id: int) -> bool:
-        candidates = by_contest[contest_id][round_id]
+    def _passes_prefilter(contest_id: int) -> bool:
+        candidates = by_contest[contest_id]
         if level == SeasonLevel.COUNTRY:
             if contest_id == 17 and any(v in variants for v in {"tanzania", "tz"}):
                 return False  # existing Singeli/Tanzania override, preserved
@@ -391,41 +409,38 @@ def resolve_live_top_high5(
             return False
         return True
 
-    ranked_contest_ids = [cid for cid, rid in chosen.items() if _passes_prefilter(cid, rid)]
+    ranked_contest_ids = [cid for cid in ranked_contest_ids if _passes_prefilter(cid)]
     if not ranked_contest_ids:
-        return _empty_response(level, selected_country, reason="no_jurisdiction_match")
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_jurisdiction_match")
 
     nxt = next_level(level)
-    next_season_by_round: dict[int, ContestSeason] = {}
+    next_season = None
     if nxt is not None:
-        next_seasons = (
+        next_season = (
             db.query(ContestSeason)
-            .filter(ContestSeason.level == nxt, ContestSeason.is_deleted == False,
-                     ContestSeason.round_id.in_(set(chosen.values())))
-            .all()
+            .filter(
+                ContestSeason.level == nxt,
+                ContestSeason.round_id == target_round.id,
+                ContestSeason.is_deleted == False,
+            )
+            .first()
         )
-        next_season_by_round = {s.round_id: s for s in next_seasons}
 
-    groups: dict[tuple[int, str], list] = {}
-    rounds_represented: set[int] = set()
-    all_selected_ids: list[int] = []
     per_group_selected: dict[tuple[int, str], list[Contestant]] = {}
     per_group_rank: dict[tuple[int, str], dict] = {}
+    all_selected_ids: list[int] = []
 
     for contest_id in ranked_contest_ids:
-        round_id = chosen[contest_id]
-        rounds_represented.add(round_id)
         contest = contest_by_id[contest_id]
-        candidates = by_contest[contest_id][round_id]
+        candidates = by_contest[contest_id]
         candidate_ids = [c.id for c in candidates if c.id is not None]
         if not candidate_ids:
             continue
 
-        season = season_by_round[round_id]
         bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
         ranking_rows = aggregate_rankings(
             db,
-            season_ids=[season.id],
+            season_ids=[target_season.id],
             contestant_ids=candidate_ids,
             contest_id=contest_id,
             bucket_key=bucket_key,
@@ -469,18 +484,18 @@ def resolve_live_top_high5(
             all_selected_ids.extend(c.id for c in top)
 
     if not per_group_selected:
-        return _empty_response(level, selected_country, reason="no_ranked_contestants")
+        return _empty_response(level, selected_country, target_month=target_month, reason="no_ranked_contestants")
 
     # ---- Batch "migrated" flag: is this contestant CURRENTLY (present
     # tense -- a legitimate use of is_active) an active member of the NEXT
-    # level's season for the SAME round? Unrelated to historical proof; this
-    # is describing right-now state, not reconstructing the past.
+    # level's season for the SAME target round? Unrelated to historical
+    # proof; this describes right-now state, not reconstructing the past.
     migrated_ids: set = set()
-    if nxt is not None and next_season_by_round:
+    if next_season is not None:
         migrated_rows = (
             db.query(ContestantSeason.contestant_id)
             .filter(
-                ContestantSeason.season_id.in_([s.id for s in next_season_by_round.values()]),
+                ContestantSeason.season_id == next_season.id,
                 ContestantSeason.is_active == True,
                 ContestantSeason.contestant_id.in_(all_selected_ids),
             )
@@ -495,21 +510,19 @@ def resolve_live_top_high5(
         else "continent_in_country" if level == SeasonLevel.CONTINENT
         else "city_group"
     )
+    cohort_month_str = target_month.isoformat()
 
     contests_out = []
     for (contest_id, jurisdiction), top in per_group_selected.items():
         contest = contest_by_id[contest_id]
-        round_id = chosen[contest_id]
-        round_obj = season_by_round[round_id].round
         rank_by_id = per_group_rank[(contest_id, jurisdiction)]
         rows = [
             _row_dict(contest, c, idx, rank_by_id[c.id], c.id in migrated_ids)
             for idx, c in enumerate(top, start=1)
         ]
         mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
-        cohort_month = _cohort_month(round_obj) if round_obj else None
-        stage_open = _level_open_date_for_mode(round_obj, level, mode) if round_obj else None
-        stage_close = _level_close_date_for_mode(round_obj, level, mode) if round_obj else None
+        stage_open = _level_open_date_for_mode(target_round, level, mode)
+        stage_close = _level_close_date_for_mode(target_round, level, mode)
         contests_out.append({
             "contest_id": contest.id,
             "contest_name": contest.name,
@@ -521,50 +534,42 @@ def resolve_live_top_high5(
             "ranking_scope": ranking_scope,
             "promotion_limit": limit,
             "rows": rows,
-            "round_id": round_id,
-            "round_name": round_obj.name if round_obj else None,
+            "round_id": target_round.id,
+            "round_name": target_round.name,
             "contest_mode": mode,
-            # Debug/verification metadata (PART 6): explicit cohort-vs-stage
-            # split so "which month is this card actually about" is never
-            # ambiguous. cohort_* is the contest's ORIGINAL submission/
-            # nomination month -- it never moves. stage_* is when THIS
-            # level's own voting window opens/closes for that cohort, per
-            # this contest's own mode -- these are two different months by
-            # design (e.g. a June cohort's nomination Country stage is
-            # July), not an off-by-one error.
-            "cohort_round_id": round_id,
-            "cohort_round_name": round_obj.name if round_obj else None,
-            "cohort_month": cohort_month.isoformat() if cohort_month else None,
+            # Debug/verification metadata: every card in this response
+            # shares the same cohort_round_id/cohort_month by construction
+            # (single target round for the whole level) -- stage_* remains
+            # per-mode/informational (when THIS level's own voting window
+            # runs for that shared cohort), never used to select the round.
+            "cohort_round_id": target_round.id,
+            "cohort_round_name": target_round.name,
+            "cohort_month": cohort_month_str,
             "stage_month": stage_close.replace(day=1).isoformat() if stage_close else None,
             "stage_open_date": stage_open.isoformat() if stage_open else None,
             "stage_close_date": stage_close.isoformat() if stage_close else None,
         })
     contests_out.sort(key=lambda c: (c["country_group"] or "").lower())
 
-    rounds_used = sorted(rounds_represented, reverse=True)
-    top_round = season_by_round[rounds_used[0]].round if rounds_used else None
-
     return {
-        "round_id": top_round.id if top_round else None,
-        "round_name": top_round.name if top_round else None,
+        "round_id": target_round.id,
+        "round_name": target_round.name,
         "country": selected_country,
         "level": level.value,
-        # True when the cards in `contests` legitimately span more than one
-        # round -- expected whenever participation and nomination contests
-        # (different lifecycle offsets) or contests at different real
-        # progress both appear in the same response. The single top-level
-        # round_id/round_name above is only the freshest one represented,
-        # NEVER a claim that every card shares it -- see each card's own
-        # round_id/cohort_month/stage_month for its actual cohort.
-        "mixed_cohorts": len(rounds_used) > 1,
+        "target_month": cohort_month_str,
+        # Always False now: every card in a response shares the single
+        # calendar-derived target round. Kept (rather than removed) so the
+        # frontend's existing mixed_cohorts branch degrades harmlessly.
+        "mixed_cohorts": False,
         "contests": contests_out,
         "fallback_applied": False,
         "diagnostics": {
-            "round_id": top_round.id if top_round else None,
-            "round_name": top_round.name if top_round else None,
+            "round_id": target_round.id,
+            "round_name": target_round.name,
             "country": selected_country,
             "requested_level": level.value,
             "source": "derived",
-            "distinct_rounds_represented": rounds_used,
+            "target_month": cohort_month_str,
+            "distinct_rounds_represented": [target_round.id],
         },
     }
