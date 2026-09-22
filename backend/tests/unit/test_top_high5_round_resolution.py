@@ -26,6 +26,20 @@ that date column is NULL -- and (b) among those eligible rounds, order by
 that same end date, not by round_id or created_at (both of which can be
 produced out of calendar order by admin backfill tooling:
 POST /rounds/generate-monthly accepts an arbitrary past year/month).
+
+2026 mode-aware resolver update: these Round.<level>_end_date columns are
+participation's calendar specifically (see the later, separate
+nomination/participation calendar-mismatch audit and
+test_top_high5_mode_aware_resolver.py). This file's fixtures directly
+manipulate those columns to simulate "closed" vs "not yet closed" -- that
+is now precisely participation's own gate, so every fixture here uses
+contest_mode="participation" (previously "nomination", before contest
+mode had any bearing on which calendar gates a result). The protection
+these tests verify -- never auto-select a round before its own level has
+genuinely closed -- is unchanged and still fully enforced; only the mode
+label was corrected to match what is actually being exercised. Nomination's
+own, independent, earlier calendar is covered separately in
+test_top_high5_mode_aware_resolver.py.
 """
 from __future__ import annotations
 
@@ -128,7 +142,7 @@ def _setup_two_rounds_one_level(
     contest = Contest(
         name=f"Contest {level.value}-resolution",
         contest_type="t",
-        contest_mode="nomination",
+        contest_mode="participation",
         level=level.value,
     )
     db.add(contest)
@@ -144,9 +158,19 @@ def _setup_two_rounds_one_level(
     db.add_all([old_season, new_season])
     db.flush()
 
-    jurisdiction = "Africa" if level in (SeasonLevel.CONTINENT, SeasonLevel.GLOBAL) else "Kenya"
+    # REGIONAL jurisdiction must be a region-pool label ("East Africa"), not
+    # a country name -- matches how real production rows are frozen (see
+    # test_top_high5_mode_aware_resolver.py) and how the endpoint's own
+    # REGIONAL filter (regional_pool_id_for_region_label) actually matches.
+    # COUNTRY jurisdiction is genuinely the country name itself.
     if level == SeasonLevel.GLOBAL:
         jurisdiction = "Global"
+    elif level == SeasonLevel.CONTINENT:
+        jurisdiction = "Africa"
+    elif level == SeasonLevel.REGIONAL:
+        jurisdiction = "East Africa"
+    else:
+        jurisdiction = "Kenya"
 
     old_contestant = _contestant(db, suffix="old", rnd=old_round, contest=contest, continent="Africa", country="Kenya")
     new_contestant = _contestant(db, suffix="new", rnd=new_round, contest=contest, continent="Africa", country="Kenya")
@@ -266,7 +290,7 @@ def test_global_resolution_null_date_completed_round(db, client):
     Round.status == COMPLETED (matches production round 3 -- a population
     gap, not an open cohort) must still resolve, not silently return an
     empty result."""
-    contest = Contest(name="Contest global-null-date", contest_type="t", contest_mode="nomination", level="global")
+    contest = Contest(name="Contest global-null-date", contest_type="t", contest_mode="participation", level="global")
     db.add(contest)
     db.flush()
 
@@ -294,7 +318,7 @@ def test_no_eligible_round_returns_empty_not_an_error(db, client):
     """A level with only a not-yet-closed round's frozen row (no closed
     round exists at all yet) must return an empty result, not fall back to
     the not-yet-closed round and not error."""
-    contest = Contest(name="Contest none-eligible", contest_type="t", contest_mode="nomination", level="continent")
+    contest = Contest(name="Contest none-eligible", contest_type="t", contest_mode="participation", level="continent")
     db.add(contest)
     db.flush()
 
@@ -322,7 +346,7 @@ def test_explicit_round_id_bypasses_close_date_gate(db, client):
     data even if its level has not closed yet -- the close-date gate only
     applies to automatic ("latest") resolution, per the existing contract
     that explicit/manual selection is always honored exactly."""
-    contest = Contest(name="Contest explicit-open", contest_type="t", contest_mode="nomination", level="continent")
+    contest = Contest(name="Contest explicit-open", contest_type="t", contest_mode="participation", level="continent")
     db.add(contest)
     db.flush()
 
