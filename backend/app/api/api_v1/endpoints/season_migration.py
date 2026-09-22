@@ -178,6 +178,15 @@ def _level_close_date_for_mode(round_obj: Round, level: SeasonLevel, contest_mod
 
 def _level_result_eligible(round_obj: Round, level: SeasonLevel, contest_mode: str, today: date) -> bool:
     """True when a frozen result at this (round, level, mode) is safe to display."""
+    # A CANCELLED round (e.g. a duplicate-calendar-identity round created
+    # and then cancelled -- production has had several, see round-guard
+    # protections in season_migration.py) must never be shown as a source
+    # of truth, regardless of what its close-date columns say. Found during
+    # the 2026-09-22 completed-stage audit: currently inert in production
+    # (zero TopHigh5Result rows are attached to any cancelled round today),
+    # but the prior code had no explicit guard against it ever happening.
+    if round_obj.status == RoundStatus.CANCELLED:
+        return False
     close = _level_close_date_for_mode(round_obj, level, contest_mode)
     if close is not None:
         return close <= today

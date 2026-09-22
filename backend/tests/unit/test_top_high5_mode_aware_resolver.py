@@ -419,3 +419,32 @@ def test_city_level_always_empty(db):
         selected_country="Tanzania", variants={"tanzania", "tz"}, today=date(2026, 9, 22),
     )
     assert result["contests"] == []
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-22 completed-stage audit follow-up: a CANCELLED round (e.g. a
+# duplicate-calendar-identity round -- production has had several, see
+# round-guard protections) must never be treated as an eligible source,
+# even when its close-date columns say the level is "closed".
+# ---------------------------------------------------------------------------
+
+def test_cancelled_round_never_eligible_even_with_passed_close_date(db):
+    july = _month_start(date(2026, 7, 1))
+    rnd = _round_for_month(db, "cancelled", submission_month_start=july)
+    rnd.status = RoundStatus.CANCELLED
+    db.add(rnd)
+    contest = _contest(db, "cancelled", mode="nomination")
+    season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix="cancelled")
+    contestant = _contestant(db, suffix="cancelled", rnd=rnd, contest=contest, country="Tanzania")
+    _freeze_row(db, contestant=contestant, contest=contest, rnd=rnd, season=season,
+                level=SeasonLevel.COUNTRY, jurisdiction="Tanzania", rank=1)
+    db.commit()
+
+    today = date(2026, 11, 1)  # well past July nomination Country's Aug-31 close
+    assert _level_result_eligible(rnd, SeasonLevel.COUNTRY, "nomination", today) is False
+
+    result = _get_top_high5_mode_aware(
+        db, requested_level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=today,
+    )
+    assert result["contests"] == []
