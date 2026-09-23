@@ -236,16 +236,6 @@ export default function LeaderboardPage() {
             >
               {t('dashboard.leaderboard.regular_tab') || 'General Leaderboard'}
             </button>
-            <button
-              onClick={() => setLeaderboardType('mfm')}
-              className={`px-6 py-3 text-base font-semibold transition-colors border-b-2 ${
-                leaderboardType === 'mfm'
-                  ? 'border-blue-500 text-blue-500 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              {t('dashboard.leaderboard.mfm_tab') || 'MFM Leaderboard'}
-            </button>
           </div>
         </div>
 

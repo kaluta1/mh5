@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.affiliate import AffiliateTree
 from app.models.fmr import MemberFmpBalance, MemberFmpLedger
+from app.services.legacy_business_model import legacy_business_model_enabled
 
 FmpSourceType = str  # FOUNDING_JOIN | REFERRAL_VERIFIED
 
@@ -75,6 +76,9 @@ def add_fmp(
 
 
 def record_founding_join_fmp(db: Session, user_id: int, deposit_id: int) -> bool:
+    # Founding Members program is retired: no new points (history is kept).
+    if not legacy_business_model_enabled():
+        return False
     return add_fmp(
         db, user_id, Decimal("1"), FOUNDING_JOIN, int(deposit_id)
     )
@@ -86,6 +90,9 @@ def record_referral_kyc_fmp(
     """
     Award +1 FMP to the direct sponsor (affiliate tree) when a referred user fully verifies KYC.
     """
+    # Founding Members program is retired: no new points (history is kept).
+    if not legacy_business_model_enabled():
+        return False
     tree = (
         db.query(AffiliateTree)
         .filter(

@@ -111,6 +111,12 @@ class Settings(BaseModel):
     # see KALUTASOCIETY_WEBHOOK_FLAG_DEFAULT_RISK. A missing flag must mean
     # "disabled", never "enabled".
     ANNUALADS_ENABLED: bool = os.getenv("ANNUALADS_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    # Old business model (10-level affiliate commissions + Founding Members
+    # pool/points/enrollment) is retired for all future activity. Fail-safe
+    # default: a missing flag means "retired". Historical rows are never
+    # touched by this flag; it only gates writers. Setting it to true is an
+    # emergency rollback lever, not a supported operating mode.
+    LEGACY_BUSINESS_MODEL_ENABLED: bool = os.getenv("LEGACY_BUSINESS_MODEL_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
     ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env(
         "ANNUALADS_TENANT_API_KEY",

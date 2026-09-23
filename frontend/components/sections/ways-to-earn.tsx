@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { TrendingUp, Users, BookOpen, Award, ShoppingBag, Megaphone, Target, DollarSign } from "lucide-react"
+import { Users, ShoppingBag, Megaphone, Target, DollarSign } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
 export function WaysToEarn() {
@@ -12,50 +12,31 @@ export function WaysToEarn() {
       key: 'kyc_payments',
       icon: Users,
       title: t('landing.ways_to_earn.kyc_payments.title'),
-      description: t('landing.ways_to_earn.kyc_payments.description'),
-      commission: t('landing.ways_to_earn.kyc_payments.commission')
-    },
-    {
-      key: 'founding_membership',
-      icon: BookOpen,
-      title: t('landing.ways_to_earn.founding_membership.title'),
-      description: t('landing.ways_to_earn.founding_membership.description'),
-      commission: t('landing.ways_to_earn.founding_membership.commission')
-    },
-    {
-      key: 'annual_membership',
-      icon: Award,
-      title: t('landing.ways_to_earn.annual_membership.title'),
-      description: t('landing.ways_to_earn.annual_membership.description'),
-      commission: t('landing.ways_to_earn.annual_membership.commission')
+      description: t('landing.ways_to_earn.kyc_payments.description')
     },
     {
       key: 'club_memberships',
       icon: Users,
       title: t('landing.ways_to_earn.club_memberships.title'),
-      description: t('landing.ways_to_earn.club_memberships.description'),
-      commission: t('landing.ways_to_earn.club_memberships.commission')
+      description: t('landing.ways_to_earn.club_memberships.description')
     },
     {
       key: 'shop_purchases',
       icon: ShoppingBag,
       title: t('landing.ways_to_earn.shop_purchases.title'),
-      description: t('landing.ways_to_earn.shop_purchases.description'),
-      commission: t('landing.ways_to_earn.shop_purchases.commission')
+      description: t('landing.ways_to_earn.shop_purchases.description')
     },
     {
       key: 'ad_revenue',
       icon: Megaphone,
       title: t('landing.ways_to_earn.ad_revenue.title'),
-      description: t('landing.ways_to_earn.ad_revenue.description'),
-      commission: t('landing.ways_to_earn.ad_revenue.commission')
+      description: t('landing.ways_to_earn.ad_revenue.description')
     },
     {
       key: 'ad_campaigns',
       icon: Target,
       title: t('landing.ways_to_earn.ad_campaigns.title'),
-      description: t('landing.ways_to_earn.ad_campaigns.description'),
-      commission: t('landing.ways_to_earn.ad_campaigns.commission')
+      description: t('landing.ways_to_earn.ad_campaigns.description')
     }
   ]
 
@@ -104,15 +85,9 @@ export function WaysToEarn() {
                     </h3>
                   </div>
                   
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                     {method.description}
                   </p>
-                  
-                  <div className="pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
-                    <p className="text-lg font-bold text-myhigh5-primary whitespace-pre-line">
-                      {method.commission}
-                    </p>
-                  </div>
                 </div>
               </div>
             )

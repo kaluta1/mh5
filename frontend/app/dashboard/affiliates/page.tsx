@@ -35,6 +35,7 @@ import { InviteDialog } from '@/components/dashboard/invite-dialog'
 import { cacheService } from '@/lib/cache-service'
 import api from '@/lib/api'
 import { shortenReferralUrl } from '@/lib/referral-share'
+import { RetiredProgramNotice } from '@/components/dashboard/retired-program-notice'
 
 interface Affiliate {
   id: string
@@ -588,71 +589,15 @@ export default function AffiliatesPage() {
               <Award className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
               {t('dashboard.affiliates.commission_tiers')}
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              {t('dashboard.affiliates.ten_levels') || '10 niveaux de commission'}
-            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
-            {/* Level 1 - Direct */}
-            <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg sm:rounded-xl border border-emerald-200 dark:border-emerald-700/50">
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 flex-shrink-0">
-                <span className="text-base sm:text-xl font-bold text-white">1</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.level')} 1</h3>
-                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.direct_referrals')}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-2xl sm:text-3xl font-bold text-emerald-500">10%</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 hidden sm:block">{t('dashboard.affiliates.direct_commission') || 'Commission directe'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Levels 2-10 - Indirect */}
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 dark:border-gray-700">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('dashboard.affiliates.levels') || 'Niveaux'} 2 - 10
-                  </span>
-                  <span className="text-[10px] sm:text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 sm:px-2 py-0.5 rounded-full">
-                    {t('dashboard.affiliates.indirect_commission') || 'Indirect'}
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl font-bold text-emerald-500">1%</p>
-              </div>
-              
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
-                  <div 
-                    key={level}
-                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400"
-                  >
-                    {level}
-                  </div>
-                ))}
-              </div>
-              
-              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-2 sm:mt-3">
-                {t('dashboard.affiliates.indirect_description') || 'Gagnez 1% sur chaque niveau de votre réseau, jusqu\'au 10ème niveau.'}
-              </p>
-            </div>
-
-            {/* Total potential */}
-            <div className="p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg sm:rounded-xl border border-emerald-200 dark:border-emerald-700/50">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.total_potential') || 'Total potentiel'}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.max_commission') || 'Commission maximale sur 10 niveaux'}</p>
-                </div>
-                <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">19%</p>
-              </div>
-            </div>
+            <RetiredProgramNotice
+              compact
+              titleKey="legacy_retired.affiliate_title"
+              bodyKey="legacy_retired.affiliate_body"
+              links={[{ href: '/dashboard/commissions', labelKey: 'legacy_retired.link_commissions' }]}
+            />
 
             {/* Cookie tracking info */}
             <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700/50">

@@ -15,14 +15,6 @@ export function FAQ() {
       answer: t('landing.faq.answer_1')
     },
     {
-      question: t('landing.faq.question_2'),
-      answer: t('landing.faq.answer_2')
-    },
-    {
-      question: t('landing.faq.question_3'),
-      answer: t('landing.faq.answer_3')
-    },
-    {
       question: t('landing.faq.question_4'),
       answer: t('landing.faq.answer_4')
     },

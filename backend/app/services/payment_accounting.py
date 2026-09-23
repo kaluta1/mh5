@@ -6,6 +6,7 @@ from typing import Optional, List, Tuple, Any, Dict
 from datetime import datetime
 
 from app.accounting.distribution_formulas import club_markup_split, kyc_verification_recognition_split
+from app.services.legacy_business_model import founding_pool_rate, without_zero_lines
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.affiliate import AffiliateCommission
 from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
@@ -408,7 +409,8 @@ class PaymentAccountingService:
 
         amount = Decimal(str(deposit.amount))
         total_comm = sum(Decimal(str(c.commission_amount)) for c in commissions)
-        split = kyc_verification_recognition_split(amount, total_comm)
+        # Founding pool (2104) accrual is retired: rate is 0 unless the legacy model is re-enabled.
+        split = kyc_verification_recognition_split(amount, total_comm, founding_rate=founding_pool_rate())
         # 4001 = gross − founding pool − Shufti; sponsor commissions hit 5001 / payables in a separate JE.
         verification_fee_revenue = amount - split.founding_pool_accrual - split.shufti_payable
 
@@ -447,7 +449,7 @@ class PaymentAccountingService:
         accounting_service.create_journal_entry(
             db,
             description=description + " (Verification performed)",
-            lines=recognition_lines,
+            lines=without_zero_lines(recognition_lines),
             date=jdate,
             commit=journal_commit,
         )
@@ -553,7 +555,7 @@ class PaymentAccountingService:
         description = f"Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
 
-        pool_amt = _money_dec(gross * Decimal("0.10"))
+        pool_amt = _money_dec(gross * founding_pool_rate())
         shufti_amt = (
             _money_dec(Decimal("2.00")) if gross <= Decimal("12.00") else _money_dec(Decimal("0"))
         )
@@ -656,7 +658,7 @@ class PaymentAccountingService:
             accounting_service.create_journal_entry(
                 db,
                 description=description + " (Recognition - annual membership)",
-                lines=rec_lines,
+                lines=without_zero_lines(rec_lines),
                 date=jdate,
                 commit=journal_commit,
             )
@@ -688,7 +690,7 @@ class PaymentAccountingService:
         description = f"Founding Membership Payment - Deposit #{dep_id} - User #{deposit.user_id}"
         jdate = _journal_entry_date(deposit, entry_date)
 
-        pool_amt = _money_dec(gross * Decimal("0.10"))
+        pool_amt = _money_dec(gross * founding_pool_rate())
         net_revenue = _money_dec(gross - pool_amt)
 
         if commissions and not _founding_membership_commissions_posted(db, dep_id):
@@ -752,7 +754,7 @@ class PaymentAccountingService:
             accounting_service.create_journal_entry(
                 db,
                 description=description + " (Recognition - founding membership)",
-                lines=[
+                lines=without_zero_lines([
                     {
                         "account_code": "2111",
                         "debit": float(gross),
@@ -773,7 +775,7 @@ class PaymentAccountingService:
                         "credit": float(pool_amt),
                         "description": "Accrued liability — Founding Members pool (10% of gross)",
                     },
-                ],
+                ]),
                 date=jdate,
                 commit=journal_commit,
             )
@@ -799,7 +801,8 @@ class PaymentAccountingService:
         jdate = _journal_entry_date(deposit, entry_date)
 
         markup_amt = split.markup
-        pool_amt = split.founding_pool
+        # Founding pool (2104) accrual is retired unless the legacy model is re-enabled.
+        pool_amt = split.founding_pool if founding_pool_rate() > 0 else Decimal("0")
         c_total = sum(Decimal(str(c.commission_amount)) for c in commissions)
         plat = markup_amt - pool_amt - c_total
         if plat < Decimal("0"):
@@ -888,7 +891,7 @@ class PaymentAccountingService:
         accounting_service.create_journal_entry(
             db,
             description=description + " (Markup allocation — Founding pool and platform)",
-            lines=alloc_lines,
+            lines=without_zero_lines(alloc_lines),
             date=jdate,
             commit=journal_commit,
         )

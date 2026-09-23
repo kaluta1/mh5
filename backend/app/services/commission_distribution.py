@@ -54,7 +54,18 @@ def distribute_commissions(
         Liste des commissions créées
     """
     commissions_created = []
-    
+
+    # The 10-level engine is retired for all future activity. Existing rows are
+    # left untouched; the direct-only model replaces this writer.
+    from app.services.legacy_business_model import legacy_business_model_enabled
+
+    if not legacy_business_model_enabled():
+        logger.info(
+            "Legacy 10-level commission engine retired; no commissions created for deposit %s",
+            deposit.id,
+        )
+        return commissions_created
+
     # 1. Chercher la règle de commission dynamique
     # Import local pour éviter les cycles
     from app.models.affiliate import CommissionRule
@@ -301,7 +312,12 @@ def process_payment_validation(
             payment_accounting.process_founding_membership_payment_accounting(
                 db, deposit, commissions, journal_commit=journal_commit
             )
-            if user:
+            from app.services.legacy_business_model import (
+                is_legacy_founding_product,
+                legacy_business_model_enabled,
+            )
+
+            if user and is_legacy_founding_product(product_code) and legacy_business_model_enabled():
                 from app.services.fmr_service import record_founding_join_fmp
 
                 record_founding_join_fmp(db, int(user.id), int(deposit.id))

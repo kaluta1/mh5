@@ -145,6 +145,15 @@ async def create_payment(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    from app.services.legacy_business_model import (
+        RETIRED_MESSAGE,
+        is_legacy_founding_product,
+        legacy_business_model_enabled,
+    )
+
+    if is_legacy_founding_product(product_code) and not legacy_business_model_enabled():
+        raise HTTPException(status_code=410, detail=f"Founding membership enrollment: {RETIRED_MESSAGE}")
+
     try:
         expected_amount, expected_currency = authoritative_product_terms(product)
         validate_client_purchase_terms(

@@ -622,51 +622,6 @@ export function PaymentDialog({
                   </div>
                 </button>
 
-                {/* MFM Card */}
-                <button
-                  onClick={() => {
-                    if (includeMyself && myselfProduct === 'mfm_membership') {
-                      setIncludeMyself(false)
-                    } else {
-                      setIncludeMyself(true)
-                      setMyselfProduct('mfm_membership')
-                      setMyselfAmount(100)
-                    }
-                  }}
-                  className={`relative w-full p-3 rounded-lg border transition-all text-left ${
-                    includeMyself && myselfProduct === 'mfm_membership'
-                      ? 'border-myhigh5-secondary bg-myhigh5-secondary/5'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-myhigh5-secondary/50'
-                  }`}
-                >
-                  <div className="absolute -top-1.5 right-2">
-                    <span className="bg-myhigh5-accent text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      PREMIUM
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      includeMyself && myselfProduct === 'mfm_membership'
-                        ? 'border-myhigh5-secondary bg-myhigh5-secondary'
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}>
-                      {includeMyself && myselfProduct === 'mfm_membership' && (
-                        <Check className="w-3 h-3 text-white" />
-                      )}
-                    </div>
-                    <div className="w-8 h-8 rounded-lg bg-myhigh5-secondary/10 flex items-center justify-center">
-                      <Crown className="w-4 h-4 text-myhigh5-secondary" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">{t('payment.mfm_membership') || 'MFM'}</h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('payment.mfm_description') || 'Pool 10% mensuel + 20% annuel'}
-                      </p>
-                    </div>
-                    <span className="text-sm font-bold text-myhigh5-secondary">$100</span>
-                  </div>
-                </button>
-
                 {/* Annual Membership Card */}
                 <button
                   onClick={() => {
@@ -778,7 +733,6 @@ export function PaymentDialog({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="kyc">KYC Service - {KYC_PRICE_USD} USD</SelectItem>
-                        <SelectItem value="mfm_membership">{t('payment.mfm_membership') || 'MFM'} - 100 USD</SelectItem>
                         <SelectItem value="annual_membership">Annual Membership - 50 USD</SelectItem>
                       </SelectContent>
                     </Select>

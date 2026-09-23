@@ -42,6 +42,9 @@ const PRODUCTS: { code: string; labelKey: string; fallback: string }[] = [
   { code: 'annual_membership', labelKey: 'admin.mark_paid.product_annual', fallback: 'Annual Membership' },
 ]
 
+// Founding (MFM) credits stay visible for history, but the program is retired and can no longer be granted.
+const GRANTABLE_PRODUCTS = PRODUCTS.filter((p) => p.code !== 'mfm_membership')
+
 export default function MarkPaidPage() {
   const { t } = useLanguage()
   const { addToast } = useToast()
@@ -290,7 +293,7 @@ export default function MarkPaidPage() {
                     onChange={(e) => setProduct(e.target.value)}
                     className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-myhigh5-primary focus:border-myhigh5-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
-                    {PRODUCTS.map((p) => (
+                    {GRANTABLE_PRODUCTS.map((p) => (
                       <option key={p.code} value={p.code}>
                         {t(p.labelKey) || p.fallback}
                       </option>

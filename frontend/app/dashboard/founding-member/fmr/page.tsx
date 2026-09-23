@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import api from '@/lib/api'
 import { Percent, BookOpen, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { RetiredProgramNotice } from '@/components/dashboard/retired-program-notice'
 
 type FmpMe = {
   detail?: string
@@ -56,6 +57,11 @@ export default function FmrPage() {
 
   return (
     <div className="space-y-6 pb-10">
+      <RetiredProgramNotice
+        compact
+        titleKey="legacy_retired.fmp_history_title"
+        bodyKey="legacy_retired.fmp_history_body"
+      />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">

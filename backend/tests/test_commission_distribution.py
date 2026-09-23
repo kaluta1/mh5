@@ -1,11 +1,25 @@
-"""Tests for commission distribution idempotency and sponsor-cycle protection."""
+"""Tests for commission distribution idempotency and sponsor-cycle protection.
+
+The 10-level engine is retired for future activity; these tests exercise it with the
+legacy model explicitly re-enabled (the emergency rollback lever), so its safety
+properties stay covered.
+"""
 
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.core.config import settings
 
 from app.models.affiliate import AffiliateCommission, CommissionType
 from app.models.payment import Deposit
 from app.models.user import User
 from app.services.commission_distribution import distribute_commissions
+
+
+@pytest.fixture(autouse=True)
+def _legacy_model_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "LEGACY_BUSINESS_MODEL_ENABLED", True)
 
 
 def _user(user_id: int, sponsor_id: int | None) -> User:

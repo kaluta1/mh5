@@ -2565,5 +2565,16 @@
   },
   "processing": "Traitement...",
   "annual_membership": "Annual Membership",
-  "canvas": "Canvas"
+  "canvas": "Canvas",
+  "legacy_retired": {
+    "founding_title": "The Founding Members program has been retired",
+    "founding_body": "New Founding Member enrollment and monthly revenue sharing have ended. Your existing payments, points and history are preserved and remain visible to you.",
+    "affiliate_title": "The 10-level affiliate program has been retired",
+    "affiliate_body": "Commissions are no longer distributed across 10 levels. Commissions you already earned are preserved and remain visible in your commission history and wallet. Details of the updated affiliate program will be published here.",
+    "fmp_history_title": "Founding Membership Points are historical",
+    "fmp_history_body": "Points are no longer awarded and no new Founding pool allocations are made. The values below are kept for your records.",
+    "link_commissions": "View commission history",
+    "link_wallet": "Open wallet",
+    "link_fmp_history": "View your Founding points history"
+  }
 }

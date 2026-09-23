@@ -12,8 +12,6 @@ export default function MyHigh5LandingPage() {
   const [siteOrigin, setSiteOrigin] = useState('')
   const [copiedInviteLink, setCopiedInviteLink] = useState(false)
   const effectiveReferralCode = (user?.personal_referral_code || referralCode || '').trim()
-  const claimTarget = '/dashboard/wallet?product=mfm'
-  const claimReturnUrl = encodeURIComponent(claimTarget)
   const referralQuery = effectiveReferralCode ? `ref=${encodeURIComponent(effectiveReferralCode)}` : ''
   const invitationLink = useMemo(() => {
     if (!siteOrigin || !effectiveReferralCode) return ''
@@ -49,37 +47,6 @@ export default function MyHigh5LandingPage() {
     }
   }
 
-  const incomeStreams = [
-    {
-      title: "Annual Verification Fees",
-      desc: "When a member pays the $10 annual verification fee, level 1 earns 10%, while levels 2 to 10 earn 1% each."
-    },
-    {
-      title: "Founding Membership",
-      desc: "Founding Members join at $100 for the first 1,000 members and $200 thereafter. Sponsors earn 10% on level 1 and 1% on levels 2 to 10."
-    },
-    {
-      title: "Founding Member Subscription",
-      desc: "Annual Founding Member subscriptions also reward sponsors with 10% on level 1 and 1% on levels 2 to 10."
-    },
-    {
-      title: "Private Club Subscriptions",
-      desc: "Members can create paid private clubs. Affiliate commissions are paid from the 20% platform markup added by the platform."
-    },
-    {
-      title: "Digital Content Sales",
-      desc: "Members can sell digital content through the online shop, while sponsors are rewarded from the 20% platform markup."
-    },
-    {
-      title: "Contest Page Ad Revenue",
-      desc: "Participants earn 40%, nominators earn 10%, and sponsors earn up to 10 levels deep from ad revenue generated on contest pages."
-    },
-    {
-      title: "Sponsor Ad Slots",
-      desc: "When ad slots are bought on the Our Sponsors page, level 1 earns 10%, while levels 2 to 10 earn 1% each."
-    }
-  ]
-
   const contestFlow = [
     "Join for free and nominate contestants or vote without account verification.",
     "Verify your account only if you want to participate with your own content.",
@@ -92,8 +59,7 @@ export default function MyHigh5LandingPage() {
   const statCards = [
     ["City to Global", "Structured contest ladder"],
     ["Free to Join", "Nominate and vote"],
-    ["Verified Entries", "Authentic participation"],
-    ["10-Level Earnings", "Affiliate-powered growth"]
+    ["Verified Entries", "Authentic participation"]
   ]
 
   const footerLinks = {
@@ -294,78 +260,6 @@ export default function MyHigh5LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex rounded-full border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-200">
-            Monetization engine
-          </div>
-          <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Seven integrated ways members can earn on MyHigh5</h2>
-          <p className="mt-4 text-base text-slate-300 sm:text-lg">
-            MyHigh5 is built for more than visibility. It is designed to create recurring income opportunities through fees, memberships, subscriptions, commerce, advertising, and sponsorships.
-          </p>
-        </div>
-
-        <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {incomeStreams.map((item, index) => (
-            <div key={item.title} className="group rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg transition hover:-translate-y-1 hover:bg-white/[0.07]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB] text-lg font-bold shadow-lg shadow-blue-900/40">
-                {index + 1}
-              </div>
-              <h3 className="mt-5 text-xl font-bold">{item.title}</h3>
-              <p className="mt-3 text-slate-300">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-gradient-to-r from-[#1D4ED8] to-[#2563EB] py-14 sm:py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
-            <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-100">Limited Founding Opportunity</div>
-              <h2 className="mt-4 text-3xl font-extrabold sm:text-4xl">Become a Founding Member before all 10,000 slots are filled</h2>
-              <p className="mt-4 max-w-2xl text-base text-blue-50/90 sm:text-lg">
-                Founding Members gain monthly revenue participation, annual profit-sharing privileges, and the advantage of receiving randomly allocated referrals from members who join without using someone else&apos;s personal invitation link.
-              </p>
-              <p className="mt-3 max-w-2xl text-sm text-blue-100/90 sm:text-base">
-                When someone joins from your unique invitation link and buys Founding Member, your affiliate percentage is credited to your earnings.
-              </p>
-            </div>
-            <div className="rounded-[28px] bg-slate-950/25 p-6 backdrop-blur sm:p-8">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/10 p-5">
-                  <div className="text-sm text-blue-100">Joining Fee</div>
-                  <div className="mt-2 text-3xl font-bold">$100</div>
-                  <div className="text-sm text-blue-100/80">First 1,000 members</div>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-5">
-                  <div className="text-sm text-blue-100">Thereafter</div>
-                  <div className="mt-2 text-3xl font-bold">$200</div>
-                  <div className="text-sm text-blue-100/80">Until 10,000 slots are filled</div>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-5 sm:col-span-2">
-                  <div className="text-sm text-blue-100">Core Privileges</div>
-                  <div className="mt-2 text-blue-50">
-                    Share in 10% of monthly website revenues, share in annual post-tax profit allocated for Founding Members, and receive random referral allocation
-                  </div>
-                </div>
-              </div>
-              <Link
-                href={
-                  user
-                    ? (referralQuery ? `/dashboard/wallet?product=mfm&${referralQuery}` : '/dashboard/wallet?product=mfm')
-                    : (referralQuery
-                      ? `/register?${referralQuery}&returnUrl=${claimReturnUrl}`
-                      : `/register?returnUrl=${claimReturnUrl}`)
-                }
-                className="mt-6 flex w-full items-center justify-center rounded-2xl bg-white px-6 py-4 text-base font-bold text-slate-900 transition hover:scale-[1.01]"
-              >
-                Claim Founding Member Position
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section className="mx-auto max-w-5xl px-4 py-14 text-center sm:px-6 lg:px-8 lg:py-16">
         <h2 className="text-3xl font-bold sm:text-4xl">Compete, nominate, vote, earn, and grow from your local market to the world</h2>
@@ -396,7 +290,7 @@ export default function MyHigh5LandingPage() {
                 </div>
               </div>
               <p className="mt-4 max-w-md text-slate-400">
-                A contest platform where members can nominate, participate, vote, and unlock multiple streams of income through a structured city-to-global contest model and a 10-level affiliate system.
+                A contest platform where members can nominate, participate, vote, and unlock multiple streams of income through a structured city-to-global contest model and an affiliate program.
               </p>
             </div>
 

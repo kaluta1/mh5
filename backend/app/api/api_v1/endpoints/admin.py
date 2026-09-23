@@ -31,6 +31,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _reject_retired_legacy_writer(action: str) -> None:
+    """Old business model (10-level + Founding Members) writers are retired; reads stay available."""
+    from app.services.legacy_business_model import RETIRED_MESSAGE, legacy_business_model_enabled
+
+    if not legacy_business_model_enabled():
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail=f"{action}: {RETIRED_MESSAGE}")
+
+
 def _block_production_accounting_maintenance(*, dry_run: bool = False) -> None:
     """Require the reviewed offline runbook for production schema/data repair."""
     if os.getenv("ENVIRONMENT", "development").strip().lower() == "production" and not dry_run:
@@ -3817,6 +3825,10 @@ def grant_user_payment(
     import uuid as _uuid
 
     product_code = (request.product_code or "kyc").strip().lower()
+    from app.services.legacy_business_model import is_legacy_founding_product
+
+    if is_legacy_founding_product(product_code):
+        _reject_retired_legacy_writer("Granting a Founding membership")
     if product_code not in GRANTABLE_PRODUCT_CODES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -4631,6 +4643,7 @@ async def admin_accounting_backfill_founding_pool_accruals(
     adjusting entry (Dr revenue / Cr 2104). Run after backfill-journals for legacy data.
     """
     check_admin(current_user)
+    _reject_retired_legacy_writer("Founding pool accrual backfill")
     _block_production_accounting_maintenance(dry_run=dry_run)
     from app.services.payment_accounting_backfill import backfill_missing_founding_pool_accruals
 
@@ -4667,6 +4680,7 @@ async def admin_founding_pool_prepare_month(
     Next: POST .../approve then POST .../post (maker-checker).
     """
     check_admin(current_user)
+    _reject_retired_legacy_writer("Founding pool month-end prepare")
     from app.services.founding_pool_service import prepare_founding_pool_month
 
     try:
@@ -4704,6 +4718,7 @@ async def admin_founding_pool_approve(
     current_user: User = Depends(get_current_user),
 ):
     check_admin(current_user)
+    _reject_retired_legacy_writer("Founding pool snapshot approval")
     from app.services.founding_pool_service import approve_founding_pool_snapshot
 
     try:
@@ -4725,6 +4740,7 @@ async def admin_founding_pool_post(
 ):
     """Post Dr 2104 / Cr 2105 for the approved snapshot total."""
     check_admin(current_user)
+    _reject_retired_legacy_writer("Founding pool snapshot posting")
     from app.services.founding_pool_service import post_founding_pool_snapshot
 
     try:

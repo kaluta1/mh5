@@ -5,14 +5,11 @@
 import type { LucideIcon } from "lucide-react"
 import {
   Award,
-  BookOpen,
   DollarSign,
   FileText,
   Hand,
   LayoutDashboard,
   Megaphone,
-  Network,
-  Percent,
   Rss,
   Shield,
   Star,
@@ -72,9 +69,6 @@ export const userNavSections: DashboardNavSection[] = [
     title: "dashboard.nav.resources",
     titleLabel: "Resources",
     items: [
-      { name: "dashboard.nav.founding_member", label: "Founding Membership", href: "/dashboard/founding-member", icon: BookOpen },
-      { name: "dashboard.nav.fmr", label: "FMP & FMR", href: "/dashboard/founding-member/fmr", icon: Percent },
-      { name: "dashboard.nav.affiliate_program", label: "Affiliate Program", href: "/dashboard/affiliate-program", icon: Network },
       { name: "dashboard.nav.affiliate_agreement", label: "Affiliate Agreement", href: "/dashboard/affiliate-agreement", icon: FileText },
     ],
   },

@@ -302,7 +302,14 @@ def backfill_missing_founding_pool_accruals(
     - Annual / founding membership: 10% of gross to 2104 (from recognition or legacy ``(Founding pool accrual)``).
 
     Deposits with no journal lines yet should use backfill_missing_payment_journals first.
+
+    Retired with the Founding Members program: only a dry run is allowed unless the legacy model
+    is explicitly re-enabled.
     """
+    if not dry_run:
+        from app.services.legacy_business_model import require_legacy_business_model
+
+        require_legacy_business_model("Founding pool accrual backfill")
     q = (
         db.query(Deposit)
         .join(ProductType, Deposit.product_type_id == ProductType.id)

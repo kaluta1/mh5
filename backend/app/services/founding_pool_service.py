@@ -20,6 +20,7 @@ from app.models.founding_pool import FoundingPoolSnapshot, FoundingPoolSnapshotL
 from app.services.accounting_service import accounting_service
 from app.services import fmr_service
 from app.services.financial_report_service import POSTED_STATUSES
+from app.services.legacy_business_model import require_legacy_business_model
 
 Q2 = Decimal("0.01")
 
@@ -118,6 +119,7 @@ def prepare_founding_pool_month(
     user_id: int,
     notes: Optional[str] = None,
 ) -> FoundingPoolSnapshot:
+    require_legacy_business_model("Founding pool month-end prepare")
     if month < 1 or month > 12:
         raise ValueError("month must be 1-12")
 
@@ -182,6 +184,7 @@ def prepare_founding_pool_month(
 
 
 def approve_founding_pool_snapshot(db: Session, snapshot_id: int, approver_user_id: int) -> FoundingPoolSnapshot:
+    require_legacy_business_model("Founding pool snapshot approval")
     snap = db.query(FoundingPoolSnapshot).filter(FoundingPoolSnapshot.id == snapshot_id).first()
     if not snap:
         raise ValueError("Snapshot not found")
@@ -197,6 +200,7 @@ def approve_founding_pool_snapshot(db: Session, snapshot_id: int, approver_user_
 
 
 def post_founding_pool_snapshot(db: Session, snapshot_id: int) -> FoundingPoolSnapshot:
+    require_legacy_business_model("Founding pool snapshot posting")
     snap = db.query(FoundingPoolSnapshot).filter(FoundingPoolSnapshot.id == snapshot_id).first()
     if not snap:
         raise ValueError("Snapshot not found")
