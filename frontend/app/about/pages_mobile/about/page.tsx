@@ -70,10 +70,10 @@ export default function AboutMobilePage() {
   }
 
   const missionFeatures: Record<string, string[]> = {
-    en: ["City to global level progression", "Fair MyHigh5 voting system (5-4-3-2-1)", "10-level affiliate program", "AI moderation for a safe environment"],
-    fr: ["Progression du niveau ville au niveau mondial", "Système de vote équitable MyHigh5 (5-4-3-2-1)", "Programme d'affiliation à 10 niveaux", "Modération IA pour un environnement sûr"],
-    es: ["Progresión del nivel ciudad al global", "Sistema de votación justo MyHigh5 (5-4-3-2-1)", "Programa de afiliados de 10 niveles", "Moderación IA para un entorno seguro"],
-    de: ["Aufstieg von Stadt- zu Globalebene", "Faires MyHigh5-Abstimmungssystem (5-4-3-2-1)", "10-stufiges Partnerprogramm", "KI-Moderation für eine sichere Umgebung"],
+    en: ["City to global level progression", "Fair MyHigh5 voting system (5-4-3-2-1)", "AI moderation for a safe environment"],
+    fr: ["Progression du niveau ville au niveau mondial", "Système de vote équitable MyHigh5 (5-4-3-2-1)", "Modération IA pour un environnement sûr"],
+    es: ["Progresión del nivel ciudad al global", "Sistema de votación justo MyHigh5 (5-4-3-2-1)", "Moderación IA para un entorno seguro"],
+    de: ["Aufstieg von Stadt- zu Globalebene", "Faires MyHigh5-Abstimmungssystem (5-4-3-2-1)", "KI-Moderation für eine sichere Umgebung"],
   }
 
   const team = [

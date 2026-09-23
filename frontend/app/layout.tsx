@@ -47,7 +47,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   // Utiliser les traductions en anglais pour tous les partages sociaux
   const englishTitle = englishTranslations.pages.home.title
-  const englishDescription = englishTranslations.pages.home.description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.'
+  const englishDescription = englishTranslations.pages.home.description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our affiliate program. Every vote, every referral generates income.'
 
   return {
     metadataBase: new URL(appUrl),

@@ -47,7 +47,7 @@ export function getMetadataTranslations(lang: Language = 'en'): MetadataTranslat
   const loginNav = getSeoString(lang, ['navigation', 'login'])
   const registerNav = getSeoString(lang, ['navigation', 'register'])
 
-  const heroDescription = 'Join contests, build your network, and earn through our 10-level affiliate program. Every vote, every referral generates income.'
+  const heroDescription = 'Join contests, build your network, and earn through our affiliate program. Every vote, every referral generates income.'
 
   return {
     siteName,

@@ -71,14 +71,8 @@ export default function FmrPage() {
             Founding Membership Points &amp; ratio
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-2xl">
-            Your FMP (Founding Membership Points) determine your share of the monthly Founding pool:{' '}
+            Your FMP (Founding Membership Points) weighted your share of the former monthly Founding pool:{' '}
             <span className="font-medium text-gray-800 dark:text-gray-200">FMR = your FMP ÷ global FMP</span>
-            {globalFmp > 0 && (
-              <span>
-                . Pool distributions use these weights for the 10% website-revenue Founding Member allocation
-                when applicable.
-              </span>
-            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -154,22 +148,18 @@ export default function FmrPage() {
         <div className="p-6 sm:p-8 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-myhigh5-primary" />
-            How you earn FMP
+            How FMP were earned (historical)
           </h2>
           <ul className="space-y-3 text-gray-600 dark:text-gray-300 text-sm sm:text-base">
             <li className="flex gap-2">
               <span className="text-myhigh5-primary font-bold">+1</span>
-              <span>When you pay the Founding / MFM joining fee (credited per completed payment).</span>
+              <span>For each completed Founding / MFM joining-fee payment.</span>
             </li>
             <li className="flex gap-2">
               <span className="text-myhigh5-primary font-bold">+1</span>
-              <span>Each time a direct referral completes account verification (KYC), to you as their sponsor.</span>
+              <span>Each time a direct referral completed account verification (KYC), to their sponsor.</span>
             </li>
           </ul>
-          <p className="text-sm text-gray-500 dark:text-gray-500 pt-2 border-t border-gray-100 dark:border-gray-700">
-            If your FMP and global FMP are zero, complete Founding membership and help your referrals verify — then
-            refresh this page.
-          </p>
         </div>
       </div>
     </div>

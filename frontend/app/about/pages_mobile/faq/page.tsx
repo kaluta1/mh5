@@ -78,38 +78,27 @@ export default function FAQMobilePage() {
     {
       icon: Wallet,
       title: t('landing.ways_to_earn.kyc_payments.title') || 'Paiements KYC',
-      description: t('landing.ways_to_earn.kyc_payments.description') || 'Gagnez des commissions lorsque les membres de votre réseau complètent leur vérification KYC',
-      commission: t('landing.ways_to_earn.kyc_payments.commission') || '20% au niveau 1, 2% aux niveaux 2-10'
-    },
-    {
-      icon: Award,
-      title: t('landing.ways_to_earn.founding_membership.title') || 'Adhésion Fondateur',
-      description: t('landing.ways_to_earn.founding_membership.description') || 'Gagnez des commissions lorsque les membres de votre réseau de parrainage rejoignent le Club des Membres Fondateurs ou paient les frais d\'adhésion annuels.',
-      commission: t('landing.ways_to_earn.founding_membership.commission') || '20% au niveau 1, 2% aux niveaux 2-10'
+      description: t('landing.ways_to_earn.kyc_payments.description') || 'Gagnez des commissions lorsque les membres de votre réseau complètent leur vérification KYC'
     },
     {
       icon: Users,
       title: t('landing.ways_to_earn.club_memberships.title') || 'Adhésions aux Clubs',
-      description: t('landing.ways_to_earn.club_memberships.description') || 'Gagnez des commissions sur les frais d\'adhésion aux clubs payants.',
-      commission: t('landing.ways_to_earn.club_memberships.commission') || '20% au niveau 1, 2% aux niveaux 2-10'
+      description: t('landing.ways_to_earn.club_memberships.description') || 'Gagnez des commissions sur les frais d\'adhésion aux clubs payants.'
     },
     {
       icon: Store,
       title: t('landing.ways_to_earn.shop_purchases.title') || 'Achats en Boutique',
-      description: t('landing.ways_to_earn.shop_purchases.description') || 'Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5.',
-      commission: t('landing.ways_to_earn.shop_purchases.commission') || '20% au niveau 1, 2% aux niveaux 2-10'
+      description: t('landing.ways_to_earn.shop_purchases.description') || 'Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5.'
     },
     {
       icon: TrendingUp,
       title: t('landing.ways_to_earn.ad_revenue.title') || 'Partage des Revenus Publicitaires',
-      description: t('landing.ways_to_earn.ad_revenue.description') || 'Les participants aux concours gagnent 40% des revenus publicitaires générés sur leurs pages de concours.',
-      commission: t('landing.ways_to_earn.ad_revenue.commission') || '10% au niveau 1, 1% aux niveaux 2-10'
+      description: t('landing.ways_to_earn.ad_revenue.description') || 'Les participants aux concours gagnent 40% des revenus publicitaires générés sur leurs pages de concours.'
     },
     {
       icon: Sparkles,
       title: t('landing.ways_to_earn.ad_campaigns.title') || 'Page Sponsors du Site',
-      description: t('landing.ways_to_earn.ad_campaigns.description') || 'Les sponsors de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.',
-      commission: t('landing.ways_to_earn.ad_campaigns.commission') || '10% au niveau 1, 1% aux niveaux 2-10'
+      description: t('landing.ways_to_earn.ad_campaigns.description') || 'Les sponsors de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.'
     }
   ]
 
@@ -201,13 +190,9 @@ export default function FAQMobilePage() {
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                           {way.title}
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-2">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                           {way.description}
                         </p>
-                        <div className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-semibold">
-                          <DollarSign className="w-3 h-3" />
-                          {way.commission}
-                        </div>
                       </div>
                     </div>
                   </div>

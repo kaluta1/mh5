@@ -69,7 +69,7 @@ export function createMetadata({
   const canonicalUrl = url ? `${appUrl}${url}` : appUrl
   
   // Utiliser la description fournie (déjà en anglais si passée correctement)
-  const ogDescription = description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our 10-level affiliate program.'
+  const ogDescription = description || englishTranslations.defaultDescription || 'Join contests, build your network, and earn through our affiliate program.'
 
   return {
     title: fullTitle,
