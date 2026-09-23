@@ -35,6 +35,7 @@ export const adminNavSections: DashboardNavSection[] = [
       { name: "admin.nav.users", label: "Users", href: "/dashboard/admin/users", icon: Settings },
       { name: "admin.nav.mark_paid", label: "Mark as paid", href: "/dashboard/admin/mark-paid", icon: BadgeCheck },
       { name: "admin.nav.accounting", label: "Accounting", href: "/dashboard/admin/accounting", icon: Banknote },
+      { name: "admin.nav.business_model", label: "Business model", href: "/dashboard/admin/business-model", icon: Banknote },
       { name: "admin.nav.kyc", label: "KYC", href: "/dashboard/admin/kyc", icon: FileCheck },
       { name: "admin.nav.reports", label: "Reports", href: "/dashboard/admin/reports", icon: Flag },
     ],

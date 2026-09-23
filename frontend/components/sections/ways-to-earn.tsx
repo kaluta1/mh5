@@ -1,13 +1,25 @@
 "use client"
 
 import * as React from "react"
-import { Users, ShoppingBag, Megaphone, Target, DollarSign } from "lucide-react"
+import { Crown, Users, ShoppingBag, Megaphone, Target, DollarSign } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
 export function WaysToEarn() {
   const { t } = useLanguage()
 
   const earningMethods = [
+    {
+      key: 'referral_pool',
+      icon: Users,
+      title: t('landing.ways_to_earn.referral_pool.title'),
+      description: t('landing.ways_to_earn.referral_pool.description')
+    },
+    {
+      key: 'leaders',
+      icon: Crown,
+      title: t('landing.ways_to_earn.leaders.title'),
+      description: t('landing.ways_to_earn.leaders.description')
+    },
     {
       key: 'kyc_payments',
       icon: Users,

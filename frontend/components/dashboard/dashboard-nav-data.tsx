@@ -5,11 +5,13 @@
 import type { LucideIcon } from "lucide-react"
 import {
   Award,
+  Crown,
   DollarSign,
   FileText,
   Hand,
   LayoutDashboard,
   Megaphone,
+  Network,
   Rss,
   Shield,
   Star,
@@ -63,12 +65,15 @@ export const userNavSections: DashboardNavSection[] = [
       { name: "dashboard.nav.affiliates", label: "Affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", label: "Commissions", href: "/dashboard/commissions", icon: DollarSign },
       { name: "dashboard.nav.leaderboard", label: "Leaderboard", href: "/dashboard/leaderboard", icon: Award },
+      { name: "dashboard.nav.referral_pool", label: "Referral Pool", href: "/dashboard/referral-pool", icon: Users },
+      { name: "dashboard.nav.leaders", label: "MyHigh5 Leaders", href: "/dashboard/leaders", icon: Crown },
     ],
   },
   {
     title: "dashboard.nav.resources",
     titleLabel: "Resources",
     items: [
+      { name: "dashboard.nav.affiliate_program", label: "Affiliate Program", href: "/dashboard/affiliate-program", icon: Network },
       { name: "dashboard.nav.affiliate_agreement", label: "Affiliate Agreement", href: "/dashboard/affiliate-agreement", icon: FileText },
     ],
   },

@@ -31,12 +31,10 @@
   "hero": {
     "title": "Concourir & Gagner",
     "subtitle": "Plateforme de Concours Mondiale",
-    "description": "Participez aux concours, développez votre réseau et gagnez grâce à notre programme d'affiliation à 10 niveaux. Chaque vote, chaque parrainage génère des revenus.",
     "cta_primary": "Commencer à Gagner",
     "cta_secondary": "En Savoir Plus",
     "affiliate": {
       "title": "Programme d'Affiliation",
-      "description": "Gagnez jusqu'à 10 niveaux de profondeur",
       "revenue_share": "20% aux participants, 5% aux sponsors"
     },
     "carousel": {
@@ -203,7 +201,6 @@
     }
   },
   "footer": {
-    "description": "Rejoignez la plus grande communauté de concours au monde. Participez, votez et gagnez grâce à notre programme d'affiliation révolutionnaire à 10 niveaux.",
     "quick_links": {
       "title": "Liens Rapides",
       "about": "À Propos",

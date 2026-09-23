@@ -26,7 +26,19 @@ export default function FAQMobilePage() {
   const faqs = [
     {
       question: t('landing.faq.question_1') || 'Comment puis-je gagner de l\'argent sur MyHigh5 ?',
-      answer: t('landing.faq.answer_1') || 'Vous pouvez gagner de l\'argent de plusieurs façons : en participant aux concours et en remportant des prix, en rejoignant le programme d\'affiliation pour gagner des commissions sur les membres que vous référez, et en devenant membre fondateur pour participer aux pools de revenus et de profits.'
+      answer: t('landing.faq.answer_1')
+    },
+    {
+      question: t('landing.faq.question_2'),
+      answer: t('landing.faq.answer_2')
+    },
+    {
+      question: t('landing.faq.question_3'),
+      answer: t('landing.faq.answer_3')
+    },
+    {
+      question: t('landing.faq.question_leaders'),
+      answer: t('landing.faq.answer_leaders')
     },
     {
       question: t('landing.faq.question_4') || 'Comment puis-je participer aux concours ?',
@@ -34,7 +46,7 @@ export default function FAQMobilePage() {
     },
     {
       question: t('landing.faq.question_5') || 'Les concours sont-ils gratuits ?',
-      answer: t('landing.faq.answer_5') || 'Oui, la participation aux concours est gratuite. Cependant, certains concours peuvent nécessiter une vérification KYC qui peut avoir un coût. Les membres fondateurs ont accès à des avantages exclusifs et à des opportunités de revenus supplémentaires.'
+      answer: t('landing.faq.answer_5')
     },
     {
       question: t('landing.faq.question_6') || 'Comment puis-je retirer mes gains ?',
@@ -98,7 +110,7 @@ export default function FAQMobilePage() {
     {
       icon: Sparkles,
       title: t('landing.ways_to_earn.ad_campaigns.title') || 'Page Sponsors du Site',
-      description: t('landing.ways_to_earn.ad_campaigns.description') || 'Les sponsors de niveau 1 gagnent une commission de 10%, et les niveaux 2 à 10 gagnent 1% chacun.'
+      description: t('landing.ways_to_earn.ad_campaigns.description')
     }
   ]
 

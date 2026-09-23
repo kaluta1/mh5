@@ -35,7 +35,6 @@ import { InviteDialog } from '@/components/dashboard/invite-dialog'
 import { cacheService } from '@/lib/cache-service'
 import api from '@/lib/api'
 import { shortenReferralUrl } from '@/lib/referral-share'
-import { RetiredProgramNotice } from '@/components/dashboard/retired-program-notice'
 
 interface Affiliate {
   id: string
@@ -592,12 +591,14 @@ export default function AffiliatesPage() {
           </DialogHeader>
           
           <div className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
-            <RetiredProgramNotice
-              compact
-              titleKey="legacy_retired.affiliate_title"
-              bodyKey="legacy_retired.affiliate_body"
-              links={[{ href: '/dashboard/commissions', labelKey: 'legacy_retired.link_commissions' }]}
-            />
+            <div className="p-3 sm:p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg sm:rounded-xl border border-emerald-200 dark:border-emerald-700/50 space-y-2">
+              <p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">{t('business_model.direct_title')}</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{t('business_model.direct_body')}</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('business_model.direct_example')}</p>
+              <Link href="/dashboard/affiliate-program" className="text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-300 underline underline-offset-4">
+                {t('business_model.learn_more')}
+              </Link>
+            </div>
 
             {/* Cookie tracking info */}
             <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700/50">
