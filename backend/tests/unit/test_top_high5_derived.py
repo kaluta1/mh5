@@ -157,7 +157,7 @@ def test_default_works_with_no_frozen_rows_at_all(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert db.query(TopHigh5Result).count() == 0  # never written by the derived path
     assert len(result["contests"]) == 1
@@ -189,7 +189,7 @@ def test_stale_frozen_row_does_not_affect_derived_result(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     ids = [r["contestant_id"] for c in result["contests"] for r in c["rows"]]
     assert ids == [real.id]
@@ -218,7 +218,7 @@ def test_incorrect_frozen_row_does_not_override_authoritative_ranking(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     rows = result["contests"][0]["rows"]
     assert rows[0]["contestant_id"] == winner.id
@@ -240,10 +240,10 @@ def test_participation_city_works(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="citywork")
     db.commit()
 
-    # City target_month = current - 2. For January's cohort to be targeted,
-    # "today" must be January + 2 = March.
+    # City target_month = current - 1. For January's cohort to be targeted,
+    # "today" must be January + 1 = February.
     result = resolve_live_top_high5(
-        db, level=SeasonLevel.CITY, selected_country="", variants=set(), today=date(2026, 3, 15),
+        db, level=SeasonLevel.CITY, selected_country="", variants=set(), today=date(2026, 2, 15),
     )
     assert len(result["contests"]) == 1
     assert result["contests"][0]["rows"][0]["contestant_id"] == contestant.id
@@ -264,7 +264,7 @@ def test_nomination_never_appears_in_city(db):
     db.commit()
 
     result = resolve_live_top_high5(
-        db, level=SeasonLevel.CITY, selected_country="", variants=set(), today=date(2026, 3, 15),
+        db, level=SeasonLevel.CITY, selected_country="", variants=set(), today=date(2026, 2, 15),
     )
     assert result["contests"] == []
 
@@ -286,17 +286,17 @@ def test_participation_country_lifecycle_offset(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="partcountry")
     db.commit()
 
-    # Country target_month = current - 3. On Sep 22 that's June, not July --
-    # empty. On Oct 1 that's July -- matches.
+    # Country target_month = current - 2. On Aug 22 that's June, not July --
+    # empty. On Sep 1 that's July -- matches.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 22),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 22),
     )
     assert result["contests"] == []
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
     )
     assert len(result["contests"]) == 1
     assert result["contests"][0]["cohort_month"] == "2026-07-01"
@@ -315,10 +315,10 @@ def test_nomination_country_lifecycle_offset(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="nomcountry2")
     db.commit()
 
-    # today=Sep 1 -> Country target_month = June -- matches this round.
+    # today=Aug 1 -> Country target_month = June -- matches this round.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 1),
     )
     assert len(result["contests"]) == 1
     card = result["contests"][0]
@@ -347,11 +347,11 @@ def test_regional_offsets_both_modes(db):
     _vote(db, contestant=nom_c, contest=nom_contest, season=season, suffix="nomreg3c")
     db.commit()
 
-    # Regional target_month = current - 4. today=Sep -> May. Both modes'
+    # Regional target_month = current - 3. today=Aug -> May. Both modes'
     # May-cohort contestants appear -- same round, same cohort_month.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 10),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 10),
     )
     by_contest = {c["contest_id"]: c for c in result["contests"]}
     assert part_contest.id in by_contest
@@ -375,9 +375,9 @@ def test_continental_offsets_both_modes(db):
     _vote(db, contestant=nom_c, contest=nom_contest, season=season, suffix="nomcontc")
     db.commit()
 
-    # Continental target_month = current - 5. today=Sep -> April.
+    # Continental target_month = current - 4. today=Aug -> April.
     result = resolve_live_top_high5(
-        db, level=SeasonLevel.CONTINENT, selected_country="", variants=set(), today=date(2026, 9, 10),
+        db, level=SeasonLevel.CONTINENT, selected_country="", variants=set(), today=date(2026, 8, 10),
     )
     by_contest = {c["contest_id"]: c for c in result["contests"]}
     assert part_contest.id in by_contest
@@ -399,9 +399,9 @@ def test_global_offsets_both_modes(db):
     _vote(db, contestant=nom_c, contest=nom_contest, season=season, suffix="nomglobc")
     db.commit()
 
-    # Global target_month = current - 6. today=Sep -> March.
+    # Global target_month = current - 5. today=Aug -> March.
     result = resolve_live_top_high5(
-        db, level=SeasonLevel.GLOBAL, selected_country="", variants=set(), today=date(2026, 9, 10),
+        db, level=SeasonLevel.GLOBAL, selected_country="", variants=set(), today=date(2026, 8, 10),
     )
     by_contest = {c["contest_id"]: c for c in result["contests"]}
     assert part_contest.id in by_contest
@@ -431,10 +431,10 @@ def test_both_modes_share_the_same_target_round(db):
     _vote(db, contestant=july_c, contest=july_contest, season=july_season, suffix="sharejulyc")
     db.commit()
 
-    # Country target_month on Sep 1 = June. Only the June contest appears.
+    # Country target_month on Aug 1 = June. Only the June contest appears.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 1),
     )
     by_contest = {c["contest_id"]: c for c in result["contests"]}
     assert june_contest.id in by_contest
@@ -460,11 +460,11 @@ def test_in_progress_stage_excluded(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="inprogress")
     db.commit()
 
-    # Regional target_month = current - 4. today=Oct 15 -> target=June, not
+    # Regional target_month = current - 3. today=Sep 15 -> target=June, not
     # July -- excluded even though July is "close".
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 10, 15),
+        variants={"tanzania", "tz"}, today=date(2026, 9, 15),
     )
     assert result["contests"] == []
 
@@ -479,10 +479,10 @@ def test_fully_completed_stage_included(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="completed")
     db.commit()
 
-    # Regional target_month = current - 4. today=Nov 1 -> target=July -- MATCH.
+    # Regional target_month = current - 3. today=Oct 1 -> target=July -- MATCH.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert len(result["contests"]) == 1
     assert result["contests"][0]["cohort_month"] == "2026-07-01"
@@ -510,7 +510,7 @@ def test_wrong_round_contestant_excluded(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert result["contests"] == []  # foreign-round row must never surface
 
@@ -534,7 +534,7 @@ def test_wrong_jurisdiction_excluded(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     ids = [r["contestant_id"] for c in result["contests"] for r in c["rows"]]
     assert tz_contestant.id in ids
@@ -561,7 +561,7 @@ def test_contest_level_field_cannot_override_derived_result(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert len(result["contests"]) == 1
     assert result["contests"][0]["contest_id"] == contest.id
@@ -593,7 +593,7 @@ def test_contestseasonlink_alone_cannot_create_a_result(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert len(result["contests"]) == 1
 
@@ -617,7 +617,7 @@ def test_fewer_than_five_never_fabricated(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     assert len(result["contests"][0]["rows"]) == 2  # not padded to 5
 
@@ -652,7 +652,7 @@ def test_ranking_order_matches_authoritative_service(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     derived_order = [r["contestant_id"] for r in result["contests"][0]["rows"]]
     assert derived_order == expected_order
@@ -678,7 +678,7 @@ def test_zero_vote_contestant_still_displayed_per_existing_rule(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.REGIONAL, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 11, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
     )
     rows = result["contests"][0]["rows"]
     ids = [r["contestant_id"] for r in rows]
@@ -706,14 +706,14 @@ def test_future_month_works_without_hardcoded_dates(db):
     # Country = M+2 -> not closed one month later.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2031, 4, 15),
+        variants={"tanzania", "tz"}, today=date(2031, 3, 15),
     )
     assert result["contests"] == []
 
     # Closed after M+2's end.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2031, 6, 1),
+        variants={"tanzania", "tz"}, today=date(2031, 5, 1),
     )
     assert len(result["contests"]) == 1
 
@@ -732,13 +732,13 @@ def test_cancelled_round_never_eligible_in_derived_path(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="cancelledderived")
     db.commit()
 
-    # Country target_month = current - 3. today=Oct 15 -> target=July, which
+    # Country target_month = current - 2. today=Sep 15 -> target=July, which
     # DOES match this round's own cohort month -- but it's CANCELLED, so it
     # must still be excluded (find_round_for_month never returns a
     # CANCELLED round, even on an exact month match).
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 10, 15),
+        variants={"tanzania", "tz"}, today=date(2026, 9, 15),
     )
     assert result["contests"] == []
 
@@ -771,7 +771,7 @@ def test_cohort_month_is_independent_of_stage_month(db):
     # Nomination Country = M+1: June cohort's Country stage is July.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 1),
     )
     card = result["contests"][0]
     assert card["cohort_month"] == "2026-06-01"   # the ORIGINAL cohort, unchanged
@@ -793,10 +793,10 @@ def test_country_does_not_shift_cohort_forward_a_month(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="noshift")
     db.commit()
 
-    # Country target_month = current - 3. today=Sep -> target=June -- MATCH.
+    # Country target_month = current - 2. today=Aug -> target=June -- MATCH.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 10),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 10),
     )
     card = result["contests"][0]
     assert card["cohort_month"] == "2026-06-01"
@@ -827,12 +827,12 @@ def test_mixed_cohorts_flag_is_always_false_under_the_calendar_rule(db):
     _vote(db, contestant=nom_c, contest=nom_contest, season=nom_season, suffix="mixednomc")
     db.commit()
 
-    # Country target_month on Sep 22 = June. Only the June (participation)
+    # Country target_month on Aug 22 = June. Only the June (participation)
     # contest appears; the July (nomination) contest does NOT, even though
     # it also has real cohort data -- it's simply not the target month.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 22),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 22),
     )
     assert result["mixed_cohorts"] is False
     by_contest = {c["contest_id"]: c for c in result["contests"]}
@@ -841,6 +841,34 @@ def test_mixed_cohorts_flag_is_always_false_under_the_calendar_rule(db):
     assert by_contest[part_contest.id]["cohort_month"] == "2026-06-01"
     assert nom_contest.id not in by_contest
     assert result["round_id"] == june_round.id
+
+
+def test_september_2026_country_returns_only_the_july_cohort(db):
+    """The exact reported business case: in September 2026, Country must
+    show the July 2026 cohort (July submission -> August City -> September
+    Country, no idle "Start Voting" month). May/June/August cohorts with
+    real Country data in the same country must all be excluded."""
+    contests = {}
+    for month in (5, 6, 7, 8):
+        start = _month_start(date(2026, month, 1))
+        rnd = _round_for_month(db, f"sep{month}", submission_month_start=start)
+        contest = _contest(db, f"sep{month}", mode="participation")
+        season = _season(db, rnd, level=SeasonLevel.COUNTRY, suffix=f"sep{month}")
+        c = _contestant(db, suffix=f"sep{month}c", rnd=rnd, contest=contest, country="Tanzania")
+        _member(db, contestant=c, season=season)
+        _vote(db, contestant=c, contest=contest, season=season, suffix=f"sep{month}c")
+        contests[month] = (rnd, contest)
+    db.commit()
+
+    result = resolve_live_top_high5(
+        db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
+        variants={"tanzania", "tz"}, today=date(2026, 9, 23),
+    )
+    assert result["target_month"] == "2026-07-01"
+    assert result["round_id"] == contests[7][0].id
+    assert result["mixed_cohorts"] is False
+    assert sorted({c["cohort_month"] for c in result["contests"]}) == ["2026-07-01"]
+    assert [c["contest_id"] for c in result["contests"]] == [contests[7][1].id]
 
 
 def test_no_older_or_newer_cohort_fallback_when_expected_cohort_has_no_data(db):
@@ -856,11 +884,11 @@ def test_no_older_or_newer_cohort_fallback_when_expected_cohort_has_no_data(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="nosubstitute")
     db.commit()
 
-    # Country target_month on Sep 22 = June, not July. This contest has NO
+    # Country target_month on Aug 22 = June, not July. This contest has NO
     # June data at all -- must return empty, never substitute its July data.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 9, 22),
+        variants={"tanzania", "tz"}, today=date(2026, 8, 22),
     )
     assert result["contests"] == []
 
@@ -881,7 +909,7 @@ def test_registered_at_is_the_authoritative_registration_timestamp(db):
 
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
     )
     row_out = result["contests"][0]["rows"][0]
     assert row_out["registered_at"] == "2026-07-03T14:30:00"
@@ -900,10 +928,10 @@ def test_topHigh5result_still_not_required_after_metadata_change(db):
     _vote(db, contestant=contestant, contest=contest, season=season, suffix="stillnotreq")
     db.commit()
 
-    # Country target_month on Oct 1 = July -- matches this round.
+    # Country target_month on Sep 1 = July -- matches this round.
     result = resolve_live_top_high5(
         db, level=SeasonLevel.COUNTRY, selected_country="Tanzania",
-        variants={"tanzania", "tz"}, today=date(2026, 10, 1),
+        variants={"tanzania", "tz"}, today=date(2026, 9, 1),
     )
     assert db.query(TopHigh5Result).count() == 0
     assert len(result["contests"]) == 1
@@ -915,52 +943,52 @@ def test_topHigh5result_still_not_required_after_metadata_change(db):
 # ---------------------------------------------------------------------------
 
 def test_target_cohort_month_matches_the_september_2026_worked_example():
-    """Direct check of the offset table against the exact example given:
-    current=September 2026 -> City=Jul, Country=Jun, Regional=May,
-    Continental=Apr, Global=Mar (all 2026)."""
+    """Direct check of the offset table against the authoritative example:
+    current=September 2026 -> City=Aug, Country=Jul, Regional=Jun,
+    Continental=May, Global=Apr (all 2026). No idle "Start Voting" month:
+    July submission -> August City -> September Country."""
     from app.services.top_high5_live import target_cohort_month
 
     today = date(2026, 9, 23)
-    assert target_cohort_month(SeasonLevel.CITY, today) == date(2026, 7, 1)
-    assert target_cohort_month(SeasonLevel.COUNTRY, today) == date(2026, 6, 1)
-    assert target_cohort_month(SeasonLevel.REGIONAL, today) == date(2026, 5, 1)
-    assert target_cohort_month(SeasonLevel.CONTINENT, today) == date(2026, 4, 1)
-    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 3, 1)
+    assert target_cohort_month(SeasonLevel.CITY, today) == date(2026, 8, 1)
+    assert target_cohort_month(SeasonLevel.COUNTRY, today) == date(2026, 7, 1)
+    assert target_cohort_month(SeasonLevel.REGIONAL, today) == date(2026, 6, 1)
+    assert target_cohort_month(SeasonLevel.CONTINENT, today) == date(2026, 5, 1)
+    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 4, 1)
 
 
 def test_target_cohort_month_rolls_over_the_year_boundary():
-    """Direct check of the exact January 2027 example given: City=Nov 2026,
-    Country=Oct 2026, Regional=Sep 2026, Continental=Aug 2026,
-    Global=Jul 2026 -- the offset must subtract correctly across the
-    Dec->Jan year boundary, in both directions."""
+    """Direct check of the exact January 2027 example given: City=Dec 2026,
+    Country=Nov 2026, Regional=Oct 2026, Continental=Sep 2026,
+    Global=Aug 2026 -- the offset must subtract correctly across the
+    Dec->Jan year boundary."""
     from app.services.top_high5_live import target_cohort_month
 
     today = date(2027, 1, 15)
-    assert target_cohort_month(SeasonLevel.CITY, today) == date(2026, 11, 1)
-    assert target_cohort_month(SeasonLevel.COUNTRY, today) == date(2026, 10, 1)
-    assert target_cohort_month(SeasonLevel.REGIONAL, today) == date(2026, 9, 1)
-    assert target_cohort_month(SeasonLevel.CONTINENT, today) == date(2026, 8, 1)
-    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 7, 1)
+    assert target_cohort_month(SeasonLevel.CITY, today) == date(2026, 12, 1)
+    assert target_cohort_month(SeasonLevel.COUNTRY, today) == date(2026, 11, 1)
+    assert target_cohort_month(SeasonLevel.REGIONAL, today) == date(2026, 10, 1)
+    assert target_cohort_month(SeasonLevel.CONTINENT, today) == date(2026, 9, 1)
+    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 8, 1)
 
 
 def test_target_cohort_month_rolls_over_multiple_years_back():
-    """A February target reaching back past TWO Decembers (Global, -6
-    months from February = August of the PREVIOUS year) -- guards against
-    an off-by-one that only shows up when the offset crosses exactly one
-    year vs. requiring it to crash through a full 12-month wraparound."""
+    """A February target reaching back past the December boundary (Global,
+    -5 months from February = September of the PREVIOUS year) -- guards
+    against an off-by-one around the 12-month wraparound."""
     from app.services.top_high5_live import target_cohort_month
 
     today = date(2027, 2, 1)
-    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 8, 1)
-    assert target_cohort_month(SeasonLevel.CITY, today) == date(2026, 12, 1)
+    assert target_cohort_month(SeasonLevel.GLOBAL, today) == date(2026, 9, 1)
+    assert target_cohort_month(SeasonLevel.CITY, today) == date(2027, 1, 1)
 
 
 def test_end_to_end_year_rollover_finds_the_correct_round(db):
-    """End-to-end (not just the pure date function): a November 2026 cohort
+    """End-to-end (not just the pure date function): a December 2026 cohort
     must be found for City when "today" is January 2027, across the real
     resolver, real Round/ContestSeason/Contestant/vote data."""
-    nov = _month_start(date(2026, 11, 1))
-    rnd = _round_for_month(db, "rollover", submission_month_start=nov)
+    dec = _month_start(date(2026, 12, 1))
+    rnd = _round_for_month(db, "rollover", submission_month_start=dec)
     contest = _contest(db, "rollover", mode="participation")
     season = _season(db, rnd, level=SeasonLevel.CITY, suffix="rollover")
     contestant = _contestant(db, suffix="rollover", rnd=rnd, contest=contest, city="Arusha")
@@ -972,8 +1000,8 @@ def test_end_to_end_year_rollover_finds_the_correct_round(db):
         db, level=SeasonLevel.CITY, selected_country="", variants=set(), today=date(2027, 1, 15),
     )
     assert len(result["contests"]) == 1
-    assert result["contests"][0]["cohort_month"] == "2026-11-01"
-    assert result["target_month"] == "2026-11-01"
+    assert result["contests"][0]["cohort_month"] == "2026-12-01"
+    assert result["target_month"] == "2026-12-01"
 
 
 def test_target_month_present_on_every_response_including_empty(db):
@@ -984,4 +1012,4 @@ def test_target_month_present_on_every_response_including_empty(db):
         variants={"tanzania", "tz"}, today=date(2026, 9, 23),
     )
     assert result["contests"] == []
-    assert result["target_month"] == "2026-06-01"
+    assert result["target_month"] == "2026-07-01"

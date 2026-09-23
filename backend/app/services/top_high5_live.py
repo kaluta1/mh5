@@ -42,17 +42,22 @@ The rule now is a single, uniform calendar calculation with **no
 per-contest search and no fallback**:
 
     target_month(level) = current_calendar_month - offset(level)
-    offset = {CITY: 2, COUNTRY: 3, REGIONAL: 4, CONTINENT: 5, GLOBAL: 6}
+    offset = {CITY: 1, COUNTRY: 2, REGIONAL: 3, CONTINENT: 4, GLOBAL: 5}
 
-This offset is anchored to PARTICIPATION's own City=M+1..Global=M+5
-lifecycle so that, for participation, target_month's own stage month for
-this level is always exactly one full calendar month in the past --
-genuinely closed, not merely closed as of today. NOMINATION reaches every
-level faster (City-less, Country=M+1..Global=M+4), so the identical
-target_month is closed for nomination with extra safety margin. Both modes
-are therefore queried against the SAME one target round -- there is no
-longer a separate target month per mode, which is exactly why a level's
-response now contains exactly one cohort month, never a mix.
+This offset is anchored directly to PARTICIPATION's own lifecycle
+(Submission=M, City=M+1, Country=M+2, Regional=M+3, Continental=M+4,
+Global=M+5): each level targets the cohort whose participation stage for
+that level falls in the current calendar month. E.g. in September 2026,
+Country targets the July 2026 cohort (July submission -> August City ->
+September Country). There is NO extra "Start Voting" month between
+submission/nomination and the first voting stage -- "Start Voting" is only
+a UI action/status, not a level, season or calendar month. (Corrected
+2026-09-23: the first version of this rule used offsets one month larger,
+{CITY: 2 .. GLOBAL: 6}, which wrongly assumed such an idle month.)
+NOMINATION (City-less, Nomination=M, Country=M+1..Global=M+4) is queried
+against the SAME one target round -- there is no separate target month
+per mode, which is exactly why a level's response contains exactly one
+cohort month, never a mix.
 
     current_month -> target_month -> the ONE Round whose own cohort month
     equals target_month -> contests/contestants that genuinely belong to
@@ -114,11 +119,11 @@ _LEVEL_ORDER = [
 # to compute the single target cohort month for each level. See the
 # "CALENDAR-MONTH TARGETING RULE" section above for the exact rationale.
 _TARGET_MONTH_OFFSET = {
-    SeasonLevel.CITY: 2,
-    SeasonLevel.COUNTRY: 3,
-    SeasonLevel.REGIONAL: 4,
-    SeasonLevel.CONTINENT: 5,
-    SeasonLevel.GLOBAL: 6,
+    SeasonLevel.CITY: 1,
+    SeasonLevel.COUNTRY: 2,
+    SeasonLevel.REGIONAL: 3,
+    SeasonLevel.CONTINENT: 4,
+    SeasonLevel.GLOBAL: 5,
 }
 
 # PARTICIPATION's own calendar close/open date columns for each level (City
