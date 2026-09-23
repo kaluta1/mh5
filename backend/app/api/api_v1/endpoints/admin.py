@@ -3826,6 +3826,7 @@ def grant_user_payment(
 
     product_code = (request.product_code or "kyc").strip().lower()
     from app.services.legacy_business_model import is_legacy_founding_product
+    from app.services.new_model_ledger import model_version_for_new_event
 
     if is_legacy_founding_product(product_code):
         _reject_retired_legacy_writer("Granting a Founding membership")
@@ -3916,6 +3917,7 @@ def grant_user_payment(
                 currency=(getattr(product, "currency", None) or "USD"),
                 order_id=f"ADMIN-{_uuid.uuid4().hex}",
                 status=DepositStatus.VALIDATED,
+                business_model_version=model_version_for_new_event(db),
                 validated_at=datetime.utcnow(),
                 validated_by=current_user.id,
                 expires_at=expires_at,

@@ -97,6 +97,9 @@ class User(Base):
     
     # Parrain (qui a référé cet utilisateur)
     sponsor_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    # How sponsor_id was set: PERSONAL_REFERRAL | JOIN_CODE | REFERRAL_POOL | NONE (NULL = legacy row)
+    sponsor_source: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    sponsor_assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Accord d'affiliation
     affiliate_agreement_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

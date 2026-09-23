@@ -44,6 +44,15 @@ _ACCOUNTED_PRODUCT_CODES = frozenset(
 )
 
 
+def _legacy_deposits_only():
+    """Backfills replay LEGACY postings; NEW_V2 deposits use the structured ledger only."""
+    from sqlalchemy import or_
+
+    from app.services.new_model_reference_data import NEW_MODEL_VERSION
+
+    return or_(Deposit.business_model_version.is_(None), Deposit.business_model_version != NEW_MODEL_VERSION)
+
+
 def _journal_exists_for_deposit(db: Session, deposit_id: int) -> bool:
     """Match descriptions built in payment_accounting (always contain 'Deposit #{id} -')."""
     needle = f"Deposit #{deposit_id} -"
@@ -91,6 +100,7 @@ def backfill_missing_payment_journals(
     """
     q = (
         db.query(Deposit)
+        .filter(_legacy_deposits_only())
         .join(ProductType, Deposit.product_type_id == ProductType.id)
         .filter(Deposit.status == DepositStatus.VALIDATED)
         .filter(ProductType.code.in_(_ACCOUNTED_PRODUCT_CODES))
@@ -211,6 +221,7 @@ def backfill_missing_kyc_recognition(
 
     q = (
         db.query(Deposit)
+        .filter(_legacy_deposits_only())
         .filter(Deposit.product_type_id == kyc_pt.id, Deposit.status == DepositStatus.VALIDATED)
         .order_by(Deposit.id.asc())
     )
@@ -312,6 +323,7 @@ def backfill_missing_founding_pool_accruals(
         require_legacy_business_model("Founding pool accrual backfill")
     q = (
         db.query(Deposit)
+        .filter(_legacy_deposits_only())
         .join(ProductType, Deposit.product_type_id == ProductType.id)
         .filter(Deposit.status == DepositStatus.VALIDATED)
         .filter(ProductType.code.in_(_ACCOUNTED_PRODUCT_CODES))

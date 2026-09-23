@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 import logging
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,11 @@ from app.services.financial_integrity import FinancialIntegrityError, money
 logger = logging.getLogger(__name__)
 
 _REFUND_MARKER = "Provider refund reconciled"
+
+
+def _mentions_exact_deposit(description: str, deposit_id: int) -> bool:
+    """Legacy journals carry the deposit only in text; match '#5' but never '#51'."""
+    return re.search(rf"Deposit #{int(deposit_id)}(?!\d)", description or "") is not None
 
 
 def _refund_amount(payload: dict[str, Any], deposit: Deposit) -> Decimal:
@@ -52,6 +58,21 @@ def reverse_provider_refund(
         return True
 
     _refund_amount(payload, locked)
+
+    from app.services.new_model_ledger import is_new_model
+
+    if is_new_model(getattr(locked, "business_model_version", None)):
+        # NEW_V2: exact structured reversal of this deposit's own journals, revenue and commission.
+        from app.services.new_model_payments import reverse_new_model_deposit
+
+        reverse_new_model_deposit(db, locked, reason="Provider refund")
+        locked.status = DepositStatus.FAILED
+        locked.admin_notes = f"{notes}\n{_REFUND_MARKER} at {datetime.utcnow().isoformat()}Z".strip()
+        db.flush()
+        if not defer_commit:
+            db.commit()
+        return True
+
     commissions = (
         db.query(AffiliateCommission)
         .filter(AffiliateCommission.deposit_id == locked.id)
@@ -84,6 +105,8 @@ def reverse_provider_refund(
             .order_by(JournalEntry.id.asc())
             .all()
         )
+        # The LIKE above is only a pre-filter; identity is the exact deposit number.
+        original_entries = [e for e in original_entries if _mentions_exact_deposit(e.description, locked.id)]
         reversal_lines: list[dict] = []
         for entry in original_entries:
             rows = (

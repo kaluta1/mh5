@@ -501,6 +501,15 @@ class PaymentAccountingService:
         if not deposit:
             logger.warning("post_kyc_verification_recognition: no validated KYC deposit for user %s", user_id)
             return False
+        from app.services.new_model_ledger import is_new_model
+
+        if is_new_model(getattr(deposit, "business_model_version", None)):
+            # NEW_V2: structured recognition + direct commission (no text-matched idempotency).
+            from app.services.new_model_payments import recognize_deferred_deposit
+
+            posted = recognize_deferred_deposit(db, deposit, recognized_at=entry_date)
+            db.commit()
+            return posted
         if kyc_recognition_posted(db, deposit.id):
             return False
         commissions = (

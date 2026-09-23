@@ -272,9 +272,15 @@ def process_payment_validation(
             return False
         
         product_code = product_type.code
-        
-        # Distribuer les commissions
-        commissions = distribute_commissions(
+
+        # The deposit's creation-time stamp decides the business model (never deployment time).
+        from app.services.new_model_ledger import is_new_model
+
+        new_model = is_new_model(getattr(deposit, "business_model_version", None))
+
+        # Legacy deposits: retired 10-level engine (creates nothing unless re-enabled).
+        # NEW_V2 deposits: direct-only commission is accrued by the new posting path below.
+        commissions = [] if new_model else distribute_commissions(
             db, deposit, product_code, commit=False
         )
 
@@ -295,36 +301,41 @@ def process_payment_validation(
 
             db.flush()
 
-        # Écritures comptables (plan comptable MyHigh5 — voir docs/MYHIGH5_CHART_OF_ACCOUNTS.md)
-        from app.services.payment_accounting import payment_accounting
+        if new_model:
+            from app.services.new_model_payments import process_new_model_deposit
 
-        journal_commit = False
-        if product_code == "kyc":
-            # Step 1: cash to deferred2113. Step 2 posts when KYC is approved (Shufti webhook / status sync).
-            payment_accounting.process_kyc_cash_receipt_accounting(
-                db, deposit, journal_commit=journal_commit
-            )
-        elif product_code == "annual_membership":
-            payment_accounting.process_membership_payment_accounting(
-                db, deposit, commissions, journal_commit=journal_commit
-            )
-        elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):
-            payment_accounting.process_founding_membership_payment_accounting(
-                db, deposit, commissions, journal_commit=journal_commit
-            )
-            from app.services.legacy_business_model import (
-                is_legacy_founding_product,
-                legacy_business_model_enabled,
-            )
+            process_new_model_deposit(db, deposit)
+        else:
+            # Écritures comptables (plan comptable MyHigh5 — voir docs/MYHIGH5_CHART_OF_ACCOUNTS.md)
+            from app.services.payment_accounting import payment_accounting
 
-            if user and is_legacy_founding_product(product_code) and legacy_business_model_enabled():
-                from app.services.fmr_service import record_founding_join_fmp
+            journal_commit = False
+            if product_code == "kyc":
+                # Step 1: cash to deferred2113. Step 2 posts when KYC is approved (Shufti webhook / status sync).
+                payment_accounting.process_kyc_cash_receipt_accounting(
+                    db, deposit, journal_commit=journal_commit
+                )
+            elif product_code == "annual_membership":
+                payment_accounting.process_membership_payment_accounting(
+                    db, deposit, commissions, journal_commit=journal_commit
+                )
+            elif product_code in ("mfm_membership", "efm_membership", "founding_membership"):
+                payment_accounting.process_founding_membership_payment_accounting(
+                    db, deposit, commissions, journal_commit=journal_commit
+                )
+                from app.services.legacy_business_model import (
+                    is_legacy_founding_product,
+                    legacy_business_model_enabled,
+                )
 
-                record_founding_join_fmp(db, int(user.id), int(deposit.id))
-        elif product_code == "club_membership":
-            payment_accounting.process_club_membership_payment_accounting(
-                db, deposit, commissions, journal_commit=journal_commit
-            )
+                if user and is_legacy_founding_product(product_code) and legacy_business_model_enabled():
+                    from app.services.fmr_service import record_founding_join_fmp
+
+                    record_founding_join_fmp(db, int(user.id), int(deposit.id))
+            elif product_code == "club_membership":
+                payment_accounting.process_club_membership_payment_accounting(
+                    db, deposit, commissions, journal_commit=journal_commit
+                )
 
         if not defer_commit:
             db.commit()

@@ -238,7 +238,13 @@ class CRUDAffiliateTree:
             is_active=True
         )
         
+        from app.services.sponsor_assignment import mark_join_code_assignment
+
+        # validate_sponsor_assignment (row lock) already refused any reassignment.
+        first_assignment = user.sponsor_id is None
         user.sponsor_id = sponsor.id
+        if first_assignment:
+            mark_join_code_assignment(db, user)
         db.add(user)
         db.add(new_tree)
         db.commit()

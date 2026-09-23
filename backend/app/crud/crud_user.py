@@ -80,12 +80,9 @@ class CRUDUser:
         # Générer un code de parrainage unique
         referral_code = self._generate_unique_referral_code(db)
         
-        # Trouver le parrain si un code est fourni
-        sponsor_id = None
-        if sponsor_code:
-            sponsor = self.get_by_referral_code(db, sponsor_code)
-            if sponsor and sponsor.is_active is not False and sponsor.is_deleted is not True:
-                sponsor_id = sponsor.id
+        # Personal referral (validated); the sponsor itself is set by the central
+        # sponsor-assignment service below, inside this same transaction.
+        personal_sponsor = self.get_by_referral_code(db, sponsor_code) if sponsor_code else None
         
         # Récupérer le rôle par défaut 'user', créer s'il n'existe pas
         default_role = self.get_role_by_name(db, 'user')
@@ -111,10 +108,20 @@ class CRUDUser:
             country=obj_in.country,
             city=obj_in.city,
             personal_referral_code=referral_code,
-            sponsor_id=sponsor_id,
             role_id=role_id
         )
         db.add(db_obj)
+        db.flush()
+
+        from app.services.new_model_ledger import active_new_model_version
+        from app.services.sponsor_assignment import PERSONAL_REFERRAL, assign_at_registration
+
+        if active_new_model_version(db) is not None:
+            # NEW_V2: personal referral first, else a Referral Pool member, else no sponsor.
+            assign_at_registration(db, db_obj, personal_sponsor)
+        elif personal_sponsor and personal_sponsor.is_active is not False and personal_sponsor.is_deleted is not True:
+            db_obj.sponsor_id = personal_sponsor.id
+            db_obj.sponsor_source = PERSONAL_REFERRAL
         db.commit()
         db.refresh(db_obj)
         return db_obj

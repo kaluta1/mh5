@@ -69,6 +69,16 @@ api_router.include_router(referral_shortener.router, tags=["Referral Short Links
 api_router.include_router(follow.router, prefix="/follow", tags=["Follow"])
 api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Scheduler"])
 
+from app.api.api_v1.endpoints import business_model as business_model_endpoints  # noqa: E402
+
+api_router.include_router(business_model_endpoints.router, tags=["Business model (NEW_V2)"])
+api_router.include_router(
+    business_model_endpoints.admin_router,
+    prefix="/admin/business-model",
+    tags=["Administration - business model"],
+    dependencies=[Depends(admin.require_admin)],
+)
+
 from app.core.build_info import BACKEND_BUILD_ID
 
 

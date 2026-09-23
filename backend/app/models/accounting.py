@@ -119,7 +119,16 @@ class JournalEntry(Base):
     # Métadonnées (created_at / updated_at from Base)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
+
+    # Structured source linkage (NEW_V2 postings). Legacy rows keep NULL here; the model
+    # never matches financial identity through description text.
+    business_model_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    source_type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    source_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    posting_type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(160), nullable=True, unique=True)
+    reverses_entry_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("journal_entries.id"), nullable=True)
+
     # Relations
     lines: Mapped[List["JournalLine"]] = relationship("JournalLine", back_populates="entry")
     creator: Mapped[Optional["User"]] = relationship("User")

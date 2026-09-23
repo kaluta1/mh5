@@ -159,6 +159,9 @@ class Deposit(Base):
     # Notes admin
     admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     validated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Stamped once at creation (NULL = legacy/pre-cutover). Decides which business model applies.
+    business_model_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], backref="deposits")

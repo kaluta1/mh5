@@ -112,6 +112,12 @@ class AffiliateCommission(Base):
     paid_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     payout_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # NEW_V2 direct-commission provenance (NULL on legacy 10-level rows).
+    business_model_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    revenue_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    source_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     source_user: Mapped["User"] = relationship("User", foreign_keys=[source_user_id])

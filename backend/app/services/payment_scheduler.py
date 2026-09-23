@@ -93,6 +93,7 @@ class PaymentScheduler:
                         and deposit.created_at < expiration_time
                     ):
                         deposit.status = DepositStatus.EXPIRED
+                        _release_pool_seat_for_deposit(db, deposit.id)
                         logger.info(
                             "Deposit %s marked as EXPIRED (created at %s)",
                             deposit.id,
@@ -158,6 +159,16 @@ class PaymentScheduler:
             logger.error(f"Error creating commission for deposit {deposit.id}: {e}")
 
 
+def _release_pool_seat_for_deposit(db: Session, deposit_id: int) -> None:
+    """An expired invoice must not keep a Referral Pool seat reserved."""
+    from app.models.business_model import ReferralPoolMembership
+    from app.services import referral_pool_service as pool
+
+    seat = db.query(ReferralPoolMembership).filter(ReferralPoolMembership.source_deposit_id == deposit_id).first()
+    if seat is not None:
+        pool.release_reservation(db, seat, "Invoice expired unpaid")
+
+
 # Global instance
 payment_scheduler = PaymentScheduler()
 
@@ -173,6 +184,7 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
     expiration_time = datetime.utcnow() - timedelta(hours=1)
     if deposit.created_at < expiration_time and deposit.status == DepositStatus.PENDING:
         deposit.status = DepositStatus.EXPIRED
+        _release_pool_seat_for_deposit(db, deposit.id)
         db.commit()
         return {
             "status": "expired",
