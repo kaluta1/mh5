@@ -145,7 +145,7 @@ def test_direct_sponsor_earns_20pct_of_website_revenue_and_upline_earns_nothing(
     _assert_all_journals_balance(db)
 
 
-def test_kyc_commission_is_on_website_revenue_after_provider_cost_and_only_on_recognition(world):
+def test_kyc_commission_is_20pct_of_full_fee_provider_cost_separate_and_only_on_recognition(world):
     db = world
     sponsor = _user(db, "ks@t.com")
     payer = _user(db, "kp@t.com", sponsor=sponsor)
@@ -159,8 +159,12 @@ def test_kyc_commission_is_on_website_revenue_after_provider_cost_and_only_on_re
     assert recognize_deferred_deposit(db, deposit) is False  # idempotent
     db.commit()
     c = db.query(AffiliateCommission).one()
-    assert (c.base_amount, c.commission_amount) == (Decimal("8.00"), Decimal("1.60"))
+    # Confirmed rule: full $10 is the commission base -> $2.00 (the old $1.60 is gone).
+    assert (c.base_amount, c.commission_amount) == (Decimal("10.00"), Decimal("2.00"))
+    assert c.commission_amount != Decimal("1.60")
+    # Provider cost stays a separate pass-through; it does not reduce the commission.
     assert _balance(db, "4001") == Decimal("-8.00") and _balance(db, "2003") == Decimal("-2.00")
+    assert _balance(db, "5001") == Decimal("2.00") and _balance(db, "2001") == Decimal("-2.00")
     assert _balance(db, "2113") == 0
     _assert_all_journals_balance(db)
 
@@ -235,7 +239,7 @@ def test_legacy_refund_text_match_no_longer_collides_5_with_51(world):
 
 # ================================================================ referral pool
 
-def test_referral_pool_purchase_activates_seat_and_books_revenue_without_commission(world):
+def test_referral_pool_purchase_activates_seat_books_revenue_and_pays_direct_sponsor_20(world):
     db = world
     sponsor = _user(db, "ps@t.com")
     buyer = _user(db, "pb@t.com", sponsor=sponsor)
@@ -247,7 +251,8 @@ def test_referral_pool_purchase_activates_seat_and_books_revenue_without_commiss
     m = db.query(ReferralPoolMembership).one()
     assert (m.status, m.entitlement_source, m.source_deposit_id, m.seat_number) == (pool.ACTIVE, pool.SOURCE_PAID, deposit.id, 1)
     assert _balance(db, "4008") == Decimal("-100.00")
-    assert db.query(AffiliateCommission).count() == 0  # provisional policy: pool entry pays no commission
+    c = db.query(AffiliateCommission).one()  # confirmed policy: direct sponsor earns 20%
+    assert (c.user_id, c.level, c.base_amount, c.commission_amount) == (sponsor.id, 1, Decimal("100.00"), Decimal("20.00"))
 
 
 def test_pool_capacity_is_enforced_and_expired_or_failed_reservations_free_seats(world):
@@ -455,10 +460,11 @@ def test_legacy_migration_refuses_to_exceed_capacity(world):
 LAST_MONTH = (datetime.utcnow().replace(day=1) - timedelta(days=1))
 
 
-def _commission(db, user, amount, *, level=1, version=NEW_MODEL_VERSION, when=None, status=CommissionStatus.APPROVED, src=[0]):
+def _commission(db, user, amount, *, level=1, version=NEW_MODEL_VERSION, when=None, status=CommissionStatus.PAID, src=[0]):
     src[0] += 1
     db.add(AffiliateCommission(user_id=user.id, source_user_id=user.id, commission_type=CommissionType.KYC_PAYMENT, level=level,
                                commission_amount=Decimal(str(amount)), base_amount=0, status=status,
+                               paid_date=datetime.utcnow() if status == CommissionStatus.PAID else None,
                                transaction_date=when or LAST_MONTH.replace(day=10), business_model_version=version,
                                source_type="TEST" if version else None, source_id=src[0] if version else None))
 
@@ -481,7 +487,7 @@ def test_leaders_ranks_direct_commission_only_and_allocates_5pct_exactly(world):
     _commission(db, legacy_user, 500, level=2)  # never counted
     _commission(db, b, 999, status=CommissionStatus.CANCELLED)
     _revenue(db, Decimal("1000.00"))
-    _revenue(db, Decimal("777.00"), eligible=False)  # e.g. pool entry: excluded
+    _revenue(db, Decimal("777.00"), eligible=False)  # a policy marked not Leaders-eligible: excluded
     _revenue(db, Decimal("-100.00"))  # a refund nets out
     db.commit()
 

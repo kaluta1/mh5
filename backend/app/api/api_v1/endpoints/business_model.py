@@ -30,12 +30,15 @@ from app.models.business_model import (
 from app.models.user import User
 from app.services import leaders_service, legacy_pool_migration, marketplace_service
 from app.services import referral_pool_service as pool
+from app.services.new_model_revenue import COMMISSION_BASE_DEFINITION, RevenuePolicyMissing, compute_breakdown, get_policy
 from app.services.new_model_reference_data import (
     LEADERS_MAX_MEMBERS,
     LEADERS_POOL_RATE,
     MARKETPLACE_MARKUP_RATE,
+    MARKETPLACE_PRODUCT_CODE,
     NEW_MODEL_VERSION,
     REFERRAL_POOL_PRICE,
+    REFERRAL_POOL_PRODUCT_CODE,
 )
 
 router = APIRouter()
@@ -50,6 +53,38 @@ def _audit(db: Session, *, actor_id: int, table: str, record_id: int, action: st
     db.add(AuditTrail(table_name=table, record_id=int(record_id), action=action, old_values=None,
                       new_values={k: (str(v) if isinstance(v, (Decimal, datetime)) else v) for k, v in new.items()},
                       user_id=actor_id))
+
+
+def _policy_example(db: Session, product_code: str, gross: str, seller_base: str = "0") -> Optional[dict]:
+    try:
+        b = compute_breakdown(get_policy(db, product_code), Decimal(gross), Decimal(seller_base))
+    except RevenuePolicyMissing:
+        return None
+    return {
+        "product_code": product_code, "gross": _num(b.gross), "seller_base": _num(b.seller_base),
+        "provider_cost": _num(b.provider_cost), "website_revenue": _num(b.website_revenue),
+        "commission_eligible": b.commission_eligible, "commission_rate": _num(b.commission_rate),
+        "commission_base": _num(b.commission_base), "direct_commission": _num(b.direct_commission),
+        "leaders_revenue_eligible": b.leaders_revenue_eligible,
+    }
+
+
+def _commission_policy(db: Session) -> dict:
+    """Live, DB-derived statement of the confirmed commission rules (no personal data)."""
+    from app.services.marketplace_service import price_for_seller_base
+
+    base, markup, total = price_for_seller_base("100.00")
+    return {
+        "commission_base_definition": COMMISSION_BASE_DEFINITION,
+        "provider_cost_reduces_commission_base": False,
+        "affiliate_levels": 1,
+        "referral_pool": _policy_example(db, REFERRAL_POOL_PRODUCT_CODE, str(REFERRAL_POOL_PRICE)),
+        "kyc": _policy_example(db, "kyc", "10.00"),
+        "other_products": [_policy_example(db, "annual_membership", g) for g in ("10.00", "50.00", "100.00")],
+        "marketplace": _policy_example(db, MARKETPLACE_PRODUCT_CODE, str(total), str(base)),
+        "leaders_revenue_definition": leaders_service.REVENUE_DEFINITION,
+        "leaders_ranking_definition": leaders_service.RANKING_DEFINITION,
+    }
 
 
 # ================================================================ public / member
@@ -73,6 +108,7 @@ def business_model_summary(db: Session = Depends(get_db)):
         },
         "leaders": {"pool_rate": _num(LEADERS_POOL_RATE), "max_members": LEADERS_MAX_MEMBERS},
         "marketplace": {"markup_rate": _num(MARKETPLACE_MARKUP_RATE), "enabled": bool(settings.MARKETPLACE_ENABLED)},
+        "commission_policy": _commission_policy(db),
     }
 
 
@@ -110,19 +146,23 @@ def my_leaders_rewards(db: Session = Depends(get_db), current_user: User = Depen
     )
     now = datetime.utcnow()
     start, end = leaders_service.month_bounds(now.year, now.month)
-    month_direct = (
-        db.query(func.coalesce(func.sum(AffiliateCommission.commission_amount), 0))
-        .filter(
-            AffiliateCommission.user_id == current_user.id,
-            AffiliateCommission.business_model_version == NEW_MODEL_VERSION,
-            AffiliateCommission.level == 1,
-            AffiliateCommission.status != CommissionStatus.CANCELLED,
-            AffiliateCommission.transaction_date >= start,
-            AffiliateCommission.transaction_date < end,
-        ).scalar()
+    month_filters = (
+        AffiliateCommission.user_id == current_user.id,
+        AffiliateCommission.business_model_version == NEW_MODEL_VERSION,
+        AffiliateCommission.level == 1,
+        AffiliateCommission.transaction_date >= start,
+        AffiliateCommission.transaction_date < end,
     )
+    total = func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)
+    # Only PAID direct commission counts toward the Leaders ranking.
+    month_paid = db.query(total).filter(*month_filters, *leaders_service.paid_direct_commission_filters()).scalar()
+    month_unpaid = db.query(total).filter(
+        *month_filters, AffiliateCommission.status.in_((CommissionStatus.PENDING, CommissionStatus.APPROVED))
+    ).scalar()
     return {
-        "current_month_direct_commission": _num(month_direct),
+        "ranking_definition": leaders_service.RANKING_DEFINITION,
+        "current_month_direct_commission": _num(month_paid),
+        "current_month_unpaid_direct_commission": _num(month_unpaid),
         "rewards": [
             {"period": f"{p.period_year:04d}-{p.period_month:02d}", "rank": l.rank,
              "direct_commission": _num(l.direct_commission_amount), "ratio": _num(l.ratio),

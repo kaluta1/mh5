@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/language-context'
 
 type LeadersMe = {
   current_month_direct_commission: number
+  current_month_unpaid_direct_commission?: number
   rewards: { period: string; rank: number; direct_commission: number; ratio: number; reward: number; payout_status: string }[]
 }
 type Period = { period: string; eligible_company_revenue: number; pool_amount: number; qualifying_members: number }
@@ -37,6 +38,11 @@ export default function LeadersPage() {
       <div className="rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
         <p className="text-sm text-gray-500 dark:text-gray-400">{t('business_model.leaders_this_month')}</p>
         <p className="text-2xl font-bold text-gray-900 dark:text-white">{usd(me?.current_month_direct_commission ?? 0)}</p>
+        {(me?.current_month_unpaid_direct_commission ?? 0) > 0 && (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t('business_model.leaders_unpaid_this_month')}: {usd(me?.current_month_unpaid_direct_commission ?? 0)}
+          </p>
+        )}
       </div>
 
       <section className="rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 overflow-x-auto">

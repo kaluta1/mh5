@@ -21,6 +21,12 @@ MARKETPLACE_MARKUP_RATE = Decimal("0.20")
 LEADERS_POOL_RATE = Decimal("0.05")
 LEADERS_MAX_MEMBERS = 10000
 
+REFERRAL_POOL_POLICY_NOTES = (
+    "CONFIRMED 2026-09-25: a paid $100 pool entry is website revenue, pays the DIRECT sponsor 20% ($20) "
+    "and is included in the Leaders revenue base. Legacy Founding entitlements create no payment, "
+    "revenue or commission."
+)
+
 # (code, name, type, parent code)
 NEW_MODEL_ACCOUNTS = [
     ("1220", "Receivable from external custodian (marketplace buyer funds held; not MyHigh5 cash)", "ASSET", "1000"),
@@ -33,7 +39,9 @@ NEW_MODEL_ACCOUNTS = [
     ("5004", "MyHigh5 Leaders program expense", "EXPENSE", "5000"),
 ]
 
-# Policy values that the client has not finally confirmed are marked PROVISIONAL in notes.
+# Policy values confirmed by the client (Shafi Abeid, 2026-09-25). The direct commission base is
+# always gross - seller base (see new_model_revenue.COMMISSION_BASE_DEFINITION); provider cost only
+# reduces booked website revenue, never the commission base.
 _KYC = dict(
     revenue_category="KYC_VERIFICATION",
     revenue_account_code="4001",
@@ -44,7 +52,8 @@ _KYC = dict(
     commission_eligible=True,
     commission_rate=Decimal("0.20"),
     leaders_revenue_eligible=True,
-    notes="PROVISIONAL: website revenue = gross - KYC provider cost (20%), recognized when verification is performed.",
+    notes=("CONFIRMED 2026-09-25: direct commission = 20% of the FULL KYC fee ($10 -> $2). The 20% provider cost "
+           "is a separate pass-through (2003) and does not reduce the commission base. Recognized when verification is performed."),
 )
 _PLATFORM = dict(
     deferred_account_code=None,
@@ -75,13 +84,7 @@ NEW_MODEL_REVENUE_POLICIES = {
         _PLATFORM,
         revenue_category="REFERRAL_POOL_ENTRY",
         revenue_account_code="4008",
-        commission_eligible=False,
-        commission_rate=Decimal("0"),
-        leaders_revenue_eligible=False,
-        notes=(
-            "PROVISIONAL (client decision pending): the $100 pool entry is booked as revenue but does not "
-            "generate direct commission and is excluded from the Leaders revenue base until confirmed."
-        ),
+        notes=REFERRAL_POOL_POLICY_NOTES,
     ),
     MARKETPLACE_PRODUCT_CODE: dict(
         _PLATFORM,
@@ -90,7 +93,7 @@ NEW_MODEL_REVENUE_POLICIES = {
         deferred_account_code="2114",
         notes=(
             "Website revenue = the 20% markup only; the seller base is never MyHigh5 revenue. "
-            "Direct commission = 20% of the markup (interpretation A)."
+            "CONFIRMED 2026-09-25: direct commission = 20% of the markup ($100 base -> $20 markup -> $4)."
         ),
     ),
 }

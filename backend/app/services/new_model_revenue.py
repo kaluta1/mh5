@@ -1,8 +1,13 @@
 """NEW_V2 website revenue and DIRECT affiliate commission.
 
 Only the payer's direct sponsor (users.sponsor_id) can earn: there is no hierarchy walk.
-direct_commission = website_revenue * policy.commission_rate
-website_revenue   = gross - seller_base - provider_cost          (from RevenuePolicy)
+commission_base   = gross - seller_base                         (COMMISSION_BASE_DEFINITION)
+direct_commission = commission_base * policy.commission_rate
+website_revenue   = gross - seller_base - provider_cost          (booked revenue / Leaders base)
+
+Client-confirmed (2026-09-25): a provider cost (e.g. the KYC verifier) is a separate
+pass-through/expense and never reduces the affiliate commission base; a seller's
+principal (marketplace) is never MyHigh5 revenue and is never commissionable.
 """
 from __future__ import annotations
 
@@ -30,6 +35,9 @@ _COMMISSION_TYPE_BY_CATEGORY = {
 }
 
 
+COMMISSION_BASE_DEFINITION = "GROSS_LESS_SELLER_BASE"
+
+
 class RevenuePolicyMissing(FinancialIntegrityError):
     pass
 
@@ -48,10 +56,16 @@ class RevenueBreakdown:
     policy: RevenuePolicy
 
     @property
+    def commission_base(self) -> Decimal:
+        """Commissionable revenue: the full selling price MyHigh5 earns on (gross minus any
+        seller principal). Provider cost is deliberately NOT deducted."""
+        return money(self.gross - self.seller_base)
+
+    @property
     def direct_commission(self) -> Decimal:
-        if not self.commission_eligible or self.website_revenue <= 0:
+        if not self.commission_eligible or self.commission_base <= 0:
             return Decimal("0.00")
-        return money(self.website_revenue * self.commission_rate)
+        return money(self.commission_base * self.commission_rate)
 
 
 def get_policy(db: Session, product_code: str) -> RevenuePolicy:
@@ -194,7 +208,7 @@ def accrue_direct_commission(
         deposit_id=deposit_id,
         commission_type=_COMMISSION_TYPE_BY_CATEGORY.get(breakdown.revenue_category, CommissionType.KYC_PAYMENT),
         level=1,
-        base_amount=breakdown.website_revenue,
+        base_amount=breakdown.commission_base,
         commission_rate=breakdown.commission_rate,
         commission_amount=amount,
         status=CommissionStatus.APPROVED if (sponsor.usdt_wallet_address or "").strip() else CommissionStatus.PENDING,

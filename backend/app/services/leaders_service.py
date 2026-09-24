@@ -7,6 +7,12 @@ Workflow: DRAFT (prepare, re-preparable) -> APPROVED (different admin) -> POSTED
 Revenue base (definition LEADERS_REVENUE_V1): sum of the website-revenue subledger
 (revenue_recognitions, signed, so refunds net out) where the product's policy marks it
 Leaders-eligible, recognized inside the calendar month (UTC).
+
+Ranking eligibility (client-confirmed 2026-09-25, RANKING_DEFINITION): only PAID direct
+commissions count. The authoritative paid state is AffiliateCommission.status == PAID,
+which the payout service sets only after the provider confirms the transfer, together with
+paid_date and the provider payout_reference. PENDING and APPROVED-but-unpaid never count.
+The month a commission belongs to is still its transaction_date (unchanged).
 """
 from __future__ import annotations
 
@@ -27,7 +33,7 @@ from app.services.new_model_ledger import Line, PostingType, SourceType, find_en
 from app.services.new_model_reference_data import LEADERS_MAX_MEMBERS, LEADERS_POOL_RATE, NEW_MODEL_VERSION
 
 REVENUE_DEFINITION = "LEADERS_REVENUE_V1"
-_COUNTED_STATUSES = (CommissionStatus.PENDING, CommissionStatus.APPROVED, CommissionStatus.PAID)
+RANKING_DEFINITION = "PAID_DIRECT_COMMISSION_ONLY"
 _CENT = Decimal("0.01")
 
 
@@ -65,17 +71,25 @@ class Ranked:
     first_earned_at: datetime
 
 
+def paid_direct_commission_filters():
+    """Filters selecting commissions that may count toward the Leaders ranking."""
+    return (
+        AffiliateCommission.business_model_version == NEW_MODEL_VERSION,
+        AffiliateCommission.level == 1,
+        AffiliateCommission.status == CommissionStatus.PAID,
+        AffiliateCommission.paid_date.isnot(None),
+    )
+
+
 def rank_members(db: Session, year: int, month: int, *, limit: int = LEADERS_MAX_MEMBERS) -> list[Ranked]:
-    """Direct (level 1, NEW_V2) commission only. Ties: earlier first commission, then lower user id."""
+    """PAID direct (level 1, NEW_V2) commission only. Ties: earlier first commission, then lower user id."""
     start, end = month_bounds(year, month)
     total = func.sum(AffiliateCommission.commission_amount)
     first = func.min(AffiliateCommission.transaction_date)
     rows = (
         db.query(AffiliateCommission.user_id, total.label("total"), first.label("first"))
         .filter(
-            AffiliateCommission.business_model_version == NEW_MODEL_VERSION,
-            AffiliateCommission.level == 1,
-            AffiliateCommission.status.in_(_COUNTED_STATUSES),
+            *paid_direct_commission_filters(),
             AffiliateCommission.transaction_date >= start,
             AffiliateCommission.transaction_date < end,
         )
@@ -126,6 +140,7 @@ def preview(db: Session, year: int, month: int) -> dict:
     return {
         "period": f"{year:04d}-{month:02d}",
         "revenue_definition": REVENUE_DEFINITION,
+        "ranking_definition": RANKING_DEFINITION,
         "eligible_company_revenue": revenue,
         "pool_rate": LEADERS_POOL_RATE,
         "pool_amount": pool,
