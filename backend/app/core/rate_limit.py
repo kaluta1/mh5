@@ -1,14 +1,26 @@
-"""Lightweight in-memory rate limiting for auth and sensitive endpoints."""
+"""Lightweight in-memory rate limiting for auth and sensitive endpoints.
+
+The middleware RETURNS the 429 response. An HTTPException raised inside a
+BaseHTTPMiddleware never reaches FastAPI's exception handlers (they sit inside
+all user middleware), so it used to surface as a 500 with a server traceback.
+"""
 from __future__ import annotations
 
+import logging
 import time
 import os
 import ipaddress
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Optional, Tuple
 
 from fastapi import HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger(__name__)
+
+ROUTE_LIMIT_MESSAGE = "Too many requests. Please try again later."
+GLOBAL_LIMIT_MESSAGE = "Rate limit exceeded. Please slow down."
 
 # path prefix -> (max_requests, window_seconds)
 RATE_LIMITS: dict[str, tuple[int, int]] = {
@@ -65,29 +77,43 @@ def _is_rate_limited(key: str, limit: int, window: int) -> bool:
     return False
 
 
-def check_rate_limit(request: Request) -> None:
+def rate_limit_exceeded(request: Request) -> Optional[Tuple[str, str]]:
+    """Record this request; return (category, client message) when a limit is
+    exceeded, else None. Policy (limits, windows, keys) is unchanged."""
     ip = _client_ip(request)
     path = request.url.path
 
     for prefix, (limit, window) in RATE_LIMITS.items():
         if path == prefix or path.startswith(prefix + "/"):
             if _is_rate_limited(f"{ip}:{prefix}", limit, window):
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many requests. Please try again later.",
-                )
-            return
+                return prefix, ROUTE_LIMIT_MESSAGE
+            return None
 
     g_limit, g_window = GLOBAL_LIMIT
     if _is_rate_limited(f"{ip}:global", g_limit, g_window):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Please slow down.",
-        )
+        return "global", GLOBAL_LIMIT_MESSAGE
+    return None
+
+
+def check_rate_limit(request: Request) -> None:
+    """Raising variant for use OUTSIDE middleware (e.g. a route dependency)."""
+    exceeded = rate_limit_exceeded(request)
+    if exceeded:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=exceeded[1])
+
+
+def rate_limit_response(message: str) -> JSONResponse:
+    """Same body the app's HTTPException handler produces for a 429."""
+    return JSONResponse(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        content={"detail": message, "code": "HTTP_429", "message": message})
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable):
         if request.method != "OPTIONS":
-            check_rate_limit(request)
+            exceeded = rate_limit_exceeded(request)
+            if exceeded:
+                # An expected control event: no traceback, no client IP, no body.
+                logger.warning("Rate limit exceeded: %s %s", request.method, exceeded[0])
+                return rate_limit_response(exceeded[1])
         return await call_next(request)
