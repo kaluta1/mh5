@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import SQLAlchemyError
 from contextlib import asynccontextmanager
 import asyncio
 import logging
@@ -470,6 +471,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": "Request validation failed"
         }
     )
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Database errors that escape get_db() (e.g. endpoints using SessionLocal()
+    directly). Without this handler the raw exception, whose message embeds the SQL
+    bound parameters, is logged with its full traceback by the request logger and
+    the server. The response is unchanged: the same plain 500 as before."""
+    from fastapi.responses import PlainTextResponse
+
+    from app.core.redaction import describe_exception, safe_traceback
+
+    logger.error("%s %s database error: %s\n%s", request.method, request.url.path,
+                 describe_exception(exc), safe_traceback(exc))
+    return PlainTextResponse("Internal Server Error", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

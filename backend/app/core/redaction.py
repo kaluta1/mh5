@@ -1,4 +1,8 @@
-"""Redaction of sensitive values before they are echoed back to clients.
+"""Redaction of sensitive values before they are echoed back to clients or logged.
+
+Logging: describe_exception() / safe_traceback() give log-safe exception
+diagnostics (types, SQLSTATE, constraint/table names, field paths) without the
+exception messages, which can carry SQL bound parameters or submitted input.
 
 Used by the global request-validation handler: Pydantic puts the submitted
 value (and, for a "missing field" error, the WHOLE request body) into each
@@ -62,6 +66,89 @@ def redact_validation_errors(errors: list) -> list:
                 err["input"] = redact_sensitive(err["input"])
         safe.append(err)
     return safe
+
+
+_SQL_TARGET = re.compile(r"\b(?:INTO|UPDATE|FROM)\s+\"?([A-Za-z_][A-Za-z0-9_.]*)\"?", re.IGNORECASE)
+_QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+# Credentials that may appear UNQUOTED in a connection error: DSN userinfo
+# (a whole scheme://user:pass@host/db URL) and libpq key=value options.
+_DSN_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+")
+_CONN_OPTIONS = re.compile(r"\b(user|username|password|passwd|pwd|dbname|host|hostaddr|sslkey|sslpassword)\s*=\s*\S+",
+                           re.IGNORECASE)
+_SAFE_LOC = re.compile(r"[^A-Za-z0-9_]")
+_MAX_CHAIN = 5
+
+
+def _exception_chain(exc: BaseException) -> list:
+    chain, current = [], exc
+    while current is not None and current not in chain and len(chain) < _MAX_CHAIN:
+        chain.append(current)
+        current = current.__cause__ or (None if current.__suppress_context__ else current.__context__)
+    return chain
+
+
+def _describe_one(exc: BaseException) -> str:
+    parts = [type(exc).__name__]
+    errors = getattr(exc, "errors", None)
+    if callable(errors) and type(exc).__name__ in ("RequestValidationError", "ValidationError"):
+        # Field paths and error types only; the submitted input is never included.
+        try:
+            items = list(errors())
+            locs = [".".join(_SAFE_LOC.sub("", str(p))[:40] for p in (e.get("loc") or ())) + ":" + str(e.get("type"))
+                    for e in items[:10]]
+            parts.append(f"errors={len(items)} [{', '.join(locs)}]")
+        except Exception:
+            pass
+    statement = getattr(exc, "statement", None)
+    if isinstance(statement, str) and statement.strip():
+        # SQL verb and target table identifier only: bound parameters, and any
+        # literal that may have been interpolated into the text, are dropped.
+        verb = statement.strip().split(None, 1)[0].upper()[:12]
+        target = _SQL_TARGET.search(_QUOTED.sub("''", statement))   # never read inside literals
+        parts.append(f"sql={verb}{' ' + target.group(1) if target else ''}")
+    orig = getattr(exc, "orig", None)
+    if orig is not None and orig is not exc:
+        parts.append(f"driver={type(orig).__name__}")
+        code = getattr(orig, "pgcode", None) or getattr(orig, "sqlite_errorname", None)
+        if code:
+            parts.append(f"sqlstate={code}")
+        diag = getattr(orig, "diag", None)
+        for attr in ("schema_name", "table_name", "column_name", "constraint_name"):
+            value = getattr(diag, attr, None) if diag is not None else None
+            if value:
+                parts.append(f"{attr}={value}")
+        if not code and type(exc).__name__ == "OperationalError":
+            # Connection-level failures (DNS, refused, timeout) carry no row data;
+            # quoted parts (host/user names), DSN credentials and key=value
+            # connection options are still removed; only the first line is kept.
+            text = str(orig).strip().splitlines()[0] if str(orig).strip() else ""
+            text = _CONN_OPTIONS.sub(r"\1=[..]", _DSN_URL.sub("[dsn]", _QUOTED.sub("[..]", text)))
+            parts.append(f"reason={text[:160]}")
+    return " ".join(parts)
+
+
+def describe_exception(exc: BaseException) -> str:
+    """Log-safe one-line description of an exception (and its cause chain).
+
+    Exception MESSAGES are never included: SQLAlchemy messages embed the SQL bound
+    parameters, driver messages embed row values (e.g. "Key (email)=(...)"), and
+    validation errors embed the submitted input (passwords, tokens). Only type
+    names and structured, non-user-controlled metadata (SQLSTATE, constraint/table/
+    column names, field paths) are kept."""
+    return " <- ".join(_describe_one(e) for e in _exception_chain(exc))
+
+
+def safe_traceback(exc: BaseException, limit: int = 15) -> str:
+    """Traceback frames (file, line, function) for the exception chain WITHOUT the
+    exception messages, so it can be logged without leaking submitted values."""
+    import traceback
+
+    blocks = []
+    for e in reversed(_exception_chain(exc)):
+        frames = traceback.extract_tb(e.__traceback__)[-limit:]
+        lines = [f'  File "{f.filename}", line {f.lineno}, in {f.name}' for f in frames]
+        blocks.append("\n".join(lines + [f"{_describe_one(e)}"]))
+    return "Traceback (values omitted):\n" + "\n-- caused --\n".join(blocks)
 
 
 def mask_email(address: Any) -> str:

@@ -73,8 +73,14 @@ def get_db():
     Commits must be managed explicitly in endpoints/CRUD.
     """
     from fastapi import HTTPException, status
+    from fastapi.exceptions import RequestValidationError
     from sqlalchemy.exc import OperationalError, SQLAlchemyError
-    
+
+    from app.core.redaction import describe_exception, safe_traceback
+
+    # Privacy: exception messages are never logged here. SQLAlchemy/driver
+    # messages embed bound parameters and row values, and validation errors embed
+    # the submitted body (passwords, tokens); see app.core.redaction.
     db = SessionLocal()
     try:
         yield db
@@ -82,12 +88,17 @@ def get_db():
         # Do not log HTTP errors (401, 403, etc.) as database errors
         # Propagate them as is
         raise
+    except RequestValidationError as e:
+        # A client input error (answered 422 by the validation handler), not a
+        # database error.
+        logger.debug("Request validation failed: %s", describe_exception(e))
+        db.rollback()
+        raise
     except OperationalError as e:
-        # Network/DNS connection error - log with more details
-        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-        logger.error(f"Database connection error: {error_msg}")
+        # Network/DNS connection error
+        logger.error("Database connection error: %s", describe_exception(e))
         logger.error("Please check your internet connection and DATABASE_URL configuration")
-        logger.error(f"Full error details: {e}", exc_info=True)
+        logger.error("%s", safe_traceback(e))
         db.rollback()
         # Convert to HTTP exception for better error handling
         raise HTTPException(
@@ -96,9 +107,9 @@ def get_db():
         )
     except SQLAlchemyError as e:
         # Other database errors
-        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-        logger.error(f"Database error: {error_msg}")
-        logger.error(f"Full error details: {e}", exc_info=True)
+        error_msg = describe_exception(e)
+        logger.error("Database error: %s", error_msg)
+        logger.error("%s", safe_traceback(e))
         db.rollback()
         
         # FIXED: Return more specific error message in development/debug mode
@@ -117,7 +128,7 @@ def get_db():
         )
     except Exception as e:
         # Log unexpected errors
-        logger.error(f"Unexpected error in database session: {e}", exc_info=True)
+        logger.error("Unexpected error in database session: %s\n%s", describe_exception(e), safe_traceback(e))
         db.rollback()
         # Re-raise to let FastAPI handle it
         raise
@@ -127,4 +138,4 @@ def get_db():
         try:
             db.close()
         except Exception as close_error:
-            logger.error(f"Error closing session: {close_error}", exc_info=True) 
+            logger.error("Error closing session: %s", describe_exception(close_error))

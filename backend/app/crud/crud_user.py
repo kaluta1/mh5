@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
+from app.core.redaction import describe_exception, safe_traceback
 from app.core.security import get_password_hash, verify_password
 from app.models.user import User, Role
 from app.schemas.user import UserCreate, UserUpdate
@@ -554,20 +555,20 @@ class CRUDUser:
             return user
             
         except OperationalError as e:
-            # Database connection error
-            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-            logger.error(f"Database connection error during authentication: {error_msg}")
+            # Database connection error. Privacy: messages would carry the bound
+            # login identifier, so only safe metadata is logged.
+            logger.error("Database connection error during authentication: %s", describe_exception(e))
             logger.error("Please check your internet connection and DATABASE_URL configuration")
             # Re-raise to be handled by get_db() dependency
             raise
         except SQLAlchemyError as e:
             # Other database errors
-            logger.error(f"Database error during authentication: {e}", exc_info=True)
+            logger.error("Database error during authentication: %s\n%s", describe_exception(e), safe_traceback(e))
             # Re-raise to be handled by get_db() dependency
             raise
         except Exception as e:
             # Unexpected errors
-            logger.error(f"Unexpected error during authentication: {e}", exc_info=True)
+            logger.error("Unexpected error during authentication: %s\n%s", describe_exception(e), safe_traceback(e))
             raise
 
     def is_active(self, user: User) -> bool:
