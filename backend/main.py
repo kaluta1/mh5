@@ -347,7 +347,7 @@ except ImportError as e:
 
 
 # Servir les fichiers statiques (médias) — always mount primary storage dir
-from app.core.storage import media_storage_roots
+from app.core.storage import PublicMediaStaticFiles, media_storage_roots
 
 _media_root = next(
     (p for p in media_storage_roots() if os.path.isdir(p)),
@@ -355,7 +355,8 @@ _media_root = next(
 )
 try:
     os.makedirs(_media_root, exist_ok=True)
-    app.mount("/media", StaticFiles(directory=_media_root), name="media")
+    # PublicMediaStaticFiles refuses KYC documents (legacy ones live in this root).
+    app.mount("/media", PublicMediaStaticFiles(directory=_media_root), name="media")
 except Exception as mount_err:
     logger.warning("Static /media mount skipped: %s", mount_err)
 

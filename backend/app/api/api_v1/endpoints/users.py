@@ -200,20 +200,27 @@ def search_users(
     return _build_follow_users(db, users, current_user.id)
 
 
-@router.get("/by-username/{username}", response_model=User)
+@router.get("/by-username/{username}", response_model=Union[User, PublicUserProfile])
 def read_user_by_username(
     username: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Retrieve a user by username."""
+    """
+    Retrieve a user by username. Same visibility rule as GET /users/{user_id}:
+    self/admin get the full profile, everyone else a scrubbed public profile.
+    """
     user = crud_user.get_by_username(db=db, username=username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Utilisateur non trouvé"
         )
-    return user
+
+    if current_user.is_admin or current_user.id == user.id:
+        return user
+
+    return PublicUserProfile.model_validate(user)
 
 
 @router.get("/{user_id}/followers", response_model=List[FollowUserResponse])

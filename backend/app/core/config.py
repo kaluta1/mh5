@@ -84,6 +84,9 @@ class Settings(BaseModel):
     # STORAGE
     STORAGE_TYPE: str = os.getenv("STORAGE_TYPE", "local")  # "local", "s3", "azure"
     LOCAL_STORAGE_PATH: str = os.getenv("LOCAL_STORAGE_PATH", "./media")
+    # Private KYC document directory (local storage). Empty = "private_kyc" next to
+    # LOCAL_STORAGE_PATH, i.e. outside every public media root and the /media mount.
+    KYC_PRIVATE_STORAGE_PATH: str = os.getenv("KYC_PRIVATE_STORAGE_PATH", "")
     S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET", "")
     S3_REGION: str = os.getenv("AWS_REGION", "us-east-1")
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")

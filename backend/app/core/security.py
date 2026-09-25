@@ -151,6 +151,49 @@ def validate_access_token(token: str) -> Optional[dict]:
     except jwt.JWTError:
         return None
 
+KYC_DOCUMENT_VIEW_TOKEN_TYPE = "kyc_document_view"
+KYC_DOCUMENT_VIEW_TOKEN_MINUTES = 5
+
+
+def create_kyc_document_view_token(viewer_user_id: int, document_id: int, side: str) -> str:
+    """Short-lived token letting one admin view one side of one KYC document.
+    Its type is not "access", so it can never authenticate API requests."""
+    now = datetime.utcnow()
+    return jwt.encode(
+        {
+            "exp": now + timedelta(minutes=KYC_DOCUMENT_VIEW_TOKEN_MINUTES),
+            "iat": now,
+            "sub": str(viewer_user_id),
+            "type": KYC_DOCUMENT_VIEW_TOKEN_TYPE,
+            "doc": int(document_id),
+            "side": side,
+            "iss": settings.JWT_ISSUER,
+            "aud": settings.JWT_AUDIENCE,
+            "jti": uuid.uuid4().hex,
+        },
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+
+def verify_kyc_document_view_token(token: str, document_id: int, side: str) -> Optional[int]:
+    """Return the viewer user id if the token is valid for exactly this document side."""
+    if not token:
+        return None
+    try:
+        payload = _decode_token(token)
+    except jwt.JWTError:
+        return None
+    if payload.get("type") != KYC_DOCUMENT_VIEW_TOKEN_TYPE:
+        return None
+    if payload.get("doc") != int(document_id) or payload.get("side") != side:
+        return None
+    try:
+        return int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
+
+
 def get_user_id_from_token(token: str) -> Optional[int]:
     """
     Extrait l'ID utilisateur depuis un token JWT valide.

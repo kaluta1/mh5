@@ -2,7 +2,7 @@ from typing import List, Optional
 from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 import json
@@ -46,7 +46,14 @@ from app.services.proof_of_address_match import (
     normalized_address_key,
     evaluate_proof_of_address,
 )
-from app.core.storage import store_kyc_proof_file
+from app.core.storage import (
+    iter_s3_object,
+    parse_kyc_document_reference,
+    resolve_kyc_document_for_serving,
+    store_kyc_proof_file,
+)
+from app.core.security import create_kyc_document_view_token, verify_kyc_document_view_token
+from app.models.kyc import KYCDocument as KYCDocumentModel, KYCVerification as KYCVerificationModel
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +160,22 @@ def _public_file_url(stored: Optional[str]) -> Optional[str]:
     if s.startswith("/") and base:
         return f"{base}{s}"
     return s
+
+
+_KYC_DOCUMENT_SIDES = {"front": "front_image_url", "back": "back_image_url"}
+
+
+def _admin_document_view_url(
+    document_id: int, side: str, stored: Optional[str], viewer_user_id: int
+) -> Optional[str]:
+    """KYC files get a short-lived signed admin URL; any other stored value keeps
+    its previous display behavior."""
+    if parse_kyc_document_reference(stored) is None:
+        return _public_file_url(stored)
+    token = create_kyc_document_view_token(viewer_user_id, document_id, side)
+    return _public_file_url(
+        f"{settings.API_V1_STR}/kyc/admin/documents/{document_id}/{side}?{urlencode({'token': token})}"
+    )
 
 
 @router.post("/initiate")
@@ -836,8 +859,8 @@ def admin_kyc_verification_detail(
         out_docs.append(
             KYCDocumentWithPublicUrls(
                 **base_doc.model_dump(),
-                front_public_url=_public_file_url(d.front_image_url),
-                back_public_url=_public_file_url(d.back_image_url),
+                front_public_url=_admin_document_view_url(d.id, "front", d.front_image_url, current_user.id),
+                back_public_url=_admin_document_view_url(d.id, "back", d.back_image_url, current_user.id),
             )
         )
 
@@ -848,6 +871,60 @@ def admin_kyc_verification_detail(
         user_email=u.email if u else None,
         user_full_name=(str(u.full_name).strip() if u and u.full_name else None),
     )
+
+
+@router.get("/admin/documents/{document_id}/{side}", include_in_schema=False)
+def admin_view_kyc_document(
+    *,
+    db: Session = Depends(deps.get_db),
+    document_id: int,
+    side: str,
+    token: str = Query(""),
+):
+    """
+    Serve one KYC document file to an admin. Authorized by the short-lived
+    signed token issued in the admin verification detail (the admin UI loads
+    it via <img src>/<a href>, which cannot carry a bearer header). The token's
+    user must still be an active admin. Every failure is an identical 404.
+    """
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    column = _KYC_DOCUMENT_SIDES.get(side)
+    viewer_id = verify_kyc_document_view_token(token, document_id, side) if column else None
+    if viewer_id is None:
+        raise not_found
+    viewer = db.query(User).filter(User.id == viewer_id).first()
+    if not viewer or not viewer.is_active or not viewer.is_admin:
+        raise not_found
+
+    document = db.query(KYCDocumentModel).filter(KYCDocumentModel.id == document_id).first()
+    if not document:
+        raise not_found
+    verification = (
+        db.query(KYCVerificationModel)
+        .filter(KYCVerificationModel.id == document.verification_id)
+        .first()
+    )
+    if not verification:
+        raise not_found
+
+    source, ref, content_type, inline = resolve_kyc_document_for_serving(
+        getattr(document, column), verification.user_id
+    )
+    if not source or not ref:
+        raise not_found
+
+    headers = {
+        "Cache-Control": "private, no-store, max-age=0",
+        "Pragma": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "Content-Disposition": "inline" if inline else "attachment",
+    }
+    if source == "local":
+        return FileResponse(ref, media_type=content_type, headers=headers)
+    bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
+    return StreamingResponse(iter_s3_object(bucket, ref), media_type=content_type, headers=headers)
 
 
 @router.post("/admin/verification/{verification_id}/approve", response_model=KYCVerification)

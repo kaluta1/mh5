@@ -270,13 +270,16 @@ def _empty_response(
     }
 
 
+def public_author_name(user) -> Optional[str]:
+    """Public display name for a TopHigh5 row. This payload is served to
+    anonymous viewers, so it must never contain or fall back to an email."""
+    if user is None:
+        return None
+    return user.full_name or user.username or None
+
+
 def _row_dict(contest: Contest, contestant: Contestant, rank: int, ranking_row, migrated: bool) -> dict:
-    author_name = None
-    author_email = None
-    user = contestant.user
-    if user is not None:
-        author_name = user.full_name or user.username or user.email
-        author_email = user.email
+    author_name = public_author_name(contestant.user)
     # Authoritative original registration/entry timestamp. NOT
     # TopHigh5Result.created_at / ContestantSeason.created_at / any
     # promotion or ranking timestamp -- Contestant.registration_date is the
@@ -292,7 +295,6 @@ def _row_dict(contest: Contest, contestant: Contestant, rank: int, ranking_row, 
         "contestant_id": contestant.id,
         "contestant_title": contestant.title,
         "author_name": author_name,
-        "author_email": author_email,
         "city": contestant.city,
         "country": contestant.country,
         "region": contestant.region,

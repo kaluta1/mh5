@@ -276,7 +276,6 @@ export interface TopHigh5Row {
   contestant_id: number
   contestant_title?: string | null
   author_name?: string | null
-  author_email?: string | null
   city?: string | null
   country?: string | null
   region?: string | null

@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import uuid
 import mimetypes
@@ -12,7 +13,10 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from functools import lru_cache
+from urllib.parse import unquote, urlparse
 from PIL import Image
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.staticfiles import StaticFiles
 
 from app.core.config import settings
 
@@ -47,6 +51,24 @@ _IMAGE_SIGNATURES = (
     ("gif", ".gif", "image/gif", lambda data: data.startswith((b"GIF87a", b"GIF89a"))),
     ("webp", ".webp", "image/webp", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"),
 )
+
+# KYC documents are private. Every KYC file ever written uses a "kyc_" name
+# prefix (store_kyc_proof_file), while ordinary media is always "<uuid>.<ext>",
+# so the prefix reliably identifies KYC files, including legacy ones that still
+# live inside the public media roots. Public routes must refuse them.
+PRIVATE_KYC_FILENAME_PREFIXES = ("kyc_",)
+KYC_PRIVATE_REF_SCHEME = "kyc-private://"
+KYC_PRIVATE_S3_PREFIX = "private/kyc"
+
+
+def is_private_kyc_filename(name: str) -> bool:
+    """True for KYC document file names (case-insensitive, as Windows/NTFS paths are)."""
+    return str(name or "").strip().lower().startswith(PRIVATE_KYC_FILENAME_PREFIXES)
+
+
+def path_contains_private_kyc(path: str) -> bool:
+    """True if any segment of a request path names a KYC file."""
+    return any(is_private_kyc_filename(part) for part in re.split(r"[\\/]+", str(path or "")))
 
 
 def validate_media_content(filename: str, declared_content_type: str, content: bytes) -> Dict[str, Any]:
@@ -159,20 +181,43 @@ def resolve_media_for_serving(
     Resolve media for HTTP serving: local disk first, then S3.
     Returns (source, ref, content_type) where source is 'local' or 's3'.
     """
-    safe_name = os.path.basename(filename)
-    if not safe_name or safe_name != filename or "\\" in filename or "\x00" in filename:
+    safe_name = _safe_basename(filename)
+    if not safe_name:
         return None, None, "application/octet-stream"
+    if is_private_kyc_filename(safe_name):
+        # KYC documents are never served through public media delivery. Answer
+        # exactly like a missing file so existence is not revealed.
+        return None, None, "application/octet-stream"
+    return _locate_stored_file(
+        [os.path.join(root, str(user_id)) for root in media_storage_roots()],
+        media_s3_key(user_id, safe_name),
+        safe_name,
+    )
+
+
+def _safe_basename(filename: str) -> Optional[str]:
+    safe_name = os.path.basename(filename or "")
+    if not safe_name or safe_name != filename or "\\" in filename or "\x00" in filename:
+        return None
+    if safe_name in (".", ".."):
+        return None
+    return safe_name
+
+
+def _locate_stored_file(
+    local_dirs: list[str], s3_key: str, safe_name: str
+) -> Tuple[Optional[str], Optional[str], str]:
+    """Find a stored file on local disk (first match) or in S3. No access checks."""
     content_type, _ = mimetypes.guess_type(safe_name)
     content_type = content_type or "application/octet-stream"
 
-    for root in media_storage_roots():
-        local_path = os.path.join(root, str(user_id), safe_name)
+    for directory in local_dirs:
+        local_path = os.path.join(directory, safe_name)
         if os.path.isfile(local_path):
             return "local", local_path, content_type
 
     bucket = (settings.S3_BUCKET_NAME or settings.AWS_S3_BUCKET or "").strip()
     if bucket and settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
-        s3_key = media_s3_key(user_id, safe_name)
         try:
             s3_client = _s3_client()
             s3_client.head_object(Bucket=bucket, Key=s3_key)
@@ -211,7 +256,12 @@ KYC_POA_ALLOWED_CT_PREFIXES = ("image/", "application/pdf")
 
 async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]:
     """
-    Store a proof-of-address upload (image or PDF). Same storage backend as media (local or S3).
+    Store a proof-of-address upload (image or PDF) in PRIVATE KYC storage.
+
+    Local: kyc_private_storage_root()/{user_id}/ (outside every public media root).
+    S3: private/kyc/{user_id}/ (never produced by media_s3_key()).
+    The returned "url" is an opaque kyc-private:// reference, not a public URL;
+    only the admin-authorized KYC document route can resolve it.
     """
     content_type = (file.content_type or "").lower()
     if not any(content_type.startswith(p) for p in KYC_POA_ALLOWED_CT_PREFIXES):
@@ -237,9 +287,11 @@ async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]
     file_uuid = str(uuid.uuid4())
     filename = f"kyc_poa_{file_uuid}{extension}"
 
+    url = f"{KYC_PRIVATE_REF_SCHEME}{int(user_id)}/{filename}"
+
     if settings.STORAGE_TYPE == "s3":
         s3_client = _s3_client()
-        s3_path = f"uploads/{user_id}/{filename}"
+        s3_path = kyc_private_s3_key(user_id, filename)
         await run_in_threadpool(
             s3_client.put_object,
             Bucket=settings.S3_BUCKET_NAME,
@@ -247,16 +299,14 @@ async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]
             Body=content,
             ContentType=file.content_type or "application/octet-stream",
         )
-        url = f"https://{settings.S3_BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
         return {"path": s3_path, "url": url, "metadata": {}}
 
-    user_dir = os.path.join(settings.LOCAL_STORAGE_PATH, str(user_id))
+    user_dir = os.path.join(kyc_private_storage_root(), str(int(user_id)))
     os.makedirs(user_dir, exist_ok=True)
     file_path = os.path.join(user_dir, filename)
     async with aiofiles.open(file_path, "wb") as out_file:
         await out_file.write(content)
 
-    url = _build_public_media_url(user_id, filename)
     metadata: Dict[str, Any] = {}
     if content_type.startswith("image/"):
         try:
@@ -268,6 +318,116 @@ async def store_kyc_proof_file(file: UploadFile, user_id: int) -> Dict[str, Any]
             pass
 
     return {"path": file_path, "url": url, "metadata": metadata}
+
+
+def kyc_private_storage_root() -> str:
+    """Local directory for private KYC documents: never a public media root."""
+    configured = (getattr(settings, "KYC_PRIVATE_STORAGE_PATH", "") or "").strip()
+    if configured:
+        root = os.path.abspath(configured)
+    else:
+        media_root = os.path.abspath(settings.LOCAL_STORAGE_PATH or "./media")
+        root = os.path.join(os.path.dirname(media_root), "private_kyc")
+    # Fail closed: a KYC directory inside (or equal to) a public media root would
+    # be reachable by the public media routes' directory lookups.
+    normalized = os.path.normcase(os.path.normpath(root))
+    for media in media_storage_roots():
+        media_norm = os.path.normcase(os.path.normpath(os.path.abspath(media)))
+        if normalized == media_norm or normalized.startswith(media_norm + os.sep):
+            raise RuntimeError("KYC private storage must be outside every public media directory")
+    return root
+
+
+def kyc_private_s3_key(user_id: int, filename: str) -> str:
+    return f"{KYC_PRIVATE_S3_PREFIX}/{int(user_id)}/{os.path.basename(filename)}"
+
+
+def parse_kyc_document_reference(stored: Optional[str]) -> Optional[Tuple[str, int, str]]:
+    """
+    Parse a kyc_documents.*_image_url value into (location, user_id, filename).
+
+    location is "private" for new kyc-private:// references, or "legacy" for
+    files written before the private namespace existed (still inside the public
+    media roots / uploads/ S3 key space, denied by the public routes):
+      /api/v1/media/file/{uid}/{name}   (local storage, relative or absolute)
+      /media/{uid}/{name}               (local static mount)
+      https://{bucket}.s3.amazonaws.com/uploads/{uid}/{name}  (S3)
+    Only KYC file names are accepted.
+    """
+    raw = str(stored or "").strip()
+    if not raw:
+        return None
+    if raw.startswith(KYC_PRIVATE_REF_SCHEME):
+        location, rest = "private", raw[len(KYC_PRIVATE_REF_SCHEME):]
+    else:
+        path = unquote(urlparse(raw).path or "")
+        match = re.search(r"/(?:api/v1/media/file|media|uploads)/(\d+/[^/]+)$", path)
+        if not match:
+            return None
+        location, rest = "legacy", match.group(1)
+    parts = rest.split("/")
+    if len(parts) != 2 or not parts[0].isdigit():
+        return None
+    filename = _safe_basename(parts[1])
+    if not filename or not is_private_kyc_filename(filename):
+        return None
+    return location, int(parts[0]), filename
+
+
+_KYC_SERVABLE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+}
+
+
+def resolve_kyc_document_for_serving(
+    stored: Optional[str], owner_user_id: int
+) -> Tuple[Optional[str], Optional[str], str, bool]:
+    """
+    Locate a KYC document for the admin-authorized KYC route ONLY.
+    Returns (source, ref, content_type, inline). The file must belong to
+    owner_user_id. Unknown extensions are served as an attachment of type
+    application/octet-stream so an uploaded file can never render as HTML.
+    """
+    parsed = parse_kyc_document_reference(stored)
+    if not parsed:
+        return None, None, "application/octet-stream", False
+    location, user_id, filename = parsed
+    if user_id != int(owner_user_id):
+        return None, None, "application/octet-stream", False
+
+    if location == "private":
+        local_dirs = [os.path.join(kyc_private_storage_root(), str(user_id))]
+        s3_key = kyc_private_s3_key(user_id, filename)
+    else:
+        local_dirs = [os.path.join(root, str(user_id)) for root in media_storage_roots()]
+        s3_key = media_s3_key(user_id, filename)
+
+    source, ref, _ = _locate_stored_file(local_dirs, s3_key, filename)
+    content_type = _KYC_SERVABLE_CONTENT_TYPES.get(os.path.splitext(filename)[1].lower())
+    if content_type is None:
+        return source, ref, "application/octet-stream", False
+    return source, ref, content_type, True
+
+
+class PublicMediaStaticFiles(StaticFiles):
+    """The public /media mount, refusing KYC documents (legacy ones live under it)."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        if path_contains_private_kyc(path):
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+    def lookup_path(self, path: str):  # type: ignore[override]
+        full_path, stat_result = super().lookup_path(path)
+        # Also check the resolved name (e.g. Windows 8.3 short names / case).
+        if full_path and path_contains_private_kyc(os.path.basename(full_path)):
+            return "", None
+        return full_path, stat_result
 
 
 async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:

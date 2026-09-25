@@ -10,7 +10,7 @@ import threading
 
 from app.api import deps
 from app.services.season_migration import SeasonMigrationService, season_migration_service
-from app.services.top_high5_live import resolve_live_top_high5
+from app.services.top_high5_live import public_author_name, resolve_live_top_high5
 from app.tasks.season_migration import (
     process_season_migrations,
     migrate_contest_to_city,
@@ -609,18 +609,13 @@ def get_top_high5_by_country(
 
 def _top_high5_row_dict(r: "TopHigh5Result") -> dict:
     contestant = r.contestant
-    author_name = None
-    author_email = None
-    if contestant.user:
-        author_name = contestant.user.full_name or contestant.user.username or contestant.user.email
-        author_email = contestant.user.email
+    author_name = public_author_name(contestant.user)
     return {
         "rank": r.rank,
         "migrates_next_stage": bool(r.migrated),
         "contestant_id": contestant.id,
         "contestant_title": contestant.title,
         "author_name": author_name,
-        "author_email": author_email,
         "city": contestant.city,
         "country": contestant.country,
         "region": contestant.region,
