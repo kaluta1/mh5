@@ -175,6 +175,8 @@ export interface RegisterRequest {
   // ISO date (YYYY-MM-DD); the client never sends an age or tier.
   date_of_birth: string
   accept_terms: boolean
+  // Only sent when the server requires guardian consent (Phase 4).
+  guardian_email?: string
 }
 
 export interface PasswordResetRequest {

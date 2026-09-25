@@ -6,6 +6,7 @@ from typing import Optional, List
 import logging
 
 from app.core.config import settings
+from app.core.redaction import mask_email
 from app.services.email_templates import (
     get_welcome_email,
     get_verify_email,
@@ -74,11 +75,13 @@ class EmailService:
             # Envoyer via Resend
             response = resend.Emails.send(params)
             
-            logger.info(f"Email envoyé à {to_email} - ID: {response.get('id', 'N/A')}")
+            # Privacy: the recipient address is masked in logs (minor/guardian safety).
+            logger.info("Email sent to %s - ID: %s", mask_email(to_email), response.get("id", "N/A"))
             return True
             
         except Exception as e:
-            logger.error(f"Erreur envoi email à {to_email}: {e}")
+            # The exception text may echo the recipient, so only its type is logged.
+            logger.error("Email send failed to %s: %s", mask_email(to_email), type(e).__name__)
             return False
     
     def send_batch_emails(

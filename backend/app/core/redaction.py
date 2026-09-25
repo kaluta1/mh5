@@ -62,3 +62,14 @@ def redact_validation_errors(errors: list) -> list:
                 err["input"] = redact_sensitive(err["input"])
         safe.append(err)
     return safe
+
+
+def mask_email(address: Any) -> str:
+    """Log-safe form of an email address, e.g. 'j***@e***.com'. Never the raw value."""
+    text = str(address or "").strip()
+    if "@" not in text:
+        return "***"
+    local, _, domain = text.partition("@")
+    host, dot, tld = domain.rpartition(".")
+    host = host or domain
+    return f"{local[:1]}***@{host[:1]}***{dot}{tld if dot else ''}"

@@ -52,6 +52,10 @@ function RegisterPageContent() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({})
   const [isSuccess, setIsSuccess] = useState(false)
+  // Phase 4 guardian handoff: shown only when the SERVER says guardian consent is required.
+  const [needsGuardian, setNeedsGuardian] = useState(false)
+  const [guardianEmail, setGuardianEmail] = useState('')
+  const [guardianPendingMessage, setGuardianPendingMessage] = useState('')
   const [referralCode, setReferralCode] = useState<string | null>(null)
   const [showSpaceWarning, setShowSpaceWarning] = useState(false)
   const [spaceWarningMessage, setSpaceWarningMessage] = useState('')
@@ -308,10 +312,17 @@ function RegisterPageContent() {
         continent: formData.continent,
         date_of_birth: formData.dateOfBirth,
         accept_terms: acceptTerms,
+        guardian_email: needsGuardian && guardianEmail ? guardianEmail : undefined,
         sponsor_code: referralCode || undefined  // Passer le code de parrainage
       }
 
-      const response = await authService.register(userData)
+      const response: any = await authService.register(userData)
+
+      // Guardian consent requested: no account yet (server decision).
+      if (response?.code === 'REGISTRATION_PENDING_GUARDIAN') {
+        setGuardianPendingMessage(typeof response.detail === 'string' ? response.detail : '')
+        return
+      }
       
       // Stocker les tokens si fournis
       if (response.access_token) {
@@ -372,6 +383,12 @@ function RegisterPageContent() {
         const data = err.response.data
         // Age-gate decision (server-authoritative): show the server's safe message as-is.
         if (data.code === 'REGISTRATION_NOT_COMPLETED' && typeof data.detail === 'string') {
+          errorMessage = data.detail
+          if (data.decision === 'PARENTAL_CONSENT_REQUIRED') {
+            setNeedsGuardian(true)
+          }
+        }
+        else if (data.code === 'GUARDIAN_EMAIL_INVALID' && typeof data.detail === 'string') {
           errorMessage = data.detail
         }
         // Format: { detail: "message" }
@@ -477,7 +494,14 @@ function RegisterPageContent() {
 
           {/* Formulaire ou Succès */}
           <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
-            {isSuccess ? (
+            {guardianPendingMessage ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  {pick('auth.register.guardian_pending_title', REGISTER_COPY.guardianPendingTitle)}
+                </h2>
+                <p className="text-gray-700 dark:text-gray-200">{guardianPendingMessage}</p>
+              </div>
+            ) : isSuccess ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="mb-6">
                   <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -716,6 +740,26 @@ function RegisterPageContent() {
                   onContinentChange={handleContinentChange}
                 />
               </div>
+
+              {/* Parent/guardian email: only requested when the server requires consent */}
+              {needsGuardian && (
+                <div className="space-y-2 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20">
+                  <label htmlFor="guardian_email" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {pick('auth.register.guardian_email', REGISTER_COPY.guardianEmail)}
+                  </label>
+                  <Input
+                    id="guardian_email"
+                    type="email"
+                    value={guardianEmail}
+                    onChange={(e) => setGuardianEmail(e.target.value)}
+                    className="h-12 rounded-xl dsm-input"
+                    required
+                  />
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    {pick('auth.register.guardian_email_hint', REGISTER_COPY.guardianEmailHint)}
+                  </p>
+                </div>
+              )}
 
               {/* Terms */}
               <div className="flex items-start space-x-3 p-4 bg-myhigh5-blue-50 dark:bg-myhigh5-blue-900/20 rounded-xl">

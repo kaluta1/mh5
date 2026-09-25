@@ -68,6 +68,33 @@ def update_user_me(
     return user
 
 
+@router.get("/me/privacy")
+def read_my_privacy(db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """Effective privacy settings (server-resolved: safety floor > guardian
+    allowances > preference). Fields held by the mandatory floor are listed as
+    locked."""
+    from app.services import teen_privacy
+    from app.services.age_policy_engine import utc_today
+
+    eff = teen_privacy.resolve_privacy(db, current_user, on=utc_today())
+    return {"settings": eff.settings, "locked_fields": eff.locked_fields, "display": eff.display}
+
+
+@router.put("/me/privacy")
+def update_my_privacy(preferences: dict, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_active_user)):
+    """Set privacy preferences. They may only be MORE private than the safety floor."""
+    from app.services import teen_privacy
+    from app.services.age_policy_engine import utc_today
+
+    try:
+        eff = teen_privacy.set_preferences(db, current_user, preferences, on=utc_today())
+    except teen_privacy.PrivacyPreferenceError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail={"message": str(exc), "fields": exc.fields}) from exc
+    return {"settings": eff.settings, "locked_fields": eff.locked_fields, "display": eff.display}
+
+
 @router.patch("/me/wallet", response_model=UserWalletResponse)
 def update_user_wallet(
     *,

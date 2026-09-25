@@ -39,6 +39,12 @@ class AgeSafetyOperationalConfig(BaseModel):
     dob_change_window_days: int = Field(365, ge=1, le=3650)
     dob_max_self_changes_in_window: int = Field(1, ge=0, le=20)
 
+    # Guardian consent workflow lifetimes and pending-data retention (operational)
+    pending_registration_ttl_hours: int = Field(168, ge=1, le=24 * 60)
+    guardian_token_ttl_hours: int = Field(168, ge=1, le=24 * 60)
+    completion_token_ttl_hours: int = Field(72, ge=1, le=24 * 30)
+    pending_data_retention_days: int = Field(30, ge=1, le=365)
+
     @model_validator(mode="after")
     def _consistent(self):
         if self.ip_immediate_window_minutes > self.ip_correlation_hours * 60:

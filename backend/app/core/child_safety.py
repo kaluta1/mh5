@@ -141,9 +141,11 @@ class RegistrationDecision(str, enum.Enum):
     """Machine-readable outcome of the registration age gate (s.4, s.6)."""
 
     ALLOWED = "ALLOWED"
+    ALLOWED_WITH_GUARDIAN_CONSENT = "ALLOWED_WITH_GUARDIAN_CONSENT"  # Phase 4: completed after verified consent
     POLICY_NOT_ENFORCED = "POLICY_NOT_ENFORCED"          # transition: enforcement off, account allowed
     BELOW_MINIMUM_ACCOUNT_AGE = "BELOW_MINIMUM_ACCOUNT_AGE"
     PARENTAL_CONSENT_REQUIRED = "PARENTAL_CONSENT_REQUIRED"  # continued by the Phase 4 guardian workflow
+    GUARDIAN_CONSENT_PENDING = "GUARDIAN_CONSENT_PENDING"    # Phase 4: pending registration awaiting guardian
     AGE_ASSURANCE_REQUIRED = "AGE_ASSURANCE_REQUIRED"
     UNRESOLVED_JURISDICTION = "UNRESOLVED_JURISDICTION"
     UNSUPPORTED_JURISDICTION = "UNSUPPORTED_JURISDICTION"
@@ -153,7 +155,8 @@ class RegistrationDecision(str, enum.Enum):
 
     @property
     def creates_account(self) -> bool:
-        return self in (RegistrationDecision.ALLOWED, RegistrationDecision.POLICY_NOT_ENFORCED)
+        return self in (RegistrationDecision.ALLOWED, RegistrationDecision.ALLOWED_WITH_GUARDIAN_CONSENT,
+                        RegistrationDecision.POLICY_NOT_ENFORCED)
 
 
 class DobSource(str, enum.Enum):
@@ -191,6 +194,15 @@ class AgeSafetyEventType(str, enum.Enum):
     DOB_CHANGE_REVIEWED = "DOB_CHANGE_REVIEWED"
     REVIEW_STATUS_CHANGED = "REVIEW_STATUS_CHANGED"
     TERMS_ACCEPTED = "TERMS_ACCEPTED"
+    GUARDIAN_CONSENT_REQUESTED = "GUARDIAN_CONSENT_REQUESTED"
+    GUARDIAN_RESPONDED = "GUARDIAN_RESPONDED"
+    GUARDIAN_VERIFIED = "GUARDIAN_VERIFIED"
+    GUARDIAN_REJECTED = "GUARDIAN_REJECTED"
+    CONSENT_GRANTED = "CONSENT_GRANTED"
+    CONSENT_WITHDRAWN = "CONSENT_WITHDRAWN"
+    PENDING_REGISTRATION_COMPLETED = "PENDING_REGISTRATION_COMPLETED"
+    PENDING_REGISTRATION_EXPIRED = "PENDING_REGISTRATION_EXPIRED"
+    LEGACY_REVIEW_FLAGGED = "LEGACY_REVIEW_FLAGGED"
 
 
 ENFORCEMENT_ALL_JURISDICTIONS = "*"
@@ -207,3 +219,93 @@ class DecisionBasis(str, enum.Enum):
     JURISDICTION_POLICY = "JURISDICTION_POLICY"        # enforced, resolved AgePolicy decided
     TRANSITION_NOT_ENFORCED = "TRANSITION_NOT_ENFORCED"  # no enforced policy: allowed only provisionally
     CIRCUMVENTION_CONTROL = "CIRCUMVENTION_CONTROL"    # s.6 retry/risk controls
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: guardian consent and teen privacy vocabulary
+# (status names are implementation choices; the source defines the concepts,
+#  s.13 GuardianConsent fields and s.14 consent areas, but not status names)
+# ---------------------------------------------------------------------------
+
+class GuardianConsentScope(str, enum.Enum):
+    """Granular consent areas, one per item listed in s.14. Consent to one scope
+    never implies another."""
+
+    ACCOUNT_PARTICIPATION = "ACCOUNT_PARTICIPATION"
+    PUBLIC_CREATIVE_DISPLAY = "PUBLIC_CREATIVE_DISPLAY"
+    NAME_DISPLAY = "NAME_DISPLAY"
+    CITY_COUNTRY_DISPLAY = "CITY_COUNTRY_DISPLAY"
+    CONTEST_ENTRY = "CONTEST_ENTRY"
+    STAGE_ADVANCEMENT = "STAGE_ADVANCEMENT"
+    MEDIA_USE = "MEDIA_USE"
+    PUBLICITY = "PUBLICITY"
+    PRIZE_ACCEPTANCE = "PRIZE_ACCEPTANCE"
+    FINANCIAL_PAYMENT = "FINANCIAL_PAYMENT"
+    PROMOTIONAL_CAMPAIGNS = "PROMOTIONAL_CAMPAIGNS"
+
+
+class GuardianRelationshipType(str, enum.Enum):
+    PARENT = "PARENT"
+    LEGAL_GUARDIAN = "LEGAL_GUARDIAN"
+
+
+class GuardianVerificationStatus(str, enum.Enum):
+    """Verification of one guardian's authority over one minor."""
+
+    PENDING = "PENDING"                          # requested; the guardian has not responded
+    VERIFICATION_REQUIRED = "VERIFICATION_REQUIRED"  # responded, but no accepted verification yet
+    VERIFIED = "VERIFIED"                        # verified through an ACCEPTED method
+    REJECTED = "REJECTED"                        # declined by the guardian or rejected by review
+    REVOKED = "REVOKED"                          # authority withdrawn after verification
+    EXPIRED = "EXPIRED"                          # request or verification lapsed
+
+
+class GuardianContactConfirmation(str, enum.Enum):
+    """A. CONTACT / INBOX CONTROL. It proves that someone controls the guardian contact
+    address; it proves NOTHING about who that person is. It authenticates the
+    guardian workflow (delivery, response) but can never establish guardian
+    authority and never makes consent valid. Stored as GuardianRelationship.responded_at."""
+
+    EMAIL_LINK = "EMAIL_LINK"   # the single-use emailed link was used
+
+
+class GuardianVerificationMethod(str, enum.Enum):
+    """B. GUARDIAN AUTHORITY VERIFICATION: a configured MyHigh5 guardian verification
+    process that establishes VERIFIED. Only these methods can be configured in
+    GUARDIAN_ACCEPTED_VERIFICATION_METHODS (empty = none, fail closed). No method is
+    claimed to be legally sufficient in any or every jurisdiction; jurisdiction
+    policy or legal review may later permit, strengthen, replace or disallow each
+    one (s.13: "according to applicable law and risk").
+
+    ADMIN_DOCUMENT_REVIEW: an authorized administrator attests that appropriate
+    evidence was reviewed OUTSIDE the application. The application stores no
+    document; the attestation, reviewer, time and note are recorded.
+    """
+
+    ADMIN_DOCUMENT_REVIEW = "ADMIN_DOCUMENT_REVIEW"
+
+
+class ConsentStatus(str, enum.Enum):
+    """withdrawal_status (s.13) plus grant state of one consent record."""
+
+    GRANTED = "GRANTED"
+    WITHDRAWN = "WITHDRAWN"
+
+
+class PendingRegistrationStatus(str, enum.Enum):
+    AWAITING_GUARDIAN = "AWAITING_GUARDIAN"
+    APPROVED = "APPROVED"          # guardian verified + ACCOUNT_PARTICIPATION granted; waiting for the minor
+    COMPLETED = "COMPLETED"        # the account was created (exactly once)
+    DECLINED = "DECLINED"          # the guardian declined
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class ConsentRequirement(str, enum.Enum):
+    """Answer to 'is guardian consent needed/present for this scope now?'."""
+
+    NOT_REQUIRED_ADULT = "NOT_REQUIRED_ADULT"            # legal adult under the policy (history kept)
+    NOT_REQUIRED_BY_POLICY = "NOT_REQUIRED_BY_POLICY"    # minor at/above parental_consent_age
+    SATISFIED = "SATISFIED"                              # valid verified consent for this scope
+    REQUIRED_MISSING = "REQUIRED_MISSING"
+    UNDETERMINED = "UNDETERMINED"                        # unknown age/jurisdiction/policy: treat as required

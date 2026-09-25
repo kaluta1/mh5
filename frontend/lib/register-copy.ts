@@ -31,6 +31,12 @@ export const REGISTER_COPY = {
       'Used to apply age-appropriate protections. It is never shown on your public profile.',
   ),
   dateOfBirthRequired: String(errors.date_of_birth_required ?? 'Please enter your date of birth'),
+  guardianEmail: String(register.guardian_email ?? "Parent or guardian's email"),
+  guardianEmailHint: String(
+    register.guardian_email_hint ??
+      'We will ask them to review your request. Your account is created only after they approve.',
+  ),
+  guardianPendingTitle: String(register.guardian_pending_title ?? 'Waiting for your parent or guardian'),
   loading: String(register.loading ?? 'Creating account...'),
   submit: String(register.submit ?? 'Create Account'),
   haveAccount: String(register.have_account ?? 'Already have an account?'),

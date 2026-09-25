@@ -90,6 +90,12 @@ class Settings(BaseModel):
     # Optional dedicated key for age-safety identifier hashing (HMAC). Empty = a key
     # derived from SECRET_KEY. Changing it (or SECRET_KEY) resets circumvention history.
     AGE_SAFETY_HASH_KEY: str = os.getenv("AGE_SAFETY_HASH_KEY", "")
+    # Guardian AUTHORITY verification processes enabled in this deployment
+    # (comma-separated GuardianVerificationMethod values; currently only
+    # "ADMIN_DOCUMENT_REVIEW"). Empty = none (fail closed). Email/inbox
+    # confirmation can never be enabled here. Enabling a method is an operational
+    # decision, not a claim of legal sufficiency (s.13: "applicable law and risk").
+    GUARDIAN_ACCEPTED_VERIFICATION_METHODS: str = os.getenv("GUARDIAN_ACCEPTED_VERIFICATION_METHODS", "")
     S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET", "")
     S3_REGION: str = os.getenv("AWS_REGION", "us-east-1")
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")

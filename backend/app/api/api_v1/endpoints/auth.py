@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.schemas.token import Token
 from app.schemas.user import UserRegister, User
+from app.api.api_v1.endpoints.guardian import CompleteRegistrationBody
 from app.schemas.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse, PasswordChange
 from app.core.security import (
     create_access_token, 
@@ -92,6 +93,30 @@ def register_user(
         on=utc_today(),
     )
     attempt = age_gate.record_attempt(db, gate)
+    if gate.decision == age_gate.RegistrationDecision.PARENTAL_CONSENT_REQUIRED and user_in.guardian_email:
+        # Phase 4 handoff: no account. A pending registration awaits verified guardian
+        # consent. The answer is identical whether or not a request already exists.
+        from app.services import guardian_consent, guardian_notifications
+
+        if user_in.guardian_email.strip().lower() == user_in.email.strip().lower():
+            return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={
+                "detail": "Please enter your parent or guardian's own email address.",
+                "code": "GUARDIAN_EMAIL_INVALID", "message": "Please enter your parent or guardian's own email address."})
+        creation = guardian_consent.create_pending_registration(
+            db, email=user_in.email, username=user_in.username, date_of_birth=user_in.date_of_birth,
+            country=user_in.country, region=user_in.region, continent=user_in.continent,
+            sponsor_code=sponsor_code or referral_shortener.get_sponsor_referral_code_from_request(request, db),
+            guardian_email=user_in.guardian_email, jurisdiction_code=gate.context.jurisdiction.code,
+            policy_id=gate.context.policy.policy_id, policy_version=gate.context.policy.policy_version,
+        )
+        if creation.created:
+            background_tasks.add_task(guardian_notifications.send_guardian_request_email,
+                                      user_in.guardian_email, creation.guardian_token, user_in.username)
+        message = ("We've asked your parent or guardian to review your request. "
+                   "Your account will be created only after they approve.")
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={
+            "detail": message, "code": "REGISTRATION_PENDING_GUARDIAN",
+            "decision": age_gate.RegistrationDecision.GUARDIAN_CONSENT_PENDING.value, "message": message})
     if not gate.allowed:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS
@@ -154,6 +179,29 @@ def register_user(
     referral_shortener.record_signup_conversion_from_request(request, db, user.id)
     
     return user
+
+
+@router.post("/register/complete", response_model=User, status_code=status.HTTP_201_CREATED)
+def complete_guardian_approved_registration(*, db: Session = Depends(get_db), payload: CompleteRegistrationBody):
+    """Finish a guardian-approved registration (Phase 4). The single-use token
+    comes from the minor's email. The account is created exactly once through the
+    normal registration transaction. The password is chosen here and was never
+    stored while the request was pending."""
+    from pydantic import ValidationError
+
+    from app.services import guardian_consent
+    from app.services.age_policy_engine import utc_today
+
+    try:
+        return guardian_consent.complete_registration(db, payload.token, payload.password, today=utc_today())
+    except guardian_consent.GuardianFlowError as exc:
+        code = status.HTTP_404_NOT_FOUND if exc.code == "INVALID_TOKEN" else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    except ValidationError as exc:
+        # Password rules (the value itself is never echoed).
+        messages = [e.get("msg", "Invalid value") for e in exc.errors() if "password" in (e.get("loc") or ())]
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=messages or ["Invalid registration data"]) from exc
 
 
 @router.get("/verify-email")

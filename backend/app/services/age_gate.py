@@ -94,7 +94,7 @@ _OUTCOME_TO_DECISION = {
 # Safe client messages: they never mention thresholds, ages or risk signals (s.6).
 CLIENT_MESSAGES = {
     RegistrationDecision.BELOW_MINIMUM_ACCOUNT_AGE: "We can't create a MyHigh5 account with the information provided.",
-    RegistrationDecision.PARENTAL_CONSENT_REQUIRED: "A parent or guardian's approval is required before this account can be created.",
+    RegistrationDecision.PARENTAL_CONSENT_REQUIRED: "A parent or guardian's approval is required before this account can be created. Please add their email address so we can ask them.",
     RegistrationDecision.AGE_ASSURANCE_REQUIRED: "Additional age verification is required before this account can be created.",
     RegistrationDecision.UNRESOLVED_JURISDICTION: "Please select your country from the list.",
     RegistrationDecision.UNSUPPORTED_JURISDICTION: "Registration is not currently available in your country.",

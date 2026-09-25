@@ -57,6 +57,9 @@ class UserRegister(UserCreate):
 
     date_of_birth: date
     accept_terms: bool
+    # Only used when the age gate requires guardian consent (Phase 4). It is never
+    # stored for registrations that do not need it.
+    guardian_email: Optional[EmailStr] = None
 
     @field_validator("date_of_birth", mode="before")
     @classmethod

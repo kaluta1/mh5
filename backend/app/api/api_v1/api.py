@@ -97,6 +97,10 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 
+from app.api.api_v1.endpoints import guardian as guardian_endpoints  # noqa: E402
+
+api_router.include_router(guardian_endpoints.router, prefix="/guardian", tags=["Guardian consent"])
+
 from app.core.build_info import BACKEND_BUILD_ID
 
 
