@@ -79,6 +79,15 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 
+from app.api.api_v1.endpoints import age_policies as age_policy_endpoints  # noqa: E402
+
+api_router.include_router(
+    age_policy_endpoints.router,
+    prefix="/admin/age-policies",
+    tags=["Administration - age policies"],
+    dependencies=[Depends(admin.require_admin)],
+)
+
 from app.core.build_info import BACKEND_BUILD_ID
 
 

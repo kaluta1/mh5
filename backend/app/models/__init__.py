@@ -38,8 +38,10 @@ from .business_model import (
     ReferralPoolAssignment, ReferralPoolMigrationRun, LeadersPeriod, LeadersAllocationLine,
     MarketOrder, MarketOrderEvent, MarketDispute,
 )
+from .age_policy import AgePolicy
 
 __all__ = [
+    "AgePolicy",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",

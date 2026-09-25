@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Response, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -431,13 +432,47 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         }
     )
 
+def _json_safe(value):
+    """JSON-safe copy of a validation-error value. Pydantic puts the raised
+    exception object in ctx["error"] for ValueError-based validators; that (and any
+    other non-JSON value) is reduced to its message string, never a traceback."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, BaseException):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(v) for v in value]
+    try:
+        return jsonable_encoder(value)
+    except Exception:
+        return str(value)
+
+
+_SENSITIVE_FIELD = re.compile(r"pass(word)?|secret|token|api[_-]?key|otp|cvv|seed|mnemonic|private[_-]?key|(^|[_-])pin($|[_-])", re.I)
+
+
+def _safe_validation_errors(errors) -> list:
+    """Validation errors as JSON, with submitted values of sensitive fields
+    (passwords, secrets, tokens...) redacted instead of echoed back."""
+    safe = []
+    for err in _json_safe(errors):
+        if isinstance(err, dict) and "input" in err:
+            loc = err.get("loc") or []
+            if any(isinstance(part, str) and _SENSITIVE_FIELD.search(part) for part in loc):
+                err["input"] = "[REDACTED]"
+        safe.append(err)
+    return safe
+
+
 # Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": exc.errors(),
+            "detail": _safe_validation_errors(exc.errors()),
             "code": "VALIDATION_ERROR",
             "message": "Request validation failed"
         }
