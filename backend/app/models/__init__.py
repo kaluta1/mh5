@@ -39,9 +39,10 @@ from .business_model import (
     MarketOrder, MarketOrderEvent, MarketDispute,
 )
 from .age_policy import AgePolicy
+from .age_safety import UserAgeProfile, DobChangeRecord, AgeSafetyEvent, ChildSafetyEnforcement
 
 __all__ = [
-    "AgePolicy",
+    "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",

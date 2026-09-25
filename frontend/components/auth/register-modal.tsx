@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
-import { authService } from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
 
 interface RegisterModalProps {
@@ -98,32 +97,11 @@ export default function RegisterModal({ open, onOpenChange, onSwitchToLogin }: R
     setError('')
 
     try {
-      const registerData = {
-        email: formData.email,
-        username: formData.username,
-        password: formData.password,
-        full_name: formData.fullName || undefined,
-        phone: formData.phone || undefined,
-        referral_code: formData.referralCode || undefined
-      }
-
-      const response = await authService.register(registerData)
-      
-      // Stocker les tokens si fournis
-      if (response.access_token) {
-        localStorage.setItem('access_token', response.access_token)
-      }
-      if (response.refresh_token) {
-        localStorage.setItem('refresh_token', response.refresh_token)
-      }
-
-      // Nettoyer le code de parrainage utilisé
-      localStorage.removeItem('referralCode')
-      
-      // Fermer le modal et rediriger
+      // Registration requires a date of birth and terms acceptance, both collected
+      // and checked by the backend age gate. Send the user to the one
+      // authoritative registration form instead of posting an incomplete payload.
       onOpenChange(false)
-      router.push('/dashboard')
-      
+      router.push('/register')
     } catch (err: any) {
       console.error('Registration error:', err)
       

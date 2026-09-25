@@ -25,6 +25,12 @@ export const REGISTER_COPY = {
   termsAccept: String(
     register.terms_accept ?? 'I agree to the Terms of Service and Privacy Policy',
   ),
+  dateOfBirth: String(register.date_of_birth ?? 'Date of birth'),
+  dateOfBirthHint: String(
+    register.date_of_birth_hint ??
+      'Used to apply age-appropriate protections. It is never shown on your public profile.',
+  ),
+  dateOfBirthRequired: String(errors.date_of_birth_required ?? 'Please enter your date of birth'),
   loading: String(register.loading ?? 'Creating account...'),
   submit: String(register.submit ?? 'Create Account'),
   haveAccount: String(register.have_account ?? 'Already have an account?'),

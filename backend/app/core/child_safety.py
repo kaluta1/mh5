@@ -131,3 +131,79 @@ class PolicyRequirement(str, enum.Enum):
     KYC = "KYC"
     GUARDIAN_CONSENT = "GUARDIAN_CONSENT"
     AGE_ASSURANCE = "AGE_ASSURANCE"
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: registration, DOB provenance, review and circumvention vocabulary
+# ---------------------------------------------------------------------------
+
+class RegistrationDecision(str, enum.Enum):
+    """Machine-readable outcome of the registration age gate (s.4, s.6)."""
+
+    ALLOWED = "ALLOWED"
+    POLICY_NOT_ENFORCED = "POLICY_NOT_ENFORCED"          # transition: enforcement off, account allowed
+    BELOW_MINIMUM_ACCOUNT_AGE = "BELOW_MINIMUM_ACCOUNT_AGE"
+    PARENTAL_CONSENT_REQUIRED = "PARENTAL_CONSENT_REQUIRED"  # continued by the Phase 4 guardian workflow
+    AGE_ASSURANCE_REQUIRED = "AGE_ASSURANCE_REQUIRED"
+    UNRESOLVED_JURISDICTION = "UNRESOLVED_JURISDICTION"
+    UNSUPPORTED_JURISDICTION = "UNSUPPORTED_JURISDICTION"
+    POLICY_UNAVAILABLE = "POLICY_UNAVAILABLE"            # conflicting/invalid policy data
+    RETRY_LIMITED = "RETRY_LIMITED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+
+    @property
+    def creates_account(self) -> bool:
+        return self in (RegistrationDecision.ALLOWED, RegistrationDecision.POLICY_NOT_ENFORCED)
+
+
+class DobSource(str, enum.Enum):
+    """How the stored date of birth was obtained. None of these implies verification."""
+
+    LEGACY_PROFILE = "LEGACY_PROFILE"                    # existed before Phase 3 (implicit when no profile row)
+    SELF_DECLARED_REGISTRATION = "SELF_DECLARED_REGISTRATION"
+    SELF_DECLARED_PROFILE = "SELF_DECLARED_PROFILE"      # first capture after registration
+    SELF_CORRECTION = "SELF_CORRECTION"                  # minor correction applied without review
+    ADMIN_REVIEWED = "ADMIN_REVIEWED"                    # correction approved by an administrator
+    ADMIN_CORRECTION = "ADMIN_CORRECTION"                # administrator-entered correction
+
+
+class AgeReviewStatus(str, enum.Enum):
+    """Escalation state (s.5): stronger verification or human review is needed."""
+
+    NONE = "NONE"
+    AGE_VERIFICATION_REQUIRED = "AGE_VERIFICATION_REQUIRED"
+    AGE_REVIEW_REQUIRED = "AGE_REVIEW_REQUIRED"
+
+
+class DobChangeStatus(str, enum.Enum):
+    AUTO_APPLIED = "AUTO_APPLIED"      # same-tier self correction, applied and audited
+    PENDING = "PENDING"                # material change waiting for review; not applied
+    APPROVED = "APPROVED"              # applied after review
+    REJECTED = "REJECTED"              # not applied
+    ADMIN_APPLIED = "ADMIN_APPLIED"    # administrator correction
+
+
+class AgeSafetyEventType(str, enum.Enum):
+    AGE_GATE_ATTEMPT = "AGE_GATE_ATTEMPT"
+    DOB_CAPTURED = "DOB_CAPTURED"
+    DOB_CHANGED = "DOB_CHANGED"
+    DOB_CHANGE_REQUESTED = "DOB_CHANGE_REQUESTED"
+    DOB_CHANGE_REVIEWED = "DOB_CHANGE_REVIEWED"
+    REVIEW_STATUS_CHANGED = "REVIEW_STATUS_CHANGED"
+    TERMS_ACCEPTED = "TERMS_ACCEPTED"
+
+
+ENFORCEMENT_ALL_JURISDICTIONS = "*"
+# Operations whose enforcement can be switched on in Phase 3. Later phases add theirs.
+ENFORCEABLE_OPERATIONS = frozenset({PolicyOperation.ACCOUNT_CREATION})
+
+
+class DecisionBasis(str, enum.Enum):
+    """Why a registration decision was reached. Keeps the platform safety baseline
+    separate from jurisdiction/legal policy, so transition mode is never recorded
+    as legal approval."""
+
+    PLATFORM_BASELINE = "PLATFORM_BASELINE"            # s.2 default (under-13), not a legal conclusion
+    JURISDICTION_POLICY = "JURISDICTION_POLICY"        # enforced, resolved AgePolicy decided
+    TRANSITION_NOT_ENFORCED = "TRANSITION_NOT_ENFORCED"  # no enforced policy: allowed only provisionally
+    CIRCUMVENTION_CONTROL = "CIRCUMVENTION_CONTROL"    # s.6 retry/risk controls

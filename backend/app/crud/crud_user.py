@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Union, List
 import secrets
 import string
 import logging
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -75,8 +76,14 @@ class CRUDUser:
         """Récupère un utilisateur par son code de parrainage."""
         return db.query(User).filter(User.personal_referral_code == referral_code).first()
 
-    def create_with_sponsor(self, db: Session, obj_in: UserCreate, sponsor_code: Optional[str] = None) -> User:
-        """Crée un utilisateur avec un parrain optionnel et le rôle 'user' par défaut."""
+    def create_with_sponsor(self, db: Session, obj_in: UserCreate, sponsor_code: Optional[str] = None,
+                            before_commit=None) -> User:
+        """Crée un utilisateur avec un parrain optionnel et le rôle 'user' par défaut.
+
+        ``before_commit(db, user)`` runs inside the same transaction, after sponsor
+        assignment and before commit, so registration safety state commits or
+        rolls back together with the user.
+        """
         # Générer un code de parrainage unique
         referral_code = self._generate_unique_referral_code(db)
         
@@ -110,6 +117,9 @@ class CRUDUser:
             personal_referral_code=referral_code,
             role_id=role_id
         )
+        dob = getattr(obj_in, "date_of_birth", None)
+        if dob is not None:
+            db_obj.date_of_birth = dob if isinstance(dob, datetime) else datetime(dob.year, dob.month, dob.day)
         db.add(db_obj)
         db.flush()
 
@@ -122,6 +132,8 @@ class CRUDUser:
         elif personal_sponsor and personal_sponsor.is_active is not False and personal_sponsor.is_deleted is not True:
             db_obj.sponsor_id = personal_sponsor.id
             db_obj.sponsor_source = PERSONAL_REFERRAL
+        if before_commit is not None:
+            before_commit(db, db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
@@ -482,6 +494,10 @@ class CRUDUser:
         else:
             update_data = obj_in.dict(exclude_unset=True)
         
+        if "date_of_birth" in update_data:
+            # DOB changes are safety-relevant: only app.services.dob_service may apply them.
+            raise ValueError("date_of_birth must be changed through dob_service")
+
         if "password" in update_data and update_data["password"]:
             hashed_password = get_password_hash(update_data["password"])
             del update_data["password"]

@@ -138,6 +138,10 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
 
       if (!response.ok) {
         const error = await response.json()
+        if (response.status === 409 && error.code === 'DOB_CHANGE_PENDING_REVIEW') {
+          addToast(error.detail, 'info')
+          return
+        }
         throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
       }
 

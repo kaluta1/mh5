@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from datetime import datetime
+from datetime import date, datetime
 
 from app.core.security_validators import sanitize_username, validate_password_strength
 
@@ -38,6 +38,49 @@ class UserCreate(UserBase):
         return validate_password_strength(v)
 
 
+def validate_date_of_birth_value(value: date) -> date:
+    """Server-side DOB sanity check shared by registration and profile updates.
+    Age and tier are always derived on the server from this value."""
+    from app.services.age_policy_engine import AgeAndContestPolicyEngine, utc_today
+
+    if isinstance(value, datetime):
+        value = value.date()
+    if AgeAndContestPolicyEngine.calculate_age(value, utc_today()) is None:
+        raise ValueError("Invalid date of birth")
+    return value
+
+
+class UserRegister(UserCreate):
+    """Public registration payload (s.4). The client supplies only a date of
+    birth; age, age tier and adult/minor status are never accepted from the
+    client (extra fields are forbidden)."""
+
+    date_of_birth: date
+    accept_terms: bool
+
+    @field_validator("date_of_birth", mode="before")
+    @classmethod
+    def _strict_date(cls, v):
+        # Only an ISO calendar date (YYYY-MM-DD); no timestamps or numbers.
+        if isinstance(v, str):
+            return date.fromisoformat(v.strip())
+        if isinstance(v, datetime) or not isinstance(v, date):
+            raise ValueError("Invalid date of birth")
+        return v
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _valid_dob(cls, v: date) -> date:
+        return validate_date_of_birth_value(v)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def _terms(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError("Terms of Service and Privacy Notice must be accepted")
+        return v
+
+
 class UserUpdate(UserBase):
     model_config = ConfigDict(extra="forbid")
 
@@ -62,6 +105,14 @@ class UserUpdate(UserBase):
         if v is None:
             return v
         return sanitize_username(v)
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_dob(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return v
+        validate_date_of_birth_value(v.date() if isinstance(v, datetime) else v)
+        return v
 
 # Schéma pour afficher un rôle
 class RoleBase(BaseModel):

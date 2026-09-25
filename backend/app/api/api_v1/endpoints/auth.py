@@ -2,13 +2,13 @@ from datetime import timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.schemas.token import Token
-from app.schemas.user import UserCreate, User
+from app.schemas.user import UserRegister, User
 from app.schemas.password_reset import PasswordResetRequest, PasswordResetConfirm, PasswordResetResponse, PasswordChange
 from app.core.security import (
     create_access_token, 
@@ -48,7 +48,7 @@ def auth_health():
 def register_user(
     *,
     db: Session = Depends(get_db),
-    user_in: UserCreate,
+    user_in: UserRegister,
     background_tasks: BackgroundTasks,
     request: Request,
     sponsor_code: Optional[str] = Query(None, description="Code de parrainage du parrain"),
@@ -77,13 +77,46 @@ def register_user(
                 detail="Ce nom d'utilisateur est déjà pris."
             )
     
+    # Child/teen safety age gate (s.4-6): decided server-side before any write, so a
+    # blocked registration leaves no user, sponsor, pool assignment or financial row.
+    from app.core.rate_limit import _client_ip
+    from app.services import age_gate
+    from app.services.age_policy_engine import utc_today
+
+    gate = age_gate.evaluate_registration(
+        db,
+        date_of_birth=user_in.date_of_birth,
+        country=user_in.country,
+        email=user_in.email,
+        ip=_client_ip(request),
+        on=utc_today(),
+    )
+    attempt = age_gate.record_attempt(db, gate)
+    if not gate.allowed:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            if gate.decision == age_gate.RegistrationDecision.RETRY_LIMITED
+            else status.HTTP_403_FORBIDDEN,
+            content={
+                "detail": gate.client_message,
+                "code": "REGISTRATION_NOT_COMPLETED",
+                "decision": gate.decision.value,
+                "message": gate.client_message,
+            },
+        )
+
     # Créer l'utilisateur avec le parrain si un code est fourni (URL param or share-link cookie)
     effective_sponsor_code = sponsor_code
     if not effective_sponsor_code:
         effective_sponsor_code = referral_shortener.get_sponsor_referral_code_from_request(request, db)
 
     try:
-        user = crud_user.create_with_sponsor(db, obj_in=user_in, sponsor_code=effective_sponsor_code)
+        user = crud_user.create_with_sponsor(
+            db,
+            obj_in=user_in,
+            sponsor_code=effective_sponsor_code,
+            before_commit=lambda session, new_user: age_gate.apply_registration_state(session, new_user, gate, attempt),
+        )
     except IntegrityError as e:
         db.rollback()
         error_str = str(e.orig).lower()

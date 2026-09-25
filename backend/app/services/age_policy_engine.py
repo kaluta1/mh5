@@ -189,18 +189,27 @@ class AgeAndContestPolicyEngine:
         return AgeTier.ADULT_18_PLUS
 
     @staticmethod
-    def dob_evidence_for_user(user) -> Optional[DobEvidence]:
+    def dob_evidence_for_user(user, profile=None) -> Optional[DobEvidence]:
         """Best DOB evidence currently available for a user.
 
-        Only the profile date of birth exists today, and it is self-declared.
-        KYC data is deliberately not used: KYC does not imply age assurance, and
-        the source-selection rules belong to the Phase 3 age-assurance workflow.
+        The DOB is users.date_of_birth. Its assurance level comes from the user's
+        UserAgeProfile. Without a profile (legacy user) the DOB counts as
+        SELF_DECLARED_DOB at most: a DOB's mere existence is never treated as
+        verified. KYC data is deliberately not used: KYC does not imply age
+        assurance (s.32).
         """
         dob = getattr(user, "date_of_birth", None)
         if dob is None:
             return None
         dob = dob.date() if isinstance(dob, datetime) else dob
-        return DobEvidence(date_of_birth=dob, assurance_level=AgeAssuranceLevel.SELF_DECLARED_DOB)
+        level = AgeAssuranceLevel.SELF_DECLARED_DOB
+        stored = getattr(profile, "assurance_level", None) if profile is not None else None
+        if stored:
+            try:
+                level = AgeAssuranceLevel(stored)
+            except ValueError:
+                level = AgeAssuranceLevel.SELF_DECLARED_DOB
+        return DobEvidence(date_of_birth=dob, assurance_level=level)
 
     # ---- jurisdiction ------------------------------------------------------
 
@@ -277,10 +286,10 @@ class AgeAndContestPolicyEngine:
             _age=age,
         )
 
-    def context_for_user(self, user, on: date) -> AgeContext:
+    def context_for_user(self, user, on: date, profile=None) -> AgeContext:
         """Context from existing profile data (read-only; nothing is written)."""
         return self.build_context(
-            dob_evidence=self.dob_evidence_for_user(user),
+            dob_evidence=self.dob_evidence_for_user(user, profile),
             jurisdiction_value=getattr(user, "country", None),
             on=on,
         )

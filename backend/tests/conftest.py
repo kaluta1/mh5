@@ -148,6 +148,10 @@ def test_user_data():
         "username": f"user_{uid}",
         "first_name": "Test",
         "last_name": "User",
+        # Phase 3: registration requires a server-validated DOB and explicit terms
+        # acceptance. Synthetic adult DOB.
+        "date_of_birth": "1990-01-15",
+        "accept_terms": True,
     }
 
 

@@ -177,3 +177,26 @@ def test_registration_extra_field_rejected_as_before(client):
 def test_login_missing_form_fields_is_422(client):
     body = _assert_safe_422(client.post("/api/v1/auth/login", data={}))
     assert all(e["input"] in (None, "[REDACTED]") or "password" not in e["loc"] for e in body["detail"])
+
+
+def test_missing_field_error_does_not_echo_password_in_body_input(client):
+    """A 'missing field' error carries the whole request body as input. Sensitive
+    keys inside it must be redacted (regression: the password was echoed)."""
+    secret = "Sup3r*SecretPassw0rd"
+    r = client.post("/api/v1/auth/register", json={"email": "val2@example.com", "password": secret,
+                                                     "nested": {"api_key": "k-123", "otp": "999111"}})
+    assert r.status_code == 422
+    assert secret not in r.text and "k-123" not in r.text and "999111" not in r.text
+    missing = [e for e in r.json()["detail"] if e["type"] == "missing"]
+    assert missing and missing[0]["input"]["password"] == "[REDACTED]"
+    assert missing[0]["input"]["email"] == "val2@example.com"  # non-sensitive keys unchanged
+
+
+def test_redaction_helper_is_recursive():
+    from main import _safe_validation_errors
+
+    errors = [{"type": "missing", "loc": ("body", "x"), "msg": "Field required",
+               "input": {"user": {"password": "a", "new_password": "b", "profile": [{"pin": "1234"}]}, "name": "ok"}}]
+    safe = _safe_validation_errors(errors)
+    assert safe[0]["input"] == {"user": {"password": "[REDACTED]", "new_password": "[REDACTED]",
+                                         "profile": [{"pin": "[REDACTED]"}]}, "name": "ok"}

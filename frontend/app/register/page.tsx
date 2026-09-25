@@ -41,7 +41,8 @@ function RegisterPageContent() {
     confirmPassword: '',
     country: '',
     region: '',
-    continent: ''
+    continent: '',
+    dateOfBirth: ''
   })
   
   const [showPassword, setShowPassword] = useState(false)
@@ -215,6 +216,12 @@ function RegisterPageContent() {
       errorMessage = t('auth.register.errors.required_fields')
     }
 
+    // Presence only: age and eligibility are decided by the backend.
+    if (!formData.dateOfBirth) {
+      errors.dateOfBirth = true
+      errorMessage = pick('auth.register.errors.date_of_birth_required', REGISTER_COPY.dateOfBirthRequired)
+    }
+
     if (!formData.country) {
       errors.country = true
       errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays'
@@ -299,6 +306,8 @@ function RegisterPageContent() {
         country: formData.country,
         region: formData.region,
         continent: formData.continent,
+        date_of_birth: formData.dateOfBirth,
+        accept_terms: acceptTerms,
         sponsor_code: referralCode || undefined  // Passer le code de parrainage
       }
 
@@ -361,8 +370,12 @@ function RegisterPageContent() {
       
       if (err.response?.data) {
         const data = err.response.data
+        // Age-gate decision (server-authoritative): show the server's safe message as-is.
+        if (data.code === 'REGISTRATION_NOT_COMPLETED' && typeof data.detail === 'string') {
+          errorMessage = data.detail
+        }
         // Format: { detail: "message" }
-        if (typeof data.detail === 'string') {
+        else if (typeof data.detail === 'string') {
           errorMessage = mapErrorToTranslation(data.detail)
         }
         // Format: { detail: [{ msg: "message", ... }] }
@@ -672,6 +685,25 @@ function RegisterPageContent() {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Date of birth (age is determined by the backend) */}
+              <div className="space-y-2">
+                <label htmlFor="date_of_birth" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {pick('auth.register.date_of_birth', REGISTER_COPY.dateOfBirth)}
+                </label>
+                <Input
+                  id="date_of_birth"
+                  type="date"
+                  value={formData.dateOfBirth}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+                  className={`h-12 rounded-xl dsm-input ${fieldErrors.dateOfBirth ? 'border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-600 focus:border-myhigh5-primary focus:ring-myhigh5-primary'}`}
+                  required
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {pick('auth.register.date_of_birth_hint', REGISTER_COPY.dateOfBirthHint)}
+                </p>
               </div>
 
               {/* Country Selection */}

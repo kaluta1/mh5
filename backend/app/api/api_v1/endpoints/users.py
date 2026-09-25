@@ -2,6 +2,7 @@ from typing import Any, List, Union
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -36,8 +37,34 @@ def update_user_me(
 ) -> Any:
     """
     Mettre à jour les informations de l'utilisateur courant.
+
+    date_of_birth is routed through app.services.dob_service (child-safety change
+    protection). A change that needs review is not applied, and the rest of the
+    request is not applied either (409).
     """
-    user = crud_user.update(db, db_obj=current_user, obj_in=user_in)
+    from app.services import dob_service
+    from app.services.age_policy_engine import utc_today
+
+    data = user_in.model_dump(exclude_unset=True)
+    if "date_of_birth" in data:
+        new_dob = data.pop("date_of_birth")
+        if new_dob is None:
+            if current_user.date_of_birth is not None:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                    detail="Date of birth cannot be removed.")
+        else:
+            try:
+                result = dob_service.submit_self_service_dob(db, current_user, new_dob, today=utc_today())
+            except dob_service.DobChangeError as exc:
+                return JSONResponse(status_code=status.HTTP_409_CONFLICT,
+                                    content={"detail": str(exc), "code": "DOB_CHANGE_NOT_APPLIED",
+                                             "message": str(exc)})
+            if result.status == dob_service.DobUpdateStatus.PENDING_REVIEW:
+                message = "Your date of birth change has been submitted for review."
+                return JSONResponse(status_code=status.HTTP_409_CONFLICT,
+                                    content={"detail": message, "code": "DOB_CHANGE_PENDING_REVIEW",
+                                             "message": message})
+    user = crud_user.update(db, db_obj=current_user, obj_in=data)
     return user
 
 

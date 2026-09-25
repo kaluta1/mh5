@@ -450,20 +450,13 @@ def _json_safe(value):
         return str(value)
 
 
-_SENSITIVE_FIELD = re.compile(r"pass(word)?|secret|token|api[_-]?key|otp|cvv|seed|mnemonic|private[_-]?key|(^|[_-])pin($|[_-])", re.I)
-
-
 def _safe_validation_errors(errors) -> list:
     """Validation errors as JSON, with submitted values of sensitive fields
-    (passwords, secrets, tokens...) redacted instead of echoed back."""
-    safe = []
-    for err in _json_safe(errors):
-        if isinstance(err, dict) and "input" in err:
-            loc = err.get("loc") or []
-            if any(isinstance(part, str) and _SENSITIVE_FIELD.search(part) for part in loc):
-                err["input"] = "[REDACTED]"
-        safe.append(err)
-    return safe
+    (passwords, secrets, tokens...) redacted recursively instead of echoed back.
+    See app.core.redaction."""
+    from app.core.redaction import redact_validation_errors
+
+    return redact_validation_errors(_json_safe(errors))
 
 
 # Custom exception handler for validation errors

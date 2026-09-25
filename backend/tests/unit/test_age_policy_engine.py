@@ -633,11 +633,13 @@ def test_admin_api_create_activate_resolve(client, db):
     assert res.json()["policy_status"] == "FOUND" and res.json()["policy_version"] == 1
 
 
-def test_engine_is_not_wired_into_member_flows():
-    """Phase 2 only builds the engine: no endpoint outside the admin router uses it."""
+def test_engine_is_only_wired_into_approved_flows():
+    """Phase 2 built the engine; Phase 3 wires it into registration and DOB updates
+    only. No other endpoint (contests, voting, TopHigh5, media, payments...) may
+    consume it until its own phase."""
     import pathlib
 
     endpoints = pathlib.Path(__file__).resolve().parents[2] / "app" / "api" / "api_v1" / "endpoints"
-    users = [p.name for p in endpoints.glob("*.py")
-             if "age_policy_engine" in p.read_text(encoding="utf-8") and p.name != "age_policies.py"]
-    assert users == []
+    users = sorted(p.name for p in endpoints.glob("*.py")
+                   if "age_policy_engine" in p.read_text(encoding="utf-8"))
+    assert users == ["age_policies.py", "age_safety.py", "auth.py", "users.py"]

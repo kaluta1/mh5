@@ -9,5 +9,8 @@ describe('REGISTER_COPY', () => {
     expect(REGISTER_COPY.password.length).toBeGreaterThan(0)
     expect(REGISTER_COPY.emailPlaceholder.length).toBeGreaterThan(0)
     expect(REGISTER_COPY.submit.length).toBeGreaterThan(0)
+    expect(REGISTER_COPY.dateOfBirth.length).toBeGreaterThan(0)
+    expect(REGISTER_COPY.dateOfBirthHint.length).toBeGreaterThan(0)
+    expect(REGISTER_COPY.dateOfBirthRequired.length).toBeGreaterThan(0)
   })
 })

@@ -171,6 +171,10 @@ export interface RegisterRequest {
   region?: string
   continent?: string
   sponsor_code?: string  // Code de parrainage optionnel
+  // Child/teen safety: the backend derives age, tier and eligibility from this
+  // ISO date (YYYY-MM-DD); the client never sends an age or tier.
+  date_of_birth: string
+  accept_terms: boolean
 }
 
 export interface PasswordResetRequest {
