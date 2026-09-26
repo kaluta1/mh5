@@ -3,6 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 import json
 
+from app.core.child_safety import NomineeAgeDeclaration
+
 
 class ContestantCreate(BaseModel):
     """Schéma pour créer une candidature"""
@@ -14,6 +16,9 @@ class ContestantCreate(BaseModel):
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
     entry_type: Optional[str] = "participation"  # 'nomination' ou 'participation'
+    # Nominations only (Child/Teen Safety s.12): the nominator's statement about
+    # the nominee's age. An attestation, never verification. Omitted = UNKNOWN.
+    nominee_age_declaration: Optional[NomineeAgeDeclaration] = None
 
     @field_validator('image_media_ids', 'video_media_ids', mode='before')
     @classmethod
@@ -75,6 +80,13 @@ class ContestantSubmissionResponse(BaseModel):
     round_id: Optional[int] = None
     registration_date: datetime
     message: str
+    # Phase 5 workflow status (safe codes only; no age, DOB or guardian details).
+    public_status: Optional[str] = None           # PUBLIC | PENDING_REVIEW
+    eligibility_reasons: List[str] = Field(default_factory=list)
+    next_step: Optional[str] = None
+    # Nominations only: single-use claim token for the nominee, returned once to
+    # the nominator (never stored in clear, never shown again).
+    nominee_claim_token: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -672,7 +672,8 @@ class ContestService {
     nominatorCity?: string,
     nominatorCountry?: string,
     roundId?: number,
-    entryType?: string
+    entryType?: string,
+    nomineeAgeDeclaration?: 'ADULT' | 'MINOR' | 'UNKNOWN'
   ): Promise<any> {
     try {
       // Convert string media IDs to array if needed
@@ -698,6 +699,10 @@ class ContestService {
       }
       if (entryType) {
         payload.entry_type = entryType;
+      }
+      if (nomineeAgeDeclaration) {
+        // Attestation only; the backend decides eligibility (Child/Teen Safety s.12).
+        payload.nominee_age_declaration = nomineeAgeDeclaration;
       }
 
       const response = await api.post(`/api/v1/contests/${contestId}/participate`, payload);

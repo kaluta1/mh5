@@ -31,7 +31,8 @@ class CRUDMedia:
             file_size=obj_in.file_size,
             width=obj_in.width,
             height=obj_in.height,
-            duration=obj_in.duration
+            duration=obj_in.duration,
+            metadata_sanitized_at=getattr(obj_in, "metadata_sanitized_at", None),
         )
         db.add(db_obj)
         db.commit()

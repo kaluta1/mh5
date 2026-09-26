@@ -19,6 +19,7 @@ class MediaCreate(MediaBase):
     width: Optional[int] = None
     height: Optional[int] = None
     duration: Optional[int] = None
+    metadata_sanitized_at: Optional[datetime] = None
 
 
 # Schéma pour mettre à jour un média

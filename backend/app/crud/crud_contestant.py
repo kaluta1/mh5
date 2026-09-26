@@ -9,6 +9,7 @@ from app.models.contests import Contestant, ContestSubmission, ContestSeason, Co
 from app.models.contest import Contest
 from app.models.voting import Vote, MyFavorites, ContestLike, ContestComment, ContestantVoting, ContestantReaction, ContestantShare
 from app.models.user import User
+from app.services.entry_exposure import public_entry_clause
 
 
 class CRUDContestant:
@@ -842,7 +843,9 @@ class CRUDContestant:
         contestants_query = db.query(Contestant)\
             .filter(
                 Contestant.round_id.in_(round_ids),
-                Contestant.is_deleted == False
+                Contestant.is_deleted == False,
+                # Phase 5: held/blocked/escalated entries are never listed publicly.
+                public_entry_clause(),
             )
         
         # Appliquer les filtres géographiques si fournis
@@ -1031,7 +1034,9 @@ class CRUDContestant:
         contestants_query = db.query(Contestant)\
             .filter(
                 Contestant.season_id == season_id,
-                Contestant.is_deleted == False
+                Contestant.is_deleted == False,
+                # Phase 5: held/blocked/escalated entries are never listed publicly.
+                public_entry_clause(),
             )
         
         # Appliquer les filtres géographiques si fournis
@@ -1217,9 +1222,15 @@ class CRUDContestant:
         nominator_city: Optional[str] = None,
         nominator_country: Optional[str] = None,
         round_id: Optional[int] = None,
-        entry_type: str = "participation"
+        entry_type: str = "participation",
+        is_active: bool = True,
+        commit: bool = True,
     ) -> Contestant:
-        """Crée une nouvelle candidature"""
+        """Crée une nouvelle candidature.
+
+        is_active=False creates the entry without making it active/public (Phase 5
+        child-safety hold). commit=False only flushes, so the caller can write the
+        entry's safety record in the same transaction."""
         # We no longer check `get_by_season_and_user` here because the API endpoint
         # already checks `get_by_round_and_user` to prevent duplicate submissions in the same round,
         # but allows submissions across different rounds of the same season/contest.
@@ -1251,9 +1262,12 @@ class CRUDContestant:
             entry_type=entry_type,
             registration_date=datetime.utcnow(),
             verification_status="pending",
-            is_active=True
+            is_active=is_active
         )
         db.add(db_obj)
+        if not commit:
+            db.flush()
+            return db_obj
         db.commit()
         db.refresh(db_obj)
         return db_obj

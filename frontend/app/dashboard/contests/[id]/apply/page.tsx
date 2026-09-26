@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useClock } from '@/contexts/clock-context'
 import { useToast } from '@/components/ui/toast'
 
-import { ParticipationForm } from '@/components/dashboard/participation-form'
+import { ParticipationForm, type NomineeAgeDeclaration } from '@/components/dashboard/participation-form'
 import { contestService } from '@/services/contest-service'
 import { cacheService } from '@/lib/cache-service'
 // REST API
@@ -51,6 +51,13 @@ function ApplyToContestPageContent() {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   /** Shown inline when submit fails (e.g. missing gender on profile). */
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // Safe next-step code from a structured backend error (Phase 5).
+  const [eligibilityNextStep, setEligibilityNextStep] = useState<string | null>(null)
+  // Set when the backend created the entry but keeps it private pending checks.
+  const [pendingReviewMessage, setPendingReviewMessage] = useState<string | null>(null)
+  const [pendingNextStep, setPendingNextStep] = useState<string | null>(null)
+  // Nominations: single-use claim link for the nominee (shown once).
+  const [nomineeClaimLink, setNomineeClaimLink] = useState<string | null>(null)
   /** Round id returned by API after submit (source of truth for View nominations link). */
   const [submittedRoundId, setSubmittedRoundId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -563,7 +570,8 @@ function ApplyToContestPageContent() {
     imageMediaIds?: string,
     videoMediaIds?: string,
     nominatorCity?: string,
-    nominatorCountry?: string
+    nominatorCountry?: string,
+    nomineeAgeDeclaration?: NomineeAgeDeclaration
   ) => {
     if (
       !isEditingParticipation &&
@@ -581,6 +589,7 @@ function ApplyToContestPageContent() {
 
     setIsSubmitting(true)
     setSubmitError(null)
+    setEligibilityNextStep(null)
 
     try {
       let response
@@ -618,7 +627,8 @@ function ApplyToContestPageContent() {
           nominatorCity,
           nominatorCountry,
           roundIdUsed,
-          isNomination ? 'nomination' : 'participation'
+          isNomination ? 'nomination' : 'participation',
+          isNomination ? nomineeAgeDeclaration : undefined
         )
       }
 
@@ -667,6 +677,27 @@ function ApplyToContestPageContent() {
         })
       }
 
+      // Child/Teen Safety Phase 5: the entry exists but stays private until the
+      // backend's required checks are complete (the reason is never shown in detail).
+      if (!isEditingParticipation && response?.public_status === 'PENDING_REVIEW') {
+        const pendingMessage =
+          response?.message ||
+          t('participation.pending_review') ||
+          'Your entry was received. It will become visible after the required checks are complete.'
+        setPendingReviewMessage(pendingMessage)
+        setPendingNextStep(typeof response?.next_step === 'string' ? response.next_step : null)
+        setNomineeClaimLink(
+          typeof response?.nominee_claim_token === 'string' && typeof window !== 'undefined'
+            ? `${window.location.origin}/nominations/claim#token=${response.nominee_claim_token}`
+            : null
+        )
+        addToast(pendingMessage, 'info')
+        return
+      }
+      setPendingReviewMessage(null)
+      setPendingNextStep(null)
+      setNomineeClaimLink(null)
+
       // Afficher un toast de succès
       addToast(
         isEditingParticipation
@@ -678,6 +709,15 @@ function ApplyToContestPageContent() {
       )
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
+
+      // Phase 5: structured, safe backend error (e.g. CONTEST_ENTRY_LOCKED). Eligibility itself never refuses.
+      const eligibility = err?.response?.data?.detail
+      if (eligibility && typeof eligibility === 'object' && typeof eligibility.message === 'string') {
+        setSubmitError(eligibility.message)
+        setEligibilityNextStep(typeof eligibility.next_step === 'string' ? eligibility.next_step : null)
+        addToast(eligibility.message, 'error')
+        return
+      }
 
       // Try to get error detail from different possible locations (detail or message)
       let errorDetail = ''
@@ -888,6 +928,15 @@ function ApplyToContestPageContent() {
                   <p className="text-sm font-medium text-red-800 dark:text-red-200">
                     {submitError}
                   </p>
+                  {eligibilityNextStep === 'ADD_DATE_OF_BIRTH' && (
+                    <button
+                      type="button"
+                      onClick={() => router.push('/dashboard/settings')}
+                      className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition text-sm"
+                    >
+                      {t('participation.add_date_of_birth') || 'Add date of birth'}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -972,12 +1021,41 @@ function ApplyToContestPageContent() {
                     {t('dashboard.contests.participation_form.success_title') || 'Submission successful'}
                   </p>
                   <p className="text-green-300 text-sm mt-1">
-                    {isEditingParticipation
+                    {pendingReviewMessage
+                      ? pendingReviewMessage
+                      : isEditingParticipation
                       ? t('dashboard.contests.participation_form.success_edit') || 'Your nomination was updated successfully.'
                       : isNomination
                         ? t('dashboard.contests.participation_form.success') || 'Your nomination was submitted. You can view it in the category list or edit it until the deadline.'
                         : t('dashboard.contests.participation_form.success_participation') || 'Your entry was submitted successfully.'}
                   </p>
+                  {pendingNextStep === 'ADD_DATE_OF_BIRTH' && (
+                    <button
+                      type="button"
+                      onClick={() => router.push('/dashboard/settings')}
+                      className="mt-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm"
+                    >
+                      {t('participation.update_profile') || 'Update my profile'}
+                    </button>
+                  )}
+                  {nomineeClaimLink && (
+                    <div className="mt-3 space-y-1">
+                      <p className="text-green-300 text-xs">
+                        {t('participation.claim_link_note') || 'Send this one-time link to the person you nominated so they can confirm it. It is shown only once.'}
+                      </p>
+                      <div className="flex gap-2">
+                        <input readOnly value={nomineeClaimLink} aria-label="Nominee claim link"
+                          className="flex-1 px-2 py-1 text-xs rounded bg-gray-900 text-gray-100 border border-gray-700" />
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard?.writeText(nomineeClaimLink).catch(() => undefined) }}
+                          className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded"
+                        >
+                          {t('common.copy') || 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">

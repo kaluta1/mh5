@@ -2784,22 +2784,74 @@ def create_contestant(
             eligibility_contest,
             entry_type=submission_entry_type,
         )
-    
+
+    # ============================================
+    # CHILD/TEEN SAFETY PHASE 5: CONTEST AGE ELIGIBILITY
+    # Account eligibility is not contest eligibility. Backend-authoritative.
+    # ============================================
+    from app.core.child_safety import ContestEntryKind as _EntryKind
+    from app.services import contest_eligibility as _eligibility
+    from app.services.age_policy_engine import utc_today as _utc_today
+
+    entry_kind = (
+        _EntryKind.NOMINATION if submission_entry_type == "nomination" else _EntryKind.PERSONAL_SUBMISSION
+    )
+    from datetime import datetime as _dt
+
+    eligibility_today, eligibility_now = _utc_today(), _dt.utcnow()
+
+    def _evaluate_entry(moderation_results=()):
+        entry_inputs = _eligibility.EntryInputs(
+            title=contestant_data.title,
+            description=contestant_data.description,
+            image_media_ids=contestant_data.image_media_ids,
+            video_media_ids=contestant_data.video_media_ids,
+            moderation_results=tuple(moderation_results),
+        )
+        if entry_kind == _EntryKind.NOMINATION:
+            return _eligibility.evaluate_nomination(
+                db, current_user, eligibility_contest, entry_inputs,
+                nominee_age_declaration=contestant_data.nominee_age_declaration,
+                today=eligibility_today, now=eligibility_now,
+            )
+        return _eligibility.evaluate_personal_submission(
+            db, current_user, eligibility_contest, entry_inputs,
+            today=eligibility_today, now=eligibility_now,
+        )
+
+    # Product rule: an unmet requirement (including a missing DOB) never refuses
+    # the entry; it is created ON HOLD and re-evaluated automatically later.
+    preliminary = _evaluate_entry()
+# s.11: sexual content with a possibly-minor subject goes to the dedicated
+    # child-safety path instead of an ordinary moderation rejection.
+    child_safety_subject = preliminary.subject_possibly_minor
+    moderation_results = []
+
+    def _moderation_rejects(result) -> bool:
+        if result.is_approved:
+            return False
+        if child_safety_subject and any(
+            getattr(getattr(f, "type", None), "value", None) == "adult" for f in result.flags
+        ):
+            return False  # handled by the child-safety escalation below
+        return True
+
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
     # ============================================
     import logging
-    
+
     logger = logging.getLogger(__name__)
     logger.info(f"Starting content moderation for contestant submission by user {current_user.id}")
-    
+
     # Modérer le texte (titre et description)
     text_to_moderate = f"{contestant_data.title} {contestant_data.description}"
     logger.info("Moderating text content...")
     text_moderation = content_moderation_service.moderate_text(text_to_moderate)
     logger.info(f"Text moderation completed: approved={text_moderation.is_approved}")
-    
-    if not text_moderation.is_approved:
+    moderation_results.append(text_moderation)
+
+    if _moderation_rejects(text_moderation):
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2846,7 +2898,8 @@ def create_contestant(
                         logger.info(f"Moderating image {idx+1}/{len(image_refs)}")
                         moderation_result = content_moderation_service.moderate_image(media_url)
                         logger.info(f"Image {idx+1} moderation: approved={moderation_result.is_approved}")
-                        if not moderation_result.is_approved:
+                        moderation_results.append(moderation_result)
+                        if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2869,7 +2922,8 @@ def create_contestant(
                         logger.info(f"Moderating video {idx+1}/{len(video_refs)}")
                         moderation_result = content_moderation_service.moderate_video(media_url)
                         logger.info(f"Video {idx+1} moderation: approved={moderation_result.is_approved}")
-                        if not moderation_result.is_approved:
+                        moderation_results.append(moderation_result)
+                        if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2931,6 +2985,11 @@ def create_contestant(
                 detail=f"The nominator country must match your country. Your country: {user_country}, Specified: {contestant_data.nominator_country}"
             )
     
+    # Final Phase 5 decision, now including the moderation signals.
+    entry_decision = _evaluate_entry(moderation_results)
+    entry_public = entry_decision.public
+    nominee_claim_token = None
+
     # ============================================
     # CRÉATION DE LA CANDIDATURE
     # ============================================
@@ -2967,7 +3026,7 @@ def create_contestant(
                 ),
                 SeasonLevel.COUNTRY,
             )
-            if country_vote_open_for_link and country_vote_open_for_link <= datetime.utcnow().date():
+            if entry_public and country_vote_open_for_link and country_vote_open_for_link <= datetime.utcnow().date():
                 SeasonMigrationService.ensure_active_country_round_link_for_nomination(
                     db, real_contest_id, target_round_id
                 )
@@ -2990,9 +3049,26 @@ def create_contestant(
             nominator_city=contestant_data.nominator_city,
             nominator_country=contestant_data.nominator_country,
             entry_type=submission_entry_type,
-            round_id=target_round_id
+            round_id=target_round_id,
+            # Phase 5: a held entry is created inactive (never public) in the same
+            # transaction as its safety record.
+            is_active=entry_public,
+            commit=False,
         )
-        
+        entry_safety = _eligibility.record_new_entry(
+            db, contestant, entry_decision, kind=entry_kind, submitted_by=current_user,
+            contest_id=getattr(eligibility_contest, "id", None),
+            nominee_age_declaration=contestant_data.nominee_age_declaration, now=eligibility_now,
+        )
+        if entry_kind == _EntryKind.NOMINATION and not entry_decision.public \
+                and entry_safety.exposure_status == "HELD":
+            # Single-use claim link for the nominee; returned once, only the hash is stored.
+            nominee_claim_token = _eligibility.issue_claim_token(
+                db, entry_safety, actor_id=current_user.id, now=eligibility_now, commit=False
+            )
+        db.commit()
+        db.refresh(contestant)
+
         # Vérifier si le lien existe déjà
         existing_link = db.query(ContestantSeason).filter(
             ContestantSeason.contestant_id == contestant.id,
@@ -3032,7 +3108,7 @@ def create_contestant(
                     city_start = getattr(entry_round, "city_season_start_date", None)
                     level_already_open = bool(city_start and city_start <= datetime.utcnow().date())
 
-        if not existing_link and level_already_open:
+        if not existing_link and level_already_open and entry_public:
             contestant_season_link = ContestantSeason(
                 contestant_id=contestant.id,
                 season_id=entry_season.id,
@@ -3063,7 +3139,15 @@ def create_contestant(
         title=contestant.title,
         description=contestant.description,
         registration_date=contestant.registration_date,
-        message="Submission created successfully."
+        message=(
+            "Submission created successfully."
+            if entry_public
+            else _eligibility.CLIENT_MESSAGES["PENDING"]
+        ),
+        public_status="PUBLIC" if entry_public else "PENDING_REVIEW",
+        eligibility_reasons=entry_decision.client_payload()["reason_codes"],
+        next_step=entry_decision.client_payload()["next_step"],
+        nominee_claim_token=nominee_claim_token,
     )
 
 
@@ -3083,7 +3167,18 @@ def get_contestant(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
-    
+    # Child/Teen Safety Phase 5: an entry that is not publicly exposable (held for
+    # consent/review, blocked or escalated) is visible only to its submitter and admins.
+    from app.services.contest_eligibility import entry_publicly_visible
+
+    if not entry_publicly_visible(db, contestant_id):
+        viewer_is_owner = current_user is not None and contestant_data.get("user_id") == current_user.id
+        if not (viewer_is_owner or (current_user is not None and current_user.is_admin)):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Submission not found"
+            )
+
     return ContestantWithAuthorAndStats(**contestant_data)
 
 
@@ -3101,7 +3196,9 @@ def track_contestant_view(
     Frontend should call this only after user stays on page >= 30s.
     """
     contestant = crud_contestant.get(db, contestant_id)
-    if not contestant:
+    from app.services.contest_eligibility import entry_publicly_visible
+
+    if not contestant or not entry_publicly_visible(db, contestant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
     if watched_seconds < 30:
@@ -3303,7 +3400,30 @@ def update_contestant(
             entry_contest,
             entry_type=(getattr(contestant, "entry_type", None) or contestant_data.entry_type),
         )
-    
+
+    # Child/Teen Safety Phase 5: entries created after Phase 5 carry a safety record.
+    from app.models.contest_eligibility import ContestEntrySafety as _EntrySafety
+    from app.services import contest_eligibility as _eligibility
+
+    safety_row = db.query(_EntrySafety).filter(_EntrySafety.contestant_id == contestant_id).first()
+    if safety_row is not None and safety_row.exposure_status in ("BLOCKED", "CHILD_SAFETY_ESCALATED"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "CONTEST_ENTRY_LOCKED", "message": "This entry can't be changed right now."},
+        )
+    child_safety_subject = safety_row is not None and _eligibility.row_subject_possibly_minor(safety_row)
+    escalation_signals = []
+
+    def _moderation_rejects(result) -> bool:
+        if result.is_approved:
+            return False
+        if child_safety_subject and any(
+            getattr(getattr(f, "type", None), "value", None) == "adult" for f in result.flags
+        ):
+            escalation_signals.append(result)
+            return False
+        return True
+
     # ============================================
     # MODÉRATION DU CONTENU AVANT MISE À JOUR
     # ============================================
@@ -3317,8 +3437,8 @@ def update_contestant(
     logger.info("Moderating text content...")
     text_moderation = content_moderation_service.moderate_text(text_to_moderate)
     logger.info(f"Text moderation completed: approved={text_moderation.is_approved}")
-    
-    if not text_moderation.is_approved:
+
+    if _moderation_rejects(text_moderation):
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -3367,7 +3487,7 @@ def update_contestant(
                         logger.info(f"Moderating image {idx+1}/{len(image_refs)}")
                         moderation_result = content_moderation_service.moderate_image(media_url)
                         logger.info(f"Image {idx+1} moderation: approved={moderation_result.is_approved}")
-                        if not moderation_result.is_approved:
+                        if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -3390,7 +3510,7 @@ def update_contestant(
                         logger.info(f"Moderating video {idx+1}/{len(video_refs)}")
                         moderation_result = content_moderation_service.moderate_video(media_url)
                         logger.info(f"Video {idx+1} moderation: approved={moderation_result.is_approved}")
-                        if not moderation_result.is_approved:
+                        if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
                             raise HTTPException(
                                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -3401,6 +3521,15 @@ def update_contestant(
     else:
         logger.info("No videos to moderate")
     
+    if escalation_signals:
+        # s.11: never an ordinary rejection. The change is not applied, the entry
+        # is taken out of public view and escalated for specialized review.
+        _eligibility.escalate_entry(db, safety_row, actor_id=current_user.id, action="CONTENT_ESCALATED_ON_UPDATE")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "CONTEST_ENTRY_LOCKED", "message": "This entry can't be changed right now."},
+        )
+
     logger.info("Content moderation completed successfully")
     
     # ============================================
@@ -3473,7 +3602,17 @@ def update_contestant(
         nominator_city=contestant_data.nominator_city,
         nominator_country=contestant_data.nominator_country
     )
-    
+
+    if safety_row is not None:
+        # New content is new input: an earlier "reviewed clear" does not carry over.
+        from app.services.age_policy_engine import utc_today as _utc_today
+
+        if safety_row.safety_status == "REVIEWED_CLEAR":
+            safety_row.safety_status = "CLEAR"
+        _eligibility.reevaluate_entry(db, safety_row, actor_id=current_user.id, trigger="ENTRY_UPDATED",
+                                      today=_utc_today())
+        db.refresh(updated_contestant)
+
     return ContestantResponse.model_validate(updated_contestant)
 
 
@@ -3536,12 +3675,14 @@ def vote_for_contestant(
     
     # Vérifier que le contestant existe
     contestant = crud_contestant.get(db, contestant_id)
-    if not contestant:
+    from app.services.contest_eligibility import entry_publicly_visible
+
+    if not contestant or not entry_publicly_visible(db, contestant_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
-    
+
     # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
     if contestant.user_id == current_user.id:
         raise HTTPException(
@@ -4179,7 +4320,9 @@ def replace_fifth_vote(
     logger = logging.getLogger(__name__)
 
     contestant = crud_contestant.get(db, contestant_id)
-    if not contestant:
+    from app.services.contest_eligibility import entry_publicly_visible
+
+    if not contestant or not entry_publicly_visible(db, contestant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
     if contestant.user_id == current_user.id:

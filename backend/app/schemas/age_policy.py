@@ -24,6 +24,7 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.child_safety import (
+    NominationAgeScope,
     AGE_THRESHOLD_FIELD_BY_OPERATION,
     AgeAssuranceLevel,
     AgePolicyStatus,
@@ -242,6 +243,9 @@ class AgePolicyDefinition(_Strict):
     profile_visibility_rules: ProfileVisibilityRules
 
     notes: Optional[str] = Field(default=None, max_length=2000)
+    # Which nomination actor nomination_minimum_age applies to. Must be stated
+    # explicitly by the policy author; never assumed (Phase 5).
+    nomination_age_applies_to: Optional[NominationAgeScope] = None
 
     @field_validator("jurisdiction")
     @classmethod
@@ -297,6 +301,7 @@ class AgePolicyRead(BaseModel):
     advertising_restrictions: dict
     profile_visibility_rules: dict
     notes: Optional[str] = None
+    nomination_age_applies_to: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     status_changed_at: Optional[datetime] = None

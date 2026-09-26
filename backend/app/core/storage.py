@@ -442,6 +442,16 @@ async def store_media(file: UploadFile, user_id: int) -> Dict[str, Any]:
         file.content_type or "",
         content,
     )
+    if validation["media_type"] == "image":
+        # Child/Teen Safety s.10: never store (and so never publish) hidden EXIF/GPS.
+        from app.core.media_metadata import strip_image_metadata
+
+        content, sanitized = await run_in_threadpool(
+            strip_image_metadata, content, validation["content_type"]
+        )
+        validation = {**validation, "file_size": len(content), "metadata_sanitized": sanitized}
+    else:
+        validation = {**validation, "metadata_sanitized": False}
     extension = validation["extension"]
     file_uuid = str(uuid.uuid4())
     filename = f"{file_uuid}{extension}"

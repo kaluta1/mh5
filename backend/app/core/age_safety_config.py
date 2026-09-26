@@ -45,6 +45,9 @@ class AgeSafetyOperationalConfig(BaseModel):
     completion_token_ttl_hours: int = Field(72, ge=1, le=24 * 30)
     pending_data_retention_days: int = Field(30, ge=1, le=365)
 
+    # Phase 5 nominee claim links (operational)
+    nominee_claim_token_ttl_days: int = Field(30, ge=1, le=180)
+
     @model_validator(mode="after")
     def _consistent(self):
         if self.ip_immediate_window_minutes > self.ip_correlation_hours * 60:

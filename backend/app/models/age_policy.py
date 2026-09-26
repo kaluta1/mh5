@@ -49,6 +49,8 @@ class AgePolicy(Base):
         ),
         CheckConstraint("status IN ('DRAFT', 'ACTIVE', 'WITHDRAWN')", name="ck_age_policies_status"),
         CheckConstraint("policy_version >= 1", name="ck_age_policies_version_positive"),
+        CheckConstraint("nomination_age_applies_to IS NULL OR nomination_age_applies_to IN "
+                        "('NOMINATOR', 'NOMINEE', 'BOTH')", name="ck_age_policies_nomination_scope"),
         *(
             CheckConstraint(f"{col} BETWEEN 0 AND 120", name=f"ck_age_policies_{col}_range")
             for col in AGE_THRESHOLD_COLUMNS
@@ -79,6 +81,10 @@ class AgePolicy(Base):
     profile_visibility_rules: Mapped[dict] = mapped_column(_JSON, nullable=False)
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Phase 5: which nomination actor nomination_minimum_age applies to. The source
+    # (s.3) does not say; the policy author must state it. NULL = not stated, and
+    # NOMINATION cannot then be enforced under this policy (entries are held).
+    nomination_age_applies_to: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     status_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status_changed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)

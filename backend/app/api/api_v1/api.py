@@ -97,6 +97,20 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 
+from app.api.api_v1.endpoints import contest_eligibility as contest_eligibility_endpoints  # noqa: E402
+
+api_router.include_router(
+    contest_eligibility_endpoints.admin_router,
+    prefix="/admin/contest-eligibility",
+    tags=["Administration - contest eligibility"],
+    dependencies=[Depends(admin.require_admin)],
+)
+api_router.include_router(
+    contest_eligibility_endpoints.member_router,
+    prefix="/contest-eligibility",
+    tags=["Contest eligibility"],
+)
+
 from app.api.api_v1.endpoints import guardian as guardian_endpoints  # noqa: E402
 
 api_router.include_router(guardian_endpoints.router, prefix="/guardian", tags=["Guardian consent"])

@@ -9,6 +9,7 @@ from app.crud import contest
 from app.db.session import get_db
 from app.schemas.contest import Contest, ContestCreate, ContestUpdate, ContestWithEntries, ContestWithEnrichedContestants
 from app.core.cache import cache_service
+from app.core.child_safety import NomineeAgeDeclaration
 import traceback
 import logging
 
@@ -50,6 +51,9 @@ class ParticipateRequest(BaseModel):
     nominator_city: Optional[str] = None
     nominator_country: Optional[str] = None
     round_id: Optional[int] = None
+    # Nominations (Child/Teen Safety s.12): the nominator's attestation about the
+    # nominee's age. Never verification; omitted = UNKNOWN (entry held).
+    nominee_age_declaration: Optional[NomineeAgeDeclaration] = None
 
 
 class VideoLinkValidationRequest(BaseModel):
@@ -676,7 +680,8 @@ def participate_in_contest(
         video_media_ids=video_ids_str,
         nominator_city=request.nominator_city,
         nominator_country=request.nominator_country,
-        round_id=request.round_id
+        round_id=request.round_id,
+        nominee_age_declaration=request.nominee_age_declaration,
     )
     
     # Import the create_contestant function from contestant module

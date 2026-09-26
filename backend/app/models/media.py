@@ -1,5 +1,6 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Integer, ForeignKey, Enum, Boolean
+from datetime import datetime
+from sqlalchemy import String, Integer, ForeignKey, Enum, Boolean, DateTime
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from app.db.base_class import Base
@@ -23,6 +24,9 @@ class Media(Base):
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Pour les vidéos, en secondes
+    # Child/Teen Safety s.10 (Phase 5): set when EXIF/GPS/XMP/IPTC metadata was
+    # stripped from an uploaded image. NULL = not sanitized (legacy upload or video).
+    metadata_sanitized_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Relations
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)

@@ -34,6 +34,10 @@ interface MediaRequirements {
   maxImages?: number
 }
 
+// Nominations: the nominator's statement about the nominee's age. It is an
+// attestation only; the backend decides eligibility and public visibility.
+export type NomineeAgeDeclaration = 'ADULT' | 'MINOR' | 'UNKNOWN'
+
 interface ParticipationFormProps {
   contestId: string
   onSubmit?: (
@@ -42,7 +46,8 @@ interface ParticipationFormProps {
     imageMediaIds?: string,
     videoMediaIds?: string,
     nominatorCity?: string,
-    nominatorCountry?: string
+    nominatorCountry?: string,
+    nomineeAgeDeclaration?: NomineeAgeDeclaration
   ) => Promise<void>
   onCancel?: () => void
   isSubmitting?: boolean
@@ -174,6 +179,9 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
   // Nomination location states
   const [nominatorCountry, setNominatorCountry] = useState<string>(initialData?.nominatorCountry || '')
   const [nominatorCity, setNominatorCity] = useState<string>(initialData?.nominatorCity || '')
+  const [nomineeAgeDeclaration, setNomineeAgeDeclaration] = useState<NomineeAgeDeclaration | ''>('')
+  // Only asked when creating a nomination (it is not editable afterwards).
+  const asksNomineeAge = isNomination && !isEditing
   const [availableCities, setAvailableCities] = useState<string[]>([])
   const [loadingCities, setLoadingCities] = useState(false)
 
@@ -436,6 +444,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     if (videoDuplicateError) { addToast(videoDuplicateError, 'error'); return }
     if (requiresVideo && !videoUrl) { addToast(t('participation.errors.content_video_required') || 'A video is required', 'error'); return }
     if (isNomination && !nominatorCountry) { addToast(t('participation.errors.nominator_country_required') || 'Country is required', 'error'); return }
+    if (asksNomineeAge && !nomineeAgeDeclaration) { addToast(t('participation.nominee_age_required') || 'Please tell us whether the nominee is an adult', 'error'); return }
 
     try {
       setIsSubmitting(true)
@@ -449,13 +458,16 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
           imageMediaIdsForSubmit,
           videoMediaIdsForSubmit,
           isNomination ? nominatorCity : undefined,
-          isNomination ? nominatorCountry : undefined
+          isNomination ? nominatorCountry : undefined,
+          asksNomineeAge && nomineeAgeDeclaration ? nomineeAgeDeclaration : undefined
         )
       }
     } catch (err: any) {
       console.error('Erreur lors de la soumission:', err)
-      const errorDetail = err?.response?.data?.detail || err?.message || 'Submission failed'
-      addToast(errorDetail, 'error')
+      const detail = err?.response?.data?.detail
+      const errorDetail =
+        (typeof detail === 'string' ? detail : detail?.message) || err?.message || 'Submission failed'
+      addToast(String(errorDetail), 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -470,7 +482,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
 
   const isStep1Valid = title.trim().length >= MIN_CONTENT_TITLE_LENGTH && title.trim().length <= MAX_CONTENT_TITLE_LENGTH && plainDescriptionLength >= MIN_CONTENT_DESCRIPTION_LENGTH && plainDescriptionLength <= MAX_CONTENT_DESCRIPTION_LENGTH
   const isStep2Valid = isNomination
-    ? (!!nominatorCountry && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
+    ? (!!nominatorCountry && (!asksNomineeAge || !!nomineeAgeDeclaration) && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
     : (imageUrls.length >= minImages && !videoDuplicateError && (requiresVideo ? !!videoUrl : true))
 
   const stepLabels = [
@@ -735,6 +747,33 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Nominee age statement (new nominations only; Child/Teen Safety s.12) */}
+          {asksNomineeAge && (
+            <div className={`bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 sm:p-5 border ${!nomineeAgeDeclaration ? 'border-red-500' : 'border-gray-200 dark:border-gray-700/50'}`}>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">
+                {t('participation.nominee_age_title') || "Nominee's age"} *
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                {t('participation.nominee_age_description') || 'Tell us whether the person you are nominating is an adult (18 or older).'}
+              </p>
+              <select
+                aria-label={t('participation.nominee_age_title') || "Nominee's age"}
+                value={nomineeAgeDeclaration}
+                onChange={(e) => setNomineeAgeDeclaration(e.target.value as NomineeAgeDeclaration | '')}
+                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isSubmitting}
+              >
+                <option value="">{t('participation.select_option') || 'Select an option'}</option>
+                <option value="ADULT">{t('participation.nominee_age_adult') || 'Adult (18 or older)'}</option>
+                <option value="MINOR">{t('participation.nominee_age_minor') || 'Under 18'}</option>
+                <option value="UNKNOWN">{t('participation.nominee_age_unknown') || "I don't know"}</option>
+              </select>
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                {t('participation.nominee_age_note') || "This is your statement, not a verification. Every nomination stays on hold until the nominee confirms it with their own account and the required checks are complete (for someone under 18, including a verified parent or guardian's consent). Nominating someone does not make you their guardian."}
+              </p>
             </div>
           )}
 

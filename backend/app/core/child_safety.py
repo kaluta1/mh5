@@ -203,11 +203,19 @@ class AgeSafetyEventType(str, enum.Enum):
     PENDING_REGISTRATION_COMPLETED = "PENDING_REGISTRATION_COMPLETED"
     PENDING_REGISTRATION_EXPIRED = "PENDING_REGISTRATION_EXPIRED"
     LEGACY_REVIEW_FLAGGED = "LEGACY_REVIEW_FLAGGED"
+    CONTEST_ENTRY_TRANSITION = "CONTEST_ENTRY_TRANSITION"
+    NOMINEE_CLAIM = "NOMINEE_CLAIM"
+    CHILD_SAFETY_ESCALATION = "CHILD_SAFETY_ESCALATION"
 
 
 ENFORCEMENT_ALL_JURISDICTIONS = "*"
-# Operations whose enforcement can be switched on in Phase 3. Later phases add theirs.
-ENFORCEABLE_OPERATIONS = frozenset({PolicyOperation.ACCOUNT_CREATION})
+# Operations whose jurisdiction-policy enforcement can be switched on. Phase 3 added
+# ACCOUNT_CREATION; Phase 5 adds the contest-entry operations. Later phases add theirs.
+ENFORCEABLE_OPERATIONS = frozenset({
+    PolicyOperation.ACCOUNT_CREATION,
+    PolicyOperation.PERSONAL_SUBMISSION,
+    PolicyOperation.NOMINATION,
+})
 
 
 class DecisionBasis(str, enum.Enum):
@@ -309,3 +317,181 @@ class ConsentRequirement(str, enum.Enum):
     SATISFIED = "SATISFIED"                              # valid verified consent for this scope
     REQUIRED_MISSING = "REQUIRED_MISSING"
     UNDETERMINED = "UNDETERMINED"                        # unknown age/jurisdiction/policy: treat as required
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: contest age eligibility, personal submission and nomination
+# (s.9-12, s.14, s.17, s.19). Names are implementation choices; the source
+# defines the concepts (ContestAgeEligibility, the ContestCategory age policy,
+# the nomination actors and the nomination workflow) but not status names.
+# ---------------------------------------------------------------------------
+
+class ContestAgeRuleStatus(str, enum.Enum):
+    """Lifecycle of a contest/category age rule. Only ACTIVE rules apply. An
+    ACTIVE rule is never edited in place: withdraw it and create a new version."""
+
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    WITHDRAWN = "WITHDRAWN"
+
+
+class ContestEntryKind(str, enum.Enum):
+    PERSONAL_SUBMISSION = "PERSONAL_SUBMISSION"
+    NOMINATION = "NOMINATION"
+
+
+class EligibilityOutcome(str, enum.Enum):
+    """ELIGIBLE_PUBLIC: every applicable requirement is met; the entry is active/public.
+    HELD: at least one requirement is not met (missing DOB, age/contest/category
+        rule, jurisdiction policy, guardian consent, rights, safety). The entry
+        and the account are kept, the entry is not public, and it is
+        re-evaluated automatically when the relevant information changes.
+
+    Product rule: a requirement that is not met always means HOLD, never
+    deletion or rejection of the account or the entry."""
+
+    ELIGIBLE_PUBLIC = "ELIGIBLE_PUBLIC"
+    HELD = "HELD"
+
+
+class EntryExposureStatus(str, enum.Enum):
+    """Workflow-level public exposure of one contest entry (Phase 5): may the
+    entry be active/public at all. Whether a particular viewer may receive its
+    media is a separate, later question (Phase 7)."""
+
+    PUBLIC = "PUBLIC"                                  # eligible and active
+    HELD = "HELD"                                      # created, not public, requirements pending
+    BLOCKED = "BLOCKED"                                # not public; only an administrator can change it
+    CHILD_SAFETY_ESCALATED = "CHILD_SAFETY_ESCALATED"  # s.11 high-severity path; never auto-released
+
+
+class NominationWorkflowStep(str, enum.Enum):
+    """s.12: Nomination -> Nominee notified -> Age status determined ->
+    Parental/guardian approval -> Rights confirmed -> Content reviewed -> Activated.
+    The step shown is the first one that is still open."""
+
+    NOMINEE_CONTACT = "NOMINEE_CONTACT"      # waiting for the nominee to claim the nomination
+    AGE_DETERMINATION = "AGE_DETERMINATION"
+    GUARDIAN_CONSENT = "GUARDIAN_CONSENT"
+    RIGHTS_CONFIRMATION = "RIGHTS_CONFIRMATION"
+    SAFETY_REVIEW = "SAFETY_REVIEW"
+    ACTIVE = "ACTIVE"
+    BLOCKED = "BLOCKED"
+
+
+class NomineeAgeDeclaration(str, enum.Enum):
+    """What the NOMINATOR states about the nominee. This is a third-party
+    attestation, never verification, and it is stored as such. It never
+    releases a hold: a nomination stays held until the nominee claims it and
+    every requirement is met. It only selects stricter handling (MINOR/UNKNOWN
+    content checks) while the nominee is unclaimed."""
+
+    ADULT = "ADULT"
+    MINOR = "MINOR"
+    UNKNOWN = "UNKNOWN"
+
+
+class CreativeOwnerType(str, enum.Enum):
+    SELF = "SELF"              # personal submission: the submitter owns the creative
+    NOMINEE = "NOMINEE"        # nomination: the nominated person
+    THIRD_PARTY = "THIRD_PARTY"
+    UNKNOWN = "UNKNOWN"
+
+
+class RightsStatus(str, enum.Enum):
+    NOT_REQUIRED = "NOT_REQUIRED"
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    DISPUTED = "DISPUTED"
+
+
+class SafetyStatus(str, enum.Enum):
+    CLEAR = "CLEAR"                                    # no Phase 5 concern raised
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"                # a concern needs human review before activation
+    REVIEWED_CLEAR = "REVIEWED_CLEAR"                  # an administrator cleared the concerns
+    BLOCKED = "BLOCKED"
+    CHILD_SAFETY_ESCALATED = "CHILD_SAFETY_ESCALATED"
+
+
+class MetadataSafetyStatus(str, enum.Enum):
+    """s.10: EXIF/GPS on hosted photographs and videos in a minor's entry."""
+
+    NOT_REQUIRED = "NOT_REQUIRED"      # adult subject, or no hosted media
+    SANITIZED = "SANITIZED"            # every hosted image was sanitized at upload
+    UNRESOLVED = "UNRESOLVED"          # hosted video or unsanitized/unknown media: not publicly activatable
+
+
+class SafetyConcern(str, enum.Enum):
+    """Phase 5 safety hooks (s.10, s.11). Full classification is Phase 6.
+
+    CHILD_SEXUAL_CONTENT is a dedicated high-severity concern. It is never
+    reduced to an ADULT_18_PLUS rating (s.11)."""
+
+    PRECISE_LOCATION = "PRECISE_LOCATION"
+    HOME_ADDRESS = "HOME_ADDRESS"
+    SCHOOL_INFORMATION = "SCHOOL_INFORMATION"
+    CONTACT_INFORMATION = "CONTACT_INFORMATION"
+    PERSONAL_INFORMATION = "PERSONAL_INFORMATION"
+    CHILD_SEXUAL_CONTENT = "CHILD_SEXUAL_CONTENT"
+    DANGEROUS_BEHAVIOR = "DANGEROUS_BEHAVIOR"
+    VIOLENCE = "VIOLENCE"
+    THIRD_PARTY_RIGHTS = "THIRD_PARTY_RIGHTS"
+
+
+CHILD_SAFETY_ESCALATION_CONCERNS = frozenset({SafetyConcern.CHILD_SEXUAL_CONTENT})
+
+
+class NominationAgeScope(str, enum.Enum):
+    """AgePolicy.nomination_age_applies_to: which nomination actor the policy's
+    nomination_minimum_age applies to. Sections 1-32 do not say, so the policy
+    author must state it explicitly; MyHigh5 never assumes it. A policy without
+    it cannot be enforced for NOMINATION (entries are held)."""
+
+    NOMINATOR = "NOMINATOR"
+    NOMINEE = "NOMINEE"
+    BOTH = "BOTH"
+
+
+class ContestEligibilityReason(str, enum.Enum):
+    """Machine-readable reasons why an entry is HELD. Safe for clients: they
+    never carry a DOB, an exact age, a threshold or guardian details."""
+
+    # age of an account holder
+    AGE_REQUIRED = "AGE_REQUIRED"                          # no/unusable DOB: add a date of birth
+    AGE_REVIEW_PENDING = "AGE_REVIEW_PENDING"
+    BELOW_PLATFORM_MINIMUM = "BELOW_PLATFORM_MINIMUM"      # UNDER_13 (s.2 baseline)
+    # contest / category rules
+    BELOW_CONTEST_MINIMUM_AGE = "BELOW_CONTEST_MINIMUM_AGE"
+    ABOVE_CONTEST_MAXIMUM_AGE = "ABOVE_CONTEST_MAXIMUM_AGE"
+    AGE_TIER_NOT_ELIGIBLE = "AGE_TIER_NOT_ELIGIBLE"
+    ADULT_ONLY_CATEGORY = "ADULT_ONLY_CATEGORY"
+    MINOR_PARTICIPATION_NOT_ALLOWED = "MINOR_PARTICIPATION_NOT_ALLOWED"
+    CONTEST_RULES_UNAVAILABLE = "CONTEST_RULES_UNAVAILABLE"
+    # jurisdiction policy (blocking only where the operation is enforced)
+    POLICY_BELOW_MINIMUM_AGE = "POLICY_BELOW_MINIMUM_AGE"
+    POLICY_JURISDICTION_UNRESOLVED = "POLICY_JURISDICTION_UNRESOLVED"
+    POLICY_UNSUPPORTED_JURISDICTION = "POLICY_UNSUPPORTED_JURISDICTION"
+    POLICY_UNAVAILABLE = "POLICY_UNAVAILABLE"
+    POLICY_AGE_ASSURANCE_REQUIRED = "POLICY_AGE_ASSURANCE_REQUIRED"
+    POLICY_NOMINATION_SCOPE_UNDEFINED = "POLICY_NOMINATION_SCOPE_UNDEFINED"
+    POLICY_NOT_ENFORCED = "POLICY_NOT_ENFORCED"            # informational: transition mode
+    # guardian consent (Phase 4)
+    GUARDIAN_CONSENT_REQUIRED = "GUARDIAN_CONSENT_REQUIRED"
+    # nominee
+    NOMINEE_UNCLAIMED = "NOMINEE_UNCLAIMED"                # the nominee has not claimed the nomination
+    NOMINEE_DECLINED = "NOMINEE_DECLINED"
+    NOMINEE_AGE_UNDETERMINED = "NOMINEE_AGE_UNDETERMINED"
+    NOMINEE_DECLARED_MINOR = "NOMINEE_DECLARED_MINOR"
+    # rights / safety / metadata hooks
+    RIGHTS_CONFIRMATION_REQUIRED = "RIGHTS_CONFIRMATION_REQUIRED"
+    SAFETY_REVIEW_REQUIRED = "SAFETY_REVIEW_REQUIRED"
+    CHILD_SAFETY_ESCALATION = "CHILD_SAFETY_ESCALATION"
+    METADATA_UNRESOLVED = "METADATA_UNRESOLVED"
+    ADMIN_BLOCKED = "ADMIN_BLOCKED"
+
+
+# Reasons that only inform (jurisdiction-policy enforcement is off for the
+# operation); they never cause a hold and never release one.
+INFORMATIONAL_ELIGIBILITY_REASONS = frozenset({
+    ContestEligibilityReason.POLICY_NOT_ENFORCED,
+})

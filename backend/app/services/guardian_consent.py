@@ -352,6 +352,7 @@ def admin_verify_relationship(db: Session, rel: GuardianRelationship, *, method:
     _audit(db, "guardian_relationships", rel.id, "GUARDIAN_VERIFIED", admin_id,
            {"method": method.value, "note": note}, {"status": GuardianVerificationStatus.VERIFICATION_REQUIRED.value})
     db.commit()
+    _reevaluate_contest_entries(db, rel.minor_user_id, "GUARDIAN_VERIFIED", admin_id)
     return GuardianResponse("APPROVED" if completion else "VERIFIED", completion, pending.email if pending else None)
 
 
@@ -371,6 +372,14 @@ def admin_reject_relationship(db: Session, rel: GuardianRelationship, *, admin_i
     _event(db, AgeSafetyEventType.GUARDIAN_REJECTED, now, details={"relationship_id": rel.id})
     _audit(db, "guardian_relationships", rel.id, "GUARDIAN_REJECTED", admin_id, {"note": note}, {"status": old})
     db.commit()
+
+
+def _reevaluate_contest_entries(db: Session, user_id: Optional[int], trigger: str, actor_id: Optional[int]) -> None:
+    """Phase 5: a consent/verification change affects current and future contest
+    eligibility (history is kept). Imported lazily to avoid an import cycle."""
+    from app.services.contest_eligibility import safe_reevaluate_for_user
+
+    safe_reevaluate_for_user(db, user_id, trigger=trigger, actor_id=actor_id)
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +490,7 @@ def withdraw_consent(db: Session, consent: GuardianConsent, *, actor_id: Optiona
            {"scope": consent.consent_scope, "reason": reason}, {"withdrawal_status": ConsentStatus.GRANTED.value})
     db.commit()
     db.refresh(consent)
+    _reevaluate_contest_entries(db, consent.minor_user_id, "CONSENT_WITHDRAWN", actor_id)
     return consent
 
 
@@ -508,6 +518,7 @@ def grant_additional_scope(db: Session, rel: GuardianRelationship, scope: Guardi
     _audit(db, "guardian_consents", consent.id, "CONSENT_GRANTED", actor_id, {"scope": scope.value})
     db.commit()
     db.refresh(consent)
+    _reevaluate_contest_entries(db, consent.minor_user_id, "CONSENT_GRANTED", actor_id)
     return consent
 
 

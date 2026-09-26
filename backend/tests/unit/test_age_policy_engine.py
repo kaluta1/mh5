@@ -634,12 +634,14 @@ def test_admin_api_create_activate_resolve(client, db):
 
 
 def test_engine_is_only_wired_into_approved_flows():
-    """Phase 2 built the engine; Phase 3 wires it into registration and DOB updates
-    only. No other endpoint (contests, voting, TopHigh5, media, payments...) may
-    consume it until its own phase."""
+    """Phase 2 built the engine; Phase 3 wires it into registration and DOB updates;
+    Phase 5 into contest entry (personal submission / nomination) eligibility.
+    No other endpoint (voting, TopHigh5, media delivery, payments...) may consume
+    it until its own phase."""
     import pathlib
 
     endpoints = pathlib.Path(__file__).resolve().parents[2] / "app" / "api" / "api_v1" / "endpoints"
     users = sorted(p.name for p in endpoints.glob("*.py")
                    if "age_policy_engine" in p.read_text(encoding="utf-8"))
-    assert users == ["age_policies.py", "age_safety.py", "auth.py", "users.py"]
+    assert users == ["age_policies.py", "age_safety.py", "auth.py", "contest_eligibility.py", "contestant.py",
+                     "users.py"]

@@ -41,10 +41,12 @@ from .business_model import (
 from .age_policy import AgePolicy
 from .age_safety import UserAgeProfile, DobChangeRecord, AgeSafetyEvent, ChildSafetyEnforcement
 from .guardian import Guardian, GuardianRelationship, GuardianConsent, PendingRegistration, UserPrivacyPreference
+from .contest_eligibility import ContestAgeEligibility, CategoryAgePolicy, ContestEntrySafety
 
 __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",
     "Guardian", "GuardianRelationship", "GuardianConsent", "PendingRegistration", "UserPrivacyPreference",
+    "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",

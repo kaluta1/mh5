@@ -118,6 +118,13 @@ def _material_change(engine: AgeAndContestPolicyEngine, user: User, old: date, n
     return None
 
 
+def _reevaluate_contest_entries(db: Session, user_id: int, trigger: str, actor_id: Optional[int]) -> None:
+    """Phase 5: a DOB/review change can change contest eligibility (lazy import: no cycle)."""
+    from app.services.contest_eligibility import safe_reevaluate_for_user
+
+    safe_reevaluate_for_user(db, user_id, trigger=trigger, actor_id=actor_id)
+
+
 def submit_self_service_dob(db: Session, user: User, new_dob: date, *, today: date,
                             now: Optional[datetime] = None) -> DobUpdateResult:
     now = now or datetime.utcnow()
@@ -147,6 +154,7 @@ def submit_self_service_dob(db: Session, user: User, new_dob: date, *, today: da
         _event(db, user.id, AgeSafetyEventType.DOB_CAPTURED, now, tier=new_tier, risk=risk,
                details={"source": DobSource.SELF_DECLARED_PROFILE.value})
         db.commit()
+        _reevaluate_contest_entries(db, user.id, "DOB_CAPTURED", user.id)
         return DobUpdateResult(DobUpdateStatus.CAPTURED, profile.review_status)
 
     pending = (db.query(DobChangeRecord)
@@ -186,6 +194,7 @@ def submit_self_service_dob(db: Session, user: User, new_dob: date, *, today: da
         _event(db, user.id, AgeSafetyEventType.DOB_CHANGE_REQUESTED, now, tier=old_tier, risk=True,
                details={"reason": reason, "requested_tier": new_tier.value})
         db.commit()
+        _reevaluate_contest_entries(db, user.id, "DOB_CHANGE_REQUESTED", user.id)
         return DobUpdateResult(DobUpdateStatus.PENDING_REVIEW, profile.review_status)
 
     db.add(DobChangeRecord(created_at=now, updated_at=now, user_id=user.id, previous_dob=current,
@@ -197,6 +206,7 @@ def submit_self_service_dob(db: Session, user: User, new_dob: date, *, today: da
     _event(db, user.id, AgeSafetyEventType.DOB_CHANGED, now, tier=new_tier,
            details={"source": DobSource.SELF_CORRECTION.value})
     db.commit()
+    _reevaluate_contest_entries(db, user.id, "DOB_CHANGED", user.id)
     return DobUpdateResult(DobUpdateStatus.APPLIED, profile.review_status)
 
 
@@ -233,6 +243,7 @@ def admin_correct_dob(db: Session, user: User, new_dob: date, *, reason: str, ad
                       old_values=None, new_values={"user_id": user.id, "reason": reason}, user_id=admin_id))
     db.commit()
     db.refresh(profile)
+    _reevaluate_contest_entries(db, user.id, "DOB_ADMIN_CORRECTION", admin_id)
     return profile
 
 
@@ -264,4 +275,5 @@ def review_change(db: Session, record: DobChangeRecord, *, approve: bool, note: 
                       new_values={"status": record.status, "note": note}, user_id=admin_id))
     db.commit()
     db.refresh(record)
+    _reevaluate_contest_entries(db, record.user_id, "DOB_CHANGE_REVIEWED", admin_id)
     return record

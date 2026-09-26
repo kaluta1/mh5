@@ -102,6 +102,7 @@ def test_rate_limit_policy_is_unchanged():
         "/api/v1/auth/login": (10, 60),
         "/api/v1/auth/register": (5, 3600),
         "/api/v1/guardian": (30, 3600),
+        "/api/v1/contest-eligibility/claims": (30, 3600),  # Phase 5 nominee claim tokens
         "/api/v1/auth/password-reset-request": (5, 3600),
         "/api/v1/auth/password-reset-confirm": (10, 3600),
         "/api/v1/share-links": (60, 60),

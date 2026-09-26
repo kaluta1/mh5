@@ -385,5 +385,6 @@ def policy_definition_from_row(row: AgePolicy) -> AgePolicyDefinition:
             "advertising_restrictions": row.advertising_restrictions,
             "profile_visibility_rules": row.profile_visibility_rules,
             "notes": row.notes,
+            "nomination_age_applies_to": getattr(row, "nomination_age_applies_to", None),
         }
     )

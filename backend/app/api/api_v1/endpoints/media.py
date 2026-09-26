@@ -1,5 +1,6 @@
 from typing import Any, List
 import os
+from datetime import datetime
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -94,6 +95,7 @@ async def upload_media(
             file_size=metadata.get("file_size"),
             width=metadata.get("width"),
             height=metadata.get("height"),
+            metadata_sanitized_at=datetime.utcnow() if metadata.get("metadata_sanitized") else None,
         )
         media = crud_media.create(db=db, obj_in=media_data)
         return media
