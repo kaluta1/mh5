@@ -2800,13 +2800,14 @@ def create_contestant(
 
     eligibility_today, eligibility_now = _utc_today(), _dt.utcnow()
 
-    def _evaluate_entry(moderation_results=()):
+    def _evaluate_entry(moderation_results=(), classifier_run=None):
         entry_inputs = _eligibility.EntryInputs(
             title=contestant_data.title,
             description=contestant_data.description,
             image_media_ids=contestant_data.image_media_ids,
             video_media_ids=contestant_data.video_media_ids,
             moderation_results=tuple(moderation_results),
+            classifier_run=classifier_run,
         )
         if entry_kind == _EntryKind.NOMINATION:
             return _eligibility.evaluate_nomination(
@@ -2822,13 +2823,38 @@ def create_contestant(
     # Product rule: an unmet requirement (including a missing DOB) never refuses
     # the entry; it is created ON HOLD and re-evaluated automatically later.
     preliminary = _evaluate_entry()
-# s.11: sexual content with a possibly-minor subject goes to the dedicated
+    # s.11: sexual content with a possibly-minor subject goes to the dedicated
     # child-safety path instead of an ordinary moderation rejection.
     child_safety_subject = preliminary.subject_possibly_minor
     moderation_results = []
+    # Phase 6: a minor's (or possibly-minor subject's) media is not sent to the
+    # external moderation provider unless that has been explicitly approved.
+    from app.core.config import settings as _settings
+    from app.core.child_safety import ClassifierStatus as _ClassifierStatus
+    from app.services import content_safety as _content_safety
+
+    external_moderation_allowed = (
+        content_moderation_service.is_configured()
+        and (not child_safety_subject or _settings.CONTENT_MODERATION_EXTERNAL_FOR_MINORS)
+    )
+    media_results = []
+
+    def _provider_moderate(kind: str, media_url: str):
+        if not external_moderation_allowed:
+            from app.services.content_moderation import ModerationResult as _ModerationResult
+
+            return _ModerationResult(False, 0, [], {"skipped": True, "reason": "not_permitted_or_configured"})
+        result = (content_moderation_service.moderate_image(media_url) if kind == "image"
+                  else content_moderation_service.moderate_video(media_url))
+        media_results.append(result)
+        return result
 
     def _moderation_rejects(result) -> bool:
         if result.is_approved:
+            return False
+        if not result.flags:
+            # Skipped/unavailable/error is NOT a rejection and NOT an approval:
+            # the content gate keeps the entry private for human review (fail closed).
             return False
         if child_safety_subject and any(
             getattr(getattr(f, "type", None), "value", None) == "adult" for f in result.flags
@@ -2896,7 +2922,7 @@ def create_contestant(
                     media_url = get_media_url(media_ref)
                     if media_url:
                         logger.info(f"Moderating image {idx+1}/{len(image_refs)}")
-                        moderation_result = content_moderation_service.moderate_image(media_url)
+                        moderation_result = _provider_moderate("image", media_url)
                         logger.info(f"Image {idx+1} moderation: approved={moderation_result.is_approved}")
                         moderation_results.append(moderation_result)
                         if _moderation_rejects(moderation_result):
@@ -2920,7 +2946,7 @@ def create_contestant(
                     media_url = get_media_url(media_ref)
                     if media_url:
                         logger.info(f"Moderating video {idx+1}/{len(video_refs)}")
-                        moderation_result = content_moderation_service.moderate_video(media_url)
+                        moderation_result = _provider_moderate("video", media_url)
                         logger.info(f"Video {idx+1} moderation: approved={moderation_result.is_approved}")
                         moderation_results.append(moderation_result)
                         if _moderation_rejects(moderation_result):
@@ -2986,7 +3012,20 @@ def create_contestant(
             )
     
     # Final Phase 5 decision, now including the moderation signals.
-    entry_decision = _evaluate_entry(moderation_results)
+    classified = sum(1 for r in media_results if _content_safety.result_completed(r))
+    failed = sum(1 for r in media_results
+                 if any((getattr(r, "details", None) or {}).get(k) for k in ("error", "fail_closed")))
+    if not media_results:
+        run_status = _ClassifierStatus.UNAVAILABLE if not external_moderation_allowed else _ClassifierStatus.NOT_RUN
+    elif failed:
+        run_status = _ClassifierStatus.FAILED
+    else:
+        run_status = (_ClassifierStatus.COMPLETED if classified == len(media_results)
+                      else _ClassifierStatus.PARTIAL)
+    classifier_run = _content_safety.ClassifierRun(status=run_status, media_total=len(media_results),
+                                                   media_classified=classified, media_failed=failed,
+                                                   media_results=tuple(media_results))
+    entry_decision = _evaluate_entry(moderation_results, classifier_run)
     entry_public = entry_decision.public
     nominee_claim_token = None
 
@@ -3414,9 +3453,27 @@ def update_contestant(
     child_safety_subject = safety_row is not None and _eligibility.row_subject_possibly_minor(safety_row)
     escalation_signals = []
 
+    from app.core.config import settings as _settings
+
+    external_moderation_allowed = (
+        content_moderation_service.is_configured()
+        and (not child_safety_subject or _settings.CONTENT_MODERATION_EXTERNAL_FOR_MINORS)
+    )
+
+    def _provider_moderate(kind: str, media_url: str):
+        # Phase 6: minor content is not sent to the external provider unless approved.
+        if not external_moderation_allowed:
+            from app.services.content_moderation import ModerationResult as _ModerationResult
+
+            return _ModerationResult(False, 0, [], {"skipped": True, "reason": "not_permitted_or_configured"})
+        return (content_moderation_service.moderate_image(media_url) if kind == "image"
+                else content_moderation_service.moderate_video(media_url))
+
     def _moderation_rejects(result) -> bool:
         if result.is_approved:
             return False
+        if not result.flags:
+            return False  # unavailable is not a rejection; the content gate keeps it private (fail closed)
         if child_safety_subject and any(
             getattr(getattr(f, "type", None), "value", None) == "adult" for f in result.flags
         ):
@@ -3485,7 +3542,7 @@ def update_contestant(
                     media_url = get_media_url(media_ref)
                     if media_url:
                         logger.info(f"Moderating image {idx+1}/{len(image_refs)}")
-                        moderation_result = content_moderation_service.moderate_image(media_url)
+                        moderation_result = _provider_moderate("image", media_url)
                         logger.info(f"Image {idx+1} moderation: approved={moderation_result.is_approved}")
                         if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
@@ -3508,7 +3565,7 @@ def update_contestant(
                     media_url = get_media_url(media_ref)
                     if media_url:
                         logger.info(f"Moderating video {idx+1}/{len(video_refs)}")
-                        moderation_result = content_moderation_service.moderate_video(media_url)
+                        moderation_result = _provider_moderate("video", media_url)
                         logger.info(f"Video {idx+1} moderation: approved={moderation_result.is_approved}")
                         if _moderation_rejects(moderation_result):
                             flags_desc = ", ".join([f.description for f in moderation_result.flags])
@@ -3604,11 +3661,24 @@ def update_contestant(
     )
 
     if safety_row is not None:
-        # New content is new input: an earlier "reviewed clear" does not carry over.
+        # New content is new input: it gets a fresh Phase 6 assessment and any
+        # earlier approval is discarded (the member cannot edit approved content
+        # into something unreviewed). Minor content is not sent to the provider.
+        from datetime import datetime as _dt
+        from app.services import content_safety as _content_safety
         from app.services.age_policy_engine import utc_today as _utc_today
 
-        if safety_row.safety_status == "REVIEWED_CLEAR":
-            safety_row.safety_status = "CLEAR"
+        possibly_minor = _eligibility.row_subject_possibly_minor(safety_row)
+        gate = _content_safety.classify(
+            db, title=contestant_data.title, description=contestant_data.description,
+            image_media_ids=contestant_data.image_media_ids, video_media_ids=contestant_data.video_media_ids,
+            moderation_results=(text_moderation,), possibly_minor=possibly_minor,
+            determined_adult=(not possibly_minor and safety_row.subject_age_tier == "ADULT_18_PLUS"),
+            run=None,
+        )
+        _content_safety.record_assessment(db, contestant_id, gate, possibly_minor=possibly_minor,
+                                          actor_id=current_user.id, now=_dt.utcnow(),
+                                          action="CONTENT_REASSESSED_AFTER_UPDATE")
         _eligibility.reevaluate_entry(db, safety_row, actor_id=current_user.id, trigger="ENTRY_UPDATED",
                                       today=_utc_today())
         db.refresh(updated_contestant)

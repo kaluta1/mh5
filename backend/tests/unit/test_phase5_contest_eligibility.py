@@ -19,6 +19,7 @@ from PIL import Image
 
 from app.core.child_safety import (
     AgeTier,
+    ModerationState,
     ContentRating,
     ContestEligibilityReason as R,
     ContestEntryKind,
@@ -53,6 +54,7 @@ from app.models.payment import Deposit
 from app.models.user import User
 from app.schemas.contest_eligibility import ContestAgeRuleDefinition
 from app.services import age_gate, contest_eligibility as ce, dob_service, guardian_consent as gc
+from app.services.content_safety import ContentGate
 from app.services.age_policy_engine import PolicyResolution, PolicyResolutionStatus, utc_today
 from app.services.content_moderation import ContentFlag, FlagType, ModerationResult, Severity
 from tests.unit.test_age_gate_registration import auth
@@ -116,13 +118,28 @@ def enforce(db, op, jurisdiction="TZ", enabled=True):
                                     reason="synthetic phase 5 test", actor_id=None)
 
 
-def submit(db, user, c=None, **inputs):
-    return ce.evaluate_personal_submission(db, user, c, ce.EntryInputs(**inputs), today=TODAY, now=datetime.utcnow())
+# Phase 6 made content safety a separate publication gate. These Phase 5 tests
+# are about PARTICIPATION eligibility, so when a test gives no content inputs
+# the helpers supply an explicitly approved SYNTHETIC content decision. Tests
+# that pass content inputs (text, moderation results, concerns, media) run the
+# real Phase 6 classifier instead.
+APPROVED_CONTENT = ContentGate(ModerationState.APPROVED, rating=ContentRating.GENERAL, human_review_required=False)
+_UNSET = object()
 
 
-def nominate(db, nominator, c=None, declaration=None, nominee=None, **inputs):
+def _content(content, inputs):
+    return (None if inputs else APPROVED_CONTENT) if content is _UNSET else content
+
+
+def submit(db, user, c=None, content=_UNSET, **inputs):
+    return ce.evaluate_personal_submission(db, user, c, ce.EntryInputs(**inputs), today=TODAY, now=datetime.utcnow(),
+                                           content=_content(content, inputs))
+
+
+def nominate(db, nominator, c=None, declaration=None, nominee=None, content=_UNSET, **inputs):
     return ce.evaluate_nomination(db, nominator, c, ce.EntryInputs(**inputs), nominee_age_declaration=declaration,
-                                  today=TODAY, now=datetime.utcnow(), nominee_user=nominee)
+                                  today=TODAY, now=datetime.utcnow(), nominee_user=nominee,
+                                  content=_content(content, inputs))
 
 
 def entry(db, submitter, decision, kind=ContestEntryKind.PERSONAL_SUBMISSION, c=None, declaration=None, **cols):
@@ -386,7 +403,7 @@ def test_birthday_boundary_is_dynamic(db):
     user = person(db, dob=born(18, days=1))  # turns 18 tomorrow
     assert submit(db, user).outcome == EligibilityOutcome.HELD
     tomorrow = ce.evaluate_personal_submission(db, user, None, ce.EntryInputs(), today=TODAY + timedelta(days=1),
-                                               now=datetime.utcnow())
+                                               now=datetime.utcnow(), content=APPROVED_CONTENT)
     assert tomorrow.outcome == EligibilityOutcome.ELIGIBLE_PUBLIC
 
 
@@ -751,8 +768,8 @@ def test_historical_nominations_are_untouched(db):
 # ===========================================================================
 
 @pytest.mark.parametrize("text, concern", [
-    ("Call me on +255 712 345 678", SafetyConcern.CONTACT_INFORMATION),
-    ("write to kid.star@example.com", SafetyConcern.CONTACT_INFORMATION),
+    ("Call me on +255 712 345 678", SafetyConcern.PII_PHONE),
+    ("write to kid.star@example.com", SafetyConcern.PII_EMAIL),
     ("We live at -6.79235, 39.20833", SafetyConcern.PRECISE_LOCATION),
     ("Come to 12 Uhuru Street after class", SafetyConcern.HOME_ADDRESS),
     ("I sing at Mzizima Secondary School", SafetyConcern.SCHOOL_INFORMATION),
@@ -763,9 +780,13 @@ def test_minor_pii_hooks_hold_for_review(db, text, concern):
     assert R.SAFETY_REVIEW_REQUIRED in d.reasons and not d.public
 
 
-def test_adult_text_is_not_changed_by_minor_hooks(db):
+def test_adult_pii_text_is_recorded_for_review_not_auto_approved(db):
+    """Phase 6: findings are recorded for every subject; content is never
+    auto-approved with a finding (the minor-only PII approval block is tested
+    in the Phase 6 suite)."""
     d = submit(db, person(db, 30), description="Booking: +255 712 345 678, star@example.com")
-    assert d.public and d.safety_status == SafetyStatus.CLEAR
+    assert not d.public and d.participation_eligible
+    assert {SafetyConcern.PII_PHONE, SafetyConcern.PII_EMAIL} <= set(d.safety_concerns)
 
 
 def test_sexual_content_involving_a_minor_is_escalated_not_rated_adult(db):
@@ -793,13 +814,15 @@ def test_unknown_or_minor_nominee_sexual_content_is_escalated(db):
     assert d.exposure == EntryExposureStatus.CHILD_SAFETY_ESCALATED
 
 
-def test_adult_sexual_content_keeps_the_existing_moderation_path(db):
+def test_adult_sexual_content_is_not_a_child_safety_escalation(db):
     d = submit(db, person(db, 30), moderation_results=(adult_flag(),))
-    assert SafetyConcern.CHILD_SEXUAL_CONTENT not in d.safety_concerns and d.public
+    assert SafetyConcern.CHILD_SEXUAL_CONTENT not in d.safety_concerns
+    assert SafetyConcern.SEXUAL_CONTENT in d.safety_concerns and not d.public
+    assert d.content.proposed_rating == ContentRating.ADULT_18_PLUS
 
 
 @pytest.mark.parametrize("kind, concern", [(FlagType.VIOLENCE, SafetyConcern.VIOLENCE),
-                                           (FlagType.WEAPONS, SafetyConcern.VIOLENCE),
+                                           (FlagType.WEAPONS, SafetyConcern.WEAPONS),
                                            (FlagType.DRUGS, SafetyConcern.DANGEROUS_BEHAVIOR)])
 def test_violence_and_dangerous_behaviour_hold_minor_entries(db, kind, concern):
     d = submit(db, person(db, 15), moderation_results=(flag(kind),))
@@ -813,6 +836,11 @@ def test_third_party_rights_concern_holds_until_confirmed(db):
     row, safety = entry(db, adult, d)
     admin = person(db, 40, admin=True)
     ce.admin_review(db, safety, action="CONFIRM_RIGHTS", admin_id=admin.id, note="synthetic license", today=TODAY)
+    assert safety.exposure_status == "HELD"  # Phase 6: content still needs a moderation decision
+    from app.services import content_safety as cs
+    cs.moderate(db, cs.moderation_for(db, row.id), action="APPROVE", actor=admin, reason="SYNTHETIC_OK",
+                rating=ContentRating.GENERAL, today=TODAY)
+    db.refresh(safety)
     assert safety.exposure_status == "PUBLIC"
 
 
@@ -824,13 +852,18 @@ def test_admin_flag_and_clear_safety_review(db):
                     note="synthetic flag", today=TODAY)
     assert safety.exposure_status == "HELD" and row.is_active is False
     ce.admin_review(db, safety, action="CLEAR_SAFETY_REVIEW", admin_id=admin.id, note="synthetic clear", today=TODAY)
+    # Phase 6: clearing a finding revokes nothing and approves nothing; a new approval is required.
+    assert safety.exposure_status == "HELD"
+    from app.services import content_safety as cs
+    cs.moderate(db, cs.moderation_for(db, row.id), action="APPROVE", actor=admin, reason="SYNTHETIC_OK",
+                rating=ContentRating.TEEN_16_PLUS, today=TODAY)
+    db.refresh(safety)
     assert safety.exposure_status == "PUBLIC"
     ce.admin_review(db, safety, action="FLAG_CONCERN", concern=SafetyConcern.CHILD_SEXUAL_CONTENT,
                     admin_id=admin.id, note="synthetic escalation", today=TODAY)
     assert safety.exposure_status == "CHILD_SAFETY_ESCALATED"
+    assert cs.moderation_for(db, row.id).child_safety_escalated is True
 
-
-# ---- EXIF / GPS -------------------------------------------------------------
 
 def test_jpeg_gps_exif_comment_and_trailing_images_are_stripped_orientation_kept():
     raw = jpeg_with_gps() + b"\xff\xd8\xff\xe1appended-secondary-image-with-exif"
@@ -892,8 +925,10 @@ def test_minor_entry_metadata_gate(db):
     assert submit(db, teen, video_media_ids=json.dumps([video.url])).metadata_status == MetadataSafetyStatus.UNRESOLVED
     ext = submit(db, teen, video_media_ids=json.dumps(["https://www.youtube.com/watch?v=abc"]))
     assert ext.metadata_status == MetadataSafetyStatus.NOT_REQUIRED
-    # Adults: not required (behaviour unchanged).
-    assert submit(db, person(db, 30), image_media_ids=json.dumps([legacy.id])).public
+    # Adults: the minor metadata HOLD does not apply (the finding is recorded for content review instead).
+    adult = submit(db, person(db, 30), image_media_ids=json.dumps([legacy.id]))
+    assert adult.metadata_status == MetadataSafetyStatus.NOT_REQUIRED
+    assert SafetyConcern.METADATA_UNVERIFIED in adult.safety_concerns
 
 
 # ===========================================================================
@@ -910,6 +945,7 @@ def api_world(db, monkeypatch):
     from app.services.contest_status import contest_status_service
 
     approved = ModerationResult(True, 1.0, [], {})
+    monkeypatch.setattr(content_moderation_service, "is_configured", lambda: True)  # in-process stub only
     monkeypatch.setattr(content_moderation_service, "moderate_text", lambda text: approved)
     monkeypatch.setattr(content_moderation_service, "moderate_image", lambda url: approved)
     monkeypatch.setattr(content_moderation_service, "moderate_video", lambda url: approved)
@@ -938,14 +974,19 @@ def _post(client, user, c, **body):
 
 
 def test_api_adult_submission_is_public(client, db, api_world):
+    """Adult, fully covered, safe content is public at once. (Phase 6: an external
+    video link cannot be classified, so that entry waits for human review.)"""
     c = api_world()
-    resp = _post(client, person(db, 30), c)
+    resp = _post(client, person(db, 30), c, title="Morning song", description="An acoustic cover",
+                 video_media_ids=None)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["public_status"] == "PUBLIC" and body["message"] == "Submission created successfully."
     contestant = db.query(Contestant).one()
     assert contestant.is_active is True
     assert db.query(ContestEntrySafety).one().exposure_status == "PUBLIC"
+    yt = _post(client, person(db, 30), api_world())  # YouTube link
+    assert yt.status_code == 200 and yt.json()["public_status"] == "PENDING_REVIEW"
 
 
 def test_api_minor_submission_is_held_and_hidden(client, db, api_world):
@@ -977,7 +1018,7 @@ def test_api_missing_dob_creates_a_held_entry_and_keeps_the_account(client, db, 
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["public_status"] == "PENDING_REVIEW" and body["next_step"] == "ADD_DATE_OF_BIRTH"
-    assert body["eligibility_reasons"] == ["AGE_REQUIRED"] and "on hold" in body["message"]
+    assert "AGE_REQUIRED" in body["eligibility_reasons"] and "on hold" in body["message"]
     contestant = db.query(Contestant).one()
     assert contestant.is_active is False and contestant.is_deleted is False
     assert db.query(ContestEntrySafety).one().exposure_status == "HELD"
@@ -985,6 +1026,15 @@ def test_api_missing_dob_creates_a_held_entry_and_keeps_the_account(client, db, 
     # The member updates the profile DOB through the normal endpoint: automatic re-evaluation.
     upd = client.put("/api/v1/users/me", headers=auth(user), json={"date_of_birth": born(30).date().isoformat()})
     assert upd.status_code == 200, upd.text
+    db.expire_all()
+    safety = db.query(ContestEntrySafety).one()
+    # Participation hold released; the content (possibly-minor at submission, not sent to the provider)
+    # still needs a moderation decision - Phase 6 independent gate.
+    assert "AGE_REQUIRED" not in safety.reason_codes and safety.exposure_status == "HELD"
+    assert [c for c in safety.reason_codes if c != "POLICY_NOT_ENFORCED"] == ["CONTENT_REVIEW_REQUIRED"]
+    from app.services import content_safety as cs
+    cs.moderate(db, cs.moderation_for(db, contestant.id), action="APPROVE", actor=person(db, 40, admin=True),
+                reason="SYNTHETIC_OK", rating=ContentRating.GENERAL, today=TODAY)
     db.expire_all()
     assert db.query(ContestEntrySafety).one().exposure_status == "PUBLIC"
     assert db.query(Contestant).one().is_active is True
@@ -1014,14 +1064,19 @@ def test_api_minor_sexual_content_goes_to_child_safety_escalation(client, db, ap
     from app.services.content_moderation import content_moderation_service
 
     c = api_world()
-    monkeypatch.setattr(content_moderation_service, "moderate_video", lambda url: adult_flag())
+    calls = []
+    monkeypatch.setattr(content_moderation_service, "moderate_video", lambda url: calls.append(url) or adult_flag())
+    # Default: a minor's media is NOT sent to the external provider at all (held for review).
     resp = _post(client, person(db, 16), c)
+    assert resp.status_code == 200 and resp.json()["public_status"] == "PENDING_REVIEW" and calls == []
+    # Only with explicit approval to use the provider for minors does its signal reach the pipeline.
+    monkeypatch.setattr(settings, "CONTENT_MODERATION_EXTERNAL_FOR_MINORS", True)
+    resp = _post(client, person(db, 16), api_world())
     assert resp.status_code == 200, resp.text
-    assert resp.json()["public_status"] == "PENDING_REVIEW"
+    assert resp.json()["public_status"] == "PENDING_REVIEW" and len(calls) == 1
     assert "CHILD_SAFETY" not in resp.text  # internal classification never reaches the member
-    safety = db.query(ContestEntrySafety).one()
-    assert safety.exposure_status == "CHILD_SAFETY_ESCALATED"
-    assert db.query(Contestant).one().is_active is False
+    escalated = [r for r in db.query(ContestEntrySafety) if r.exposure_status == "CHILD_SAFETY_ESCALATED"]
+    assert len(escalated) == 1
     # Adults keep the existing moderation rejection.
     adult = _post(client, person(db, 30), api_world())
     assert adult.status_code == 422
@@ -1047,7 +1102,8 @@ def test_api_precheck(client, db, api_world):
     assert no.json()["can_start"] is True and no.json()["will_be_held"] is True
     assert no.json()["next_step"] == "ADD_DATE_OF_BIRTH"
     adult = client.get(f"/api/v1/contest-eligibility/contests/{c.id}", headers=auth(person(db, 30)))
-    assert adult.json()["will_be_held"] is False
+    # Phase 6: content is unknown before submission, so review may still be needed.
+    assert adult.json()["will_be_held"] is True and "AGE_REQUIRED" not in adult.json()["reason_codes"]
 
 
 def test_admin_endpoints(client, db, api_world):

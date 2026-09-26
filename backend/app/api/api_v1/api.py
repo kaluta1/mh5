@@ -111,6 +111,15 @@ api_router.include_router(
     tags=["Contest eligibility"],
 )
 
+from app.api.api_v1.endpoints import content_moderation as content_moderation_endpoints  # noqa: E402
+
+# Phase 6: authorization is per route (moderate_content / explicit child_safety_resolve), not require_admin.
+api_router.include_router(
+    content_moderation_endpoints.router,
+    prefix="/admin/content-moderation",
+    tags=["Administration - content moderation"],
+)
+
 from app.api.api_v1.endpoints import guardian as guardian_endpoints  # noqa: E402
 
 api_router.include_router(guardian_endpoints.router, prefix="/guardian", tags=["Guardian consent"])

@@ -84,7 +84,7 @@ def my_entry_status(
     if contestant is None or contestant.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
     row = db.query(ContestEntrySafety).filter(ContestEntrySafety.contestant_id == contestant_id).first()
-    return service.owner_view(row) or {"public_status": "PUBLIC", "workflow_step": None, "reason_codes": []}
+    return service.owner_view(row, db) or {"public_status": "PUBLIC", "workflow_step": None, "reason_codes": []}
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ def respond_to_claim(body: ClaimResponse, db: Session = Depends(get_db),
     except service.ClaimError as exc:
         db.rollback()
         raise _claim_error(exc)
-    view = service.owner_view(row) or {}
+    view = service.owner_view(row, db) or {}
     next_step = None
     if body.decision == "ACCEPT" and row.exposure_status != EntryExposureStatus.PUBLIC.value:
         codes = set(row.reason_codes or ())

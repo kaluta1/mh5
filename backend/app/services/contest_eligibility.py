@@ -66,6 +66,11 @@ is first activated (so a corrected or newly added DOB can release it); after
 activation a birthday never removes the participant. Everything else (tier,
 policy, consent, review state) is always recomputed from current data.
 
+CONTENT SAFETY (Phase 6): content is a separate, independent gate decided by
+app.services.content_safety. Public exposure requires participation
+eligibility AND approved content AND no child-safety escalation; this module
+composes both into the one authoritative exposure decision.
+
 Nothing here touches payments, commissions, wallets, the Referral Pool, KYC
 providers, votes or results.
 """
@@ -73,7 +78,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -102,6 +106,7 @@ from app.core.child_safety import (
     EntryExposureStatus,
     GuardianConsentScope,
     MetadataSafetyStatus,
+    ModerationState,
     NominationAgeScope,
     NominationWorkflowStep,
     NomineeAgeDeclaration,
@@ -166,6 +171,9 @@ CLIENT_MESSAGES = {
                 "Share the claim link with them."),
     "PENDING": ("Your entry was received and is on hold. It will become visible automatically once the "
                 "required checks are complete."),
+    "CONTENT": "Your entry was received and is being reviewed before it can be shown publicly.",
+    "UPDATE": "Your entry needs a change before it can be shown publicly. Please update it.",
+    "PROHIBITED": "This entry can't be published.",
 }
 
 
@@ -280,42 +288,21 @@ def resolve_contest_rules(db: Session, contest: Optional[Contest], jurisdiction:
 # Safety / PII / metadata hooks (Phase 5 only; Phase 6 replaces the detectors)
 # ---------------------------------------------------------------------------
 
-_TEXT_PATTERNS = (
-    (SafetyConcern.CONTACT_INFORMATION, re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
-    (SafetyConcern.CONTACT_INFORMATION, re.compile(r"(?:\+?\d[\s().-]?){8,}\d")),
-    (SafetyConcern.PRECISE_LOCATION, re.compile(r"-?\d{1,2}\.\d{4,}\s*,\s*-?\d{1,3}\.\d{4,}")),
-    (SafetyConcern.HOME_ADDRESS, re.compile(
-        r"\b\d{1,5}\s+(?:[A-Za-z]+\s){0,3}(?:street|st\.|avenue|ave\.?|road|rd\.?|lane|boulevard|blvd|drive|"
-        r"rue|calle|avenida|strasse|straße)\b", re.IGNORECASE)),
-    (SafetyConcern.SCHOOL_INFORMATION, re.compile(
-        r"\b(?:school|high\s+school|primary\s+school|secondary\s+school|middle\s+school|academy|"
-        r"école|ecole|lycée|lycee|collège|escuela|colegio)\b", re.IGNORECASE)),
+# Detectors live in the Phase 6 content-safety service (single implementation).
+from app.services.content_safety import (  # noqa: E402
+    ClassifierRun,
+    ContentGate,
+    concerns_from_moderation,
+    detect_text_concerns,
 )
+from app.services import content_safety as cs  # noqa: E402
 
-
-def detect_text_concerns(text: Optional[str]) -> Set[SafetyConcern]:
-    """Deterministic Phase 5 PII hook for a minor's (or possibly-minor) entry text."""
-    found: Set[SafetyConcern] = set()
-    for concern, pattern in _TEXT_PATTERNS:
-        if text and pattern.search(text):
-            found.add(concern)
-    return found
-
-
-def concerns_from_moderation(results: Iterable, *, possibly_minor_subject: bool) -> Set[SafetyConcern]:
-    """Map existing ContentModerationService results to Phase 5 concerns. Sexual
-    content with a possibly-minor subject is CHILD_SEXUAL_CONTENT (s.11)."""
-    found: Set[SafetyConcern] = set()
-    for result in results or ():
-        for flag in getattr(result, "flags", None) or ():
-            kind = getattr(getattr(flag, "type", None), "value", getattr(flag, "type", None))
-            if kind == "adult" and possibly_minor_subject:
-                found.add(SafetyConcern.CHILD_SEXUAL_CONTENT)
-            elif kind in ("violence", "gore", "weapons"):
-                found.add(SafetyConcern.VIOLENCE)
-            elif kind == "drugs":
-                found.add(SafetyConcern.DANGEROUS_BEHAVIOR)
-    return found
+_CONTENT_REASONS = frozenset({
+    R.CONTENT_REVIEW_REQUIRED, R.CONTENT_UPDATE_REQUIRED, R.CONTENT_PROHIBITED, R.CONTENT_RATING_NOT_PERMITTED,
+    R.SAFETY_REVIEW_REQUIRED, R.CHILD_SAFETY_ESCALATION,
+})
+_PIPELINE_FINDINGS = frozenset({SafetyConcern.THIRD_PARTY_RIGHTS, SafetyConcern.UNCLASSIFIED_MEDIA,
+                                SafetyConcern.METADATA_UNVERIFIED})
 
 
 def _refs(raw: Optional[str]) -> List[str]:
@@ -380,6 +367,7 @@ class EntryInputs:
     video_media_ids: Optional[str] = None
     moderation_results: Tuple = ()
     extra_concerns: frozenset = frozenset()   # admin-flagged or synthetic signals
+    classifier_run: Optional[ClassifierRun] = None   # what automated classification covered
 
 
 @dataclass
@@ -423,6 +411,11 @@ class ContestEntryDecision:
     # True unless the exposed person is a determined adult or a nominee the
     # nominator declared an adult (the latter only affects which hooks run).
     subject_possibly_minor: bool = True
+    subject_determined_adult: bool = False
+    # Phase 6: the content gate used for this decision, and whether every
+    # participation requirement (everything except content) is met.
+    content: Optional[ContentGate] = None
+    participation_eligible: bool = False
 
     @property
     def public(self) -> bool:
@@ -442,6 +435,12 @@ class ContestEntryDecision:
             key, step = "NOMINEE", "SHARE_CLAIM_LINK"
         elif R.GUARDIAN_CONSENT_REQUIRED in self.reasons:
             key, step = "PENDING", "GUARDIAN_CONSENT"
+        elif R.CONTENT_PROHIBITED in self.reasons:
+            key, step = "PROHIBITED", None
+        elif R.CONTENT_UPDATE_REQUIRED in self.reasons:
+            key, step = "UPDATE", "UPDATE_CONTENT"
+        elif self.reasons and set(self.reasons) <= _CONTENT_REASONS | INFORMATIONAL_ELIGIBILITY_REASONS:
+            key, step = "CONTENT", "AWAIT_REVIEW"
         else:
             key, step = "PENDING", "AWAIT_REVIEW"
         return {"outcome": self.outcome.value, "reason_codes": codes, "message": CLIENT_MESSAGES.get(key),
@@ -615,34 +614,36 @@ def assess_unclaimed_nominee(db: Session, declaration: Optional[NomineeAgeDeclar
 # ---------------------------------------------------------------------------
 
 def _hooks(db: Session, subject: _Assessment, inputs: EntryInputs, *, kind: ContestEntryKind,
-           stored_safety: Optional[SafetyStatus] = None, stored_rights: Optional[RightsStatus] = None
-           ) -> Tuple[Set[SafetyConcern], SafetyStatus, RightsStatus, MetadataSafetyStatus, List[R], bool]:
-    """Layer 6. Returns (concerns, safety, rights, metadata, hold reasons, escalate)."""
+           stored_rights: Optional[RightsStatus] = None, content: Optional[ContentGate] = None):
+    """Layer 6. Content comes from the Phase 6 content-safety gate (classified
+    now for a new submission, or the stored moderation decision). Returns
+    (concerns, safety, rights, metadata, hold reasons, escalate, gate)."""
     possibly_minor = subject.possibly_minor
-    concerns: Set[SafetyConcern] = set(inputs.extra_concerns)
-    concerns |= concerns_from_moderation(inputs.moderation_results, possibly_minor_subject=possibly_minor)
-    if possibly_minor:
-        concerns |= detect_text_concerns(" ".join(x for x in (inputs.title, inputs.description) if x))
-    else:
-        # Adults: only admin/synthetic signals and rights concerns; existing moderation is unchanged.
-        concerns = {c for c in concerns if c in (SafetyConcern.THIRD_PARTY_RIGHTS,)
-                    or c in inputs.extra_concerns}
-
+    gate = content
+    if gate is None:
+        gate = cs.classify(db, title=inputs.title, description=inputs.description,
+                           image_media_ids=inputs.image_media_ids, video_media_ids=inputs.video_media_ids,
+                           moderation_results=inputs.moderation_results, extra_concerns=inputs.extra_concerns,
+                           possibly_minor=possibly_minor, determined_adult=subject.determined_adult,
+                           run=inputs.classifier_run)
+    concerns: Set[SafetyConcern] = set(gate.findings)
     holds: List[R] = []
-    escalate = bool(concerns & CHILD_SAFETY_ESCALATION_CONCERNS) or stored_safety == SafetyStatus.CHILD_SAFETY_ESCALATED
+    escalate = gate.child_safety_escalated
     if escalate:
         safety = SafetyStatus.CHILD_SAFETY_ESCALATED
         holds.append(R.CHILD_SAFETY_ESCALATION)
-    elif stored_safety == SafetyStatus.BLOCKED:
-        safety = SafetyStatus.BLOCKED
-        holds.append(R.ADMIN_BLOCKED)
-    elif stored_safety == SafetyStatus.REVIEWED_CLEAR:
-        safety = SafetyStatus.REVIEWED_CLEAR
-    elif concerns - {SafetyConcern.THIRD_PARTY_RIGHTS}:
+    elif not gate.governed:
+        safety = SafetyStatus.CLEAR  # historical public entry: not re-reviewed, not rewritten
+    elif gate.state == ModerationState.PROHIBITED:
         safety = SafetyStatus.REVIEW_REQUIRED
-        holds.append(R.SAFETY_REVIEW_REQUIRED)
+        holds.append(R.CONTENT_PROHIBITED)
+    elif not gate.approved:
+        safety = SafetyStatus.REVIEW_REQUIRED
+        holds.append(R.CONTENT_UPDATE_REQUIRED if gate.update_required else R.CONTENT_REVIEW_REQUIRED)
+        if concerns - _PIPELINE_FINDINGS:
+            holds.append(R.SAFETY_REVIEW_REQUIRED)
     else:
-        safety = SafetyStatus.CLEAR
+        safety = SafetyStatus.CLEAR if gate.automated else SafetyStatus.REVIEWED_CLEAR
 
     if stored_rights in (RightsStatus.CONFIRMED, RightsStatus.DISPUTED):
         rights = stored_rights
@@ -660,7 +661,7 @@ def _hooks(db: Session, subject: _Assessment, inputs: EntryInputs, *, kind: Cont
         metadata = metadata_status_for(db, inputs.image_media_ids, inputs.video_media_ids)
         if metadata == MetadataSafetyStatus.UNRESOLVED:
             holds.append(R.METADATA_UNRESOLVED)
-    return concerns, safety, rights, metadata, holds, escalate
+    return concerns, safety, rights, metadata, holds, escalate, gate
 
 
 def _workflow_step(kind: ContestEntryKind, reasons: Set[R], exposure: EntryExposureStatus,
@@ -677,15 +678,23 @@ def _workflow_step(kind: ContestEntryKind, reasons: Set[R], exposure: EntryExpos
         return NominationWorkflowStep.GUARDIAN_CONSENT
     if R.RIGHTS_CONFIRMATION_REQUIRED in reasons:
         return NominationWorkflowStep.RIGHTS_CONFIRMATION
-    if reasons & {R.SAFETY_REVIEW_REQUIRED, R.METADATA_UNRESOLVED}:
+    if reasons & ({R.METADATA_UNRESOLVED} | _CONTENT_REASONS):
         return NominationWorkflowStep.SAFETY_REVIEW
     return NominationWorkflowStep.ACTIVE if exposure == EntryExposureStatus.PUBLIC else NominationWorkflowStep.SAFETY_REVIEW
 
 
 def _compose(kind: ContestEntryKind, parts: Sequence[_Assessment], subject: _Assessment, hooks, *,
-             nominee_linked: bool, owner: CreativeOwnerType) -> ContestEntryDecision:
-    concerns, safety, rights, metadata, hook_holds, escalate = hooks
+             nominee_linked: bool, owner: CreativeOwnerType,
+             rating_ceiling: Optional[ContentRating] = None) -> ContestEntryDecision:
+    concerns, safety, rights, metadata, hook_holds, escalate, gate = hooks
     unmet = _uniq(r for p in parts for r in p.unmet)
+    hook_holds = list(hook_holds)
+    if gate.governed and gate.approved:
+        # s.16/s.18: a minor's content rated ADULT_18_PLUS is never published as
+        # ordinary adult content, and an entry may not exceed the contest's rating.
+        if (subject.possibly_minor and gate.rating == ContentRating.ADULT_18_PLUS) or \
+                cs.rating_exceeds(gate.rating, rating_ceiling):
+            hook_holds.append(R.CONTENT_RATING_NOT_PERMITTED)
     holds = _uniq([r for p in parts for r in p.holds] + hook_holds)
     info = _uniq(r for p in parts for r in p.info)
     scopes = _uniq(s for p in parts for s in p.missing_scopes)
@@ -716,7 +725,9 @@ def _compose(kind: ContestEntryKind, parts: Sequence[_Assessment], subject: _Ass
         workflow_step=_workflow_step(kind, set(unmet + holds), exposure, nominee_linked),
         age_window_ok=all(p.age_window_ok for p in parts),
         guardian_relationship_id=subject.guardian_relationship_id, creative_owner_type=owner,
-        subject_possibly_minor=subject.possibly_minor)
+        subject_possibly_minor=subject.possibly_minor, subject_determined_adult=subject.determined_adult,
+        content=gate,
+        participation_eligible=not unmet and not [h for h in holds if h not in _CONTENT_REASONS])
 
 
 def _exposed_scopes(db: Session, rules: EffectiveContestRules, inputs: EntryInputs) -> Tuple[GuardianConsentScope, ...]:
@@ -730,23 +741,24 @@ def _exposed_scopes(db: Session, rules: EffectiveContestRules, inputs: EntryInpu
 
 def evaluate_personal_submission(db: Session, user: User, contest: Optional[Contest], inputs: EntryInputs, *,
                                  today: date, now: datetime, check_age_window: bool = True,
-                                 stored: Optional[ContestEntrySafety] = None) -> ContestEntryDecision:
+                                 stored: Optional[ContestEntrySafety] = None,
+                                 content: Optional[ContentGate] = None) -> ContestEntryDecision:
     subject_jur = AgeAndContestPolicyEngine.resolve_jurisdiction(getattr(user, "country", None))
     rules = resolve_contest_rules(db, contest, subject_jur.code)
     a = assess_account(db, user, role=ROLE_SUBMITTER, operation=PolicyOperation.PERSONAL_SUBMISSION, rules=rules,
                        today=today, now=now, consent_scopes=_exposed_scopes(db, rules, inputs),
                        check_age_window=check_age_window)
     hooks = _hooks(db, a, inputs, kind=ContestEntryKind.PERSONAL_SUBMISSION,
-                   stored_safety=SafetyStatus(stored.safety_status) if stored else None,
-                   stored_rights=RightsStatus(stored.rights_status) if stored else None)
+                   stored_rights=RightsStatus(stored.rights_status) if stored else None, content=content)
     return _compose(ContestEntryKind.PERSONAL_SUBMISSION, [a], a, hooks, nominee_linked=False,
-                    owner=CreativeOwnerType.SELF)
+                    owner=CreativeOwnerType.SELF, rating_ceiling=rules.content_age_rating)
 
 
 def evaluate_nomination(db: Session, nominator: User, contest: Optional[Contest], inputs: EntryInputs, *,
                         nominee_age_declaration: Optional[NomineeAgeDeclaration], today: date, now: datetime,
                         nominee_user: Optional[User] = None, check_age_window: bool = True,
-                        stored: Optional[ContestEntrySafety] = None, declined: bool = False) -> ContestEntryDecision:
+                        stored: Optional[ContestEntrySafety] = None, declined: bool = False,
+                        content: Optional[ContentGate] = None) -> ContestEntryDecision:
     """Two separate people: the nominator (acting) and the nominee (exposed).
     The nominator is never treated as the nominee's guardian."""
     nom_jur = AgeAndContestPolicyEngine.resolve_jurisdiction(getattr(nominator, "country", None))
@@ -761,13 +773,14 @@ def evaluate_nomination(db: Session, nominator: User, contest: Optional[Contest]
                                    consent_scopes=_exposed_scopes(db, nominee_rules, inputs),
                                    check_age_window=check_age_window)
     else:
+        nominee_rules = rules
         nominee_a = assess_unclaimed_nominee(db, nominee_age_declaration, rules=rules,
                                              nominator_jurisdiction=nom_jur.code, declined=declined)
     hooks = _hooks(db, nominee_a, inputs, kind=ContestEntryKind.NOMINATION,
-                   stored_safety=SafetyStatus(stored.safety_status) if stored else None,
-                   stored_rights=RightsStatus(stored.rights_status) if stored else None)
+                   stored_rights=RightsStatus(stored.rights_status) if stored else None, content=content)
     return _compose(ContestEntryKind.NOMINATION, [nominator_a, nominee_a], nominee_a, hooks,
-                    nominee_linked=nominee_user is not None, owner=CreativeOwnerType.NOMINEE)
+                    nominee_linked=nominee_user is not None, owner=CreativeOwnerType.NOMINEE,
+                    rating_ceiling=nominee_rules.content_age_rating)
 
 
 def precheck(db: Session, user: User, contest: Optional[Contest], kind: ContestEntryKind, *, today: date,
@@ -778,8 +791,10 @@ def precheck(db: Session, user: User, contest: Optional[Contest], kind: ContestE
         rules = resolve_contest_rules(db, contest, jur.code)
         a = assess_account(db, user, role=ROLE_NOMINATOR, operation=PolicyOperation.NOMINATION, rules=rules,
                            today=today, now=now, consent_scopes=_NOMINATOR_SCOPES)
-        return _compose(kind, [a], a, (set(), SafetyStatus.CLEAR, RightsStatus.NOT_REQUIRED,
-                                       MetadataSafetyStatus.NOT_REQUIRED, [], False),
+        # Content is unknown before submission: every nomination goes through content review.
+        pending = ContentGate(ModerationState.PENDING)
+        return _compose(kind, [a], a, (set(), SafetyStatus.REVIEW_REQUIRED, RightsStatus.NOT_REQUIRED,
+                                       MetadataSafetyStatus.NOT_REQUIRED, [R.CONTENT_REVIEW_REQUIRED], False, pending),
                         nominee_linked=False, owner=CreativeOwnerType.NOMINEE)
     return evaluate_personal_submission(db, user, contest, EntryInputs(), today=today, now=now)
 
@@ -852,6 +867,9 @@ def record_new_entry(db: Session, contestant: Contestant, decision: ContestEntry
     db.add(row)
     db.flush()
     _log(db, row, "ENTRY_CREATED", submitted_by.id, _state(row), now=now)
+    if decision.content is not None and decision.content.governed:
+        cs.record_assessment(db, contestant.id, decision.content, possibly_minor=decision.subject_possibly_minor,
+                             actor_id=submitted_by.id, now=now)
     return row
 
 
@@ -876,6 +894,14 @@ def evaluate_stored_entry(db: Session, row: ContestEntrySafety, *, today: date, 
     # corrected DOB can release the hold); never afterwards (a birthday does not
     # remove an active participant).
     window = row.activated_at is None
+    moderation = cs.moderation_for(db, row.contestant_id)
+    if moderation is not None:
+        content = cs.gate_from_row(moderation)
+    elif row.exposure_status == EntryExposureStatus.PUBLIC.value:
+        # Public before Phase 6: not re-reviewed and not rewritten.
+        content = ContentGate.legacy_public(inputs.extra_concerns)
+    else:
+        content = None  # classified now; reevaluate_entry records it prospectively
     if submitter is None:
         return ContestEntryDecision(EligibilityOutcome.HELD, (R.SAFETY_REVIEW_REQUIRED,), EntryExposureStatus.HELD)
     if row.entry_kind == ContestEntryKind.NOMINATION.value:
@@ -884,9 +910,9 @@ def evaluate_stored_entry(db: Session, row: ContestEntrySafety, *, today: date, 
                        if row.nominee_age_declaration else NomineeAgeDeclaration.UNKNOWN)
         return evaluate_nomination(db, submitter, contest, inputs, nominee_age_declaration=declaration,
                                    today=today, now=now, nominee_user=nominee, check_age_window=window, stored=row,
-                                   declined=row.claim_declined_at is not None)
+                                   declined=row.claim_declined_at is not None, content=content)
     return evaluate_personal_submission(db, submitter, contest, inputs, today=today, now=now,
-                                        check_age_window=window, stored=row)
+                                        check_age_window=window, stored=row, content=content)
 
 
 def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional[int], trigger: str,
@@ -906,6 +932,11 @@ def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional
     if row.exposure_status in (EntryExposureStatus.BLOCKED.value, EntryExposureStatus.CHILD_SAFETY_ESCALATED.value):
         return row
     d = evaluate_stored_entry(db, row, today=today, now=now, inputs=inputs)
+    if d.content is not None and d.content.governed and cs.moderation_for(db, row.contestant_id) is None:
+        # An entry that has to BECOME public from now on needs a content decision:
+        # record the (never pre-approved) assessment prospectively.
+        cs.record_assessment(db, row.contestant_id, d.content, possibly_minor=d.subject_possibly_minor,
+                             actor_id=actor_id, now=now, action="CONTENT_RECORD_CREATED_PROSPECTIVE")
     was_public = row.exposure_status == EntryExposureStatus.PUBLIC.value
     _apply(row, d, now)
     action = "ENTRY_REEVALUATED"
@@ -1053,7 +1084,7 @@ def row_subject_possibly_minor(row: ContestEntrySafety) -> bool:
 
 
 def escalate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional[int], action: str,
-                   now: Optional[datetime] = None) -> ContestEntrySafety:
+                   now: Optional[datetime] = None, sync_moderation: bool = True) -> ContestEntrySafety:
     """s.11 dedicated path: block publication and distribution of the entry,
     keep the record for specialized review, raise a high-severity event. Only
     codes are logged; the content itself is never copied into logs."""
@@ -1068,6 +1099,9 @@ def escalate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional[i
     contestant = db.query(Contestant).filter(Contestant.id == row.contestant_id).first()
     if contestant is not None:
         contestant.is_active = False
+    if sync_moderation:
+        cs.mark_escalated(db, row.contestant_id, actor_id=actor_id, now=now,
+                          possibly_minor=row_subject_possibly_minor(row))
     _log(db, row, action, actor_id, _state(row), old, now=now)
     db.commit()
     db.refresh(row)
@@ -1215,6 +1249,25 @@ def admin_review(db: Session, row: ContestEntrySafety, *, action: str, admin_id:
     guardian authority, and none of them can override a denial of eligibility:
     activation only ever happens through re-evaluation."""
     now = now or datetime.utcnow()
+    if action in ("FLAG_CONCERN", "CLEAR_SAFETY_REVIEW") and \
+            row.exposure_status != EntryExposureStatus.CHILD_SAFETY_ESCALATED.value and \
+            not (action == "FLAG_CONCERN" and concern in CHILD_SAFETY_ESCALATION_CONCERNS):
+        # Content findings are owned by the Phase 6 content-safety service (one system).
+        admin = db.query(User).filter(User.id == admin_id).first()
+        moderation = cs.moderation_for(db, row.contestant_id) or cs.record_assessment(
+            db, row.contestant_id, ContentGate(ModerationState.REVIEW_REQUIRED),
+            possibly_minor=row_subject_possibly_minor(row), actor_id=admin_id, now=now,
+            action="CONTENT_RECORD_CREATED_BY_REVIEW")
+        try:
+            if action == "FLAG_CONCERN":
+                cs.moderate(db, moderation, action="HOLD", actor=admin, reason=note, finding_codes=[concern],
+                            now=now, today=today)
+            else:
+                cs.moderate(db, moderation, action="RESOLVE_ISSUE", actor=admin, reason=note, now=now, today=today)
+        except cs.ModerationError as exc:
+            raise EntryReviewError(exc.code, str(exc)) from exc
+        db.refresh(row)
+        return row
     old = _state(row)
     contestant = db.query(Contestant).filter(Contestant.id == row.contestant_id).first()
     row.reviewed_by_user_id, row.reviewed_at = admin_id, now
@@ -1289,11 +1342,20 @@ from app.services.entry_exposure import (  # noqa: E402,F401
 )
 
 
-def owner_view(row: Optional[ContestEntrySafety]) -> Optional[dict]:
-    """What the entry's own submitter may see (codes and step only)."""
+def owner_view(row: Optional[ContestEntrySafety], db: Optional[Session] = None) -> Optional[dict]:
+    """What the entry's own submitter may see (codes, step and a safe content
+    status only; never findings, notes or child-safety details)."""
     if row is None:
         return None
-    return {"public_status": "PUBLIC" if row.exposure_status == EntryExposureStatus.PUBLIC.value else "PENDING_REVIEW",
+    view = {"public_status": "PUBLIC" if row.exposure_status == EntryExposureStatus.PUBLIC.value else "PENDING_REVIEW",
             "workflow_step": row.workflow_step,
             "reason_codes": [c for c in (row.reason_codes or ())
                              if c not in (R.CHILD_SAFETY_ESCALATION.value,)]}
+    if db is not None:
+        moderation = cs.moderation_for(db, row.contestant_id)
+        gate = cs.gate_from_row(moderation) if moderation is not None else None
+        if row.exposure_status == EntryExposureStatus.CHILD_SAFETY_ESCALATED.value:
+            view["content_status"] = "CONTENT_HELD"
+        else:
+            view["content_status"] = cs.member_status(gate).value
+    return view

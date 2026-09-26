@@ -422,23 +422,119 @@ class MetadataSafetyStatus(str, enum.Enum):
 
 
 class SafetyConcern(str, enum.Enum):
-    """Phase 5 safety hooks (s.10, s.11). Full classification is Phase 6.
+    """Content-safety findings (s.10, s.11, s.15, s.18). One vocabulary for the
+    Phase 5 hooks and the Phase 6 content-safety pipeline. Findings are codes
+    only: the matched text itself is never stored or logged.
 
     CHILD_SEXUAL_CONTENT is a dedicated high-severity concern. It is never
     reduced to an ADULT_18_PLUS rating (s.11)."""
 
+    # personal information / location (s.10, s.24)
+    PII_EMAIL = "PII_EMAIL"
+    PII_PHONE = "PII_PHONE"
     PRECISE_LOCATION = "PRECISE_LOCATION"
     HOME_ADDRESS = "HOME_ADDRESS"
     SCHOOL_INFORMATION = "SCHOOL_INFORMATION"
-    CONTACT_INFORMATION = "CONTACT_INFORMATION"
+    CONTACT_INFORMATION = "CONTACT_INFORMATION"      # Phase 5 generic code (kept for stored records)
     PERSONAL_INFORMATION = "PERSONAL_INFORMATION"
+    # child safety (s.11) - dedicated path
     CHILD_SEXUAL_CONTENT = "CHILD_SEXUAL_CONTENT"
-    DANGEROUS_BEHAVIOR = "DANGEROUS_BEHAVIOR"
+    # content (s.10, s.15, s.18)
+    SEXUAL_CONTENT = "SEXUAL_CONTENT"                # adult subject only; never used for a possible minor
     VIOLENCE = "VIOLENCE"
+    GRAPHIC_VIOLENCE = "GRAPHIC_VIOLENCE"
+    WEAPONS = "WEAPONS"
+    DANGEROUS_BEHAVIOR = "DANGEROUS_BEHAVIOR"
+    HATE = "HATE"
+    OFFENSIVE_LANGUAGE = "OFFENSIVE_LANGUAGE"
+    SPAM = "SPAM"
     THIRD_PARTY_RIGHTS = "THIRD_PARTY_RIGHTS"
+    # pipeline state
+    UNCLASSIFIED_MEDIA = "UNCLASSIFIED_MEDIA"        # automated classification could not cover the media
+    METADATA_UNVERIFIED = "METADATA_UNVERIFIED"      # hosted image without verified EXIF/GPS sanitization
 
 
 CHILD_SAFETY_ESCALATION_CONCERNS = frozenset({SafetyConcern.CHILD_SEXUAL_CONTENT})
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: content classification and moderation (s.10, s.11, s.15-18)
+# ---------------------------------------------------------------------------
+
+class ModerationState(str, enum.Enum):
+    """Content-moderation lifecycle of one governed entry. Separate from the
+    Phase 5 participation HOLD: public exposure requires BOTH participation
+    eligibility and APPROVED content (and no child-safety escalation)."""
+
+    PENDING = "PENDING"                                # not yet evaluated/reviewed
+    APPROVED = "APPROVED"                              # rated and approved for publication
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"                # held for human review
+    PROHIBITED = "PROHIBITED"                          # must never be public
+    CHILD_SAFETY_ESCALATED = "CHILD_SAFETY_ESCALATED"  # dedicated s.11 path; only an authorized resolver acts
+
+
+class ClassifierStatus(str, enum.Enum):
+    """Outcome of automated classification. Only COMPLETED can ever support an
+    automated approval; anything else is fail-closed (human review)."""
+
+    COMPLETED = "COMPLETED"        # every required dimension completed
+    PARTIAL = "PARTIAL"            # some required dimension not run / not supported
+    UNAVAILABLE = "UNAVAILABLE"    # provider needed but not configured/not permitted
+    FAILED = "FAILED"              # a required check errored
+    NOT_RUN = "NOT_RUN"
+
+
+class CoverageDimension(str, enum.Enum):
+    """Safety dimensions Phase 6 is responsible for. Each one is tracked
+    separately so "nothing was detected" is never confused with "this was not
+    evaluated"."""
+
+    TEXT_PERSONAL_INFORMATION = "TEXT_PERSONAL_INFORMATION"  # PII, location, address, school
+    TEXT_HARM = "TEXT_HARM"                                  # sexual, violence, dangerous behaviour
+    TEXT_LANGUAGE = "TEXT_LANGUAGE"                          # profanity / spam (local rules)
+    MEDIA_CONTENT = "MEDIA_CONTENT"                          # image/video content classification
+    MEDIA_METADATA = "MEDIA_METADATA"                        # EXIF/GPS sanitization of hosted media
+
+
+class CoverageStatus(str, enum.Enum):
+    """Outcome of one safety dimension. Only COMPLETED_NO_FINDING and
+    NOT_APPLICABLE can ever support an automated approval."""
+
+    COMPLETED_NO_FINDING = "COMPLETED_NO_FINDING"
+    COMPLETED_FINDING = "COMPLETED_FINDING"
+    NOT_APPLICABLE = "NOT_APPLICABLE"      # nothing of this kind in the submission
+    NOT_SUPPORTED = "NOT_SUPPORTED"        # present, but the local pipeline cannot evaluate it
+    NOT_RUN = "NOT_RUN"                    # required check did not run (e.g. provider unavailable)
+    FAILED = "FAILED"                      # the check errored
+
+
+AUTO_APPROVABLE_COVERAGE = frozenset({CoverageStatus.COMPLETED_NO_FINDING, CoverageStatus.NOT_APPLICABLE})
+
+
+class ChildSafetyResolution(str, enum.Enum):
+    """Decision of an explicitly authorized child-safety reviewer. Neither value
+    publishes anything: CONFIRMED is terminal (PROHIBITED); NO_CHILD_SAFETY_CONCERN
+    only returns the content to ordinary review, where a moderator must still
+    approve it separately."""
+
+    CONFIRMED = "CONFIRMED"
+    NO_CHILD_SAFETY_CONCERN = "NO_CHILD_SAFETY_CONCERN"
+
+
+class MemberContentStatus(str, enum.Enum):
+    """What the entry's owner may see about content review (no detection internals)."""
+
+    APPROVED = "APPROVED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    CONTENT_HELD = "CONTENT_HELD"
+    UPDATE_REQUIRED = "UPDATE_REQUIRED"
+    PROHIBITED = "PROHIBITED"
+
+
+# Permissions (role-based, app.models.user.Permission names).
+PERMISSION_MODERATE_CONTENT = "moderate_content"
+# Deliberately NOT implied by the 'all' wildcard or by is_admin: must be granted explicitly.
+PERMISSION_CHILD_SAFETY_RESOLVE = "child_safety_resolve"
 
 
 class NominationAgeScope(str, enum.Enum):
@@ -488,6 +584,11 @@ class ContestEligibilityReason(str, enum.Enum):
     CHILD_SAFETY_ESCALATION = "CHILD_SAFETY_ESCALATION"
     METADATA_UNRESOLVED = "METADATA_UNRESOLVED"
     ADMIN_BLOCKED = "ADMIN_BLOCKED"
+    # Phase 6 content gate
+    CONTENT_REVIEW_REQUIRED = "CONTENT_REVIEW_REQUIRED"
+    CONTENT_UPDATE_REQUIRED = "CONTENT_UPDATE_REQUIRED"
+    CONTENT_PROHIBITED = "CONTENT_PROHIBITED"
+    CONTENT_RATING_NOT_PERMITTED = "CONTENT_RATING_NOT_PERMITTED"
 
 
 # Reasons that only inform (jurisdiction-policy enforcement is off for the

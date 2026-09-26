@@ -200,6 +200,11 @@ class Settings(BaseModel):
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"
     SIGHTENGINE_API_USER: str = os.getenv("SIGHTENGINE_API_USER", "")
     SIGHTENGINE_API_KEY: str = os.getenv("SIGHTENGINE_API_KEY", "")
+    # Child/Teen Safety Phase 6: content of a minor or possibly-minor subject is
+    # NOT sent to the external moderation provider unless explicitly approved.
+    CONTENT_MODERATION_EXTERNAL_FOR_MINORS: bool = (
+        os.getenv("CONTENT_MODERATION_EXTERNAL_FOR_MINORS", "false").lower() == "true"
+    )
     
     # CONTENT RELEVANCE (OpenAI - optionnel pour analyse IA)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
