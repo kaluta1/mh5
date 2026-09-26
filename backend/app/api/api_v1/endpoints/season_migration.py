@@ -28,6 +28,44 @@ _top_high5_flights_lock = threading.Lock()
 _top_high5_flights: dict[tuple, dict] = {}
 
 
+def secure_top_high5_payload(db, current_user, payload):
+    """Phase 7: per-viewer age-safe view of a TopHigh5 payload. Works on a deep
+    copy (the singleflight result is shared between concurrent viewers). Rank,
+    order, counters and promotion flags are never changed; an entry the viewer
+    may not receive keeps its slot with content withheld (content_restricted),
+    and authors are minimized (minor/UNKNOWN: username only, no place)."""
+    import copy
+    from app.services import viewer_access as va
+
+    if not isinstance(payload, dict):
+        return payload
+    out = copy.deepcopy(payload)
+    viewer = va.viewer_for(db, current_user)
+    for card in out.get("contests") or []:
+        if isinstance(card, dict) and isinstance(card.get("rows"), list):
+            card["rows"] = va.secure_entry_refs(db, viewer, card["rows"], id_key="contestant_id")
+    return out
+
+
+def _per_viewer_top_high5(func):
+    """Outer wrapper around the singleflight: secure the shared result per viewer."""
+    signature = inspect.signature(func)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        from app.db.session import SessionLocal
+
+        result = func(*args, **kwargs)
+        current_user = signature.bind_partial(*args, **kwargs).arguments.get("current_user")
+        db = SessionLocal()
+        try:
+            return secure_top_high5_payload(db, current_user, result)
+        finally:
+            db.close()
+
+    return wrapper
+
+
 def _singleflight_top_high5(func):
     """Coalesce identical in-process leaderboard requests without caching stale data."""
     signature = inspect.signature(func)
@@ -502,6 +540,7 @@ def _get_top_high5_mode_aware(
 
 
 @router.get("/top-high5")
+@_per_viewer_top_high5
 @_singleflight_top_high5
 def get_top_high5_by_country(
     response: Response,

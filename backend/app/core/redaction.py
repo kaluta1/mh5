@@ -160,3 +160,28 @@ def mask_email(address: Any) -> str:
     host, dot, tld = domain.rpartition(".")
     host = host or domain
     return f"{local[:1]}***@{host[:1]}***{dot}{tld if dot else ''}"
+
+
+# Child/Teen Safety Phase 7: protected media URLs carry a viewer-bound grant
+# (?g=). A grant is NOT a bearer credential (the media route also requires the
+# grant's own viewer session), but it is still kept out of application logs as
+# defense in depth.
+_MEDIA_TOKEN_RE = re.compile(r"(/media/file/[^?\s]*\?(?:[^\s#]*&)?[gt]=)[^&\s#\"]+")
+
+
+def redact_media_tokens(text: Any) -> Any:
+    if not isinstance(text, str) or ("g=" not in text and "t=" not in text):
+        return text
+    return _MEDIA_TOKEN_RE.sub(lambda m: m.group(1) + REDACTED, text)
+
+
+class MediaTokenLogFilter:
+    """logging filter: redact media tokens in a record's message and args."""
+
+    def filter(self, record) -> bool:  # noqa: A003 - logging API
+        record.msg = redact_media_tokens(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact_media_tokens(a) for a in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {k: redact_media_tokens(v) for k, v in record.args.items()}
+        return True

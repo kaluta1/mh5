@@ -58,25 +58,69 @@ def _youtube_thumbnail(url: str) -> Optional[str]:
     return None
 
 
+_GENERIC_ENTRY_PREVIEW = {
+    "title": "Entry on MyHigh5",
+    "description": "Sign in to MyHigh5 to view this entry.",
+    "image_url": _DEFAULT_OG_IMAGE,
+}
+
+
+def _anonymous_share_access(db: Session, contestant: Optional[Contestant]):
+    """Phase 7: crawlers, link previews and SSR metadata are anonymous viewers.
+    Only entries deliverable to an anonymous viewer (public, GENERAL or legacy
+    unrated) get a content preview; everything else gets a generic preview."""
+    from app.services import viewer_access as va
+
+    if contestant is None:
+        return None
+    access = va.entry_access(db, va.ANONYMOUS, contestant)
+    if not access.allowed or access.mode != va.Mode.PUBLIC or not access.anonymous_deliverable:
+        return None
+    return access
+
+
+def _author_display_name(db: Session, user: Optional[User], fallback: str) -> str:
+    """Phase 7: minor/UNKNOWN authors are shown by username only."""
+    from app.services.viewer_access import PrivacyCache
+
+    if user is None:
+        return fallback
+    if PrivacyCache(db).display(user)["name"] and user.full_name:
+        return user.full_name
+    return user.username or fallback
+
+
+def _og_safe(db: Session, url: Optional[str]) -> Optional[str]:
+    """Never put protected MyHigh5 media in public metadata."""
+    from app.services import viewer_access as va
+
+    if not url:
+        return None
+    parts = va.split_media_url(url)
+    if parts is not None and va.media_is_protected(db, parts[0], parts[1]):
+        return None
+    return url
+
+
 def _contestant_og_image(db: Session, contestant: Contestant) -> str:
     for submission in contestant.submissions or []:
         media_type = (submission.media_type or "").lower()
         if media_type == "image":
-            resolved = _absolutize_url(submission.file_url or submission.external_url)
+            resolved = _og_safe(db, _absolutize_url(submission.file_url or submission.external_url))
             if resolved:
                 return resolved
         if media_type in ("video", "youtube", "vimeo") and submission.external_url:
             thumb = _youtube_thumbnail(submission.external_url)
             if thumb:
                 return thumb
-            resolved = _absolutize_url(submission.external_url)
+            resolved = _og_safe(db, _absolutize_url(submission.external_url))
             if resolved and resolved.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
                 return resolved
 
     if contestant.image_media_ids:
         try:
             for ref in json.loads(contestant.image_media_ids):
-                resolved = _absolutize_url(_resolve_media_ref(db, ref))
+                resolved = _og_safe(db, _absolutize_url(_resolve_media_ref(db, ref)))
                 if resolved:
                     return resolved
         except (json.JSONDecodeError, TypeError):
@@ -189,14 +233,10 @@ def _contestant_preview_payload(db: Session, contestant_id: int) -> dict:
             "description": "Vote and support on MyHigh5.",
             "image_url": _DEFAULT_OG_IMAGE,
         }
+    if _anonymous_share_access(db, contestant) is None:
+        return dict(_GENERIC_ENTRY_PREVIEW)
 
-    author_name = "Contestant"
-    if contestant.user:
-        author_name = (
-            contestant.user.full_name
-            or contestant.user.username
-            or "Contestant"
-        )
+    author_name = _author_display_name(db, contestant.user, "Contestant")
     entry_title = (contestant.title or "").strip()
     title = f"{entry_title} — {author_name}" if entry_title else f"{author_name} on MyHigh5"
     description = (
@@ -240,12 +280,16 @@ def share_short_verify_email(
 
 
 def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestant]:
+    from app.services import viewer_access as va
+
+    _anon = va.listing_clause(va.ANONYMOUS)
     latest_active_contestant = (
         db.query(Contestant)
         .filter(
             Contestant.user_id == user_id,
             Contestant.is_deleted.is_(False),
             Contestant.is_active.is_(True),
+            _anon,
         )
         .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
         .first()
@@ -259,6 +303,7 @@ def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestan
         .filter(
             Contestant.user_id == user_id,
             Contestant.is_deleted.is_(False),
+            _anon,
         )
         .order_by(Contestant.registration_date.desc(), Contestant.id.desc())
         .first()
@@ -569,26 +614,19 @@ async def share_contestant(
     if ref:
         flutter_url += f"?{urlencode({'ref': ref})}"
     
-    # Échapper les caractères HTML pour éviter les injections
-    title = html.escape(contestant.title or "MyHighFive")
-    description = html.escape(contestant.description or "Découvrez cette participation sur MyHighFive")[:200]
-    
-    # Récupérer le nom de l'auteur depuis la relation user
-    author_name = "Participant"
-    if contestant.user:
-        if contestant.user.full_name:
-            author_name = html.escape(contestant.user.full_name)
-        elif contestant.user.username:
-            author_name = html.escape(contestant.user.username)
-        elif contestant.user.first_name or contestant.user.last_name:
-            name_parts = []
-            if contestant.user.first_name:
-                name_parts.append(contestant.user.first_name)
-            if contestant.user.last_name:
-                name_parts.append(contestant.user.last_name)
-            author_name = html.escape(" ".join(name_parts))
-    
-    image_url = _contestant_og_image(db, contestant)
+    # Phase 7: the share page is served to anonymous crawlers; restricted or
+    # non-public entries get a generic preview (no title/description/author/media).
+    if _anonymous_share_access(db, contestant) is None:
+        title = html.escape(_GENERIC_ENTRY_PREVIEW["title"])
+        description = html.escape(_GENERIC_ENTRY_PREVIEW["description"])
+        author_name = "MyHigh5"
+        image_url = _DEFAULT_OG_IMAGE
+    else:
+        # Échapper les caractères HTML pour éviter les injections
+        title = html.escape(contestant.title or "MyHighFive")
+        description = html.escape(contestant.description or "Découvrez cette participation sur MyHighFive")[:200]
+        author_name = html.escape(_author_display_name(db, contestant.user, "Participant"))
+        image_url = _contestant_og_image(db, contestant)
     
     # Générer le HTML avec métadonnées Open Graph et Twitter Cards
     html_content = f"""<!DOCTYPE html>
@@ -724,7 +762,7 @@ async def share_profile(
         flutter_url += f"?{urlencode({'ref': ref})}"
     
     # Échapper les caractères HTML
-    full_name = html.escape(user.full_name or user.username or "Utilisateur")
+    full_name = html.escape(_author_display_name(db, user, "Utilisateur"))
     username_safe = html.escape(username)
     
     # Image de profil ou image par défaut

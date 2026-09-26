@@ -5,6 +5,7 @@ import { AxiosError } from 'axios'
 import { authService } from '@/lib/api'
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
+import { closeMediaSession, openMediaSession } from '@/lib/media-session'
 import { logger } from '@/lib/logger'
 import type { User, UserRole } from '@/types/user'
 
@@ -209,6 +210,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Child/Teen Safety Phase 7: bind this browser's protected-media session to the
+  // signed-in viewer (HttpOnly cookie) and keep it fresh while signed in.
+  const userId = user?.id
+  React.useEffect(() => {
+    if (!userId) return
+    void openMediaSession()
+    const id = window.setInterval(() => void openMediaSession(), 30 * 60 * 1000)
+    return () => window.clearInterval(id)
+  }, [userId])
+
   React.useEffect(() => {
     const onUnauthorized = () => {
       setUser(null)
@@ -236,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const logout = async () => {
+    await closeMediaSession()
     await authService.logout()
     setUser(null)
     setPermissions([])

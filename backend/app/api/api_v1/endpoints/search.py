@@ -1,12 +1,81 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 
 from app.api import deps
 from app.models import Contest, User, FanClub, Contestant
 from app.models.clubs import ClubStatus
 
 router = APIRouter()
+
+
+def _search_contestant_rows(db: Session, current_user, q: str, skip: int, limit: int):
+    """Phase 7: age-safe contestant search.
+    - Only entries this viewer may receive (Phase 5/6 exposure + rating), not deleted.
+    - Real names and places are searchable only for DOB-adult authors; minors and
+      UNKNOWN-age authors are findable by username / entry text only.
+    - Output is minimized with the same privacy floor as every other surface."""
+    from app.services import viewer_access as va
+
+    viewer = va.viewer_for(db, current_user)
+    search_term = f"%{q}%"
+    adult = va.adult_dob_clause()
+    contestants = (
+        db.query(Contestant)
+        .options(joinedload(Contestant.user))
+        .join(Contestant.user)
+        .filter(
+            Contestant.is_deleted == False,  # noqa: E712
+            va.listing_clause(viewer),
+            or_(
+                Contestant.title.ilike(search_term),
+                Contestant.description.ilike(search_term),
+                User.username.ilike(search_term),
+                and_(adult, or_(
+                    User.first_name.ilike(search_term),
+                    User.last_name.ilike(search_term),
+                    User.full_name.ilike(search_term),
+                    User.continent.ilike(search_term),
+                    User.region.ilike(search_term),
+                    User.country.ilike(search_term),
+                    User.city.ilike(search_term),
+                )),
+            ),
+        )
+        .order_by(Contestant.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    privacy = va.PrivacyCache(db)
+    rows = []
+    for contestant in contestants:
+        user = contestant.user
+        perm = privacy.display(user)
+        if user is None:
+            full_name = "Unknown"
+        elif perm["name"] or (current_user is not None and user.id == current_user.id):
+            full_name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip() or user.username
+        else:
+            full_name = user.username
+        show_place = user is not None and (perm["place"] or (current_user is not None and user.id == current_user.id))
+        city = user.city if show_place and user.city else None
+        country = user.country if show_place and user.country else None
+        continent = user.continent if show_place and user.continent else None
+        location = " · ".join([x for x in (city, country, continent) if x]) or None
+        description = contestant.description[:100] if contestant.description else (location or full_name)
+        rows.append({
+            "id": str(contestant.id),
+            "title": contestant.title or full_name,
+            "category": "contestant",
+            "description": description,
+            "full_name": full_name,
+            "city": city,
+            "country": country,
+            "continent": continent,
+        })
+    return rows
 
 
 class SearchResult:
@@ -65,62 +134,9 @@ def search(
             "location_name": location_name,
         })
     
-    # Search contestants (by submission, user name and geo fields)
-    contestants = (
-        db.query(Contestant)
-        .options(joinedload(Contestant.user))
-        .join(Contestant.user)
-        .filter(
-            or_(
-                Contestant.title.ilike(search_term),
-                Contestant.description.ilike(search_term),
-                User.first_name.ilike(search_term),
-                User.last_name.ilike(search_term),
-                User.full_name.ilike(search_term),
-                User.username.ilike(search_term),
-                User.continent.ilike(search_term),
-                User.region.ilike(search_term),
-                User.country.ilike(search_term),
-                User.city.ilike(search_term),
-            )
-        )
-        .limit(10)
-        .all()
-    )
-    
-    for contestant in contestants:
-        user = contestant.user
-        full_name = (
-            f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
-            if user
-            else "Unknown"
-        )
-        location_parts = [
-            part
-            for part in [
-                (user.city if user and user.city else None),
-                (user.country if user and user.country else None),
-                (user.continent if user and user.continent else None),
-            ]
-            if part
-        ]
-        location = " · ".join(location_parts) if location_parts else None
-        description = (
-            contestant.description[:100]
-            if contestant.description
-            else (location or full_name)
-        )
-        results["contestant"].append({
-            "id": str(contestant.id),
-            "title": contestant.title or full_name,
-            "category": "contestant",
-            "description": description,
-            "full_name": full_name,
-            "city": user.city if user and user.city else None,
-            "country": user.country if user and user.country else None,
-            "continent": user.continent if user and user.continent else None,
-        })
-    
+    # Search contestants (Phase 7: age-safe, see _search_contestant_rows)
+    results["contestant"] = _search_contestant_rows(db, current_user, q, 0, 10)
+
     # Search clubs
     clubs = (
         db.query(FanClub)
@@ -185,63 +201,11 @@ def search_contestants(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_user),
 ):
-    """Search only contestants (submissions + user name + geo)."""
-    search_term = f"%{q}%"
-    
-    contestants = (
-        db.query(Contestant)
-        .options(joinedload(Contestant.user))
-        .join(Contestant.user)
-        .filter(
-            or_(
-                Contestant.title.ilike(search_term),
-                Contestant.description.ilike(search_term),
-                User.first_name.ilike(search_term),
-                User.last_name.ilike(search_term),
-                User.full_name.ilike(search_term),
-                User.username.ilike(search_term),
-                User.continent.ilike(search_term),
-                User.region.ilike(search_term),
-                User.country.ilike(search_term),
-                User.city.ilike(search_term),
-            )
-        )
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-    
-    results = []
-    for contestant in contestants:
-        user = contestant.user
-        full_name = (
-            f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
-            if user
-            else "Unknown"
-        )
-        location_parts = [
-            part
-            for part in [
-                (user.city if user and user.city else None),
-                (user.country if user and user.country else None),
-                (user.continent if user and user.continent else None),
-            ]
-            if part
-        ]
-        location = " · ".join(location_parts) if location_parts else None
-        description = (
-            contestant.description[:100]
-            if contestant.description
-            else (location or full_name)
-        )
-        results.append({
-            "id": str(contestant.id),
-            "title": contestant.title or full_name,
-            "category": "contestant",
-            "description": description,
-        })
-    
-    return results
+    """Search only contestants (submissions + user name + geo; Phase 7 age-safe)."""
+    return [
+        {k: r[k] for k in ("id", "title", "category", "description")}
+        for r in _search_contestant_rows(db, current_user, q, skip, limit)
+    ]
 
 
 @router.get("/search/clubs")

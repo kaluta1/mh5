@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, MapPin, Heart } from 'lucide-react'
 import api from '@/lib/api'
+import { getContentRestriction, type ContentRestriction } from '@/lib/content-restriction'
+import { throwIfApiError } from '@/lib/http-error'
+import { ContentRestrictedNotice } from '@/components/ui/content-restricted-notice'
 import { htmlToPlainText } from '@/lib/utils'
 
 interface ContestantDetail {
@@ -50,6 +53,7 @@ function ContestantDetailPage() {
   const [contestant, setContestant] = useState<ContestantDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [restriction, setRestriction] = useState<ContentRestriction | null>(null)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -63,9 +67,11 @@ function ContestantDetailPage() {
         setLoading(true)
         setError(null)
         const response = await api.get(`/api/v1/contestants/${contestantId}`)
+        throwIfApiError(response) // 4xx do not throw with this client; restricted/hidden -> catch
         setContestant(response.data)
       } catch (err) {
         console.error('Error loading contestant details:', err)
+        setRestriction(getContentRestriction(err))
         setError('error_loading_contestant')
       } finally {
         setLoading(false)
@@ -98,6 +104,10 @@ function ContestantDetailPage() {
 
   if (isLoading || loading) {
     return <ContestantDetailSkeleton />
+  }
+
+  if (restriction) {
+    return <ContentRestrictedNotice restriction={restriction} />
   }
 
   if (!isAuthenticated || !user || !contestant) {

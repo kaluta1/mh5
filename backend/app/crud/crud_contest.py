@@ -1961,6 +1961,7 @@ class CRUDContest:
         entry_type: Optional[str] = None,
         round_id: Optional[int] = None,
         requested_ui_level: Optional[str] = None,
+        listing_filter=None,
     ) -> int:
         """Dashboard card count for nominations under geo filters — same query as opened contest."""
         data = self.get_contest_with_enriched_contestants(
@@ -1974,6 +1975,7 @@ class CRUDContest:
             round_id=round_id,
             requested_ui_level=requested_ui_level,
             count_only=True,
+            listing_filter=listing_filter,
         )
         if data and data.get("roster_count") is not None:
             return int(data["roster_count"])
@@ -1988,6 +1990,7 @@ class CRUDContest:
         requested_ui_level: Optional[str] = None,
         count_only: bool = False,
         roster_only: bool = False,
+        listing_filter=None,
     ) -> Dict[str, Any]:
         """
         Récupère un contest avec tous ses contestants enrichis de toutes les informations :
@@ -2221,11 +2224,19 @@ class CRUDContest:
             nomination_category_roster_season_clause,
         )
 
+        # Phase 5-7: never list entries that are not publicly exposed; callers pass the
+        # viewer-level age-safe clause (viewer_access.listing_clause) when they have a viewer.
+        if listing_filter is None:
+            from app.services.entry_exposure import public_entry_clause
+
+            listing_filter = public_entry_clause()
+        _listing_filter = listing_filter
+
         if pooled_season_membership_scope:
             # Pooled phases: base query without season_id filter.
             # ContestantSeason membership filter is applied later (see below).
             contestants_query = db.query(Contestant)\
-                .filter(Contestant.is_deleted == False)\
+                .filter(Contestant.is_deleted == False, _listing_filter)\
                 .outerjoin(User, Contestant.user_id == User.id) \
                 .options(
                     contains_eager(Contestant.user)
@@ -2248,6 +2259,7 @@ class CRUDContest:
                 .filter(
                     Contestant.is_deleted == False,
                     roster_scope_clause,
+                    _listing_filter,
                 )\
                 .outerjoin(User, Contestant.user_id == User.id) \
                 .options(
@@ -2653,7 +2665,8 @@ class CRUDContest:
                 try:
                     fallback1 = db.query(Contestant).filter(
                         Contestant.is_deleted == False,
-                        Contestant.season_id == contest_id
+                        Contestant.season_id == contest_id,
+                        _listing_filter,
                     ).options(joinedload(Contestant.user)).limit(100).all()
                     logger.info(f"[get_contest_with_enriched_contestants] Fallback 1 (season_id={contest_id}): Found {len(fallback1)}")
                     if fallback1:

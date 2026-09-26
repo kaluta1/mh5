@@ -63,6 +63,50 @@ def _resolve_media_url(db: Session, media_ref: Any) -> Optional[str]:
     return None
 
 
+def _viewer(db: Session, user):
+    """Phase 7: viewer context for age-safe delivery (backend-authoritative)."""
+    from app.services import viewer_access as va
+
+    return va.viewer_for(db, user)
+
+
+def _secure_entries(db: Session, user, items, *, owner_ok: bool = False):
+    """Phase 7: drop entries this viewer may not receive; protect media; minimize authors."""
+    from app.services import viewer_access as va
+
+    modes = (va.Mode.PUBLIC, va.Mode.OWNER) if owner_ok else (va.Mode.PUBLIC,)
+    plain = [i.model_dump() if hasattr(i, "model_dump") else dict(i) for i in items]
+    return va.secure_entry_list(db, _viewer(db, user), plain, allow_modes=modes)
+
+
+def _public_access_or_404(db: Session, user, contestant) -> None:
+    """Phase 7: votes/views only on entries this viewer may receive publicly."""
+    from app.services import viewer_access as va
+
+    access = va.entry_access(db, _viewer(db, user), contestant)
+    if not access.allowed or access.mode != va.Mode.PUBLIC:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+
+def _entry_for_viewer_or_404(db: Session, user, contestant) -> None:
+    """Phase 7: data about an entry (stats, interaction lists) is served only to
+    viewers who may receive the entry itself (public, owner or moderation)."""
+    from app.services import viewer_access as va
+
+    access = va.entry_access(db, _viewer(db, user), contestant)
+    if not access.allowed:
+        if access.denial in (va.Denial.SIGN_IN_REQUIRED, va.Denial.AGE_REQUIRED, va.Denial.AGE_RESTRICTED):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=access.client_error())
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+
+def _safe_full_name(privacy, user) -> Optional[str]:
+    """Phase 7: another user's full name only when their age/consent floor allows it."""
+    if user is None or not privacy.display(user)["name"]:
+        return None
+    return user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip() or None
+
+
 def _clean_video_url(value: str) -> str:
     cleaned = value.strip()
     max_depth = 3
@@ -879,12 +923,16 @@ def _already_voted_for_nominator_in_bucket(
 def debug_get_all_contestants(
     *,
     db: Session = Depends(deps.get_db),
-    limit: int = Query(20, ge=1, le=100)
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(deps.get_current_active_user),
 ):
     """
     DEBUG: Get all contestants from database (no filters) to verify they exist.
     This endpoint helps diagnose why contestants aren't appearing.
+    Phase 7: administrators only (it lists non-public entries).
     """
+    if not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     import logging
     logger = logging.getLogger(__name__)
     
@@ -935,7 +983,7 @@ def get_user_contestants(
     contestants = crud_contestant.get_multi_by_user_with_stats(
         db, user_id, skip=skip, limit=limit
     )
-    return contestants
+    return _secure_entries(db, current_user, contestants, owner_ok=(current_user.id == user_id))
 
 
 @router.get("/user/my-entries", response_model=List[ContestantWithAuthorAndStats])
@@ -950,7 +998,7 @@ def get_my_contestants(
     contestants = crud_contestant.get_multi_by_user_with_stats(
         db, current_user.id, skip=skip, limit=limit
     )
-    return contestants
+    return _secure_entries(db, current_user, contestants, owner_ok=True)
 
 
 @router.get("/user/my-votes")
@@ -1356,6 +1404,12 @@ def get_my_votes(
         )
         result["seasons"] = collapsed
 
+    # Phase 7: withhold content of entries this viewer may no longer receive; keep vote slots.
+    from app.services import viewer_access as _va
+
+    _v = _viewer(db, current_user)
+    for _s in result.get("seasons", []):
+        _s["votes"] = _va.secure_entry_refs(db, _v, _s.get("votes") or [])
     return result
 
 
@@ -1576,6 +1630,13 @@ def get_my_votes_history(
         
         result["history"].append(contest_data)
     
+    # Phase 7: withhold content of entries this viewer may no longer receive; keep history shape.
+    from app.services import viewer_access as _va
+
+    _v = _viewer(db, current_user)
+    for _c in result.get("history", []):
+        for _s in _c.get("seasons", []):
+            _s["votes"] = _va.secure_entry_refs(db, _v, _s.get("votes") or [])
     return result
 
 
@@ -1778,7 +1839,8 @@ def get_contest_leaderboard(
     db: Session = Depends(deps.get_db),
     contest_id: int,
     skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100)
+    limit: int = Query(10, ge=1, le=100),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
 ) -> List[ContestantListResponse]:
     """Récupère le classement d'un concours"""
     # Vérifier que la saison existe
@@ -1793,6 +1855,12 @@ def get_contest_leaderboard(
         db, contest_id, skip=skip, limit=limit
     )
     
+    from app.services import viewer_access as _va
+
+    _lb_viewer = _viewer(db, current_user)
+    _lb_gov = _va.Governance(db, [c.id for c in contestants])
+    contestants = [c for c in contestants
+                   if (lambda a: a.allowed and a.mode == _va.Mode.PUBLIC)(_va.entry_access(db, _lb_viewer, c, _lb_gov))]
     result = []
     for rank, contestant in enumerate(contestants, 1):
         result.append(ContestantListResponse(
@@ -1944,7 +2012,12 @@ def get_contest_contestants(
             logger.warning(f"[DEBUG] No round_ids found. Sample of all contestants: {[(c.id, c.season_id, c.round_id) for c in all_contestants_sample]}")
         
         # Step 2: Build simplified query - try season_id first (most common)
-        query = db.query(Contestant).filter(Contestant.is_deleted == False)
+        # Phase 7: viewer-level age-safe listing filter in SQL (before offset/limit,
+        # so pagination stays coherent). Includes the Phase 5/6 public-exposure rule.
+        from app.services import viewer_access as _va
+
+        _listing_filter = _va.listing_clause(_viewer(db, current_user))
+        query = db.query(Contestant).filter(Contestant.is_deleted == False, _listing_filter)
 
         # Resolve season for nomination rosters (never pick highest active link blindly).
         from sqlalchemy import case
@@ -2188,7 +2261,8 @@ def get_contest_contestants(
                 try:
                     fallback1 = db.query(Contestant).filter(
                         Contestant.is_deleted == False,
-                        Contestant.season_id == real_contest_id
+                        Contestant.season_id == real_contest_id,
+                        _listing_filter,
                     ).limit(limit).all()
                     logger.info(f"[get_contest_contestants] Fallback 1 (season_id only): Found {len(fallback1)} contestants")
                     if fallback1:
@@ -2423,6 +2497,9 @@ def get_contest_contestants(
         # This allows the frontend to handle gracefully
         return []
     
+    # Phase 7: viewer-level age-safe delivery (drop, protect media, minimize authors).
+    contestants_data = _secure_entries(db, current_user, contestants_data)
+
     # Convertir en schéma Pydantic
     try:
         result = [ContestantWithAuthorAndStats(**data) for data in contestants_data]
@@ -3206,17 +3283,24 @@ def get_contestant(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
-    # Child/Teen Safety Phase 5: an entry that is not publicly exposable (held for
-    # consent/review, blocked or escalated) is visible only to its submitter and admins.
-    from app.services.contest_eligibility import entry_publicly_visible
+    # Child/Teen Safety Phase 5-7: ONE viewer-level decision (exposure, moderation,
+    # rating, owner/moderator/child-safety modes). Denied payloads never leave the backend.
+    from app.services import viewer_access as va
 
-    if not entry_publicly_visible(db, contestant_id):
-        viewer_is_owner = current_user is not None and contestant_data.get("user_id") == current_user.id
-        if not (viewer_is_owner or (current_user is not None and current_user.is_admin)):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Submission not found"
-            )
+    _entry_row = crud_contestant.get(db, contestant_id)
+    _viewer_ctx = _viewer(db, current_user)
+    access = va.entry_access(db, _viewer_ctx, _entry_row)
+    if not access.allowed:
+        if access.denial in (va.Denial.SIGN_IN_REQUIRED, va.Denial.AGE_REQUIRED, va.Denial.AGE_RESTRICTED):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=access.client_error())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found"
+        )
+    contestant_data = va.secure_entry_item(db, _viewer_ctx, contestant_data, _entry_row, access,
+                                           va.PrivacyCache(db))
+    if access.mode in (va.Mode.MODERATION, va.Mode.CHILD_SAFETY_REVIEW):
+        db.commit()  # the protected-access audit record
 
     return ContestantWithAuthorAndStats(**contestant_data)
 
@@ -3235,10 +3319,9 @@ def track_contestant_view(
     Frontend should call this only after user stays on page >= 30s.
     """
     contestant = crud_contestant.get(db, contestant_id)
-    from app.services.contest_eligibility import entry_publicly_visible
-
-    if not contestant or not entry_publicly_visible(db, contestant_id):
+    if not contestant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    _public_access_or_404(db, current_user, contestant)
 
     if watched_seconds < 30:
         raise HTTPException(
@@ -3316,6 +3399,7 @@ def add_to_favorites(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestant not found"
         )
+    _public_access_or_404(db, current_user, contestant)
     
     # Vérifier que l'utilisateur n'a pas déjà ce contestant en favoris
     existing = db.query(MyFavorites).filter(
@@ -3745,13 +3829,9 @@ def vote_for_contestant(
     
     # Vérifier que le contestant existe
     contestant = crud_contestant.get(db, contestant_id)
-    from app.services.contest_eligibility import entry_publicly_visible
-
-    if not contestant or not entry_publicly_visible(db, contestant_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Submission not found"
-        )
+    if not contestant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    _public_access_or_404(db, current_user, contestant)
 
     # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
     if contestant.user_id == current_user.id:
@@ -4390,10 +4470,9 @@ def replace_fifth_vote(
     logger = logging.getLogger(__name__)
 
     contestant = crud_contestant.get(db, contestant_id)
-    from app.services.contest_eligibility import entry_publicly_visible
-
-    if not contestant or not entry_publicly_visible(db, contestant_id):
+    if not contestant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    _public_access_or_404(db, current_user, contestant)
 
     if contestant.user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
@@ -4742,6 +4821,7 @@ def add_reaction(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _public_access_or_404(db, current_user, contestant)
     
     # Vérifier que le type de réaction est valide et le convertir en minuscules
     reaction_type_str = reaction_in.reaction_type.lower()
@@ -4855,6 +4935,7 @@ def get_reaction_stats(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _entry_for_viewer_or_404(db, current_user, contestant)
     
     # Compter les réactions par type
     reactions = db.query(ContestantReaction).filter(
@@ -4899,6 +4980,7 @@ def share_contestant(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _public_access_or_404(db, current_user, contestant)
     
     # Déterminer qui partage
     shared_by_user_id = share_in.shared_by_user_id or (current_user.id if current_user else None)
@@ -4943,6 +5025,7 @@ def share_contestant(
 def get_share_stats(
     *,
     db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
     contestant_id: int
 ) -> ShareStats:
     """Récupérer les statistiques de partage pour un contestant"""
@@ -4959,6 +5042,9 @@ def get_share_stats(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _entry_for_viewer_or_404(db, current_user, contestant)
+    from app.services.viewer_access import PrivacyCache as _PC
+    _privacy = _PC(db)
     
     # Récupérer tous les partages avec les utilisateurs
     shares = db.query(ContestantShare)\
@@ -4980,11 +5066,7 @@ def get_share_stats(
             id=share.id,
             user_id=share.shared_by_user_id,
             username=share.shared_by.username if share.shared_by else None,
-            full_name=(
-                share.shared_by.full_name or 
-                f"{share.shared_by.first_name or ''} {share.shared_by.last_name or ''}".strip()
-                if share.shared_by else None
-            ),
+            full_name=_safe_full_name(_privacy, share.shared_by),
             avatar_url=share.shared_by.avatar_url if share.shared_by else None,
             platform=share.platform,
             share_link=share.share_link,
@@ -4995,8 +5077,10 @@ def get_share_stats(
     # Récupérer les informations de l'auteur
     author_name = None
     author_username = None
+    _author_perm = _privacy.display(contestant.user)
     if contestant.user:
-        author_name = contestant.user.full_name or f"{contestant.user.first_name or ''} {contestant.user.last_name or ''}".strip()
+        author_name = (_safe_full_name(_privacy, contestant.user) if _author_perm["name"] else None) \
+            or contestant.user.username
         author_username = contestant.user.username
     
     return ShareStats(
@@ -5011,8 +5095,8 @@ def get_share_stats(
         author_id=contestant.user_id,
         author_name=author_name,
         author_username=author_username,
-        author_country=contestant.user.country if contestant.user else None,
-        author_city=contestant.user.city if contestant.user else None,
+        author_country=contestant.user.country if contestant.user and _author_perm["place"] else None,
+        author_city=contestant.user.city if contestant.user and _author_perm["place"] else None,
         author_avatar_url=contestant.user.avatar_url if contestant.user else None,
         # Liste des utilisateurs qui ont partagé
         shares=shares_list
@@ -5023,6 +5107,7 @@ def get_share_stats(
 def get_reaction_details(
     *,
     db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
     contestant_id: int
 ) -> ReactionDetails:
     """Récupérer les détails des réactions avec les noms des utilisateurs"""
@@ -5033,6 +5118,9 @@ def get_reaction_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _entry_for_viewer_or_404(db, current_user, contestant)
+    from app.services.viewer_access import PrivacyCache as _PC
+    _privacy = _PC(db)
     
     # Récupérer toutes les réactions avec les utilisateurs
     reactions = db.query(ContestantReaction).join(User).filter(
@@ -5050,7 +5138,7 @@ def get_reaction_details(
             ReactionUserDetail(
                 user_id=reaction.user.id,
                 username=reaction.user.username,
-                full_name=reaction.user.full_name,
+                full_name=_safe_full_name(_privacy, reaction.user),
                 avatar_url=reaction.user.avatar_url,
                 reaction_type=reaction_type
             )
@@ -5066,6 +5154,7 @@ def get_reaction_details(
 def get_vote_details(
     *,
     db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
     contestant_id: int
 ) -> VoteDetails:
     """Récupérer les détails des votes avec les noms des utilisateurs"""
@@ -5076,6 +5165,9 @@ def get_vote_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _entry_for_viewer_or_404(db, current_user, contestant)
+    from app.services.viewer_access import PrivacyCache as _PC
+    _privacy = _PC(db)
     
     # Récupérer tous les votes avec les utilisateurs depuis ContestantVoting
     votes = db.query(ContestantVoting).join(User, ContestantVoting.user_id == User.id).filter(
@@ -5087,7 +5179,7 @@ def get_vote_details(
             id=vote.id,
             user_id=vote.user.id,
             username=vote.user.username,
-            full_name=vote.user.full_name,
+            full_name=_safe_full_name(_privacy, vote.user),
             avatar_url=vote.user.avatar_url,
             points=1,  # Chaque vote vaut 1 point dans le nouveau système
             vote_date=vote.vote_date,
@@ -5107,6 +5199,7 @@ def get_vote_details(
 def get_favorite_details(
     *,
     db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
     contestant_id: int
 ) -> FavoriteDetails:
     """Récupérer les détails des favoris avec les noms des utilisateurs"""
@@ -5117,6 +5210,9 @@ def get_favorite_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found"
         )
+    _entry_for_viewer_or_404(db, current_user, contestant)
+    from app.services.viewer_access import PrivacyCache as _PC
+    _privacy = _PC(db)
     
     # Récupérer tous les favoris avec les utilisateurs
     favorites = db.query(MyFavorites).join(User, MyFavorites.user_id == User.id).filter(
@@ -5127,7 +5223,7 @@ def get_favorite_details(
         FavoriteUserDetail(
             user_id=favorite.user.id,
             username=favorite.user.username,
-            full_name=favorite.user.full_name,
+            full_name=_safe_full_name(_privacy, favorite.user),
             avatar_url=favorite.user.avatar_url,
             position=favorite.position,
             added_date=favorite.added_date

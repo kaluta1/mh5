@@ -21,13 +21,39 @@ from app.services.content_moderation import content_moderation_service
 router = APIRouter()
 
 
+def _guard_entry(db: Session, user, contestant_id: Optional[int], *, public_only: bool = False) -> None:
+    """Phase 7: comments are data about an entry; same viewer decision as the entry."""
+    from app.services.viewer_access import require_entry_access
+
+    if contestant_id is None:
+        return
+    contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
+    require_entry_access(db, user, contestant, public_only=public_only)
+
+
+def _comment_author_name(user, current_user_id, privacy) -> Optional[str]:
+    """Phase 7: a commenter's real name only where their age/consent floor allows."""
+    if user is None:
+        return None
+    if user.id == current_user_id or (privacy is not None and privacy.display(user)["name"]):
+        return user.full_name or user.username
+    return user.username
+
+
 def serialize_comment_with_replies(
-    comment, 
-    all_replies_map: dict, 
+    comment,
+    all_replies_map: dict,
     liked_comment_ids: set,
-    current_user_id: Optional[int] = None
+    current_user_id: Optional[int] = None,
+    privacy=None,
 ) -> CommentWithReplies:
     """Sérialiser un commentaire avec ses réponses (version optimisée)"""
+    if privacy is None:
+        from sqlalchemy.orm import object_session
+        from app.services.viewer_access import PrivacyCache
+
+        _session = object_session(comment)
+        privacy = PrivacyCache(_session) if _session is not None else None
     user = comment.user
     replies = all_replies_map.get(comment.id, [])
     
@@ -38,7 +64,7 @@ def serialize_comment_with_replies(
         id=comment.id,
         content=comment.content,
         user_id=comment.user_id,
-        author_name=user.full_name or user.username,
+        author_name=_comment_author_name(user, current_user_id, privacy),
         author_avatar=user.avatar_url,
         created_at=comment.created_at,
         updated_at=comment.updated_at,
@@ -50,7 +76,8 @@ def serialize_comment_with_replies(
         is_flagged=comment.is_flagged,
         is_hidden=comment.is_hidden,
         is_liked=is_liked,
-        replies=[serialize_comment_with_replies(r, all_replies_map, liked_comment_ids, current_user_id) for r in replies]
+        replies=[serialize_comment_with_replies(r, all_replies_map, liked_comment_ids, current_user_id, privacy)
+                 for r in replies]
     )
 
 
@@ -64,7 +91,7 @@ def get_contestant_comments(
     limit: int = Query(50, ge=1, le=100)
 ):
     """Récupérer les commentaires d'un contestant (version optimisée)"""
-    
+
     # Vérifier que le contestant existe
     contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
     if not contestant:
@@ -72,7 +99,8 @@ def get_contestant_comments(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestant not found"
         )
-    
+    _guard_entry(db, current_user, contestant_id)
+
     # Récupérer les commentaires principaux avec eager loading des utilisateurs
     comments, total = comment_crud.get_comments_by_contestant(
         db, contestant_id, skip, limit, parent_id=None
@@ -146,6 +174,7 @@ def create_contestant_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestant not found"
         )
+    _guard_entry(db, current_user, contestant_id, public_only=True)
     
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
@@ -234,6 +263,7 @@ def get_media_comments(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestant not found"
         )
+    _guard_entry(db, None, contestant_id, public_only=False)
     
     # Pour maintenant, on accepte juste l'ID de média comme string
     # Les commentaires seront stockés avec media_id = None et target_id = media_id
@@ -264,6 +294,7 @@ def create_media_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contestant not found"
         )
+    _guard_entry(db, current_user, contestant_id, public_only=True)
     
     # Modérer le contenu avant création
     text_moderation = content_moderation_service.moderate_text(comment_data.content)
@@ -302,6 +333,7 @@ def get_comment(
             detail="Comment not found"
         )
     
+    _guard_entry(db, current_user, comment.contestant_id)
     current_user_id = current_user.id if current_user else None
     return serialize_comment_with_replies(comment, db, current_user_id)
 
@@ -457,8 +489,9 @@ def get_comment_replies(
             detail="Comment not found"
         )
     
+    _guard_entry(db, current_user, comment.contestant_id)
     replies, total = comment_crud.get_replies(db, comment_id, skip, limit)
-    
+
     current_user_id = current_user.id if current_user else None
     
     # Récupérer tous les commentaires du contestant pour construire all_replies_map
@@ -497,9 +530,17 @@ def get_comment_replies(
 @router.get("/{contestant_id}/commenters")
 def get_contestant_commenters(
     contestant_id: int,
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_current_active_user_optional),
 ):
     """Récupérer la liste des utilisateurs ayant commenté sur un contestant"""
+    from app.services.viewer_access import PrivacyCache
+
+    contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
+    if not contestant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contestant not found")
+    _guard_entry(db, current_user, contestant_id)
+    privacy = PrivacyCache(db)
     from app.models.comment import Comment
     from app.models.user import User
     from sqlalchemy import distinct
@@ -515,11 +556,13 @@ def get_contestant_commenters(
         User.id.in_([uid[0] for uid in user_ids])
     ).all()
     
+    current_user_id = current_user.id if current_user else None
     return [
         {
             "id": user.id,
-            "username": user.username or user.email.split("@")[0],
-            "name": user.full_name or user.username or user.email.split("@")[0],
+            # Never derived from the email address.
+            "username": user.username or f"user{user.id}",
+            "name": _comment_author_name(user, current_user_id, privacy) or f"user{user.id}",
             "avatar_url": user.avatar_url
         }
         for user in users

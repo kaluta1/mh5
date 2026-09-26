@@ -168,12 +168,17 @@ server {
         proxy_next_upstream_timeout 15s;
     }
 
+    # Child/Teen Safety Phase 7: NEVER serve the media directory from disk here.
+    # Protected entry media must pass the application's authorization, so /media/
+    # is proxied to FastAPI (which keeps public caching for public files).
     location /media/ {
-        alias ${MEDIA_ROOT}/;
-        access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=86400";
-        add_header Access-Control-Allow-Origin "*";
+        proxy_pass http://mh5_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
     }
 
     location / {
@@ -285,12 +290,17 @@ server {
         proxy_next_upstream_timeout 15s;
     }
 
+    # Child/Teen Safety Phase 7: NEVER serve the media directory from disk here.
+    # Protected entry media must pass the application's authorization, so /media/
+    # is proxied to FastAPI (which keeps public caching for public files).
     location /media/ {
-        alias ${MEDIA_ROOT}/;
-        access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=86400";
-        add_header Access-Control-Allow-Origin "*";
+        proxy_pass http://mh5_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
     }
 
     location / {

@@ -786,6 +786,10 @@ def read_contest(
 
     # Utiliser la méthode simplifiée qui utilise directement les champs du Contestant
     current_user_id = current_user.id if current_user else None
+    # Phase 7: viewer-level age-safe delivery (SQL filter + payload securing below).
+    from app.services import viewer_access as _va
+
+    _viewer_ctx = _va.viewer_for(db, current_user)
     enriched_contest = contest.get_contest_with_enriched_contestants(
         db=db, 
         contest_id=contest_id, 
@@ -797,7 +801,10 @@ def read_contest(
         round_id=round_id,
         requested_ui_level=contest_level,
         roster_only=use_roster_only,
+        listing_filter=_va.listing_clause(_viewer_ctx),
     )
+    if isinstance(enriched_contest, dict) and enriched_contest.get("contestants"):
+        enriched_contest["contestants"] = _va.secure_entry_list(db, _viewer_ctx, enriched_contest["contestants"])
 
     # #region agent log
     try:
@@ -890,6 +897,8 @@ def read_contest(
                         "nominator_country": getattr(participation, 'nominator_country', None),
                         "nominator_city": getattr(participation, 'nominator_city', None),
                     }
+                    # Phase 7: own entry in OWNER mode (protected media); escalated content withheld.
+                    participation_dict = _va.secure_entry_refs(db, _viewer_ctx, [participation_dict], id_key="id")[0]
                     enriched_contest["current_user_participation"] = participation_dict
                     enriched_contest["current_user_contesting"] = True
                     if getattr(participation, "round_id", None) is not None:

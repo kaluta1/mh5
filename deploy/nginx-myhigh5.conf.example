@@ -107,7 +107,8 @@ server {
         proxy_next_upstream_timeout 15s;
     }
 
-    # Optional: media files served from disk (fix_nginx_myhigh5.sh uses alias)
+    # /media/ MUST be proxied to FastAPI (never an alias/root to the media directory):
+    # protected entry media is authorized by the application (Child/Teen Safety Phase 7).
     location /media/ {
         proxy_pass http://mh5_backend;
         proxy_http_version 1.1;

@@ -305,7 +305,13 @@ def test_resolver_denies_kyc_even_if_present_in_s3(monkeypatch):
     assert storage.resolve_media_for_serving(5, "ordinary.png")[0] == "s3"
 
 
-def test_static_media_mount_denies_kyc(tmp_path, app):
+def test_static_media_mount_denies_kyc(tmp_path, app, db, monkeypatch):
+    # Phase 7: the static mount also consults the DB (protected entry media), so
+    # it must use the test database like every other request path.
+    from app.db import session as session_module
+    from tests.conftest import TestingSessionLocal
+
+    monkeypatch.setattr(session_module, "SessionLocal", TestingSessionLocal)
     owner = OWNER_ID_BASE + 3
     _write(tmp_path, owner, "kyc_poa_static.png", PNG_BYTES)
     _write(tmp_path, owner, "public-static.png", PNG_BYTES)

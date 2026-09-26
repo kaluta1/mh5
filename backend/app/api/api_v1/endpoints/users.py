@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
@@ -194,14 +194,19 @@ def _build_follow_users(
         .all()
     )
 
+    # Phase 7: other users' names/bios only where their age/consent floor allows.
+    from app.services.viewer_access import PrivacyCache
+
+    privacy = PrivacyCache(db)
     result = []
     for u in users:
+        show_name = u.id == current_user_id or privacy.display(u)["name"]
         result.append(FollowUserResponse(
             id=u.id,
             username=u.username,
-            full_name=u.full_name,
+            full_name=u.full_name if show_name else None,
             avatar_url=u.avatar_url,
-            bio=u.bio,
+            bio=u.bio if show_name else None,
             is_following=u.id in is_following_set,
             is_followed_by=u.id in is_followed_by_set,
             followers_count=int(followers_counts.get(u.id, 0)),
@@ -238,16 +243,22 @@ def search_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Search users by username or full name for mentions."""
+    """Search users by username or full name for mentions.
+    Phase 7: real names are searchable only for DOB-adults; minors and
+    UNKNOWN-age users are findable by username only."""
+    from app.services.viewer_access import adult_dob_clause
+
     search_term = f"%{q.strip()}%"
 
     users = db.query(UserModel).filter(
         UserModel.id != current_user.id,
         or_(
             UserModel.username.ilike(search_term),
-            UserModel.full_name.ilike(search_term),
-            UserModel.first_name.ilike(search_term),
-            UserModel.last_name.ilike(search_term),
+            and_(adult_dob_clause(), or_(
+                UserModel.full_name.ilike(search_term),
+                UserModel.first_name.ilike(search_term),
+                UserModel.last_name.ilike(search_term),
+            )),
         )
     ).limit(limit).all()
 
@@ -274,7 +285,10 @@ def read_user_by_username(
     if current_user.is_admin or current_user.id == user.id:
         return user
 
-    return PublicUserProfile.model_validate(user)
+    # Phase 7: field-by-field safe profile (minor/UNKNOWN floor: username + avatar).
+    from app.services.viewer_access import public_profile
+
+    return PublicUserProfile(**public_profile(db, user))
 
 
 @router.get("/{user_id}/followers", response_model=List[FollowUserResponse])
@@ -332,7 +346,10 @@ def read_user_by_id(
     if current_user.is_admin or current_user.id == user_id:
         return user
 
-    return PublicUserProfile.model_validate(user)
+    # Phase 7: field-by-field safe profile (minor/UNKNOWN floor: username + avatar).
+    from app.services.viewer_access import public_profile
+
+    return PublicUserProfile(**public_profile(db, user))
 
 @router.get("/", response_model=List[User])
 def read_users(

@@ -414,8 +414,32 @@ def resolve_kyc_document_for_serving(
     return source, ref, content_type, True
 
 
+def _static_media_is_protected(owner_id: int, filename: str) -> bool:
+    """Is this stored file used by an entry that may not go to an anonymous viewer?
+    Fail closed: any error counts as protected."""
+    from app.db.session import SessionLocal
+    from app.services.viewer_access import media_is_protected
+
+    try:
+        db = SessionLocal()
+    except Exception:  # noqa: BLE001
+        logger.warning("static media protection check unavailable; refusing")
+        return True
+    try:
+        return media_is_protected(db, owner_id, filename)
+    except Exception:  # noqa: BLE001 - never serve on a failed check
+        logger.warning("static media protection check failed; refusing")
+        return True
+    finally:
+        db.close()
+
+
 class PublicMediaStaticFiles(StaticFiles):
-    """The public /media mount, refusing KYC documents (legacy ones live under it)."""
+    """The public /media mount. Refuses KYC documents (legacy ones live under it)
+    and, Child/Teen Safety Phase 7, every PROTECTED entry file: those are served
+    only by /api/v1/media/file with a viewer-bound grant. The decision is made on
+    the RESOLVED filesystem path (after normalization of '.', '//', symlinks,
+    case), so no alternate spelling of a URL can reach a protected file."""
 
     async def get_response(self, path: str, scope):  # type: ignore[override]
         if path_contains_private_kyc(path):
@@ -423,10 +447,25 @@ class PublicMediaStaticFiles(StaticFiles):
         return await super().get_response(path, scope)
 
     def lookup_path(self, path: str):  # type: ignore[override]
+        # Runs in a worker thread (Starlette), so the DB check below may block.
         full_path, stat_result = super().lookup_path(path)
+        if not full_path:
+            return full_path, stat_result
         # Also check the resolved name (e.g. Windows 8.3 short names / case).
-        if full_path and path_contains_private_kyc(os.path.basename(full_path)):
+        if path_contains_private_kyc(os.path.basename(full_path)):
             return "", None
+        for directory in self.all_directories:
+            root = os.path.realpath(directory)
+            try:
+                if os.path.commonpath([full_path, root]) != root:
+                    continue
+            except ValueError:  # different drives
+                continue
+            parts = os.path.relpath(full_path, root).split(os.sep)
+            if len(parts) == 2 and parts[0].isdigit() and parts[1]:
+                if _static_media_is_protected(int(parts[0]), parts[1]):
+                    return "", None
+            break
         return full_path, stat_result
 
 

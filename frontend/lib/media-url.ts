@@ -1,6 +1,6 @@
 import { API_URL, getEffectiveApiUrl } from "@/lib/config"
 
-function mediaApiOrigin(): string {
+export function mediaApiOrigin(): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname
     if (host !== "localhost" && host !== "127.0.0.1") {
@@ -40,6 +40,17 @@ function canonicalFilePath(raw: string): string | null {
   return null
 }
 
+/**
+ * Child/Teen Safety Phase 7: protected entry media URLs carry a short-lived,
+ * viewer-bound grant (`/api/v1/media/file/{uid}/{name}?g=...`). The grant is not a
+ * credential on its own (the server also requires this viewer's media session);
+ * it is kept for display only and is never part of a stored value.
+ */
+function mediaToken(raw: string): string | null {
+  const m = raw.match(/\/api\/v1\/media\/file\/\d+\/[^/?#\\]+\?(?:[^#]*&)?g=([A-Za-z0-9_\-.]{1,1024})(?:[&#]|$)/i)
+  return m ? m[1] : null
+}
+
 /** Extract a portable, host-agnostic value suitable for database storage. */
 export function toStoredMediaUrl(url?: string | null): string {
   const raw = String(url || "").trim()
@@ -62,7 +73,10 @@ export function normalizeMediaUrl(url?: string | null): string {
 
   const origin = mediaApiOrigin()
   const canonical = canonicalFilePath(raw)
-  if (canonical) return `${origin}${canonical}`
+  if (canonical) {
+    const token = mediaToken(raw)
+    return `${origin}${canonical}${token ? `?g=${token}` : ""}`
+  }
   if (/\/api\/v1\/media\/file\//i.test(raw)) return ""
 
   if (/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(raw)) return raw

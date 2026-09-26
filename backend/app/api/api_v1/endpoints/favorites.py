@@ -183,6 +183,12 @@ def add_contestant_favorite(
     position: int = Query(default=1, ge=1, le=5),
 ) -> Any:
     """Add a contestant to user's favorites"""
+    # Phase 7: only entries this viewer may receive publicly.
+    from app.models.contests import Contestant as _Contestant
+    from app.services.viewer_access import require_entry_access
+
+    require_entry_access(db, current_user,
+                         db.query(_Contestant).filter(_Contestant.id == contestant_id).first(), public_only=True)
     # Check if already favorited
     if crud_favorite.is_contestant_favorite(db, current_user.id, contestant_id):
         raise HTTPException(
@@ -222,8 +228,19 @@ def get_contestant_favorites(
 ) -> Any:
     """Get user's favorite contestants"""
     favorites = crud_favorite.get_contestant_favorites(db, current_user.id, skip, limit)
-    # Return the contestants from the favorites
-    return [fav.contestant for fav in favorites]
+    # Return the contestants from the favorites.
+    # Phase 7: an entry this viewer may no longer receive keeps its slot, but its
+    # content is withheld (content_restricted); media is protected, authors minimized.
+    from sqlalchemy import inspect as sa_inspect
+    from app.services import viewer_access as va
+
+    rows = []
+    for fav in favorites:
+        c = fav.contestant
+        if c is None:
+            continue
+        rows.append({attr.key: getattr(c, attr.key) for attr in sa_inspect(c).mapper.column_attrs})
+    return va.secure_entry_refs(db, va.viewer_for(db, current_user), rows, id_key="id")
 
 
 @router.get("/contestants/{contestant_id}/is-favorite")

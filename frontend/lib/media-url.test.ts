@@ -39,6 +39,15 @@ describe('media URL compatibility and safety', () => {
     expect(normalizeMediaUrl('/api/v1/media/file/1/%2Fsecret.png')).toBe('')
   })
 
+  it('keeps the viewer-bound grant of protected media for display but never stores it', () => {
+    const signed = '/api/v1/media/file/42/photo.png?g=eyJhIjoxfQ.c2ln_-x'
+    expect(normalizeMediaUrl(signed)).toMatch(/\/api\/v1\/media\/file\/42\/photo\.png\?g=eyJhIjoxfQ\.c2ln_-x$/)
+    expect(toStoredMediaUrl(signed)).toBe('/api/v1/media/file/42/photo.png')
+    expect(normalizeMediaUrl('/api/v1/media/file/42/photo.png?g=<bad>')).toMatch(/photo\.png$/)
+    expect(normalizeMediaUrl('/api/v1/media/file/42/photo.png?t=old')).toMatch(/photo\.png$/)
+    expect(withMediaCacheBust(normalizeMediaUrl(signed), 3)).toContain('?g=eyJhIjoxfQ.c2ln_-x&v=3')
+  })
+
   it('adds cache busting without changing data URLs', () => {
     expect(withMediaCacheBust('https://cdn.example/a.png', 5)).toContain('?v=5')
     expect(withMediaCacheBust('data:image/png;base64,AA==', 5)).toBe('data:image/png;base64,AA==')

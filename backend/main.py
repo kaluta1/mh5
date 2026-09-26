@@ -17,6 +17,12 @@ import uvicorn
 # Setup Logger to fix NameError globally
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn.error")
+
+# Child/Teen Safety Phase 7: signed media tokens are never written to access logs.
+from app.core.redaction import MediaTokenLogFilter as _MediaTokenLogFilter
+
+for _name in ("uvicorn.access", "uvicorn.error", "gunicorn.access"):
+    logging.getLogger(_name).addFilter(_MediaTokenLogFilter())
 IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").strip().lower() == "production"
 
 # Fix Windows console encoding for emoji/log output
@@ -318,7 +324,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # setdefault: a route may require a stricter policy (Phase 7 protected media: no-referrer).
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(self), payment=(self)"
         )
@@ -329,10 +336,42 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Child/Teen Safety Phase 7: these API responses depend on WHO is viewing
+# (age-rated delivery, owner/moderator modes, minor-safe profiles, signed media
+# URLs). They must never be stored by a shared cache or reused for another viewer.
+_VIEWER_DEPENDENT_PREFIXES = tuple(
+    f"{settings.API_V1_STR}{p}" for p in ("/contestants", "/contests", "/search", "/users", "/seasons/top-high5", "/comments",
+                                              "/favorites")
+)
+
+
+class ViewerDependentCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(_VIEWER_DEPENDENT_PREFIXES):
+            if "cache-control" not in response.headers:
+                response.headers["Cache-Control"] = "private, no-store"
+            vary = response.headers.get("vary")
+            if not vary or "authorization" not in vary.lower():
+                response.headers["Vary"] = f"{vary}, Authorization" if vary else "Authorization"
+            # These responses may carry viewer-bound media grants: (re)bind this
+            # browser's media session to the SAME authenticated viewer (HttpOnly
+            # cookie, never in a URL). Only a valid bearer can do this.
+            if response.status_code < 400 and request.headers.get("authorization", "").lower().startswith("bearer "):
+                from app.services import viewer_access as _va
+
+                viewer_id = _va.requester_user_id(request)
+                if viewer_id is not None:
+                    response.set_cookie(value=_va.sign_media_session(viewer_id),
+                                        **_va.media_session_cookie_kwargs(request))
+        return response
+
+
 from app.core.rate_limit import RateLimitMiddleware
 
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ViewerDependentCacheMiddleware)
 app.add_middleware(BuildIdMiddleware)
 
 # Inclusion des routes API

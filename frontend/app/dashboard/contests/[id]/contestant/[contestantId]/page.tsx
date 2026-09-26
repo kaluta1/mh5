@@ -22,6 +22,9 @@ import { ToastNotification } from '@/components/dashboard/toast-notification'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { Info } from 'lucide-react'
 import api from '@/lib/api'
+import { getContentRestriction, type ContentRestriction } from '@/lib/content-restriction'
+import { throwIfApiError } from '@/lib/http-error'
+import { ContentRestrictedNotice } from '@/components/ui/content-restricted-notice'
 import { contestService } from '@/services/contest-service'
 import { commentsService, Comment as ServiceComment } from '@/lib/services/comments-service'
 import { reactionsService, ReactionDetails } from '@/services/reactions-service'
@@ -105,6 +108,7 @@ function ContestantDetailContent() {
   const [isVoting, setIsVoting] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [restriction, setRestriction] = useState<ContentRestriction | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [isFollowing, setIsFollowing] = useState(false)
   const [isFollowLoading, setIsFollowLoading] = useState(false)
@@ -135,6 +139,7 @@ function ContestantDetailContent() {
 
         // Appel API pour récupérer les détails du contestant
         const response = await api.get(`/api/v1/contestants/${contestantId}`)
+        throwIfApiError(response) // 4xx do not throw with this client; restricted/hidden -> catch
         const data = response.data
 
         setContestant(data)
@@ -162,6 +167,7 @@ function ContestantDetailContent() {
         }
       } catch (err) {
         console.error('Error loading contestant:', err)
+        setRestriction(getContentRestriction(err))
         setError('Erreur lors du chargement des détails du contestant')
       } finally {
         setPageLoading(false)
@@ -583,6 +589,10 @@ function ContestantDetailContent() {
 
   if (isLoading || pageLoading) {
     return <ContestantDetailSkeleton />
+  }
+
+  if (restriction) {
+    return <ContentRestrictedNotice restriction={restriction} />
   }
 
   if (!isAuthenticated || !user || !contestant) {
