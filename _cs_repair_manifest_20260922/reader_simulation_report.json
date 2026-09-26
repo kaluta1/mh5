@@ -1,0 +1,262 @@
+{
+ "res": {
+  "contestants": 349,
+  "A_detail_page_has_link_before": 349,
+  "A_detail_page_has_link_after": 349,
+  "A_detail_season_changed": 75,
+  "A_before_home_round": 272,
+  "A_after_home_round": 347,
+  "A_changed_foreign_to_home": 75,
+  "A_changed_home_to_foreign": 0,
+  "A_changed_level": 61,
+  "B_vote_not_active_in_any_season_before": 0,
+  "B_vote_not_active_in_any_season_after": 0,
+  "B_vote_season_changed": 121,
+  "B_vote_season_home_before": 228,
+  "B_vote_season_home_after": 301,
+  "B_vote_foreign_to_home": 73,
+  "B_vote_home_to_foreign": 0,
+  "B_contest_membership_true_before": 349,
+  "B_contest_membership_true_after": 349,
+  "B_contest_membership_lost": 0,
+  "B_contest_membership_gained": 0,
+  "C_removed_nonpooled_membership[city]": 305,
+  "D_entry_type_of_removed_rows[nomination]": 717,
+  "LEVEL_LOSS_contestants": 0,
+  "contestants_with_no_active_row_after": 0,
+  "C_authoritative_pooled_listing_retained[continent]": 185,
+  "C_nomination_cohort_roster_includes_keep_before": 185,
+  "C_nomination_cohort_roster_includes_keep_after": 185,
+  "C_wrong_round_pooled_listings_removed": 315,
+  "C_authoritative_pooled_listing_retained[regional]": 24,
+  "C_removed_nonpooled_membership[country]": 102,
+  "D_entry_type_of_removed_rows[participation]": 5,
+  "KEEP_active_live": 408,
+  "KEEP_total": 408,
+  "KEEP_ids_also_in_DEACTIVATE": 0,
+  "D_admin_seasons_with_count_change": 17,
+  "D_admin_total_count_decrease": 722,
+  "D_admin_seasons_whose_active_count_would_reach_zero": 0
+ },
+ "notes": {
+  "B": [
+   [
+    46,
+    {
+     "season": 267,
+     "level": "city",
+     "round": 28,
+     "home": false
+    },
+    {
+     "season": 257,
+     "level": "country",
+     "round": 27,
+     "home": false
+    }
+   ],
+   [
+    48,
+    {
+     "season": 265,
+     "level": "continent",
+     "round": 21,
+     "home": false
+    },
+    {
+     "season": 254,
+     "level": "continent",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    50,
+    {
+     "season": 267,
+     "level": "city",
+     "round": 28,
+     "home": false
+    },
+    {
+     "season": 257,
+     "level": "country",
+     "round": 27,
+     "home": false
+    }
+   ],
+   [
+    54,
+    {
+     "season": 267,
+     "level": "city",
+     "round": 28,
+     "home": false
+    },
+    {
+     "season": 257,
+     "level": "country",
+     "round": 27,
+     "home": false
+    }
+   ],
+   [
+    88,
+    {
+     "season": 261,
+     "level": "continent",
+     "round": 4,
+     "home": false
+    },
+    {
+     "season": 254,
+     "level": "continent",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    96,
+    {
+     "season": 265,
+     "level": "continent",
+     "round": 21,
+     "home": false
+    },
+    {
+     "season": 254,
+     "level": "continent",
+     "round": 3,
+     "home": true
+    }
+   ]
+  ],
+  "A": [
+   [
+    48,
+    {
+     "season": 265,
+     "level": "continent",
+     "round": 21,
+     "home": false
+    },
+    {
+     "season": 239,
+     "level": "regional",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    382,
+    {
+     "season": 265,
+     "level": "continent",
+     "round": 21,
+     "home": false
+    },
+    {
+     "season": 239,
+     "level": "regional",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    400,
+    {
+     "season": 261,
+     "level": "continent",
+     "round": 4,
+     "home": false
+    },
+    {
+     "season": 254,
+     "level": "continent",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    404,
+    {
+     "season": 261,
+     "level": "continent",
+     "round": 4,
+     "home": false
+    },
+    {
+     "season": 239,
+     "level": "regional",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    408,
+    {
+     "season": 261,
+     "level": "continent",
+     "round": 4,
+     "home": false
+    },
+    {
+     "season": 239,
+     "level": "regional",
+     "round": 3,
+     "home": true
+    }
+   ],
+   [
+    642,
+    {
+     "season": 265,
+     "level": "continent",
+     "round": 21,
+     "home": false
+    },
+    {
+     "season": 8,
+     "level": "city",
+     "round": 4,
+     "home": true
+    }
+   ]
+  ],
+  "D_zero": [],
+  "D_top_decreases": [
+   [
+    267,
+    164
+   ],
+   [
+    265,
+    163
+   ],
+   [
+    8,
+    128
+   ],
+   [
+    261,
+    95
+   ],
+   [
+    253,
+    35
+   ],
+   [
+    255,
+    35
+   ],
+   [
+    257,
+    31
+   ],
+   [
+    245,
+    22
+   ]
+  ]
+ }
+}

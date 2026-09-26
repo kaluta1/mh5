@@ -1,0 +1,748 @@
+contestant_id,level,contestant_round_id,active_rows,distinct_rounds,match_rows,foreign_rows,reg_corroborates,classification,sub,disposition,reason,home_row_history,home_higher_level_active,votes_on_foreign_active
+46,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+46,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+46,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+48,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+50,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+50,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+50,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+54,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+54,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+54,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+54,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+58,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+58,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+58,country,3,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+62,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+62,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+62,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+62,regional,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+66,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+66,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+66,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+66,regional,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+70,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+70,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+70,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+70,regional,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+74,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+74,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+74,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+74,regional,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+78,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+78,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+78,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+78,regional,3,3,2,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+82,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+82,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+82,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+86,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+86,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+86,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+88,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+90,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+90,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+90,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+94,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+94,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+94,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+96,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+98,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+98,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+98,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+102,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+102,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+102,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+108,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+108,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+108,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+110,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+112,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+112,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+112,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+114,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+114,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+114,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+118,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+118,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+118,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+122,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+122,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+122,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+124,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+126,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+128,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+128,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+128,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+130,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+130,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+130,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+132,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+134,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+134,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+134,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+136,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+138,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+138,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+138,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+140,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+142,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+142,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+142,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+144,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+146,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+146,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+146,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+148,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+150,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+150,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+150,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+152,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+154,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+154,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+154,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+156,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+158,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+158,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+158,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+160,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+162,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+162,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+162,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+164,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+166,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+168,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+168,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+168,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+170,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+172,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+172,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+172,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+174,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+176,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+176,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+176,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+178,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+180,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+180,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+180,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+182,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+184,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+184,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+184,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+186,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+188,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+188,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+188,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+190,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+192,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+192,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+192,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+194,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+196,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+196,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+196,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+198,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+200,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+200,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+200,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+202,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+204,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+204,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+204,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+206,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+208,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+208,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+208,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+210,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+212,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+212,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+212,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+214,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+216,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+216,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+216,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+218,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+220,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+220,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+220,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+222,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+224,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+224,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+224,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+226,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+228,city,3,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+228,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+228,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+230,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+232,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+232,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+232,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+236,city,3,5,5,1,4,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+236,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+236,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+238,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+240,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+240,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+240,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+242,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+244,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+244,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+244,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+246,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+248,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+250,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+252,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+252,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+252,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+254,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+256,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+256,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+256,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+258,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+260,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+260,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+260,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+262,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+264,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+264,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+264,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+266,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+268,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+268,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+268,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+270,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+272,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+274,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+274,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+274,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+276,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+278,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+278,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+278,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+280,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+282,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+282,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+282,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+284,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+286,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+286,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+286,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+288,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+290,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+290,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+290,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+292,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+294,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+294,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+294,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+296,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+298,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+298,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+298,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+300,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+302,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+302,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+302,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+304,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+306,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+306,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+306,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+308,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+310,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+310,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+310,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+312,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+314,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+314,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+314,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+318,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+318,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+318,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+320,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+322,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+322,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+322,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+324,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+326,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+326,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+326,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+328,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+330,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+330,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+330,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+332,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+334,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+334,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+334,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+336,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+338,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+338,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+338,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+340,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+342,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+342,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+342,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+344,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+346,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+346,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+346,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+346,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+348,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+350,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+350,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+350,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+350,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+352,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+354,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+354,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+354,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+354,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+356,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+358,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+358,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+358,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+358,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+360,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+362,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+362,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+362,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+362,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+364,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+366,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+366,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+366,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+366,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+368,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+370,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+370,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+370,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+372,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+374,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+374,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+374,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+376,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+378,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+378,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+378,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+380,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+382,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+384,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+386,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+386,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+386,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+388,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+390,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+390,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+390,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+392,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+394,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+394,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+394,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+398,city,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+398,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+398,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+400,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+402,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+402,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+402,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+404,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+406,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+406,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+406,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+406,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+408,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+410,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+410,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+410,country,3,5,5,1,4,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+410,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+411,city,3,6,6,1,5,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+411,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+411,regional,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+414,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+414,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+414,country,3,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+414,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+451,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+451,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+451,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+451,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+456,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+457,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+459,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+468,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+469,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+471,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+472,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+472,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+472,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+472,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+473,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+473,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+473,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+475,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+484,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+484,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+484,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+498,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+498,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+498,country,3,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+498,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+500,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+500,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+500,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+500,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+501,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+504,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+506,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+506,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+506,country,3,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+506,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+507,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+507,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+507,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+507,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+508,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+508,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+508,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+509,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+509,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+509,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+509,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+513,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+514,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+519,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+522,city,3,7,6,1,6,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+522,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+526,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+529,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+529,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+529,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+529,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+531,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+538,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+538,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+538,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+544,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+544,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+544,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+544,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+552,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+554,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+554,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+554,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+554,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+557,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+558,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+558,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+558,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+558,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+559,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+564,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+565,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+569,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+569,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+569,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+569,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+572,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+573,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+580,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+580,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+580,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+585,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+586,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+587,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+589,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+592,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+592,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+592,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+592,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+593,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+593,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+593,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+594,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+594,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+594,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+597,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+597,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+597,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+599,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+599,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+599,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+599,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+600,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+600,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+600,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+600,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+604,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+604,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+604,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+604,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+605,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+605,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+605,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+605,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+607,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+607,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+607,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+609,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+609,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+609,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+609,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+610,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+610,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+610,country,3,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+610,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+611,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+611,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+611,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+611,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+612,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+614,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+614,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+614,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+615,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+617,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+618,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+618,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+618,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+619,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+619,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+619,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+623,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+624,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+624,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+624,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+625,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+625,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+625,global,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+625,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+626,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+626,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+626,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+628,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+629,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+629,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+629,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+629,regional,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+630,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+630,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+630,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+630,regional,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+632,continent,3,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+633,continent,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+635,city,3,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+635,continent,3,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 3; winner never chosen,no_home_row_ever,False,False
+635,country,3,4,4,0,4,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 3; winner never chosen,inactive_home_row_exists,True,False
+642,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+643,city,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+643,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+643,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+666,city,4,6,5,2,4,True,C_MULTIPLE_AUTHORITATIVE_MATCH,DUPLICATE_SEASON_STRUCTURE_SAME_ROUND,EXCLUDED,multiple active rows in authoritative round 4: no single invalid row deterministically identifiable,,,
+666,regional,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+671,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+673,city,4,8,7,2,6,True,C_MULTIPLE_AUTHORITATIVE_MATCH,DUPLICATE_SEASON_STRUCTURE_SAME_ROUND,EXCLUDED,multiple active rows in authoritative round 4: no single invalid row deterministically identifiable,,,
+673,regional,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+677,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+678,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+771,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+772,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+773,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+774,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+785,city,4,8,7,2,6,True,C_MULTIPLE_AUTHORITATIVE_MATCH,DUPLICATE_SEASON_STRUCTURE_SAME_ROUND,EXCLUDED,multiple active rows in authoritative round 4: no single invalid row deterministically identifiable,,,
+785,regional,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+788,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+789,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+791,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+825,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+827,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+828,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+829,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+833,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+834,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+835,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+835,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+835,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+843,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+843,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+843,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+848,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+848,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+848,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+850,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+851,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+853,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+853,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+853,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+862,city,4,8,7,2,6,True,C_MULTIPLE_AUTHORITATIVE_MATCH,DUPLICATE_SEASON_STRUCTURE_SAME_ROUND,EXCLUDED,multiple active rows in authoritative round 4: no single invalid row deterministically identifiable,,,
+862,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+864,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+865,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+865,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+865,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+866,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+868,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+869,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+870,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+871,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+873,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+874,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+876,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+877,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+878,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+879,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+880,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+881,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+885,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+886,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+888,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+888,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+888,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+889,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+889,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+889,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+890,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+890,country,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+890,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+893,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+895,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+895,country,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+895,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+896,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+896,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+896,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+897,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+897,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+897,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+898,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+898,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+898,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+899,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+899,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+899,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+900,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+900,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+900,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+901,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+901,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+901,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+902,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+902,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+902,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+903,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+903,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+903,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+904,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+905,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+906,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+907,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+908,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+909,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+909,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+909,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+910,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+912,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+912,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+912,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+913,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,False,False
+914,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+916,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+916,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+916,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+918,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+919,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+920,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+921,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+922,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+922,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+922,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+923,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+923,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+923,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+924,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+924,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+924,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+925,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+925,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+925,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+926,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+926,country,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+926,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+926,regional,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+927,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+927,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+927,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+928,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+929,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+930,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+931,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+932,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+933,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+934,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+935,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+936,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+937,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+937,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+937,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+938,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+938,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+938,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+939,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+939,country,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+939,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+940,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+941,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+943,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+943,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+943,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+946,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+947,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+948,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+949,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+950,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+950,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+950,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+951,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+951,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+951,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+951,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+952,city,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+952,country,4,4,4,1,3,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+952,global,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 4; winner never chosen,no_home_row_ever,False,False
+953,continent,4,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_ALL_ACTIVE_MEMBERSHIPS_FOREIGN,EXCLUDED,no active membership in authoritative round 4; winner never chosen,inactive_home_row_exists,True,False
+959,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+972,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+973,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+976,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+978,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+980,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+982,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+985,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+988,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+989,continent,4,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+998,continent,4,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1109,continent,21,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1115,continent,26,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1116,continent,26,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 26; winner never chosen,no_home_row_ever,False,False
+1118,continent,26,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1119,continent,26,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1120,continent,26,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 26; winner never chosen,no_home_row_ever,False,False
+1130,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1135,continent,26,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1136,continent,26,3,3,1,2,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1137,continent,26,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_MISSING_GENUINE_MEMBERSHIP,EXCLUDED,no active membership in authoritative round 26; winner never chosen,no_home_row_ever,False,False
+1140,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1154,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1156,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1158,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1164,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1166,continent,26,2,2,1,1,True,A_EXACT_ONE_AUTHORITATIVE_MATCH,,REPAIR,DETERMINISTIC,,,
+1184,continent,27,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1189,continent,27,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1202,continent,27,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1206,continent,27,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1207,continent,27,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1208,continent,27,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 27; winner never chosen,no_home_row_ever,False,False
+1221,continent,28,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 28; winner never chosen,no_home_row_ever,False,False
+1222,continent,28,2,2,0,2,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 28; winner never chosen,no_home_row_ever,False,False
+1235,continent,28,3,3,0,3,True,B_ZERO_AUTHORITATIVE_MATCH,ZM_LEGACY_ROUND_SEMANTIC_CONFLICT,EXCLUDED,no active membership in authoritative round 28; winner never chosen,no_home_row_ever,False,False

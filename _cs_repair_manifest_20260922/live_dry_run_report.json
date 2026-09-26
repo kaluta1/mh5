@@ -1,0 +1,96 @@
+{
+ "live_dry_run_started_utc": "2026-09-21T18:15:24.055070+00:00",
+ "active_sha": "ad3f6919f9f80f9bfd071d9a1c93febb3f086563",
+ "server_hashes_match_local": {
+  "contestantseason_keep_manifest.csv": true,
+  "contestantseason_deactivate_manifest.csv": true,
+  "contestantseason_exclusion_manifest.csv": true,
+  "contestantseason_rollback_artifact.json": true,
+  "groups_classification.csv": true,
+  "raw_snapshot.json": true
+ },
+ "baseline": {
+  "top_high5_results": 1398,
+  "contestant_voting": 1203,
+  "contestants": 1073,
+  "active_contestant_seasons": 3918
+ },
+ "contestant_seasons_rows_live_vs_snapshot": {
+  "live": 16771,
+  "snapshot": 16771,
+  "ids_only_live": 0,
+  "ids_only_snapshot": 0,
+  "rows_with_changed_state": 0
+ },
+ "mismatch_deactivate": [],
+ "mismatch_keep": [],
+ "mismatch_excluded": [],
+ "repaired_groups_live_composition_mismatch": [],
+ "excluded_groups_live_composition_mismatch": [],
+ "live_multiround_groups": 747,
+ "live_multiround_contestants": 376,
+ "live_multiround_active_rows": 2084,
+ "live_multiround_groups_equal_repair_plus_excluded": true,
+ "DRY_RUN": "PASS",
+ "phase17_contest_ids_swept": 196,
+ "phase17_query_calls": 4116,
+ "phase17_seasons_tested": 21,
+ "phase17_deactivate_targets_total": 722,
+ "phase17_DEACTIVATE_TARGETS_RETURNED_BY_DEPLOYED_QUERY": 0,
+ "phase17_leaked_sample": [],
+ "phase17_errors": [],
+ "phase17_positive_control_keep_rows_returned": "363/408",
+ "FOREIGN_TARGETS_BLOCKED_BY_DEPLOYED_CODE": "YES",
+ "c96_live": [
+  [
+   15977,
+   265,
+   "continent",
+   21,
+   true
+  ],
+  [
+   14311,
+   261,
+   "continent",
+   4,
+   true
+  ],
+  [
+   11704,
+   254,
+   "continent",
+   3,
+   true
+  ],
+  [
+   10023,
+   252,
+   "continent",
+   2,
+   false
+  ],
+  [
+   8551,
+   249,
+   "continent",
+   1,
+   false
+  ],
+  [
+   17555,
+   269,
+   "continent",
+   26,
+   false
+  ]
+ ],
+ "txn_read_only": "on",
+ "baseline_after": {
+  "top_high5_results": 1398,
+  "contestant_voting": 1203,
+  "contestants": 1073,
+  "active_contestant_seasons": 3918
+ },
+ "live_dry_run_finished_utc": "2026-09-21T18:16:22.015907+00:00"
+}

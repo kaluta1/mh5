@@ -1,0 +1,24 @@
+{
+ "mode": "execute",
+ "started_utc": "20260921T220407Z",
+ "TRANSACTION_STARTED": "YES",
+ "TRANSACTION_COMMITTED": "YES",
+ "TRANSACTION_ROLLED_BACK": "NO",
+ "ROWS_UPDATED": 722,
+ "rows_locked": 1130,
+ "preconditions": {
+  "checks": 22,
+  "passed": 22,
+  "failed": []
+ },
+ "postconditions": {
+  "checks": 17,
+  "passed": 17,
+  "failed": []
+ },
+ "in_txn_summary": {
+  "active": 3196,
+  "groups": 339
+ },
+ "finished_utc": "20260921T220407Z"
+}

@@ -1,0 +1,91 @@
+{
+ "KEEP_DEACTIVATE_DISJOINT": true,
+ "KEEP_EXCLUSION_DISJOINT": true,
+ "DEACTIVATE_EXCLUSION_DISJOINT": true,
+ "DEACTIVATE_GROUPS_disjoint_from_EXCLUDED_GROUPS": true,
+ "KEEP_GROUPS_equal_DEACTIVATE_GROUPS": true,
+ "ALL_DEACTIVATE_ROWS_ACTIVE_IN_SNAPSHOT": true,
+ "ALL_KEEP_ROWS_ACTIVE_IN_SNAPSHOT": true,
+ "ALL_EXCLUDED_ROWS_ACTIVE_IN_SNAPSHOT": true,
+ "MANIFEST_ROW_IDENTITY_MATCHES_SNAPSHOT": true,
+ "EVERY_DEACT_ROW_IS_FOREIGN_ROUND": true,
+ "EVERY_KEEP_ROW_IS_HOME_ROUND": true,
+ "ROLLBACK_COVERS_EXACTLY_DEACTIVATE_ROWS": true,
+ "ROLLBACK_ROWS_HAVE_ALL_RESTORE_FIELDS": true,
+ "sim_active_before": 3918,
+ "sim_deactivations": 722,
+ "sim_active_after": 3196,
+ "sim_multiround_groups_before": 747,
+ "sim_multiround_groups_after": 339,
+ "sim_remaining_groups_equal_excluded_groups_exactly": true,
+ "sim_repaired_groups_collapse_to_single_KEEP": true,
+ "sim_remaining_contestants": 190,
+ "sim_remaining_rows_in_groups": 954,
+ "sim_remaining_by_level": {
+  "city": 4,
+  "country": 127,
+  "regional": 10,
+  "continent": 151,
+  "global": 47
+ },
+ "CROSS_LEVEL_MEMBERSHIPS_AFFECTED": 0,
+ "sim_changed_groups_equal_repaired_groups": true,
+ "sim_contestants_touched": 349,
+ "sim_repaired_groups_left_with_zero_active_rows": 0,
+ "sim_touched_contestants_levels_lost": 0,
+ "recreated_191_identified": 191,
+ "recreated_all_continent_Africa": true,
+ "TH5_LINKED_via_from_season_id": 190,
+ "TH5_LINKED_via_contestant_level_round": 190,
+ "TH5_LINKED_union": 190,
+ "RECREATED_191_LINKED(union)": 173,
+ "OTHER_HISTORICAL_LINKED(union)": 17,
+ "TH5_LINKED_by_from__recreated": 173,
+ "TH5_LINKED_by_from__other": 17,
+ "recreated_191_by_level_round": {
+  "continent/round21": 111,
+  "continent/round4": 73,
+  "continent/round3": 7
+ },
+ "recreated_row_round_vs_contestant_home": {
+  "foreign": 191
+ },
+ "PROTECTED_PRESERVE_ROWS_LINKED_TO_DEACTIVATE": 0,
+ "C96": {
+  "home_round": 3,
+  "rows": [
+   [
+    "continent",
+    "KEEP",
+    "11704",
+    "254",
+    "3",
+    "A_EXACT_ONE_AUTHORITATIVE_MATCH"
+   ],
+   [
+    "continent",
+    "DEACTIVATE",
+    "14311",
+    "261",
+    "4",
+    "A_EXACT_ONE_AUTHORITATIVE_MATCH"
+   ],
+   [
+    "continent",
+    "DEACTIVATE",
+    "15977",
+    "265",
+    "21",
+    "A_EXACT_ONE_AUTHORITATIVE_MATCH"
+   ]
+  ]
+ },
+ "HASHES": {
+  "contestantseason_keep_manifest.csv": "9d2e2df21050010cf551e99098858eb86509bdc1c1dcd70e596de87f5dd66307",
+  "contestantseason_deactivate_manifest.csv": "39a151b0447251b7cd75e539d6a7ce060ddf8cb1d9e91ef71575c3e73becf4b7",
+  "contestantseason_exclusion_manifest.csv": "894dd5f8145d3d84e6a435cb7c2cf923780010899ba46e61e68b54fa55ff2e33",
+  "contestantseason_rollback_artifact.json": "dcf0dd2bd1018a601b4d8a45b6c998c695d616178702319488c2288ffcfd4005",
+  "groups_classification.csv": "65077d0850e17a6d5854e4c5b31f6136fca957504dc674034926b53cd49bfa24",
+  "raw_snapshot.json": "6757f19ab9fdc044747c51e548840fb258b899d61f70d7cde49b71890dd9229b"
+ }
+}

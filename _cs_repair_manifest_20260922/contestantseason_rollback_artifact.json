@@ -1,0 +1,6506 @@
+{
+ "active_sha": "ad3f6919f9f80f9bfd071d9a1c93febb3f086563",
+ "generated_from_snapshot": "2026-09-21T18:04:58.349643Z",
+ "purpose": "restore exact prior state of every DEACTIVATE row; NOT executed",
+ "restore_sql_template": "UPDATE contestant_seasons SET is_active = TRUE, updated_at = :updated_at WHERE id = :id AND contestant_id = :contestant_id AND season_id = :season_id AND is_active = FALSE",
+ "rows": [
+  {
+   "contestant_id": 46,
+   "created_at": "2026-05-01 00:04:16.982579",
+   "id": 5015,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.989189",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.982579"
+  },
+  {
+   "contestant_id": 46,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17143,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.976922",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 48,
+   "created_at": "2026-07-01 00:05:22.162524",
+   "id": 14193,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.665956",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 48,
+   "created_at": "2026-08-01 02:38:44.536171",
+   "id": 15811,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.377171",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 50,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5016,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.006858",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 50,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17175,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.296697",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 54,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5022,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.026205",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 54,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17188,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.370948",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 54,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5455,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.524845",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 58,
+   "created_at": "2026-05-12 11:23:43.294222",
+   "id": 9134,
+   "is_active": true,
+   "joined_at": "2026-05-12 11:23:43.919960",
+   "season_id": 8,
+   "updated_at": "2026-05-12 11:23:43.294222"
+  },
+  {
+   "contestant_id": 58,
+   "created_at": "2026-09-03 12:08:17.881411",
+   "id": 17241,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.897027",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.881411"
+  },
+  {
+   "contestant_id": 62,
+   "created_at": "2026-05-01 00:04:15.729002",
+   "id": 4643,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.736968",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.729002"
+  },
+  {
+   "contestant_id": 62,
+   "created_at": "2026-09-03 12:08:17.495499",
+   "id": 17224,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.508397",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.495499"
+  },
+  {
+   "contestant_id": 66,
+   "created_at": "2026-05-01 00:04:15.921036",
+   "id": 4739,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.927200",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.921036"
+  },
+  {
+   "contestant_id": 66,
+   "created_at": "2026-09-03 12:08:17.119183",
+   "id": 17171,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.131856",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.119183"
+  },
+  {
+   "contestant_id": 70,
+   "created_at": "2026-05-01 00:04:15.788002",
+   "id": 4680,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.794815",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.788002"
+  },
+  {
+   "contestant_id": 70,
+   "created_at": "2026-09-03 12:08:17.514704",
+   "id": 17225,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.527501",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.514704"
+  },
+  {
+   "contestant_id": 74,
+   "created_at": "2026-05-01 00:04:15.931739",
+   "id": 4740,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.938374",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.931739"
+  },
+  {
+   "contestant_id": 74,
+   "created_at": "2026-09-03 12:08:17.538467",
+   "id": 17226,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.551723",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.538467"
+  },
+  {
+   "contestant_id": 78,
+   "created_at": "2026-05-01 00:04:15.942865",
+   "id": 4741,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.948966",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.942865"
+  },
+  {
+   "contestant_id": 78,
+   "created_at": "2026-09-03 12:08:16.993162",
+   "id": 17150,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.005407",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.993162"
+  },
+  {
+   "contestant_id": 82,
+   "created_at": "2026-05-01 00:04:15.952614",
+   "id": 4742,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.958176",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.952614"
+  },
+  {
+   "contestant_id": 82,
+   "created_at": "2026-09-03 12:08:17.560098",
+   "id": 17227,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.582292",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.560098"
+  },
+  {
+   "contestant_id": 86,
+   "created_at": "2026-05-01 00:04:15.979465",
+   "id": 4757,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.985902",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.979465"
+  },
+  {
+   "contestant_id": 86,
+   "created_at": "2026-09-03 12:08:18.460871",
+   "id": 17269,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.472786",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.460871"
+  },
+  {
+   "contestant_id": 88,
+   "created_at": "2026-07-01 00:05:22.718430",
+   "id": 14291,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.791590",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 90,
+   "created_at": "2026-05-01 00:04:16.010171",
+   "id": 4770,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.017328",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.010171"
+  },
+  {
+   "contestant_id": 90,
+   "created_at": "2026-09-03 12:08:18.480414",
+   "id": 17270,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.496052",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.480414"
+  },
+  {
+   "contestant_id": 94,
+   "created_at": "2026-05-01 00:04:16.073807",
+   "id": 4802,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.082045",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.073807"
+  },
+  {
+   "contestant_id": 94,
+   "created_at": "2026-09-03 12:08:18.197225",
+   "id": 17256,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.213337",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.197225"
+  },
+  {
+   "contestant_id": 96,
+   "created_at": "2026-07-01 00:05:22.875859",
+   "id": 14311,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.984441",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 96,
+   "created_at": "2026-08-01 02:38:45.717153",
+   "id": 15977,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.492646",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 98,
+   "created_at": "2026-05-01 00:04:16.086855",
+   "id": 4803,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.094018",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.086855"
+  },
+  {
+   "contestant_id": 98,
+   "created_at": "2026-09-03 12:08:17.421547",
+   "id": 17220,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.433972",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.421547"
+  },
+  {
+   "contestant_id": 102,
+   "created_at": "2026-05-01 00:04:16.098794",
+   "id": 4804,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.105417",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.098794"
+  },
+  {
+   "contestant_id": 102,
+   "created_at": "2026-09-03 12:08:17.612069",
+   "id": 17229,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.640043",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.612069"
+  },
+  {
+   "contestant_id": 108,
+   "created_at": "2026-05-01 00:04:16.139355",
+   "id": 4818,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.145531",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.139355"
+  },
+  {
+   "contestant_id": 108,
+   "created_at": "2026-09-03 12:08:17.648111",
+   "id": 17230,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.663783",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.648111"
+  },
+  {
+   "contestant_id": 110,
+   "created_at": "2026-07-01 00:05:23.078047",
+   "id": 14338,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.078629",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 110,
+   "created_at": "2026-08-01 02:38:46.023028",
+   "id": 16012,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.655641",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 112,
+   "created_at": "2026-05-01 00:04:16.160355",
+   "id": 4820,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.166860",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.160355"
+  },
+  {
+   "contestant_id": 112,
+   "created_at": "2026-09-03 12:08:17.670915",
+   "id": 17231,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.687479",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.670915"
+  },
+  {
+   "contestant_id": 114,
+   "created_at": "2026-05-01 00:04:16.171179",
+   "id": 4821,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.177626",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.171179"
+  },
+  {
+   "contestant_id": 114,
+   "created_at": "2026-09-03 12:08:17.696307",
+   "id": 17232,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.708774",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.696307"
+  },
+  {
+   "contestant_id": 118,
+   "created_at": "2026-05-01 00:04:16.230780",
+   "id": 4854,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.238841",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.230780"
+  },
+  {
+   "contestant_id": 118,
+   "created_at": "2026-09-03 12:08:17.717815",
+   "id": 17233,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.729096",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.717815"
+  },
+  {
+   "contestant_id": 122,
+   "created_at": "2026-05-01 00:04:16.273494",
+   "id": 4878,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.283113",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.273494"
+  },
+  {
+   "contestant_id": 122,
+   "created_at": "2026-09-03 12:08:17.441924",
+   "id": 17221,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.452841",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.441924"
+  },
+  {
+   "contestant_id": 124,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16076,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.894882",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 126,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16086,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.412569",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 128,
+   "created_at": "2026-05-01 00:04:16.325306",
+   "id": 4899,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.331747",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.325306"
+  },
+  {
+   "contestant_id": 128,
+   "created_at": "2026-09-03 12:08:17.768115",
+   "id": 17236,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.788427",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.768115"
+  },
+  {
+   "contestant_id": 130,
+   "created_at": "2026-05-01 00:04:16.336844",
+   "id": 4900,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.343320",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.336844"
+  },
+  {
+   "contestant_id": 130,
+   "created_at": "2026-09-03 12:08:17.794974",
+   "id": 17237,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.807809",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.794974"
+  },
+  {
+   "contestant_id": 132,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16100,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.826467",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 134,
+   "created_at": "2026-05-01 00:04:16.364892",
+   "id": 4912,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.372920",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.364892"
+  },
+  {
+   "contestant_id": 134,
+   "created_at": "2026-09-03 12:08:17.478034",
+   "id": 17223,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.489501",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.478034"
+  },
+  {
+   "contestant_id": 136,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16109,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.416648",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 138,
+   "created_at": "2026-05-01 00:04:16.409092",
+   "id": 4923,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.416096",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.409092"
+  },
+  {
+   "contestant_id": 138,
+   "created_at": "2026-09-03 12:08:18.229787",
+   "id": 17257,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.246040",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.229787"
+  },
+  {
+   "contestant_id": 140,
+   "created_at": "2026-07-01 00:05:23.423873",
+   "id": 14390,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.181363",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 140,
+   "created_at": "2026-08-01 02:38:46.612135",
+   "id": 16110,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.830629",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 142,
+   "created_at": "2026-05-19 11:18:07.334464",
+   "id": 9230,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.508549",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.334464"
+  },
+  {
+   "contestant_id": 142,
+   "created_at": "2026-09-03 12:08:17.903938",
+   "id": 17242,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.913833",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.903938"
+  },
+  {
+   "contestant_id": 144,
+   "created_at": "2026-07-01 00:05:23.463528",
+   "id": 14391,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.266247",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 144,
+   "created_at": "2026-08-01 02:38:46.662763",
+   "id": 16113,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.008647",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 146,
+   "created_at": "2026-05-01 00:04:16.453313",
+   "id": 4929,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.459219",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.453313"
+  },
+  {
+   "contestant_id": 146,
+   "created_at": "2026-09-03 12:08:18.984430",
+   "id": 17297,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.004081",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.984430"
+  },
+  {
+   "contestant_id": 148,
+   "created_at": "2026-07-01 00:05:23.498529",
+   "id": 14392,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.324205",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 148,
+   "created_at": "2026-08-01 02:38:46.707554",
+   "id": 16114,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.169929",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 150,
+   "created_at": "2026-05-01 00:04:16.482651",
+   "id": 4931,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.489568",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.482651"
+  },
+  {
+   "contestant_id": 150,
+   "created_at": "2026-09-03 12:08:19.013933",
+   "id": 17298,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.026683",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.013933"
+  },
+  {
+   "contestant_id": 152,
+   "created_at": "2026-07-01 00:05:23.527652",
+   "id": 14393,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.359925",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 152,
+   "created_at": "2026-08-01 02:38:46.751029",
+   "id": 16115,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.292707",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 154,
+   "created_at": "2026-05-01 00:04:16.504156",
+   "id": 4933,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.510878",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.504156"
+  },
+  {
+   "contestant_id": 154,
+   "created_at": "2026-09-03 12:08:18.319052",
+   "id": 17261,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.329198",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.319052"
+  },
+  {
+   "contestant_id": 156,
+   "created_at": "2026-07-01 00:05:23.555326",
+   "id": 14394,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.396847",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 156,
+   "created_at": "2026-08-01 02:38:46.795150",
+   "id": 16116,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.374476",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 158,
+   "created_at": "2026-05-01 00:04:16.528440",
+   "id": 4935,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.536722",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.528440"
+  },
+  {
+   "contestant_id": 158,
+   "created_at": "2026-09-03 12:08:18.368678",
+   "id": 17264,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.386643",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.368678"
+  },
+  {
+   "contestant_id": 160,
+   "created_at": "2026-07-01 00:05:23.583867",
+   "id": 14397,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.429356",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 160,
+   "created_at": "2026-08-01 02:38:46.834406",
+   "id": 16117,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.459762",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 162,
+   "created_at": "2026-05-01 00:04:16.555675",
+   "id": 4939,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.562567",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.555675"
+  },
+  {
+   "contestant_id": 162,
+   "created_at": "2026-09-03 12:08:19.034505",
+   "id": 17299,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.044975",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.034505"
+  },
+  {
+   "contestant_id": 164,
+   "created_at": "2026-07-01 00:05:23.616178",
+   "id": 14398,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.466239",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 164,
+   "created_at": "2026-08-01 02:38:46.890274",
+   "id": 16120,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.535136",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 166,
+   "created_at": "2026-07-01 00:05:23.647556",
+   "id": 14400,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.498865",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 166,
+   "created_at": "2026-08-01 02:38:46.933321",
+   "id": 16121,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.594424",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 168,
+   "created_at": "2026-05-01 00:04:16.579011",
+   "id": 4942,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.588001",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.579011"
+  },
+  {
+   "contestant_id": 168,
+   "created_at": "2026-09-03 12:08:19.057557",
+   "id": 17300,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.069491",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.057557"
+  },
+  {
+   "contestant_id": 170,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16125,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.698207",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 172,
+   "created_at": "2026-05-01 00:04:16.613808",
+   "id": 4950,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.620945",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.613808"
+  },
+  {
+   "contestant_id": 172,
+   "created_at": "2026-09-03 12:08:19.077990",
+   "id": 17301,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.092175",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.077990"
+  },
+  {
+   "contestant_id": 174,
+   "created_at": "2026-07-01 00:05:23.730350",
+   "id": 14408,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.534118",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 174,
+   "created_at": "2026-08-01 02:38:47.046000",
+   "id": 16130,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.835626",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 176,
+   "created_at": "2026-05-19 11:18:07.515615",
+   "id": 9231,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.544231",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.515615"
+  },
+  {
+   "contestant_id": 176,
+   "created_at": "2026-09-03 12:08:18.012466",
+   "id": 17247,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.022302",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.012466"
+  },
+  {
+   "contestant_id": 178,
+   "created_at": "2026-07-01 00:05:23.760979",
+   "id": 14409,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.574440",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 178,
+   "created_at": "2026-08-01 02:38:47.091200",
+   "id": 16131,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.912618",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 180,
+   "created_at": "2026-05-01 00:04:16.687168",
+   "id": 4956,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.694289",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.687168"
+  },
+  {
+   "contestant_id": 180,
+   "created_at": "2026-09-03 12:08:19.101782",
+   "id": 17302,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.113886",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.101782"
+  },
+  {
+   "contestant_id": 182,
+   "created_at": "2026-07-01 00:05:23.795252",
+   "id": 14410,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.616618",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 182,
+   "created_at": "2026-08-01 02:38:47.142038",
+   "id": 16132,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.989133",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 184,
+   "created_at": "2026-05-01 00:04:16.710320",
+   "id": 4958,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.717052",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.710320"
+  },
+  {
+   "contestant_id": 184,
+   "created_at": "2026-09-03 12:08:16.882868",
+   "id": 17140,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.902937",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.882868"
+  },
+  {
+   "contestant_id": 186,
+   "created_at": "2026-08-01 02:38:47.197865",
+   "id": 16135,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.075844",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 188,
+   "created_at": "2026-05-01 00:04:16.733228",
+   "id": 4962,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.740576",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.733228"
+  },
+  {
+   "contestant_id": 188,
+   "created_at": "2026-09-03 12:08:18.598439",
+   "id": 17281,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.615338",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.598439"
+  },
+  {
+   "contestant_id": 190,
+   "created_at": "2026-07-01 00:05:23.858397",
+   "id": 14417,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.650447",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 190,
+   "created_at": "2026-08-01 02:38:47.259362",
+   "id": 16139,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.172843",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 192,
+   "created_at": "2026-05-01 00:04:16.637998",
+   "id": 4952,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.644844",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.637998"
+  },
+  {
+   "contestant_id": 192,
+   "created_at": "2026-09-03 12:08:18.628561",
+   "id": 17282,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.643293",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.628561"
+  },
+  {
+   "contestant_id": 194,
+   "created_at": "2026-07-01 00:05:23.901100",
+   "id": 14418,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.689035",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 194,
+   "created_at": "2026-08-01 02:38:47.323607",
+   "id": 16140,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.273512",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 196,
+   "created_at": "2026-05-01 00:04:16.766294",
+   "id": 4968,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.772580",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.766294"
+  },
+  {
+   "contestant_id": 196,
+   "created_at": "2026-09-03 12:08:18.843778",
+   "id": 17293,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.871484",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.843778"
+  },
+  {
+   "contestant_id": 198,
+   "created_at": "2026-08-01 02:38:41.571896",
+   "id": 15693,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.725502",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 200,
+   "created_at": "2026-05-01 00:04:16.796306",
+   "id": 4979,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.803490",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.796306"
+  },
+  {
+   "contestant_id": 200,
+   "created_at": "2026-09-03 12:08:18.896777",
+   "id": 17294,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.919339",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.896777"
+  },
+  {
+   "contestant_id": 202,
+   "created_at": "2026-08-01 02:38:47.521967",
+   "id": 16159,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.367119",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 204,
+   "created_at": "2026-05-01 00:04:16.825918",
+   "id": 4991,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.832529",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.825918"
+  },
+  {
+   "contestant_id": 204,
+   "created_at": "2026-09-03 12:08:18.504327",
+   "id": 17271,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.518170",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.504327"
+  },
+  {
+   "contestant_id": 206,
+   "created_at": "2026-07-01 00:05:24.043450",
+   "id": 14431,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.791262",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 206,
+   "created_at": "2026-08-01 02:38:47.603117",
+   "id": 16160,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.471042",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 208,
+   "created_at": "2026-05-01 00:04:16.848103",
+   "id": 4993,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.854294",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.848103"
+  },
+  {
+   "contestant_id": 208,
+   "created_at": "2026-09-03 12:08:17.818481",
+   "id": 17238,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.831884",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.818481"
+  },
+  {
+   "contestant_id": 210,
+   "created_at": "2026-08-01 02:38:47.652225",
+   "id": 16162,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.530116",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 212,
+   "created_at": "2026-05-01 00:04:16.870106",
+   "id": 4996,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.876886",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.870106"
+  },
+  {
+   "contestant_id": 212,
+   "created_at": "2026-09-03 12:08:17.839451",
+   "id": 17239,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.857907",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.839451"
+  },
+  {
+   "contestant_id": 214,
+   "created_at": "2026-07-01 00:05:24.116518",
+   "id": 14436,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.826718",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 214,
+   "created_at": "2026-08-01 02:38:47.729607",
+   "id": 16166,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.590114",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 216,
+   "created_at": "2026-05-01 00:04:16.893485",
+   "id": 4999,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.899734",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.893485"
+  },
+  {
+   "contestant_id": 216,
+   "created_at": "2026-09-03 12:08:18.936713",
+   "id": 17295,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.953200",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.936713"
+  },
+  {
+   "contestant_id": 218,
+   "created_at": "2026-08-01 02:38:47.803973",
+   "id": 16170,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.663265",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 220,
+   "created_at": "2026-05-01 00:04:16.916990",
+   "id": 5004,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.923480",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.916990"
+  },
+  {
+   "contestant_id": 220,
+   "created_at": "2026-09-03 12:08:16.917140",
+   "id": 17141,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.930309",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.917140"
+  },
+  {
+   "contestant_id": 222,
+   "created_at": "2026-08-01 02:38:47.864231",
+   "id": 16173,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.734860",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 224,
+   "created_at": "2026-05-01 00:04:16.939961",
+   "id": 5008,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:16.946341",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:16.939961"
+  },
+  {
+   "contestant_id": 224,
+   "created_at": "2026-09-03 12:08:18.961902",
+   "id": 17296,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.975393",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.961902"
+  },
+  {
+   "contestant_id": 226,
+   "created_at": "2026-08-01 02:38:47.930073",
+   "id": 16177,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.826380",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 228,
+   "created_at": "2026-04-24 01:52:08.218325",
+   "id": 3475,
+   "is_active": true,
+   "joined_at": "2026-04-24 01:52:08.611630",
+   "season_id": 2,
+   "updated_at": "2026-04-24 01:52:08.218325"
+  },
+  {
+   "contestant_id": 228,
+   "created_at": "2026-05-19 11:18:07.551817",
+   "id": 9232,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.589362",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.551817"
+  },
+  {
+   "contestant_id": 228,
+   "created_at": "2026-09-03 12:08:19.232969",
+   "id": 17306,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.243838",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.232969"
+  },
+  {
+   "contestant_id": 230,
+   "created_at": "2026-07-01 00:05:24.270084",
+   "id": 14448,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.877114",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 230,
+   "created_at": "2026-08-01 02:38:47.998027",
+   "id": 16178,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.887285",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 232,
+   "created_at": "2026-05-19 11:18:07.595842",
+   "id": 9233,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.604741",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.595842"
+  },
+  {
+   "contestant_id": 232,
+   "created_at": "2026-09-03 12:08:17.208213",
+   "id": 17172,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.228505",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.208213"
+  },
+  {
+   "contestant_id": 236,
+   "created_at": "2026-05-19 11:18:06.832638",
+   "id": 9228,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.091731",
+   "season_id": 2,
+   "updated_at": "2026-05-19 11:18:06.832638"
+  },
+  {
+   "contestant_id": 236,
+   "created_at": "2026-05-19 11:18:07.107823",
+   "id": 9229,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.328190",
+   "season_id": 5,
+   "updated_at": "2026-05-19 11:18:07.107823"
+  },
+  {
+   "contestant_id": 236,
+   "created_at": "2026-05-19 11:18:07.610627",
+   "id": 9234,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.619519",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.610627"
+  },
+  {
+   "contestant_id": 236,
+   "created_at": "2026-09-03 12:08:17.240562",
+   "id": 17173,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.254374",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.240562"
+  },
+  {
+   "contestant_id": 238,
+   "created_at": "2026-07-01 00:05:24.297986",
+   "id": 14449,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.964389",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 238,
+   "created_at": "2026-08-01 02:38:48.046195",
+   "id": 16179,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.990099",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 240,
+   "created_at": "2026-05-01 00:04:17.135617",
+   "id": 5051,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.143824",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.135617"
+  },
+  {
+   "contestant_id": 240,
+   "created_at": "2026-09-03 12:08:17.312604",
+   "id": 17186,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.322017",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.312604"
+  },
+  {
+   "contestant_id": 242,
+   "created_at": "2026-08-01 02:38:48.100719",
+   "id": 16182,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.057540",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 244,
+   "created_at": "2026-05-01 00:04:17.162547",
+   "id": 5055,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.169521",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.162547"
+  },
+  {
+   "contestant_id": 244,
+   "created_at": "2026-09-03 12:08:17.922280",
+   "id": 17243,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.934693",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.922280"
+  },
+  {
+   "contestant_id": 246,
+   "created_at": "2026-07-01 00:05:24.359482",
+   "id": 14453,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.007181",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 246,
+   "created_at": "2026-08-01 02:38:48.160461",
+   "id": 16183,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.150928",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 248,
+   "created_at": "2026-08-01 02:38:48.241563",
+   "id": 16185,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.218067",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 250,
+   "created_at": "2026-07-01 00:05:24.411333",
+   "id": 14456,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.048846",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 250,
+   "created_at": "2026-08-01 02:38:48.291133",
+   "id": 16186,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.292034",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 252,
+   "created_at": "2026-05-01 00:04:17.195317",
+   "id": 5058,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.201807",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.195317"
+  },
+  {
+   "contestant_id": 252,
+   "created_at": "2026-09-03 12:08:17.329691",
+   "id": 17187,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.346204",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.329691"
+  },
+  {
+   "contestant_id": 254,
+   "created_at": "2026-07-01 00:05:24.438864",
+   "id": 14457,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.118531",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 254,
+   "created_at": "2026-08-01 02:38:48.369027",
+   "id": 16187,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.365089",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 256,
+   "created_at": "2026-05-01 00:04:17.217498",
+   "id": 5060,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.224198",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.217498"
+  },
+  {
+   "contestant_id": 256,
+   "created_at": "2026-09-03 12:08:18.651894",
+   "id": 17283,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.664332",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.651894"
+  },
+  {
+   "contestant_id": 258,
+   "created_at": "2026-07-01 00:05:24.464829",
+   "id": 14458,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.173026",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 258,
+   "created_at": "2026-08-01 02:38:48.484576",
+   "id": 16188,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.423570",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 260,
+   "created_at": "2026-05-01 00:04:17.242216",
+   "id": 5062,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.250256",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.242216"
+  },
+  {
+   "contestant_id": 260,
+   "created_at": "2026-09-03 12:08:17.461340",
+   "id": 17222,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.471471",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.461340"
+  },
+  {
+   "contestant_id": 262,
+   "created_at": "2026-07-01 00:05:24.493256",
+   "id": 14459,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.216320",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 262,
+   "created_at": "2026-08-01 02:38:48.595618",
+   "id": 16189,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.674415",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 264,
+   "created_at": "2026-05-01 00:04:17.268636",
+   "id": 5064,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.277595",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.268636"
+  },
+  {
+   "contestant_id": 264,
+   "created_at": "2026-09-03 12:08:17.266092",
+   "id": 17174,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.275998",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.266092"
+  },
+  {
+   "contestant_id": 266,
+   "created_at": "2026-07-01 00:05:24.519200",
+   "id": 14460,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.251211",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 266,
+   "created_at": "2026-08-01 02:38:48.710513",
+   "id": 16190,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.962484",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 268,
+   "created_at": "2026-05-01 00:04:17.296655",
+   "id": 5066,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.304568",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.296655"
+  },
+  {
+   "contestant_id": 268,
+   "created_at": "2026-09-03 12:08:18.103879",
+   "id": 17252,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.128495",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.103879"
+  },
+  {
+   "contestant_id": 270,
+   "created_at": "2026-07-01 00:05:24.545999",
+   "id": 14461,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.280185",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 270,
+   "created_at": "2026-08-01 02:38:48.783515",
+   "id": 16191,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.089894",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 272,
+   "created_at": "2026-07-01 00:05:24.573260",
+   "id": 14462,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.310353",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 272,
+   "created_at": "2026-08-01 02:38:48.850094",
+   "id": 16192,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.168265",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 274,
+   "created_at": "2026-05-01 00:04:17.334495",
+   "id": 5069,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.342534",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.334495"
+  },
+  {
+   "contestant_id": 274,
+   "created_at": "2026-09-03 12:08:17.590390",
+   "id": 17228,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.601629",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.590390"
+  },
+  {
+   "contestant_id": 276,
+   "created_at": "2026-07-01 00:05:24.601924",
+   "id": 14463,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.338860",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 276,
+   "created_at": "2026-08-01 02:38:48.922439",
+   "id": 16193,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.232505",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 278,
+   "created_at": "2026-05-01 00:04:17.367403",
+   "id": 5072,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.374160",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.367403"
+  },
+  {
+   "contestant_id": 278,
+   "created_at": "2026-09-03 12:08:17.735558",
+   "id": 17234,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.744930",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.735558"
+  },
+  {
+   "contestant_id": 280,
+   "created_at": "2026-07-01 00:05:24.631178",
+   "id": 14464,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.370849",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 280,
+   "created_at": "2026-08-01 02:38:48.982317",
+   "id": 16194,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.296789",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 282,
+   "created_at": "2026-05-01 00:04:17.389974",
+   "id": 5074,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.396495",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.389974"
+  },
+  {
+   "contestant_id": 282,
+   "created_at": "2026-09-03 12:08:17.751263",
+   "id": 17235,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.760132",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.751263"
+  },
+  {
+   "contestant_id": 284,
+   "created_at": "2026-07-01 00:05:24.657401",
+   "id": 14467,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.408506",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 284,
+   "created_at": "2026-08-01 02:38:49.085872",
+   "id": 16197,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.362669",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 286,
+   "created_at": "2026-05-01 00:04:17.412862",
+   "id": 5076,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.419503",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.412862"
+  },
+  {
+   "contestant_id": 286,
+   "created_at": "2026-09-03 12:08:16.937223",
+   "id": 17142,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.953822",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.937223"
+  },
+  {
+   "contestant_id": 288,
+   "created_at": "2026-07-01 00:05:24.692507",
+   "id": 14470,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.450344",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 288,
+   "created_at": "2026-08-01 02:38:49.158753",
+   "id": 16198,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.447766",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 290,
+   "created_at": "2026-05-01 00:04:17.424079",
+   "id": 5077,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.430685",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.424079"
+  },
+  {
+   "contestant_id": 290,
+   "created_at": "2026-09-03 12:08:17.941396",
+   "id": 17244,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.954691",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.941396"
+  },
+  {
+   "contestant_id": 292,
+   "created_at": "2026-07-01 00:05:24.719500",
+   "id": 14471,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.483875",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 292,
+   "created_at": "2026-08-01 02:38:49.223734",
+   "id": 16199,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.529767",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 294,
+   "created_at": "2026-05-19 11:18:07.624412",
+   "id": 9235,
+   "is_active": true,
+   "joined_at": "2026-05-19 11:18:07.663085",
+   "season_id": 8,
+   "updated_at": "2026-05-19 11:18:07.624412"
+  },
+  {
+   "contestant_id": 294,
+   "created_at": "2026-09-03 12:08:17.962039",
+   "id": 17245,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.973481",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.962039"
+  },
+  {
+   "contestant_id": 296,
+   "created_at": "2026-07-01 00:05:24.745318",
+   "id": 14472,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.520495",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 296,
+   "created_at": "2026-08-01 02:38:49.281680",
+   "id": 16200,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.605801",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 298,
+   "created_at": "2026-05-01 00:04:17.467012",
+   "id": 5081,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.473390",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.467012"
+  },
+  {
+   "contestant_id": 298,
+   "created_at": "2026-09-03 12:08:18.747307",
+   "id": 17292,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.760919",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.747307"
+  },
+  {
+   "contestant_id": 300,
+   "created_at": "2026-07-01 00:05:24.771623",
+   "id": 14473,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.570417",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 300,
+   "created_at": "2026-08-01 02:38:49.341377",
+   "id": 16201,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.685253",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 302,
+   "created_at": "2026-05-01 00:04:17.490427",
+   "id": 5083,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.498073",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.490427"
+  },
+  {
+   "contestant_id": 302,
+   "created_at": "2026-09-03 12:08:17.985727",
+   "id": 17246,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.003488",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.985727"
+  },
+  {
+   "contestant_id": 304,
+   "created_at": "2026-07-01 00:05:24.801145",
+   "id": 14474,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.614930",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 304,
+   "created_at": "2026-08-01 02:38:49.403630",
+   "id": 16202,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.747460",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 306,
+   "created_at": "2026-05-01 00:04:17.513840",
+   "id": 5085,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.521218",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.513840"
+  },
+  {
+   "contestant_id": 306,
+   "created_at": "2026-09-03 12:08:19.125036",
+   "id": 17303,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.149659",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.125036"
+  },
+  {
+   "contestant_id": 308,
+   "created_at": "2026-07-01 00:05:24.831373",
+   "id": 14475,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.656135",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 308,
+   "created_at": "2026-08-01 02:38:49.465774",
+   "id": 16203,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.820064",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 310,
+   "created_at": "2026-05-01 00:04:17.538110",
+   "id": 5087,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.544472",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.538110"
+  },
+  {
+   "contestant_id": 310,
+   "created_at": "2026-09-03 12:08:19.163075",
+   "id": 17304,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.175967",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.163075"
+  },
+  {
+   "contestant_id": 312,
+   "created_at": "2026-07-01 00:05:24.858871",
+   "id": 14476,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.692435",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 312,
+   "created_at": "2026-08-01 02:38:49.528672",
+   "id": 16204,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.886897",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 314,
+   "created_at": "2026-05-01 00:04:17.559675",
+   "id": 5089,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.567002",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.559675"
+  },
+  {
+   "contestant_id": 314,
+   "created_at": "2026-09-03 12:08:17.863473",
+   "id": 17240,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.874002",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.863473"
+  },
+  {
+   "contestant_id": 318,
+   "created_at": "2026-05-01 00:04:17.584350",
+   "id": 5094,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.591343",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.584350"
+  },
+  {
+   "contestant_id": 318,
+   "created_at": "2026-09-03 12:08:18.167810",
+   "id": 17254,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.176200",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.167810"
+  },
+  {
+   "contestant_id": 320,
+   "created_at": "2026-07-01 00:05:24.925736",
+   "id": 14481,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.737938",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 320,
+   "created_at": "2026-08-01 02:38:49.650827",
+   "id": 16212,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.957213",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 322,
+   "created_at": "2026-05-01 00:04:17.605433",
+   "id": 5096,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.612007",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.605433"
+  },
+  {
+   "contestant_id": 322,
+   "created_at": "2026-09-03 12:08:18.181483",
+   "id": 17255,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.190679",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.181483"
+  },
+  {
+   "contestant_id": 324,
+   "created_at": "2026-07-01 00:05:24.954194",
+   "id": 14482,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.786134",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 324,
+   "created_at": "2026-08-01 02:38:49.705435",
+   "id": 16213,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.024594",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 326,
+   "created_at": "2026-05-01 00:04:17.628316",
+   "id": 5098,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.634879",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.628316"
+  },
+  {
+   "contestant_id": 326,
+   "created_at": "2026-09-03 12:08:18.029046",
+   "id": 17248,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.040033",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.029046"
+  },
+  {
+   "contestant_id": 328,
+   "created_at": "2026-07-01 00:05:24.979417",
+   "id": 14483,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.833702",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 328,
+   "created_at": "2026-08-01 02:38:49.762492",
+   "id": 16214,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.094405",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 330,
+   "created_at": "2026-05-01 00:04:17.650093",
+   "id": 5100,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.656896",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.650093"
+  },
+  {
+   "contestant_id": 330,
+   "created_at": "2026-09-03 12:08:18.392460",
+   "id": 17265,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.401480",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.392460"
+  },
+  {
+   "contestant_id": 332,
+   "created_at": "2026-07-01 00:05:25.008746",
+   "id": 14484,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.871829",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 332,
+   "created_at": "2026-08-01 02:38:49.800916",
+   "id": 16215,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.162248",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 334,
+   "created_at": "2026-05-01 00:04:17.672735",
+   "id": 5102,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.679117",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.672735"
+  },
+  {
+   "contestant_id": 334,
+   "created_at": "2026-09-03 12:08:18.407067",
+   "id": 17266,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.416487",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.407067"
+  },
+  {
+   "contestant_id": 336,
+   "created_at": "2026-07-01 00:05:25.044866",
+   "id": 14486,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.907984",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 336,
+   "created_at": "2026-08-01 02:38:49.851475",
+   "id": 16217,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.228115",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 338,
+   "created_at": "2026-05-01 00:04:17.694911",
+   "id": 5105,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.701510",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.694911"
+  },
+  {
+   "contestant_id": 338,
+   "created_at": "2026-09-03 12:08:18.423712",
+   "id": 17267,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.434664",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.423712"
+  },
+  {
+   "contestant_id": 340,
+   "created_at": "2026-07-01 00:05:25.084555",
+   "id": 14487,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.944845",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 340,
+   "created_at": "2026-08-01 02:38:49.905784",
+   "id": 16218,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.293272",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 342,
+   "created_at": "2026-05-01 00:04:17.715904",
+   "id": 5107,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.723698",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.715904"
+  },
+  {
+   "contestant_id": 342,
+   "created_at": "2026-09-03 12:08:18.047032",
+   "id": 17249,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.057174",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.047032"
+  },
+  {
+   "contestant_id": 344,
+   "created_at": "2026-07-01 00:05:25.113981",
+   "id": 14488,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.979909",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 344,
+   "created_at": "2026-08-01 02:38:49.946154",
+   "id": 16219,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.360958",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 346,
+   "created_at": "2026-05-01 00:04:17.739973",
+   "id": 5109,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.746317",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.739973"
+  },
+  {
+   "contestant_id": 346,
+   "created_at": "2026-09-03 12:08:18.136666",
+   "id": 17253,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.157822",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.136666"
+  },
+  {
+   "contestant_id": 348,
+   "created_at": "2026-07-01 00:05:25.147130",
+   "id": 14489,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.014439",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 348,
+   "created_at": "2026-08-01 02:38:49.995583",
+   "id": 16220,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.432516",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 350,
+   "created_at": "2026-05-01 00:04:17.761602",
+   "id": 5111,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.768297",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.761602"
+  },
+  {
+   "contestant_id": 350,
+   "created_at": "2026-09-03 12:08:18.067815",
+   "id": 17250,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.079099",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.067815"
+  },
+  {
+   "contestant_id": 352,
+   "created_at": "2026-07-01 00:05:25.180208",
+   "id": 14490,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.050114",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 352,
+   "created_at": "2026-08-01 02:38:50.049300",
+   "id": 16221,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.507070",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 354,
+   "created_at": "2026-05-01 00:04:17.784115",
+   "id": 5113,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.791022",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.784115"
+  },
+  {
+   "contestant_id": 354,
+   "created_at": "2026-09-03 12:08:18.086155",
+   "id": 17251,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.096954",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.086155"
+  },
+  {
+   "contestant_id": 356,
+   "created_at": "2026-07-01 00:05:25.215179",
+   "id": 14491,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.093067",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 356,
+   "created_at": "2026-08-01 02:38:50.100237",
+   "id": 16222,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.575441",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 358,
+   "created_at": "2026-05-01 00:04:17.805492",
+   "id": 5115,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.812396",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.805492"
+  },
+  {
+   "contestant_id": 358,
+   "created_at": "2026-09-03 12:08:18.256036",
+   "id": 17258,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.271581",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.256036"
+  },
+  {
+   "contestant_id": 360,
+   "created_at": "2026-07-01 00:05:25.250529",
+   "id": 14492,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.126342",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 360,
+   "created_at": "2026-08-01 02:38:50.161064",
+   "id": 16223,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.639813",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 362,
+   "created_at": "2026-05-01 00:04:15.637729",
+   "id": 4597,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:15.645642",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:15.637729"
+  },
+  {
+   "contestant_id": 362,
+   "created_at": "2026-09-03 12:08:19.251806",
+   "id": 17307,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.263756",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.251806"
+  },
+  {
+   "contestant_id": 364,
+   "created_at": "2026-07-01 00:05:25.284735",
+   "id": 14493,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.173916",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 364,
+   "created_at": "2026-08-01 02:38:50.218496",
+   "id": 16224,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.708846",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 366,
+   "created_at": "2026-05-01 00:04:17.839527",
+   "id": 5118,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.847058",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.839527"
+  },
+  {
+   "contestant_id": 366,
+   "created_at": "2026-09-03 12:08:18.279919",
+   "id": 17259,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.289384",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.279919"
+  },
+  {
+   "contestant_id": 368,
+   "created_at": "2026-07-01 00:05:25.317319",
+   "id": 14494,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.208753",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 368,
+   "created_at": "2026-08-01 02:38:50.277235",
+   "id": 16225,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.778399",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 370,
+   "created_at": "2026-05-01 00:04:17.851992",
+   "id": 5119,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.859384",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.851992"
+  },
+  {
+   "contestant_id": 370,
+   "created_at": "2026-09-03 12:08:19.211213",
+   "id": 17305,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:19.225780",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:19.211213"
+  },
+  {
+   "contestant_id": 372,
+   "created_at": "2026-07-01 00:05:25.346258",
+   "id": 14495,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.256382",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 372,
+   "created_at": "2026-08-01 02:38:50.329774",
+   "id": 16226,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.851924",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 374,
+   "created_at": "2026-05-01 00:04:17.875225",
+   "id": 5121,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.882126",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.875225"
+  },
+  {
+   "contestant_id": 374,
+   "created_at": "2026-09-03 12:08:18.528104",
+   "id": 17272,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.541121",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.528104"
+  },
+  {
+   "contestant_id": 376,
+   "created_at": "2026-07-01 00:05:25.374652",
+   "id": 14496,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.293545",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 376,
+   "created_at": "2026-08-01 02:38:50.388755",
+   "id": 16227,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.927348",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 378,
+   "created_at": "2026-05-01 00:04:17.898554",
+   "id": 5123,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.905606",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.898554"
+  },
+  {
+   "contestant_id": 378,
+   "created_at": "2026-09-03 12:08:18.441811",
+   "id": 17268,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.454494",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.441811"
+  },
+  {
+   "contestant_id": 380,
+   "created_at": "2026-07-01 00:05:26.137876",
+   "id": 14590,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.350273",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 380,
+   "created_at": "2026-08-01 02:38:50.443059",
+   "id": 16228,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.986516",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 382,
+   "created_at": "2026-07-01 00:05:25.407529",
+   "id": 14497,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.385700",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 382,
+   "created_at": "2026-08-01 02:38:50.487140",
+   "id": 16229,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.055490",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 384,
+   "created_at": "2026-07-01 00:05:25.445723",
+   "id": 14498,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.417087",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 384,
+   "created_at": "2026-08-01 02:38:50.529860",
+   "id": 16230,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.120846",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 386,
+   "created_at": "2026-05-01 00:04:17.921775",
+   "id": 5125,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.928867",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.921775"
+  },
+  {
+   "contestant_id": 386,
+   "created_at": "2026-09-03 12:08:18.295387",
+   "id": 17260,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.312992",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.295387"
+  },
+  {
+   "contestant_id": 388,
+   "created_at": "2026-07-01 00:05:25.478360",
+   "id": 14499,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.449403",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 388,
+   "created_at": "2026-08-01 02:38:50.579313",
+   "id": 16231,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.190523",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 390,
+   "created_at": "2026-05-01 00:04:17.945643",
+   "id": 5127,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.952590",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.945643"
+  },
+  {
+   "contestant_id": 390,
+   "created_at": "2026-09-03 12:08:18.335062",
+   "id": 17262,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.345737",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.335062"
+  },
+  {
+   "contestant_id": 392,
+   "created_at": "2026-07-01 00:05:25.507512",
+   "id": 14503,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.487302",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 392,
+   "created_at": "2026-08-01 02:38:50.622843",
+   "id": 16234,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.261670",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 394,
+   "created_at": "2026-05-01 00:04:17.968693",
+   "id": 5130,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.975552",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.968693"
+  },
+  {
+   "contestant_id": 394,
+   "created_at": "2026-09-03 12:08:18.352382",
+   "id": 17263,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.361621",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.352382"
+  },
+  {
+   "contestant_id": 398,
+   "created_at": "2026-09-03 12:08:18.673553",
+   "id": 17284,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.687369",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.673553"
+  },
+  {
+   "contestant_id": 400,
+   "created_at": "2026-07-01 00:05:25.612289",
+   "id": 14528,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.530097",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 402,
+   "created_at": "2026-05-01 00:04:18.099542",
+   "id": 5151,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.107061",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.099542"
+  },
+  {
+   "contestant_id": 402,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17289,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.711905",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 404,
+   "created_at": "2026-07-01 00:05:25.665762",
+   "id": 14534,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.600266",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 406,
+   "created_at": "2026-05-01 00:04:18.058787",
+   "id": 5145,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.067000",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.058787"
+  },
+  {
+   "contestant_id": 406,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17276,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.563944",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 408,
+   "created_at": "2026-07-01 00:05:25.711675",
+   "id": 14540,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.662720",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-05-01 00:04:18.138192",
+   "id": 5160,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.146445",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.138192"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17153,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.024808",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-05-31 00:03:19.846409",
+   "id": 10546,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:19.880190",
+   "season_id": 241,
+   "updated_at": "2026-05-31 00:03:19.846409"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-06-30 00:20:16.343070",
+   "id": 13347,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.378210",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.343070"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-07-31 00:04:57.835976",
+   "id": 15152,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:57.884701",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.835976"
+  },
+  {
+   "contestant_id": 410,
+   "created_at": "2026-09-03 12:08:43.329632",
+   "id": 18408,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:43.407814",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.329632"
+  },
+  {
+   "contestant_id": 411,
+   "created_at": "2026-05-31 00:03:19.846409",
+   "id": 10544,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:19.854768",
+   "season_id": 240,
+   "updated_at": "2026-05-31 00:03:19.846409"
+  },
+  {
+   "contestant_id": 411,
+   "created_at": "2026-06-01 00:04:25.702231",
+   "id": 11537,
+   "is_active": true,
+   "joined_at": "2026-06-01 00:04:25.711361",
+   "season_id": 250,
+   "updated_at": "2026-06-01 00:04:25.702231"
+  },
+  {
+   "contestant_id": 411,
+   "created_at": "2026-07-01 00:05:08.377124",
+   "id": 13378,
+   "is_active": true,
+   "joined_at": "2026-07-01 00:05:08.393647",
+   "season_id": 258,
+   "updated_at": "2026-07-01 00:05:08.377124"
+  },
+  {
+   "contestant_id": 411,
+   "created_at": "2026-08-01 00:05:13.558132",
+   "id": 15324,
+   "is_active": true,
+   "joined_at": "2026-08-01 00:05:13.574979",
+   "season_id": 263,
+   "updated_at": "2026-08-01 00:05:13.558132"
+  },
+  {
+   "contestant_id": 411,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17152,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.023851",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 414,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5153,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.126053",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 414,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17164,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.051122",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 451,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5023,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.026966",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 451,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17189,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.372160",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 451,
+   "created_at": "2026-05-01 23:55:30.501072",
+   "id": 5365,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.911809",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 451,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5458,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.532979",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 456,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18184,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.877337",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 457,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18176,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.964405",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 459,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18180,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.472358",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 468,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18177,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.969712",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 469,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18183,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.884240",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 471,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18179,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.480367",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 472,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5024,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.030591",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 472,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17198,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.382686",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 472,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5460,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.526409",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 473,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5017,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.008045",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 473,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17179,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.300632",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 475,
+   "created_at": "2026-07-01 00:05:22.718430",
+   "id": 14284,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.799282",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 484,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5031,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.036182",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 484,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17211,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.398000",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 484,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5391,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.910510",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 484,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5462,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.531545",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 498,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5154,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.127902",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 498,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17163,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.050374",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 500,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5032,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.037203",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 500,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17205,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.391138",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 500,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5481,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.535180",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 501,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18181,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.802819",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 504,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16129,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.682991",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 506,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5155,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.128445",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 506,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17162,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.049642",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 507,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5033,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.037730",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 507,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17206,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.391893",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 507,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5396,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.902806",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 507,
+   "created_at": "2026-05-02 01:00:37.359515",
+   "id": 7434,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.536195",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 508,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5034,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.038317",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 508,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17214,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.401432",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 508,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5397,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.905294",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 508,
+   "created_at": "2026-05-02 01:00:37.359515",
+   "id": 7436,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.538532",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 509,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5035,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.038870",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 509,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17208,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.394758",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 509,
+   "created_at": "2026-05-31 00:03:10.849709",
+   "id": 9871,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:10.884427",
+   "season_id": 247,
+   "updated_at": "2026-05-31 00:03:10.849709"
+  },
+  {
+   "contestant_id": 513,
+   "created_at": "2026-07-01 00:05:22.162524",
+   "id": 14192,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.668112",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 513,
+   "created_at": "2026-08-01 02:38:44.536171",
+   "id": 15812,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.380445",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 514,
+   "created_at": "2026-07-01 00:05:23.423873",
+   "id": 14389,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.184182",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 514,
+   "created_at": "2026-08-01 02:38:46.612135",
+   "id": 16112,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.834305",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 519,
+   "created_at": "2026-09-03 12:08:34.629293",
+   "id": 18198,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.368867",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-05-01 00:04:14.246387",
+   "id": 4423,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:14.271836",
+   "season_id": 240,
+   "updated_at": "2026-05-01 00:04:14.246387"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5036,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.039370",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-06-01 00:04:22.892354",
+   "id": 10933,
+   "is_active": true,
+   "joined_at": "2026-06-01 00:04:22.909291",
+   "season_id": 250,
+   "updated_at": "2026-06-01 00:04:22.892354"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-07-01 00:05:08.532278",
+   "id": 13418,
+   "is_active": true,
+   "joined_at": "2026-07-01 00:05:08.546513",
+   "season_id": 258,
+   "updated_at": "2026-07-01 00:05:08.532278"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-08-01 00:05:11.943836",
+   "id": 15202,
+   "is_active": true,
+   "joined_at": "2026-08-01 00:05:11.962978",
+   "season_id": 263,
+   "updated_at": "2026-08-01 00:05:11.943836"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17197,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.381886",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-05-02 01:35:11.380109",
+   "id": 8426,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:35:11.409657",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:35:11.380109"
+  },
+  {
+   "contestant_id": 522,
+   "created_at": "2026-05-31 00:03:10.849709",
+   "id": 9870,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:10.883315",
+   "season_id": 247,
+   "updated_at": "2026-05-31 00:03:10.849709"
+  },
+  {
+   "contestant_id": 526,
+   "created_at": "2026-08-01 02:38:41.867542",
+   "id": 15709,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.827992",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 526,
+   "created_at": "2026-09-03 12:08:34.629293",
+   "id": 18201,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.593316",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 529,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5156,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.129031",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 529,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17167,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.053780",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 531,
+   "created_at": "2026-09-03 12:08:33.729481",
+   "id": 18178,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.955865",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 538,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5025,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.031229",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 538,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17199,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.383698",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 538,
+   "created_at": "2026-05-02 01:00:30.839543",
+   "id": 6559,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.903986",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 538,
+   "created_at": "2026-05-02 01:00:37.359515",
+   "id": 7435,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.537357",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 544,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5026,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.031820",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 544,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17200,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.384607",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 544,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5479,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.534166",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 552,
+   "created_at": "2026-07-01 00:05:23.423873",
+   "id": 14388,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.187360",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 552,
+   "created_at": "2026-08-01 02:38:46.612135",
+   "id": 16111,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.836035",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 554,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5157,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.129582",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 554,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17168,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.054790",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 557,
+   "created_at": "2026-07-01 00:05:23.583867",
+   "id": 14396,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.431903",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 557,
+   "created_at": "2026-08-01 02:38:46.834406",
+   "id": 16119,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.466833",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 558,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5018,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.010928",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 558,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17183,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.303955",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 558,
+   "created_at": "2026-05-02 01:00:30.747865",
+   "id": 6548,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.797577",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.747865"
+  },
+  {
+   "contestant_id": 558,
+   "created_at": "2026-05-02 01:00:37.253156",
+   "id": 7416,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.456896",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.411556"
+  },
+  {
+   "contestant_id": 559,
+   "created_at": "2026-07-01 00:05:23.647556",
+   "id": 14399,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.500305",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 559,
+   "created_at": "2026-08-01 02:38:46.933321",
+   "id": 16122,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.599015",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 564,
+   "created_at": "2026-07-01 00:05:25.881867",
+   "id": 14563,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.783380",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 564,
+   "created_at": "2026-08-01 02:38:51.154217",
+   "id": 16287,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.398173",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 565,
+   "created_at": "2026-07-01 00:05:25.848432",
+   "id": 14560,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.733985",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 565,
+   "created_at": "2026-08-01 02:38:51.101467",
+   "id": 16284,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.328523",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 569,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5027,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.032401",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 569,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17201,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.385852",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 569,
+   "created_at": "2026-05-01 23:55:30.501072",
+   "id": 5367,
+   "is_active": true,
+   "joined_at": "2026-05-01 23:55:30.714985",
+   "season_id": 247,
+   "updated_at": "2026-05-01 23:55:30.501072"
+  },
+  {
+   "contestant_id": 569,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5478,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:35:11.400080",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:35:11.380109"
+  },
+  {
+   "contestant_id": 572,
+   "created_at": "2026-07-01 00:05:23.583867",
+   "id": 14395,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.430639",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 572,
+   "created_at": "2026-08-01 02:38:46.834406",
+   "id": 16118,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.462897",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 573,
+   "created_at": "2026-07-01 00:05:25.044866",
+   "id": 14485,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.906569",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 573,
+   "created_at": "2026-08-01 02:38:49.851475",
+   "id": 16216,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:22.224610",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 580,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5038,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.040426",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 580,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17190,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.373720",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 580,
+   "created_at": "2026-05-02 01:35:11.380109",
+   "id": 8419,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:35:11.387825",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:35:11.380109"
+  },
+  {
+   "contestant_id": 580,
+   "created_at": "2026-05-31 00:03:10.849709",
+   "id": 9865,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:10.863178",
+   "season_id": 247,
+   "updated_at": "2026-05-31 00:03:10.849709"
+  },
+  {
+   "contestant_id": 585,
+   "created_at": "2026-07-01 00:05:23.858397",
+   "id": 14415,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.653610",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 585,
+   "created_at": "2026-08-01 02:38:47.259362",
+   "id": 16138,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.180112",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 586,
+   "created_at": "2026-08-01 02:38:41.571896",
+   "id": 15696,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.731810",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 587,
+   "created_at": "2026-08-01 02:38:41.571896",
+   "id": 15692,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.726786",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 589,
+   "created_at": "2026-07-01 00:05:23.858397",
+   "id": 14414,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.654606",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 589,
+   "created_at": "2026-08-01 02:38:47.259362",
+   "id": 16137,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.183564",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 592,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5039,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.040993",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 592,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17215,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.402625",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 592,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5459,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.529042",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 593,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5020,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.012200",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 593,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17185,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.305298",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 594,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5019,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.011532",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 594,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17177,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.298606",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 597,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5040,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.041500",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 597,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17216,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.403557",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 597,
+   "created_at": "2026-05-02 01:00:37.359515",
+   "id": 7437,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.530381",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 599,
+   "created_at": "2026-05-01 00:04:18.138192",
+   "id": 5161,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.148423",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.138192"
+  },
+  {
+   "contestant_id": 599,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17156,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.027004",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 600,
+   "created_at": "2026-05-01 00:04:18.058787",
+   "id": 5146,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.068711",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.058787"
+  },
+  {
+   "contestant_id": 600,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17278,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.565558",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 604,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5158,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.130270",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 604,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17170,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.056467",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 605,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5041,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.042006",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 605,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17217,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.404348",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 605,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5400,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.926205",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 605,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5485,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.551655",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 607,
+   "created_at": "2026-05-01 00:04:18.138192",
+   "id": 5162,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.149077",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.138192"
+  },
+  {
+   "contestant_id": 607,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17158,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.028459",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 609,
+   "created_at": "2026-05-01 00:04:18.058787",
+   "id": 5147,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.069351",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.058787"
+  },
+  {
+   "contestant_id": 609,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17279,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.566684",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 610,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5152,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.124935",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 610,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17160,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.048084",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 611,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5028,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.032929",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 611,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17202,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.387821",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 611,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5386,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.922623",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 611,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5475,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.541995",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 612,
+   "created_at": "2026-07-01 00:05:25.507512",
+   "id": 14502,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.485943",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 612,
+   "created_at": "2026-08-01 02:38:50.622843",
+   "id": 16233,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.257212",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 614,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5029,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.033407",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 614,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17203,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.388899",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 614,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5387,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.923851",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 614,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5476,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.543225",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 615,
+   "created_at": "2026-07-01 00:05:23.934080",
+   "id": 14420,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.733020",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 617,
+   "created_at": "2026-08-01 02:38:41.571896",
+   "id": 15694,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.722390",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 618,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5037,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.039928",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 618,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17209,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.395760",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 618,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5388,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.924999",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 618,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5477,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.544346",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 619,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5030,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.033922",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 619,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17204,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.390364",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 619,
+   "created_at": "2026-05-01 23:55:30.730713",
+   "id": 5401,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.927436",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.839543"
+  },
+  {
+   "contestant_id": 619,
+   "created_at": "2026-05-01 23:55:32.895425",
+   "id": 5486,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.552861",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.468680"
+  },
+  {
+   "contestant_id": 623,
+   "created_at": "2026-07-01 00:05:23.934080",
+   "id": 14419,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.720485",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 624,
+   "created_at": "2026-05-01 00:04:18.058787",
+   "id": 5148,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.069931",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.058787"
+  },
+  {
+   "contestant_id": 624,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17280,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.567596",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 625,
+   "created_at": "2026-05-01 00:04:18.116804",
+   "id": 5159,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:18.130938",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:18.116804"
+  },
+  {
+   "contestant_id": 625,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17169,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.055837",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 625,
+   "created_at": "2026-05-02 01:00:36.915334",
+   "id": 7396,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:36.967876",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:36.915334"
+  },
+  {
+   "contestant_id": 625,
+   "created_at": "2026-05-02 01:00:43.361300",
+   "id": 8285,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:49:00.954518",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:49:00.910730"
+  },
+  {
+   "contestant_id": 626,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5042,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.042499",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 626,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17218,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.405148",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 628,
+   "created_at": "2026-07-01 00:05:23.934080",
+   "id": 14421,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.728030",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 629,
+   "created_at": "2026-05-01 00:04:17.000626",
+   "id": 5021,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.012878",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.000626"
+  },
+  {
+   "contestant_id": 629,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17176,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.297614",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 629,
+   "created_at": "2026-05-02 01:00:30.747865",
+   "id": 6544,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:00:30.789153",
+   "season_id": 247,
+   "updated_at": "2026-05-02 01:00:30.747865"
+  },
+  {
+   "contestant_id": 629,
+   "created_at": "2026-05-02 01:00:37.253156",
+   "id": 7412,
+   "is_active": true,
+   "joined_at": "2026-05-02 01:48:58.408331",
+   "season_id": 245,
+   "updated_at": "2026-05-02 01:48:58.369551"
+  },
+  {
+   "contestant_id": 630,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5043,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.043040",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 630,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17192,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.376195",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 630,
+   "created_at": "2026-05-31 00:03:10.849709",
+   "id": 9866,
+   "is_active": true,
+   "joined_at": "2026-05-31 00:03:10.864260",
+   "season_id": 247,
+   "updated_at": "2026-05-31 00:03:10.849709"
+  },
+  {
+   "contestant_id": 632,
+   "created_at": "2026-07-01 00:05:23.934080",
+   "id": 14423,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.729332",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 633,
+   "created_at": "2026-07-01 00:05:23.858397",
+   "id": 14416,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:25.652456",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 633,
+   "created_at": "2026-08-01 02:38:47.259362",
+   "id": 16136,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.176574",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 635,
+   "created_at": "2026-05-01 00:04:17.019614",
+   "id": 5044,
+   "is_active": true,
+   "joined_at": "2026-05-01 00:04:17.043544",
+   "season_id": 8,
+   "updated_at": "2026-05-01 00:04:17.019614"
+  },
+  {
+   "contestant_id": 635,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17219,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.406038",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 642,
+   "created_at": "2026-08-01 02:38:47.197865",
+   "id": 16134,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.073047",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-04-27 14:37:37.459622",
+   "id": 3808,
+   "is_active": true,
+   "joined_at": "2026-04-27 14:37:37.471964",
+   "season_id": 2,
+   "updated_at": "2026-04-27 14:37:37.459622"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-04-27 14:37:37.878824",
+   "id": 3887,
+   "is_active": true,
+   "joined_at": "2026-04-27 14:37:37.890818",
+   "season_id": 5,
+   "updated_at": "2026-04-27 14:37:37.878824"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17194,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.378697",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13225,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.546748",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15030,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 643,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18286,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:42.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 671,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16081,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.906349",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 677,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16080,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.913391",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 678,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16097,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.822690",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 771,
+   "created_at": "2026-08-01 02:39:18.967432",
+   "id": 17103,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.286333",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 771,
+   "created_at": "2026-09-03 12:08:37.269438",
+   "id": 18254,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.596261",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 773,
+   "created_at": "2026-08-01 02:39:13.932414",
+   "id": 17088,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.559621",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 774,
+   "created_at": "2026-08-01 02:39:13.932414",
+   "id": 17087,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.569783",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 789,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16301,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.718838",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 789,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17083,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.434390",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 791,
+   "created_at": "2026-08-01 02:38:51.206887",
+   "id": 16290,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.528694",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 827,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16300,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.721819",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 827,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17082,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.437437",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 829,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16299,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.727522",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 829,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17081,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.441540",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 834,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16298,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.729489",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 834,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17080,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.443576",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 835,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17196,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.380933",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 835,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13241,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.567812",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 835,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15046,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:14.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 835,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18302,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:58.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 843,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17181,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.302409",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 843,
+   "created_at": "2026-06-30 00:20:13.394348",
+   "id": 13218,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.446232",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.394348"
+  },
+  {
+   "contestant_id": 843,
+   "created_at": "2026-07-31 00:04:53.805014",
+   "id": 15023,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:00.866787",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.805014"
+  },
+  {
+   "contestant_id": 843,
+   "created_at": "2026-09-03 12:08:37.839238",
+   "id": 18279,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:44.911180",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.839238"
+  },
+  {
+   "contestant_id": 848,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17212,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.399004",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 848,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13243,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.570597",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 848,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15048,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:16.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 848,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18304,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:09:00.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 850,
+   "created_at": "2026-08-01 02:38:47.803973",
+   "id": 16169,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.657492",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 851,
+   "created_at": "2026-08-01 02:38:48.241563",
+   "id": 16184,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.215769",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 853,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17184,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.304638",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 853,
+   "created_at": "2026-06-30 00:20:13.394348",
+   "id": 13217,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.444640",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.394348"
+  },
+  {
+   "contestant_id": 853,
+   "created_at": "2026-07-31 00:04:53.805014",
+   "id": 15022,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:59.866787",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.805014"
+  },
+  {
+   "contestant_id": 853,
+   "created_at": "2026-09-03 12:08:37.839238",
+   "id": 18278,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:43.911180",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.839238"
+  },
+  {
+   "contestant_id": 864,
+   "created_at": "2026-08-01 02:38:47.803973",
+   "id": 16168,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.659387",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 865,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17193,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.377329",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 865,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13242,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.569238",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 865,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15047,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:15.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 865,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18303,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:59.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 866,
+   "created_at": "2026-08-01 02:38:47.803973",
+   "id": 16167,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.661693",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 868,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16099,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.850477",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 869,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16108,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.452487",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 870,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16075,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.920034",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 871,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16085,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.428196",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 873,
+   "created_at": "2026-08-01 02:38:47.864231",
+   "id": 16172,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.729982",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 874,
+   "created_at": "2026-08-01 02:38:48.100719",
+   "id": 16181,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.059366",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 876,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16074,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.928418",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 877,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16098,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.840391",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 878,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16107,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.434162",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 879,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16084,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.435714",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 880,
+   "created_at": "2026-08-01 02:38:48.100719",
+   "id": 16180,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:20.063957",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 881,
+   "created_at": "2026-08-01 02:38:47.864231",
+   "id": 16171,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.731490",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 885,
+   "created_at": "2026-08-01 02:38:47.930073",
+   "id": 16176,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.814635",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 886,
+   "created_at": "2026-08-01 02:38:47.930073",
+   "id": 16175,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.818569",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 888,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17273,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.561421",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 888,
+   "created_at": "2026-06-30 00:20:16.287187",
+   "id": 13342,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.327490",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.287187"
+  },
+  {
+   "contestant_id": 888,
+   "created_at": "2026-07-31 00:04:57.768560",
+   "id": 15147,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:00.811309",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.768560"
+  },
+  {
+   "contestant_id": 888,
+   "created_at": "2026-09-03 12:08:43.258761",
+   "id": 18403,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:46.359756",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.245651"
+  },
+  {
+   "contestant_id": 889,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17151,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.022969",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 889,
+   "created_at": "2026-06-30 00:20:16.343070",
+   "id": 13351,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.386688",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.343070"
+  },
+  {
+   "contestant_id": 889,
+   "created_at": "2026-07-31 00:04:57.835976",
+   "id": 15156,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:01.884701",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.835976"
+  },
+  {
+   "contestant_id": 889,
+   "created_at": "2026-09-03 12:08:43.329632",
+   "id": 18412,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:47.407814",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.329632"
+  },
+  {
+   "contestant_id": 890,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17159,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.047259",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 890,
+   "created_at": "2026-06-30 00:20:16.402568",
+   "id": 13361,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.457030",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.402568"
+  },
+  {
+   "contestant_id": 890,
+   "created_at": "2026-07-31 00:04:57.915343",
+   "id": 15166,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:04.983300",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.915343"
+  },
+  {
+   "contestant_id": 893,
+   "created_at": "2026-08-01 02:38:47.930073",
+   "id": 16174,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.822371",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 895,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17161,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.048851",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 895,
+   "created_at": "2026-06-30 00:20:16.402568",
+   "id": 13360,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.455790",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.402568"
+  },
+  {
+   "contestant_id": 895,
+   "created_at": "2026-07-31 00:04:57.915343",
+   "id": 15165,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:03.983300",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.915343"
+  },
+  {
+   "contestant_id": 896,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17155,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.026246",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 896,
+   "created_at": "2026-06-30 00:20:16.343070",
+   "id": 13350,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.384970",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.343070"
+  },
+  {
+   "contestant_id": 896,
+   "created_at": "2026-07-31 00:04:57.835976",
+   "id": 15155,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:00.884701",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.835976"
+  },
+  {
+   "contestant_id": 896,
+   "created_at": "2026-09-03 12:08:43.329632",
+   "id": 18411,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:46.407814",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.329632"
+  },
+  {
+   "contestant_id": 897,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17274,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.562347",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 897,
+   "created_at": "2026-06-30 00:20:16.287187",
+   "id": 13341,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.326156",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.287187"
+  },
+  {
+   "contestant_id": 897,
+   "created_at": "2026-07-31 00:04:57.768560",
+   "id": 15146,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:59.811309",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.768560"
+  },
+  {
+   "contestant_id": 897,
+   "created_at": "2026-09-03 12:08:43.258761",
+   "id": 18402,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:45.359756",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.245651"
+  },
+  {
+   "contestant_id": 898,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17147,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.981611",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 898,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13210,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.381453",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 898,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15015,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:59.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 898,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18271,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:43.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 899,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17286,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.708841",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 899,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13337,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.275665",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 899,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15142,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:02.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 899,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18398,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:48.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 900,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17149,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.983747",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 900,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13209,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.379874",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 900,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15014,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 900,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18270,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:42.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 901,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17290,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.713170",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 901,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13336,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.274223",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 901,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15141,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:01.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 901,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18397,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:47.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 902,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17291,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.713914",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 902,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13335,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.272843",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 902,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15140,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:00.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 902,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18396,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:46.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 903,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17144,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.978407",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 903,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13208,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.378519",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 903,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15013,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:57.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 903,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18269,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:41.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 904,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16090,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.465181",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 905,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16106,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.467555",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 906,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16079,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.933676",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 907,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16096,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.778400",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 908,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16089,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.447350",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 909,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17146,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.980630",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 909,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13207,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.377187",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 909,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15012,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:56.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 909,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18268,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:40.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 910,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16105,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.489637",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 912,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17285,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.706378",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 912,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13334,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.271218",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 912,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15139,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:59.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 912,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18395,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:45.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 914,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16302,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.733434",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 914,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17084,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.448223",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 916,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17195,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.379922",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 916,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13240,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.566380",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 916,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15045,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:13.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 916,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18301,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:57.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 918,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16078,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.951726",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 919,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16088,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.420420",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 920,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16095,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.787941",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 921,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16104,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.511760",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 922,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17148,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.982855",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 922,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13206,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.375931",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 922,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15011,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:55.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 922,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18267,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:39.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 923,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17287,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.709819",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 923,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13333,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.269456",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 923,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15138,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 923,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18394,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:44.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 924,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17182,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.303199",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 924,
+   "created_at": "2026-06-30 00:20:13.394348",
+   "id": 13216,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.443079",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.394348"
+  },
+  {
+   "contestant_id": 924,
+   "created_at": "2026-07-31 00:04:53.805014",
+   "id": 15021,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.866787",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.805014"
+  },
+  {
+   "contestant_id": 924,
+   "created_at": "2026-09-03 12:08:37.839238",
+   "id": 18277,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:42.911180",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.839238"
+  },
+  {
+   "contestant_id": 925,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17277,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.564817",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 925,
+   "created_at": "2026-06-30 00:20:16.287187",
+   "id": 13340,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.324788",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.287187"
+  },
+  {
+   "contestant_id": 925,
+   "created_at": "2026-07-31 00:04:57.768560",
+   "id": 15145,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.811309",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.768560"
+  },
+  {
+   "contestant_id": 925,
+   "created_at": "2026-09-03 12:08:43.258761",
+   "id": 18401,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:44.359756",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.245651"
+  },
+  {
+   "contestant_id": 926,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17166,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.052598",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 926,
+   "created_at": "2026-06-30 00:20:16.402568",
+   "id": 13359,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.454513",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.402568"
+  },
+  {
+   "contestant_id": 926,
+   "created_at": "2026-07-31 00:04:57.915343",
+   "id": 15164,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:02.983300",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.915343"
+  },
+  {
+   "contestant_id": 927,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17157,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.027685",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 927,
+   "created_at": "2026-06-30 00:20:16.343070",
+   "id": 13349,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.382313",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.343070"
+  },
+  {
+   "contestant_id": 927,
+   "created_at": "2026-07-31 00:04:57.835976",
+   "id": 15154,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:59.884701",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.835976"
+  },
+  {
+   "contestant_id": 927,
+   "created_at": "2026-09-03 12:08:43.329632",
+   "id": 18410,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:45.407814",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.329632"
+  },
+  {
+   "contestant_id": 930,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16124,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.665060",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 932,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16123,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.669558",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 933,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16128,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.687393",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 935,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16127,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.677424",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 936,
+   "created_at": "2026-08-01 02:38:51.523027",
+   "id": 16314,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.882824",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 936,
+   "created_at": "2026-08-01 02:39:14.341446",
+   "id": 17099,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.783595",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 937,
+   "created_at": "2026-09-03 12:08:17.012242",
+   "id": 17154,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.025493",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.012242"
+  },
+  {
+   "contestant_id": 937,
+   "created_at": "2026-06-30 00:20:16.343070",
+   "id": 13348,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.379704",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.343070"
+  },
+  {
+   "contestant_id": 937,
+   "created_at": "2026-07-31 00:04:57.835976",
+   "id": 15153,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:58.884701",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.835976"
+  },
+  {
+   "contestant_id": 937,
+   "created_at": "2026-09-03 12:08:43.329632",
+   "id": 18409,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:44.407814",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.329632"
+  },
+  {
+   "contestant_id": 938,
+   "created_at": "2026-09-03 12:08:18.551114",
+   "id": 17275,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.563176",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.551114"
+  },
+  {
+   "contestant_id": 938,
+   "created_at": "2026-06-30 00:20:16.287187",
+   "id": 13339,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.323278",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.287187"
+  },
+  {
+   "contestant_id": 938,
+   "created_at": "2026-07-31 00:04:57.768560",
+   "id": 15144,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:57.811309",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.768560"
+  },
+  {
+   "contestant_id": 938,
+   "created_at": "2026-09-03 12:08:43.258761",
+   "id": 18400,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:43.359756",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.245651"
+  },
+  {
+   "contestant_id": 939,
+   "created_at": "2026-09-03 12:08:17.037098",
+   "id": 17165,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.051800",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.037098"
+  },
+  {
+   "contestant_id": 939,
+   "created_at": "2026-06-30 00:20:16.402568",
+   "id": 13358,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.453189",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.402568"
+  },
+  {
+   "contestant_id": 939,
+   "created_at": "2026-07-31 00:04:57.915343",
+   "id": 15163,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:01.983300",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.915343"
+  },
+  {
+   "contestant_id": 940,
+   "created_at": "2026-08-01 02:38:46.980872",
+   "id": 16126,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:18.693401",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 941,
+   "created_at": "2026-08-01 02:38:51.523027",
+   "id": 16313,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.884127",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 941,
+   "created_at": "2026-08-01 02:39:14.341446",
+   "id": 17098,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.789394",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 943,
+   "created_at": "2026-09-03 12:08:17.355580",
+   "id": 17213,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.400024",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.355580"
+  },
+  {
+   "contestant_id": 943,
+   "created_at": "2026-06-30 00:20:13.464732",
+   "id": 13239,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.565192",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.464732"
+  },
+  {
+   "contestant_id": 943,
+   "created_at": "2026-07-31 00:04:53.909783",
+   "id": 15044,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:05:12.045219",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.909783"
+  },
+  {
+   "contestant_id": 943,
+   "created_at": "2026-09-03 12:08:37.949829",
+   "id": 18300,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:56.065309",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.949829"
+  },
+  {
+   "contestant_id": 946,
+   "created_at": "2026-08-01 02:38:46.334771",
+   "id": 16077,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:15.943373",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 947,
+   "created_at": "2026-08-01 02:38:46.406007",
+   "id": 16087,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.454431",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 948,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16094,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.869733",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 949,
+   "created_at": "2026-08-01 02:38:46.548179",
+   "id": 16103,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:17.544475",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 950,
+   "created_at": "2026-09-03 12:08:16.962694",
+   "id": 17145,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:16.979574",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:16.962694"
+  },
+  {
+   "contestant_id": 950,
+   "created_at": "2026-06-30 00:20:13.331948",
+   "id": 13205,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.374437",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.331948"
+  },
+  {
+   "contestant_id": 950,
+   "created_at": "2026-07-31 00:04:51.003415",
+   "id": 15010,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:54.680376",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:51.003415"
+  },
+  {
+   "contestant_id": 950,
+   "created_at": "2026-09-03 12:08:37.568833",
+   "id": 18266,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:38.801299",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.568833"
+  },
+  {
+   "contestant_id": 951,
+   "created_at": "2026-09-03 12:08:17.282014",
+   "id": 17180,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:17.301394",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:17.282014"
+  },
+  {
+   "contestant_id": 951,
+   "created_at": "2026-06-30 00:20:13.394348",
+   "id": 13215,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:13.441454",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:13.394348"
+  },
+  {
+   "contestant_id": 951,
+   "created_at": "2026-07-31 00:04:53.805014",
+   "id": 15020,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:57.866787",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:53.805014"
+  },
+  {
+   "contestant_id": 951,
+   "created_at": "2026-09-03 12:08:37.839238",
+   "id": 18276,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:41.911180",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:37.839238"
+  },
+  {
+   "contestant_id": 952,
+   "created_at": "2026-09-03 12:08:18.695831",
+   "id": 17288,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:18.711011",
+   "season_id": 267,
+   "updated_at": "2026-09-03 12:08:18.695831"
+  },
+  {
+   "contestant_id": 952,
+   "created_at": "2026-06-30 00:20:16.226181",
+   "id": 13332,
+   "is_active": true,
+   "joined_at": "2026-06-30 00:20:16.268020",
+   "season_id": 253,
+   "updated_at": "2026-06-30 00:20:16.226181"
+  },
+  {
+   "contestant_id": 952,
+   "created_at": "2026-07-31 00:04:57.702449",
+   "id": 15137,
+   "is_active": true,
+   "joined_at": "2026-07-31 00:04:57.746230",
+   "season_id": 255,
+   "updated_at": "2026-07-31 00:04:57.702449"
+  },
+  {
+   "contestant_id": 952,
+   "created_at": "2026-09-03 12:08:43.187916",
+   "id": 18393,
+   "is_active": true,
+   "joined_at": "2026-09-03 12:08:43.235953",
+   "season_id": 257,
+   "updated_at": "2026-09-03 12:08:43.187916"
+  },
+  {
+   "contestant_id": 959,
+   "created_at": "2026-08-01 02:38:47.652225",
+   "id": 16161,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.527517",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 972,
+   "created_at": "2026-08-01 02:38:47.521967",
+   "id": 16158,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.355941",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 973,
+   "created_at": "2026-08-01 02:38:51.255529",
+   "id": 16295,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.615295",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 973,
+   "created_at": "2026-08-01 02:39:12.039342",
+   "id": 17077,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.310207",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 976,
+   "created_at": "2026-08-01 02:38:47.197865",
+   "id": 16133,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.068247",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 978,
+   "created_at": "2026-08-01 02:38:51.255529",
+   "id": 16294,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.609241",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 978,
+   "created_at": "2026-08-01 02:39:12.039342",
+   "id": 17076,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.301691",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 980,
+   "created_at": "2026-08-01 02:38:47.521967",
+   "id": 16157,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.362271",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 982,
+   "created_at": "2026-08-01 02:38:47.521967",
+   "id": 16156,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.364536",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 985,
+   "created_at": "2026-08-01 02:38:51.255529",
+   "id": 16293,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.611464",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 985,
+   "created_at": "2026-08-01 02:39:12.039342",
+   "id": 17075,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.304490",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 988,
+   "created_at": "2026-08-01 02:38:51.453624",
+   "id": 16309,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.837791",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 988,
+   "created_at": "2026-08-01 02:39:14.120081",
+   "id": 17091,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.668967",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 989,
+   "created_at": "2026-08-01 02:38:51.255529",
+   "id": 16292,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.613120",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 989,
+   "created_at": "2026-08-01 02:39:12.039342",
+   "id": 17074,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.307694",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 998,
+   "created_at": "2026-08-01 02:38:47.521967",
+   "id": 16155,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:19.359672",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1109,
+   "created_at": "2026-08-01 02:38:40.069858",
+   "id": 15520,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.767315",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1115,
+   "created_at": "2026-07-01 00:05:25.507512",
+   "id": 14501,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.484561",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1115,
+   "created_at": "2026-08-01 02:38:50.622843",
+   "id": 16232,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.254665",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1118,
+   "created_at": "2026-08-01 02:38:51.328620",
+   "id": 16297,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.712562",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1118,
+   "created_at": "2026-08-01 02:39:13.719124",
+   "id": 17079,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.427915",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 1119,
+   "created_at": "2026-08-01 02:38:51.255529",
+   "id": 16291,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:23.593134",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1119,
+   "created_at": "2026-08-01 02:39:12.039342",
+   "id": 17073,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:30.284312",
+   "season_id": 254,
+   "updated_at": "2026-09-03 13:04:29.558222"
+  },
+  {
+   "contestant_id": 1130,
+   "created_at": "2026-08-01 02:38:40.069858",
+   "id": 15521,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.771181",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1135,
+   "created_at": "2026-07-01 00:05:24.657401",
+   "id": 14469,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.405692",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1135,
+   "created_at": "2026-08-01 02:38:49.085872",
+   "id": 16196,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.355656",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1136,
+   "created_at": "2026-07-01 00:05:24.657401",
+   "id": 14468,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:26.407024",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1136,
+   "created_at": "2026-08-01 02:38:49.085872",
+   "id": 16195,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:21.360005",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1140,
+   "created_at": "2026-08-01 02:38:46.472500",
+   "id": 16093,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:16.864382",
+   "season_id": 265,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1154,
+   "created_at": "2026-08-01 02:38:40.069858",
+   "id": 15523,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.796513",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1156,
+   "created_at": "2026-08-01 02:38:43.684934",
+   "id": 15734,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.537480",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1158,
+   "created_at": "2026-08-01 02:38:43.684934",
+   "id": 15735,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.538866",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1164,
+   "created_at": "2026-08-01 02:38:43.684934",
+   "id": 15733,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:27.531618",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  },
+  {
+   "contestant_id": 1166,
+   "created_at": "2026-08-01 02:38:40.069858",
+   "id": 15516,
+   "is_active": true,
+   "joined_at": "2026-09-03 13:04:24.760422",
+   "season_id": 261,
+   "updated_at": "2026-09-03 13:04:07.238422"
+  }
+ ]
+}
