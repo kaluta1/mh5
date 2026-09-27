@@ -419,7 +419,11 @@ async def initiate_shufti_verification(
     if len(lang) > 2:
         lang = lang[:2]
 
+    # The dispatcher's contract is keyword-only and requires the live request
+    # session (it re-checks KYC_INITIATION eligibility right before any
+    # provider I/O). Omitting it raised TypeError here since c30a215.
     result = await initiate_kyc_session(
+        db=db,
         user=current_user,
         reference=reference,
         language=lang,
