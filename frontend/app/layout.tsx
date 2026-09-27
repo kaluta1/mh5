@@ -13,6 +13,7 @@ import { getMetadataTranslations, detectLanguageFromHeaders, getKeywords } from 
 import { LANGUAGE_PREFERENCE_KEY, SUPPORTED_LANGUAGE_CODES } from "@/lib/language-cookie"
 import { API_ORIGIN } from "@/lib/config"
 import { AnnualAdsPartnerRotator } from "@/components/annualads-partner-rotator"
+import { AdSenseLoader } from "@/components/ads/adsense-loader"
 import { headers } from "next/headers"
 
 
@@ -190,33 +191,8 @@ export default function RootLayout({
                     }
                   });
                 });
-                // Load ads after the first page paint so third-party JS doesn't
-                // compete with route hydration and API requests.
-                function hasAdvertisingConsent() {
-                  try {
-                    var consent = JSON.parse(localStorage.getItem('myhigh5_cookie_consent') || '{}');
-                    return consent && consent.preferences && consent.preferences.advertising === true;
-                  } catch (_) {
-                    return false;
-                  }
-                }
-                function loadAds() {
-                  if (!hasAdvertisingConsent()) return;
-                  if (document.querySelector('script[src^="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) return;
-                  var s = document.createElement('script');
-                  s.async = true;
-                  s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5582556318526474';
-                  s.crossOrigin = 'anonymous';
-                  document.head.appendChild(s);
-                }
-                window.addEventListener('load', function() {
-                  if ('requestIdleCallback' in window) {
-                    window.requestIdleCallback(loadAds, { timeout: 3000 });
-                  } else {
-                    setTimeout(loadAds, 1500);
-                  }
-                }, { once: true });
-                window.addEventListener('myhigh5-cookie-consent-changed', loadAds);
+                // Ads: loaded by <AdSenseLoader /> only for viewers the backend
+                // allows (Child/Teen Safety Phase 9) and who consented.
               })();
             `,
           }}
@@ -236,6 +212,7 @@ export default function RootLayout({
                     {children}
                     <CookieConsent />
                     <AnnualAdsPartnerRotator />
+                    <AdSenseLoader />
                   </AuthProvider>
                 </ClockProvider>
               </LanguageProvider>

@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { useAuth } from '@/hooks/use-auth'
 import { Megaphone, AlertCircle, Loader2, User, RefreshCw } from 'lucide-react'
 import { ANNUALADS_EMBED_URL, ANNUALADS_SSO_TARGET_ORIGIN } from '@/lib/config'
+import { useAdEligibility } from '@/hooks/use-ad-eligibility'
 
 const embedUrl = ANNUALADS_EMBED_URL
 const ssoTargetOrigin = ANNUALADS_SSO_TARGET_ORIGIN
@@ -34,6 +35,10 @@ export default function SponsoredPage() {
   const [hasSsoToken, setHasSsoToken] = useState(false)
   const [ssoErrorText, setSsoErrorText] = useState<string | null>(null)
   const [embedMissing, setEmbedMissing] = useState(!embedUrl)
+  // Phase 9: the third-party sponsor embed (and the SSO that shares this member's
+  // email and name with it) is only for viewers the backend allows.
+  const { annualads_sponsor: sponsorEligible } = useAdEligibility()
+  const canEmbed = Boolean(embedUrl) && isAuthenticated && sponsorEligible
 
   const displayName =
     user?.full_name?.trim() ||
@@ -56,7 +61,7 @@ export default function SponsoredPage() {
   }, [ssoTargetOrigin])
 
   const fetchSso = useCallback(async () => {
-    if (!embedUrl || !isAuthenticated) return
+    if (!embedUrl || !isAuthenticated || !sponsorEligible) return
     setLoading(true)
     setSsoErrorText(null)
     try {
@@ -79,13 +84,13 @@ export default function SponsoredPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAuthenticated, postSsoToIframe])
+  }, [isAuthenticated, sponsorEligible, postSsoToIframe])
 
   useEffect(() => {
     setEmbedMissing(!embedUrl)
-    if (!embedUrl || !isAuthenticated) return
+    if (!embedUrl || !isAuthenticated || !sponsorEligible) return
     void fetchSso()
-  }, [embedUrl, isAuthenticated, fetchSso])
+  }, [embedUrl, isAuthenticated, sponsorEligible, fetchSso])
 
   const onIframeLoad = useCallback(() => {
     postSsoToIframe()
@@ -135,7 +140,7 @@ export default function SponsoredPage() {
           )}
         </div>
 
-        {embedUrl && isAuthenticated && (
+        {canEmbed && (
           <button
             type="button"
             onClick={() => void fetchSso()}
@@ -164,24 +169,24 @@ export default function SponsoredPage() {
         </div>
       )}
 
-      {isAuthenticated && embedUrl && ssoErrorText && !loading && (
+      {canEmbed && ssoErrorText && !loading && (
         <p className="text-sm text-amber-800 dark:text-amber-200/90" role="status">
           {ssoErrorText}
         </p>
       )}
 
-      {embedUrl && isAuthenticated && loading && !hasSsoToken && !ssoErrorText && (
+      {canEmbed && loading && !hasSsoToken && !ssoErrorText && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="w-4 h-4 animate-spin" />
           Linking your account…
         </div>
       )}
 
-      {embedUrl && isAuthenticated && !ssoErrorText && hasSsoToken && !loading && (
+      {canEmbed && !ssoErrorText && hasSsoToken && !loading && (
         <p className="text-xs text-gray-500 dark:text-gray-500">Your account is linked for this session.</p>
       )}
 
-      {embedUrl && isAuthenticated && (
+      {canEmbed && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
           <iframe
             ref={iframeRef}
@@ -194,6 +199,10 @@ export default function SponsoredPage() {
             referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>
+      )}
+
+      {embedUrl && isAuthenticated && !sponsorEligible && (
+        <p className="text-sm text-gray-500" role="status">Sponsor content isn&apos;t available for your account.</p>
       )}
 
       {embedUrl && !isAuthenticated && !authLoading && (

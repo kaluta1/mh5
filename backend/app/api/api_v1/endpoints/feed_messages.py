@@ -101,7 +101,17 @@ def send_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot send message to yourself"
         )
-    
+
+    # Phase 9: the CURRENT interaction decision governs every new message,
+    # including one into an existing conversation (history is kept as it is).
+    from app.services import interaction_safety as isafe
+
+    recipient = db.query(User).filter(User.id == recipient_id).first()
+    isafe.guard_contact(db, current_user, recipient, channel=isafe.Channel.DIRECT_MESSAGE)
+    isafe.guard_text(db, current_user, message_data.content,
+                     minor_involved=isafe.participants_protected(db, [current_user, recipient]),
+                     channel=isafe.Channel.DIRECT_MESSAGE)
+
     # Get or create conversation
     conversation = db.query(PrivateConversation).filter(
         ((PrivateConversation.user1_id == sender_id) & (PrivateConversation.user2_id == recipient_id)) |

@@ -172,3 +172,114 @@ def recheck_progression_hold(hold_id: int, db: Session = Depends(get_db),
     db.commit()
     db.refresh(hold)
     return ps.staff_hold_view(hold)
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: interaction reports (comments, private messages, accounts)
+#
+# Staff access only through this report workflow: an ordinary moderator sees
+# ordinary reports; a CHILD_SAFETY report is visible ONLY to an explicit
+# child_safety_resolve holder (never implied by admin/moderator). A private
+# message is readable only as the evidence of a report about THAT message
+# (no inbox access), and every evidence read is audited.
+# ---------------------------------------------------------------------------
+
+def _interaction_report_query(db: Session, user: User):
+    from sqlalchemy import or_
+
+    from app.models.comment import Report
+
+    q = db.query(Report).filter(Report.contestant_id.is_(None), or_(
+        Report.comment_id.isnot(None), Report.private_message_id.isnot(None), Report.user_id.isnot(None)))
+    if not cs.can_resolve_child_safety(user):
+        q = q.filter(Report.reason != "CHILD_SAFETY")
+    if not cs.can_moderate(user):
+        q = q.filter(Report.reason == "CHILD_SAFETY")
+    return q
+
+
+def _report_item(r) -> dict:
+    target = "message" if r.private_message_id else "comment" if r.comment_id else "user"
+    return {"id": r.id, "target_type": target, "comment_id": r.comment_id,
+            "private_message_id": r.private_message_id, "reported_user_id": r.user_id, "reason": r.reason,
+            "status": r.status, "created_at": r.created_at.isoformat() if r.created_at else None,
+            "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None}
+
+
+@router.get("/interaction-reports")
+def interaction_reports(status_filter: Optional[str] = Query(None, alias="status", pattern=r"^(pending|reviewed|resolved)$"),
+                        limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db),
+                        user: User = Depends(require_content_moderator)):
+    from app.models.comment import Report
+
+    q = _interaction_report_query(db, user)
+    if status_filter:
+        q = q.filter(Report.status == status_filter)
+    return [_report_item(r) for r in q.order_by(Report.id.asc()).limit(limit).all()]
+
+
+def _message_text(db: Session, message, reporter_id: int) -> Optional[str]:
+    """Decrypt ONE reported message with the reporting participant's key."""
+    from app.models.user_encryption_keys import UserEncryptionKeys
+    from app.services.feed_encryption import get_encryption_service
+
+    def keys(uid):
+        return db.query(UserEncryptionKeys).filter(UserEncryptionKeys.user_id == uid,
+                                                   UserEncryptionKeys.is_active == True).first()  # noqa: E712
+    try:
+        sender, reader = keys(message.sender_id), keys(reporter_id)
+        payload = (message.sender_encrypted_content if message.sender_id == reporter_id
+                   and getattr(message, "sender_encrypted_content", None) else message.content)
+        if sender is None or reader is None:
+            return None
+        return get_encryption_service().decrypt_message(encrypted_message=payload, sender_public_key=sender.public_key,
+                                                        recipient_private_key=reader.encrypted_private_key,
+                                                        is_private_key_encrypted=True)
+    except Exception:  # noqa: BLE001 - legacy/undecryptable content is not shown
+        return None
+
+
+@router.get("/interaction-reports/{report_id}")
+def interaction_report_evidence(report_id: int, db: Session = Depends(get_db),
+                                user: User = Depends(require_content_moderator)):
+    from app.models.comment import Comment, Report
+    from app.models.private_message import PrivateMessage
+
+    row = _interaction_report_query(db, user).filter(Report.id == report_id).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    evidence = None
+    if row.comment_id:
+        comment = db.query(Comment).filter(Comment.id == row.comment_id).first()
+        evidence = comment.content if comment else None
+    elif row.private_message_id:
+        message = db.query(PrivateMessage).filter(PrivateMessage.id == row.private_message_id).first()
+        evidence = _message_text(db, message, row.reporter_id) if message else None
+    db.add(AuditTrail(table_name="report", record_id=row.id, action="EVIDENCE_ACCESSED", old_values=None,
+                      new_values={"target": _report_item(row)["target_type"], "reason": row.reason}, user_id=user.id))
+    db.commit()
+    return {**_report_item(row), "evidence": evidence, "description": row.description}
+
+
+class InteractionReportReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: str = Field(pattern=r"^(reviewed|resolved)$")
+    note_code: str = Field(min_length=3, max_length=80, pattern=r"^[A-Z0-9_]+$")
+
+
+@router.post("/interaction-reports/{report_id}/review")
+def review_interaction_report(report_id: int, body: InteractionReportReviewBody, db: Session = Depends(get_db),
+                              user: User = Depends(require_content_moderator)):
+    from app.models.comment import Report
+
+    row = _interaction_report_query(db, user).filter(Report.id == report_id).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    old = row.status
+    row.status, row.reviewed_by, row.reviewed_at = body.status, user.id, datetime.utcnow()
+    row.moderator_notes = body.note_code
+    db.add(AuditTrail(table_name="report", record_id=row.id, action=f"REPORT_{body.status.upper()}",
+                      old_values={"status": old}, new_values={"status": body.status, "note_code": body.note_code},
+                      user_id=user.id))
+    db.commit()
+    return _report_item(row)

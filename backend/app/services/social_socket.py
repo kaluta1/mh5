@@ -161,7 +161,7 @@ class SocialSocketService:
                 
                 # Si le post est dans un groupe, notifier les membres
                 if post.group_id:
-                    await self.sio.emit("new_post", notification_data, room=f"group_{post.group_id}")
+                    await self.emit_group_safe(post.group_id, [post.author_id, user_id], "new_post", notification_data)  # Phase 9
                 
                 return {"success": True}
             finally:
@@ -203,7 +203,7 @@ class SocialSocketService:
                     
                     # Notifier dans la room du groupe si applicable
                     if post.group_id:
-                        await self.sio.emit("new_reaction", notification_data, room=f"group_{post.group_id}")
+                        await self.emit_group_safe(post.group_id, [post.author_id, user_id], "new_reaction", notification_data)  # Phase 9
                 
                 elif comment_id:
                     comment = crud_post_comment.get(db, comment_id)
@@ -264,7 +264,7 @@ class SocialSocketService:
                 
                 # Notifier dans la room du groupe si applicable
                 if post.group_id:
-                    await self.sio.emit("new_comment", notification_data, room=f"group_{post.group_id}")
+                    await self.emit_group_safe(post.group_id, [post.author_id, user_id], "new_comment", notification_data)  # Phase 9
                 
                 return {"success": True}
             finally:
@@ -286,7 +286,9 @@ class SocialSocketService:
             db = SessionLocal()
             try:
                 message = crud_group_message.get(db, message_id)
-                if not message:
+                # Phase 9: relay only the caller's own live message of THIS group.
+                if (not message or str(message.group_id) != str(group_id) or message.sender_id != user_id
+                        or getattr(message, "is_deleted", False)):
                     return {"error": "Message introuvable"}
                 
                 # Vérifier que l'utilisateur est membre du groupe
@@ -307,8 +309,8 @@ class SocialSocketService:
                     "created_at": message.created_at.isoformat()
                 }
                 
-                # Envoyer le message à tous les membres du groupe
-                await self.sio.emit("new_message", message_data, room=f"group_{group_id}")
+                # Phase 9: only to members the sender may reach (same decision as REST).
+                await self.emit_group_safe(message.group_id, [user_id], "new_message", message_data)
                 
                 return {"success": True}
             finally:
@@ -327,19 +329,21 @@ class SocialSocketService:
             
             db = SessionLocal()
             try:
-                success = crud_group_message.mark_as_read(db, message_id, user_id)
-                if success:
-                    # Notifier dans le groupe
-                    message = crud_group_message.get(db, message_id)
-                    if message:
-                        await self.sio.emit("message_read", {
-                            "message_id": message_id,
-                            "user_id": user_id
-                        }, room=f"group_{message.group_id}")
-                
-                return {"success": success}
+                # Phase 9: only a message this member CURRENTLY may see; the
+                # receipt reaches only members who may see both the message's
+                # sender and the reader.
+                from app.services import interaction_safety as isafe
+
+                message = isafe.visible_group_message(db, db.query(User).filter(User.id == user_id).first(),
+                                                      message_id)
+                success = message is not None and crud_group_message.mark_as_read(db, message_id, user_id)
+                group_id, sender_id = (message.group_id, message.sender_id) if message is not None else (None, None)
             finally:
                 db.close()
+            if success:
+                await self.emit_group_safe(group_id, [sender_id, user_id], "message_read",
+                                           {"message_id": message_id, "user_id": user_id})
+            return {"success": bool(success)}
         
         @self.sio.event
         async def join_conversation(sid, data):
@@ -421,6 +425,10 @@ class SocialSocketService:
                 # Vérifier que l'utilisateur est l'expéditeur
                 if message.sender_id != user_id:
                     return {"error": "Vous n'êtes pas l'expéditeur de ce message"}
+                # Phase 9: the message must belong to THIS conversation (no
+                # re-routing an allowed message into someone else's conversation).
+                if str(message.conversation_id) != str(conversation_id):
+                    return {"error": "Message introuvable"}
                 
                 # Récupérer les destinataires
                 recipient_ids = []
@@ -438,7 +446,15 @@ class SocialSocketService:
                     recipient_ids = [p.user_id for p in participants]
                 
                 sender = db.query(User).filter(User.id == user_id).first()
-                
+                # Phase 9: a re-emit is checked against CURRENT state (blocks,
+                # minor protection) like a new REST message.
+                from app.services import interaction_safety as isafe
+
+                recipient_ids = [rid for rid in recipient_ids if isafe.can_contact(
+                    db, sender, db.query(User).filter(User.id == rid).first()).allowed]
+                if not recipient_ids:
+                    return {"error": "Accès non autorisé"}
+
                 message_data = {
                     "message_id": message.id,
                     "conversation_id": conversation_id,
@@ -449,10 +465,12 @@ class SocialSocketService:
                     "created_at": message.created_at.isoformat()
                 }
                 
-                # Envoyer à tous les destinataires
+                # Envoyer aux destinataires autorisés (Phase 9: never the shared
+                # conversation-room broadcast, which would reach filtered participants)
                 for recipient_id in recipient_ids:
                     await self.sio.emit("new_private_message", message_data, room=f"user_{recipient_id}")
-                    await self.sio.emit("new_private_message", message_data, room=f"conversation_{conversation_id}")
+                await self._emit_room_filtered(f"conversation_{conversation_id}", set(recipient_ids) | {user_id},
+                                               "new_private_message", message_data)
                 
                 return {"success": True}
             finally:
@@ -506,18 +524,38 @@ class SocialSocketService:
         except Exception as e:
             print(f"Erreur d'authentification Socket.IO: {e}")
         
-        # Fallback pour le développement (non recommandé en production)
-        return auth.get("user_id")
+        # Phase 9: never trust a client-supplied user id (no token = no identity).
+        return None
     
     async def emit_to_user(self, user_id: int, event: str, data: dict):
         """Émet un événement à un utilisateur spécifique"""
         if self.sio and SOCKETIO_AVAILABLE:
             await self.sio.emit(event, data, room=f"user_{user_id}")
     
-    async def emit_to_group(self, group_id: int, event: str, data: dict):
-        """Émet un événement à tous les membres d'un groupe"""
-        if self.sio and SOCKETIO_AVAILABLE:
-            await self.sio.emit(event, data, room=f"group_{group_id}")
+    async def emit_group_safe(self, group_id: int, actor_ids, event: str, data: dict):
+        """Phase 9: the ONLY group-room emitter. Sends to each socket in the
+        group room whose user is a CURRENT member reachable by every actor
+        (interaction_safety.group_recipient_ids); anything unresolvable is
+        skipped (fail closed). The shared room broadcast is never used."""
+        if not (self.sio and SOCKETIO_AVAILABLE) or not group_id:
+            return
+        from app.services import interaction_safety as isafe
+
+        db = SessionLocal()
+        try:
+            allowed = isafe.group_recipient_ids(db, group_id, actor_ids)
+        finally:
+            db.close()
+        await self._emit_room_filtered(f"group_{group_id}", allowed, event, data)
+
+    async def _emit_room_filtered(self, room: str, allowed_user_ids, event: str, data: dict):
+        try:
+            sids = [sid for sid, _ in self.sio.manager.get_participants("/", room)]
+        except Exception:  # noqa: BLE001 - no room info: deliver nothing (clients fetch over HTTP)
+            return
+        for sid in sids:
+            if self.user_sessions.get(sid) in allowed_user_ids:
+                await self.sio.emit(event, data, to=sid)
     
     async def emit_to_conversation(self, conversation_id: int, event: str, data: dict):
         """Émet un événement à tous les participants d'une conversation"""

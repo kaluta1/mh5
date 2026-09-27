@@ -113,6 +113,9 @@ def test_rate_limit_policy_is_unchanged():
         "/api/v1/wallet": (30, 60),
         "/api/v1/votes": (120, 60),
         "/api/v1/comments": (30, 60),
+        "/api/v1/feed/messages/send": (30, 60),  # Phase 9 direct messages
+        "/api/v1/messages": (60, 60),  # Phase 9 legacy messaging API
+        "/api/v1/interactions/reports": (20, 3600),  # Phase 9 reports
         "/api/v1/media/upload": (20, 60),
         "/api/v1/search": (60, 60),
     }

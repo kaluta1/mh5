@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import Script from "next/script"
+import { AdSenseSlot } from "@/components/ads/adsense-loader"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
 import { ContestCard } from "@/components/dashboard/contest-card"
@@ -610,14 +610,8 @@ function ContestsPageContent() {
         </section>
 
         <section className="container px-4 md:px-6 py-4">
-          <ins
-            className="adsbygoogle"
-            style={{ display: "block" }}
-            data-ad-client="ca-pub-5582556318526474"
-            data-ad-slot="8189486989"
-            data-ad-format="auto"
-            data-full-width-responsive="true"
-          />
+          {/* Phase 9: rendered (and requested from the provider) only for an eligible viewer. */}
+          <AdSenseSlot slot="8189486989" />
         </section>
 
         {/* CTA Section */}
@@ -667,9 +661,6 @@ function ContestsPageContent() {
 
       <Footer />
 
-      <Script id="adsense-mh5-contests" strategy="afterInteractive">
-        {`(adsbygoogle = window.adsbygoogle || []).push({});`}
-      </Script>
 
       {/* Auth Required Dialog */}
       <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>

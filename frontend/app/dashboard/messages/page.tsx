@@ -14,6 +14,13 @@ import { enUS, fr } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
+import { ThreadSafetyControls } from '@/components/messaging/thread-safety-controls'
+import {
+  INTERACTION_UNAVAILABLE_MESSAGE,
+  interactionErrorMessage,
+  interactionService,
+  type ContactStatus,
+} from '@/services/interaction-service'
 
 const localeMap: Record<string, any> = {
   en: enUS,
@@ -49,6 +56,8 @@ export default function MessagesPage() {
   const [isSending, setIsSending] = useState(false)
   const [recipientId, setRecipientId] = useState<number | null>(null)
   const [usersById, setUsersById] = useState<Record<number, any>>({})
+  // Phase 9: whether a NEW message may be sent to the active partner (backend decides every send).
+  const [contactStatus, setContactStatus] = useState<ContactStatus | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -205,8 +214,10 @@ export default function MessagesPage() {
       scrollToBottom() // Scroll to bottom after sending
     } catch (error: any) {
       console.error('Error sending message:', error)
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to send message. Please try again.'
-      addToast(errorMessage, 'error')
+      addToast(interactionErrorMessage(error, 'Failed to send message. Please try again.'), 'error')
+      if (error?.response?.status === 403 && recipientId) {
+        interactionService.contactStatus(recipientId).then(setContactStatus).catch(() => undefined)
+      }
     } finally {
       setIsSending(false)
     }
@@ -354,6 +365,9 @@ export default function MessagesPage() {
                     <span className="truncate">{t('dashboard.messages.end_to_end_encrypted')}</span>
                   </div>
                 </div>
+                {activePartner?.id ? (
+                  <ThreadSafetyControls partnerId={activePartner.id} onStatus={setContactStatus} />
+                ) : null}
                 {/* Back button for mobile */}
                 <button
                   onClick={() => setSelectedConversation(null)}
@@ -427,6 +441,11 @@ export default function MessagesPage() {
 
             {/* Message Input */}
             <div className="p-3 md:p-4 border-t border-gray-200 dark:border-gray-700">
+              {contactStatus && !contactStatus.can_message ? (
+                <p role="status" className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  {INTERACTION_UNAVAILABLE_MESSAGE}
+                </p>
+              ) : null}
               <div className="flex items-center gap-2">
                 <Input
                   value={messageText}
@@ -439,10 +458,11 @@ export default function MessagesPage() {
                   }}
                   placeholder={t('dashboard.messages.type_message')}
                   className="flex-1 text-sm md:text-base"
+                  disabled={Boolean(contactStatus && !contactStatus.can_message)}
                 />
                 <Button
                   onClick={handleSendMessage}
-                  disabled={!messageText.trim() || isSending}
+                  disabled={!messageText.trim() || isSending || Boolean(contactStatus && !contactStatus.can_message)}
                   size="sm"
                   className="bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-white shrink-0"
                 >

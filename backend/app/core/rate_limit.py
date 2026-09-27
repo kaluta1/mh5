@@ -38,6 +38,10 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/wallet": (30, 60),
     "/api/v1/votes": (120, 60),
     "/api/v1/comments": (30, 60),
+    # Phase 9: abuse-prone interaction writers not covered above.
+    "/api/v1/feed/messages/send": (30, 60),
+    "/api/v1/messages": (60, 60),
+    "/api/v1/interactions/reports": (20, 3600),
     "/api/v1/media/upload": (20, 60),
     "/api/v1/search": (60, 60),
 }

@@ -230,7 +230,10 @@ def create_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post introuvable"
         )
-    
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_post_comment(db, current_user, post, comment_in.parent_id, comment_in.content)
+
     comment = crud_post_comment.create(
         db, 
         obj_in=comment_in, 
@@ -660,13 +663,14 @@ def create_message(
     background_tasks: BackgroundTasks
 ) -> Any:
     """Envoyer un message dans un groupe"""
-    # Vérifier que l'utilisateur est membre du groupe
-    if not crud_social_group.is_member(db, group_id, current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous devez être membre du groupe pour envoyer des messages"
-        )
-    
+    # Phase 9: CURRENT membership, same-group visible reply target, and the
+    # minor-safe text rules when a minor / UNKNOWN-age member is in the group.
+    # Delivery is per recipient (see interaction_safety "Group chat").
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_group_message(db, current_user, group_id, getattr(message_in, "content", None),
+                              getattr(message_in, "reply_to_id", None))
+
     message = crud_group_message.create(
         db,
         obj_in=message_in,
@@ -689,13 +693,17 @@ def create_message(
     # Notifier via Socket.IO en arrière-plan
     def notify_message():
         try:
-            sender_name = (
-                (msg.sender.full_name if msg.sender and msg.sender.full_name else None)
-                or (msg.sender.username if msg.sender and msg.sender.username else None)
-                or "Utilisateur"
-            )
-            asyncio.run(social_socket_service.emit_to_group(
+            from app.services.interaction_safety import safe_display_name
+            from app.db.session import SessionLocal as _SL
+
+            _s = _SL()
+            try:
+                sender_name = safe_display_name(_s, _s.get(User, msg.sender_id), "Utilisateur")
+            finally:
+                _s.close()
+            asyncio.run(social_socket_service.emit_group_safe(
                 group_id,
+                [msg.sender_id],
                 "new_message",
                 {
                     "message_id": msg.id,
@@ -729,8 +737,10 @@ def get_messages(
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Récupérer les messages d'un groupe"""
+    from app.services import interaction_safety as isafe
+
     # Vérifier que l'utilisateur est membre du groupe
-    if not crud_social_group.is_member(db, group_id, current_user.id):
+    if not isafe.is_group_member(db, group_id, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous devez être membre du groupe pour voir les messages"
@@ -744,8 +754,15 @@ def get_messages(
         search=search,
     )
     
+    from app.services.viewer_access import PrivacyCache
+    _privacy = PrivacyCache(db)
+    # Phase 9: only messages from senders in this member's CURRENT audience;
+    # the stored rows are untouched and nothing marks a message as withheld.
+    _audience = isafe.GroupAudience(db, current_user)
     result = []
     for message in messages:
+        if not _audience.can_see(message.sender_id):
+            continue
         message_dict = {
             "id": message.id,
             "group_id": message.group_id,
@@ -764,11 +781,14 @@ def get_messages(
             "sender": {
                 "id": message.sender.id,
                 "username": message.sender.username,
-                "full_name": getattr(message.sender, "full_name", None),
+                # Phase 9: real name only where the sender's age/consent floor allows it.
+                "full_name": getattr(message.sender, "full_name", None)
+                if (message.sender.id == current_user.id or _privacy.display(message.sender)["name"]) else None,
                 "avatar_url": message.sender.avatar_url,
             } if message.sender else None,
             "reply_to": None,
-            "read_by": [r.user_id for r in message.read_receipts]
+            # Phase 9: readers outside this member's audience are not listed.
+            "read_by": [r.user_id for r in message.read_receipts if _audience.can_see(r.user_id)]
         }
         
         result.append(message_dict)
@@ -778,7 +798,7 @@ def get_messages(
         "total": len(result),
         "page": skip // limit + 1,
         "page_size": limit,
-        "has_next": len(result) == limit
+        "has_next": len(messages) == limit
     }
 
 
@@ -790,8 +810,12 @@ def mark_message_read(
     current_user: User = Depends(get_current_active_user)
 ):
     """Marquer un message comme lu"""
-    success = crud_group_message.mark_as_read(db, message_id=message_id, user_id=current_user.id)
-    
+    # Phase 9: only a message of a group this member is CURRENTLY in and may see.
+    from app.services import interaction_safety as isafe
+
+    success = (isafe.visible_group_message(db, current_user, message_id) is not None
+               and crud_group_message.mark_as_read(db, message_id=message_id, user_id=current_user.id))
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

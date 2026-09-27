@@ -120,6 +120,12 @@ api_router.include_router(
     tags=["Administration - content moderation"],
 )
 
+from app.api.api_v1.endpoints import interactions as interaction_endpoints  # noqa: E402
+
+# Phase 9: member interaction controls (blocks, reports, contact check) and ad eligibility.
+api_router.include_router(interaction_endpoints.router, prefix="/interactions", tags=["Interaction safety"])
+api_router.include_router(interaction_endpoints.ads_router, prefix="/ads", tags=["Advertising safety"])
+
 from app.api.api_v1.endpoints import guardian as guardian_endpoints  # noqa: E402
 
 api_router.include_router(guardian_endpoints.router, prefix="/guardian", tags=["Guardian consent"])

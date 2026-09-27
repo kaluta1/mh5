@@ -245,7 +245,17 @@ def list_group_members(
         .all()
     )
 
-    return [GroupMemberResponse.model_validate(member) for member in members]
+    # Phase 9: another member's real name only where their age/consent floor allows it.
+    from app.services.viewer_access import PrivacyCache
+
+    privacy = PrivacyCache(db)
+    out = []
+    for member in members:
+        item = GroupMemberResponse.model_validate(member)
+        if item.user is not None and member.user_id != current_user.id and not privacy.display(member.user)["name"]:
+            item.user.full_name = None
+        out.append(item)
+    return out
 
 
 @router.post("/{group_id}/join", status_code=status.HTTP_200_OK)
@@ -407,6 +417,10 @@ def add_group_member_by_username(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No user with username {uname!r}",
         )
+    # Phase 9: adding someone to a group is direct contact by the adder.
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_contact(db, current_user, u, channel=isafe.Channel.GROUP_ADD)
     try:
         crud_social_group.add_member(db, group_id, u.id, GroupMemberRole.MEMBER)
     except ValueError as e:

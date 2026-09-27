@@ -31,6 +31,28 @@ def _guard_entry(db: Session, user, contestant_id: Optional[int], *, public_only
     require_entry_access(db, user, contestant, public_only=public_only)
 
 
+def _guard_comment_interaction(db: Session, user, contestant, parent_id: Optional[int], text: Optional[str]) -> None:
+    """Phase 9: a reply must target a visible comment of the SAME entry; a block
+    with the entry owner or the replied-to author stops the comment; text that
+    involves a minor / UNKNOWN-age member passes the local safety rules."""
+    from app.services import interaction_safety as isafe
+
+    parent = None
+    if parent_id is not None:
+        parent = db.query(Comment).filter(Comment.id == parent_id).first()
+        if (parent is None or parent.contestant_id != contestant.id or parent.is_deleted or parent.is_hidden):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+    for other_id in {contestant.user_id, getattr(parent, "user_id", None)} - {None, user.id}:
+        if isafe.is_blocked(db, user.id, other_id):
+            isafe.enforce(db, isafe.Decision(False, isafe.Reason.BLOCKED), actor_id=user.id,
+                          channel=isafe.Channel.COMMENT, target_id=contestant.id)
+    parent_author = db.query(User).filter(User.id == parent.user_id).first() if parent is not None else None
+    minor_involved = (isafe.entry_subject_protected(db, contestant)
+                      or isafe.participants_protected(db, [user] + ([parent_author] if parent is not None else [])))
+    isafe.guard_text(db, user, text, minor_involved=minor_involved, channel=isafe.Channel.COMMENT,
+                     target_id=contestant.id)
+
+
 def _comment_author_name(user, current_user_id, privacy) -> Optional[str]:
     """Phase 7: a commenter's real name only where their age/consent floor allows."""
     if user is None:
@@ -175,7 +197,8 @@ def create_contestant_comment(
             detail="Contestant not found"
         )
     _guard_entry(db, current_user, contestant_id, public_only=True)
-    
+    _guard_comment_interaction(db, current_user, contestant, comment_data.parent_id, comment_data.content)
+
     # ============================================
     # MODÉRATION DU CONTENU AVANT CRÉATION
     # ============================================
@@ -209,8 +232,10 @@ def create_contestant_comment(
     from app.crud.crud_notification import crud_notification
     from app.models.notification import NotificationType
     
-    commenter_name = current_user.full_name or current_user.username or "Someone"
-    
+    from app.services.interaction_safety import safe_display_name
+
+    commenter_name = safe_display_name(db, current_user)
+
     # Si c'est une réponse (parent_id existe), notifier le propriétaire du commentaire parent
     if comment_data.parent_id:
         parent_comment = db.query(Comment).filter(Comment.id == comment_data.parent_id).first()
@@ -295,7 +320,8 @@ def create_media_comment(
             detail="Contestant not found"
         )
     _guard_entry(db, current_user, contestant_id, public_only=True)
-    
+    _guard_comment_interaction(db, current_user, contestant, comment_data.parent_id, comment_data.content)
+
     # Modérer le contenu avant création
     text_moderation = content_moderation_service.moderate_text(comment_data.content)
     if not text_moderation.is_approved:
@@ -421,12 +447,20 @@ def like_comment(
 ):
     """Liker un commentaire"""
     comment = comment_crud.get_comment(db, comment_id)
-    if not comment:
+    if not comment or comment.is_deleted or comment.is_hidden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comment not found"
         )
-    
+    # Phase 9: only a comment on an entry this member may receive publicly,
+    # and never across a block.
+    _guard_entry(db, current_user, comment.contestant_id, public_only=True)
+    from app.services import interaction_safety as isafe
+
+    isafe.enforce(db, isafe.can_follow(db, current_user, comment.user) if comment.user_id != current_user.id
+                  else isafe.ALLOWED, actor_id=current_user.id, channel=isafe.Channel.COMMENT,
+                  target_id=comment_id)
+
     comment_crud.like_comment(db, current_user.id, comment_id)
     
     # Créer une notification pour le propriétaire du commentaire
@@ -434,7 +468,7 @@ def like_comment(
     from app.models.notification import NotificationType
     
     if comment.user_id != current_user.id:
-        liker_name = current_user.full_name or current_user.username or "Someone"
+        liker_name = isafe.safe_display_name(db, current_user)
         crud_notification.create(
             db,
             user_id=comment.user_id,

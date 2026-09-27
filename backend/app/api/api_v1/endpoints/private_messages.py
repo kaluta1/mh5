@@ -231,7 +231,11 @@ def create_or_get_direct_conversation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Vous ne pouvez pas créer une conversation avec vous-même"
         )
-    
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_contact(db, current_user, db.query(User).filter(User.id == user_id).first(),
+                        channel=isafe.Channel.DIRECT_MESSAGE)
+
     conversation = crud_private_conversation.get_or_create_direct(
         db,
         user1_id=current_user.id,
@@ -380,7 +384,20 @@ def send_private_message(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès non autorisé"
         )
-    
+
+    # Phase 9: an existing conversation (direct or group) never bypasses the
+    # current interaction decision with ANY recipient.
+    from app.services import interaction_safety as isafe
+
+    recipients = db.query(User).filter(User.id.in_(recipient_ids or [-1])).all()
+    if len(recipients) != len(set(recipient_ids)):
+        recipients.append(None)  # a missing participant fails closed
+    for recipient in recipients:
+        isafe.guard_contact(db, current_user, recipient, channel=isafe.Channel.DIRECT_MESSAGE)
+    isafe.guard_text(db, current_user, getattr(message_in, "content", None),
+                     minor_involved=isafe.participants_protected(db, [current_user, *recipients]),
+                     channel=isafe.Channel.DIRECT_MESSAGE)
+
     message = crud_private_message.create(
         db,
         obj_in=message_in.dict(),
@@ -462,7 +479,11 @@ def invite_user_to_group(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous devez être membre du groupe pour inviter des utilisateurs"
         )
-    
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_contact(db, current_user, db.query(User).filter(User.id == invitation_in.invitee_id).first(),
+                        channel=isafe.Channel.GROUP_ADD)
+
     try:
         invitation = crud_group_invitation.create(
             db,

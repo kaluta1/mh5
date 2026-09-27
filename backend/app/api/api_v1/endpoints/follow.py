@@ -29,6 +29,10 @@ def follow_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    from app.services import interaction_safety as isafe
+
+    isafe.enforce(db, isafe.can_follow(db, current_user, target), actor_id=current_user.id,
+                  channel=isafe.Channel.FOLLOW, target_user_id=target.id)
 
     existing = db.query(Follow).filter(
         Follow.follower_id == current_user.id,

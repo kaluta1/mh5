@@ -189,18 +189,19 @@ def create_comment(
     """Create a comment on a post"""
     author_id = current_user.id
     
-    # Verify post exists
-    post = db.query(Post).filter(
-        Post.id == post_id,
-        Post.is_deleted == False
-    ).first()
-    
+    # Verify post exists (Phase 9: and that this member may see it)
+    from app.crud.crud_social import crud_post
+    from app.services import interaction_safety as isafe
+
+    post = crud_post.get(db, post_id=post_id, user_id=author_id)
+
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
-    
+    isafe.guard_post_comment(db, current_user, post, comment_data.parent_id, comment_data.content)
+
     # Create comment
     comment = PostComment(
         post_id=post_id,

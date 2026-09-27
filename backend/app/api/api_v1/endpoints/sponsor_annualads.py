@@ -68,6 +68,20 @@ def get_sponsor_sso_token(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Annual Ads SSO is not configured (set ANNUALADS_SSO_SECRET and ANNUALADS_TENANT_ID).",
         )
+    # Phase 9: this sends the member's email and name to a third-party ad
+    # service; only for a viewer that source may be delivered to (unclassified
+    # -> confirmed legal adults only). Never for minors / UNKNOWN age.
+    from app.db.session import SessionLocal
+    from app.services.interaction_safety import ad_eligibility
+
+    _db = SessionLocal()
+    try:
+        allowed = ad_eligibility(_db, current_user).get("annualads_sponsor", False)
+    finally:
+        _db.close()
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail={"code": "CONTENT_RESTRICTED", "message": "This content isn't available for your account."})
     secret = settings.ANNUALADS_SSO_SECRET
     tenant_id = settings.ANNUALADS_TENANT_ID
     api_key = getattr(settings, "ANNUALADS_TENANT_API_KEY", "") or ""

@@ -74,7 +74,12 @@ def add_member_by_email_or_username(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Vous devez fournir soit un email, soit un nom d'utilisateur"
         )
-    
+
+    # Phase 9: adding someone to a group is direct contact by the adder.
+    from app.services import interaction_safety as isafe
+
+    isafe.guard_contact(db, current_user, user_to_add, channel=isafe.Channel.GROUP_ADD)
+
     # Add member
     try:
         member = crud_social_group.add_member(
@@ -90,7 +95,6 @@ def add_member_by_email_or_username(
             "user": {
                 "id": user_to_add.id,
                 "username": user_to_add.username,
-                "email": user_to_add.email,
                 "avatar_url": user_to_add.avatar_url
             }
         }
@@ -236,6 +240,8 @@ def get_group_members(
         GroupMember.joined_at.asc()  # Then by join date
     ).all()
     
+    from app.services.viewer_access import PrivacyCache
+    _privacy = PrivacyCache(db)
     result = []
     for member in members:
         result.append({
@@ -245,12 +251,14 @@ def get_group_members(
             "joined_at": member.joined_at.isoformat(),
             "is_muted": member.is_muted,
             "is_banned": member.is_banned,
+            # Phase 9: other members' email is never listed; the real name only
+            # where that member's age/consent floor allows it (Phase 7).
             "user": {
                 "id": member.user.id,
                 "username": member.user.username,
-                "email": member.user.email,
                 "avatar_url": member.user.avatar_url,
-                "full_name": member.user.full_name or f"{member.user.first_name or ''} {member.user.last_name or ''}".strip()
+                "full_name": (member.user.full_name or f"{member.user.first_name or ''} {member.user.last_name or ''}".strip())
+                if (member.user.id == current_user.id or _privacy.display(member.user)["name"]) else None,
             } if member.user else None
         })
     

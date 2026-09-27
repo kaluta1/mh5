@@ -205,6 +205,12 @@ class Settings(BaseModel):
     CONTENT_MODERATION_EXTERNAL_FOR_MINORS: bool = (
         os.getenv("CONTENT_MODERATION_EXTERNAL_FOR_MINORS", "false").lower() == "true"
     )
+    # Child/Teen Safety Phase 9 (advertising; source s.33 is incomplete): the
+    # OPERATOR-DECLARED age rating of each ad source, JSON {"adsense": "GENERAL", ...}
+    # with ratings GENERAL / TEEN_13_PLUS / TEEN_16_PLUS / ADULT_18_PLUS. A source
+    # with no declared rating is UNCLASSIFIED and is delivered only to viewers
+    # confirmed as legal adults (fail closed for minor / UNKNOWN / anonymous).
+    AD_SOURCE_RATINGS: str = os.getenv("AD_SOURCE_RATINGS", "")
     
     # CONTENT RELEVANCE (OpenAI - optionnel pour analyse IA)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

@@ -4,6 +4,7 @@ import Script from 'next/script'
 import { useEffect, useState } from 'react'
 import { ANNUALADS_PARTNER_ID, ANNUALADS_ROTATOR_SCRIPT_URL } from '@/lib/config'
 import { COOKIE_CONSENT_EVENT } from '@/components/ui/cookie-consent'
+import { useAdEligibility } from '@/hooks/use-ad-eligibility'
 
 const COOKIE_CONSENT_KEY = 'myhigh5_cookie_consent'
 
@@ -22,6 +23,8 @@ function hasAdvertisingConsent(): boolean {
  */
 export function AnnualAdsPartnerRotator() {
   const [consented, setConsented] = useState(false)
+  // Phase 9: the backend decides whether this viewer may receive this ad source.
+  const { annualads_rotator: eligible } = useAdEligibility()
   const partnerId = ANNUALADS_PARTNER_ID?.trim()
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function AnnualAdsPartnerRotator() {
     }
   }, [])
 
-  if (!consented || !partnerId || !ANNUALADS_ROTATOR_SCRIPT_URL) return null
+  if (!eligible || !consented || !partnerId || !ANNUALADS_ROTATOR_SCRIPT_URL) return null
 
   return (
     <Script

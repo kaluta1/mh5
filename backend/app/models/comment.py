@@ -69,6 +69,10 @@ class Report(Base):
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     contestant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contestants.id"), nullable=True)
     contest_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("contest.id"), nullable=True)
+    # Phase 9: a reported private message (evidence stays in private_messages;
+    # staff read it only through the report review workflow).
+    private_message_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("private_messages.id", ondelete="SET NULL"), nullable=True)
     
     reason: Mapped[str] = mapped_column(String(100), nullable=False)  # spam, inappropriate, harassment, etc.
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
