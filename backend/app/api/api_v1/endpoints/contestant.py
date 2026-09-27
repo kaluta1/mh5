@@ -88,6 +88,62 @@ def _public_access_or_404(db: Session, user, contestant) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
 
+def _vote_precheck_or_404(db: Session, user, contestant) -> None:
+    """Phase 8: votes only for entries currently ELIGIBLE_FOR_PUBLIC_VOTING
+    (participation + viewer delivery). Generic 404; reasons go to the audit only.
+    The authoritative re-check runs inside the vote transaction."""
+    from app.services import participation_safety as ps
+
+    decision = ps.can_receive_vote(db, contestant, user)
+    if not decision.eligible:
+        ps.record_vote_blocked(db, contestant_id=contestant.id, voter_id=getattr(user, "id", None),
+                               reasons=decision.reasons)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+
+def _vote_unavailable_404(db: Session, user, contestant_id: int, exc) -> HTTPException:
+    """Phase 8: the in-transaction gate refused the vote (state changed after the
+    pre-check). The vote transaction is already rolled back."""
+    from app.services import participation_safety as ps
+
+    ps.record_vote_blocked(db, contestant_id=contestant_id, voter_id=getattr(user, "id", None), reasons=exc.reasons)
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+
+def _safe_entry_title(db: Session, user, contestant_id) -> Optional[str]:
+    """Phase 8: an entry title for a vote response, only when this viewer may
+    receive the entry (otherwise None: no restricted title in conflicts)."""
+    from app.services import viewer_access as va
+
+    refs = va.secure_entry_refs(db, _viewer(db, user), [{"contestant_id": contestant_id, "title": None}])
+    if not refs or refs[0].get("content_restricted"):
+        return None
+    row = db.query(Contestant.title).filter(Contestant.id == contestant_id).first()
+    return row[0] if row else None
+
+
+def _entry_place_displayable(db: Session, contestant) -> bool:
+    """Phase 8: may a vote error echo this entry's city/country? Only when the
+    person it describes may have their place displayed (Phase 4/7 floor). A
+    nomination describes the nominee, whose age is not the account holder's:
+    never echoed."""
+    from app.services.viewer_access import PrivacyCache
+
+    if (getattr(contestant, "entry_type", None) or "").strip().lower() == "nomination":
+        return False
+    return bool(PrivacyCache(db).display(getattr(contestant, "user", None))["place"])
+
+
+def _vote_voter_name(db: Session, voter) -> str:
+    """Phase 8: the voter's name in the owner's notification respects the voter's
+    own age/consent display floor (minor/UNKNOWN: username only)."""
+    from app.services.viewer_access import PrivacyCache
+
+    if PrivacyCache(db).display(voter)["name"]:
+        return voter.full_name or voter.username or "Someone"
+    return voter.username or "Someone"
+
+
 def _entry_for_viewer_or_404(db: Session, user, contestant) -> None:
     """Phase 7: data about an entry (stats, interaction lists) is served only to
     viewers who may receive the entry itself (public, owner or moderation)."""
@@ -3831,7 +3887,7 @@ def vote_for_contestant(
     contestant = crud_contestant.get(db, contestant_id)
     if not contestant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
-    _public_access_or_404(db, current_user, contestant)
+    _vote_precheck_or_404(db, current_user, contestant)
 
     # Vérifier que l'utilisateur ne vote pas pour sa propre candidature
     if contestant.user_id == current_user.id:
@@ -4083,6 +4139,8 @@ def vote_for_contestant(
             )
 
         ac_continent, ac_region, ac_country, ac_city = author_location_for_vote()
+        # Phase 8: the entry's location is echoed only where its subject's display floor allows it.
+        show_theirs = _entry_place_displayable(db, contestant)
 
         if lvl == "city":
             country_match = compare_with_unknown(voter.country, ac_country)
@@ -4091,7 +4149,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to the same country and city. "
                     "Your country on your profile does not match this contestant's country."
                 )
-                if is_valid_location(voter.country) and is_valid_location(ac_country):
+                if show_theirs and is_valid_location(voter.country) and is_valid_location(ac_country):
                     msg += f" Your profile: {voter.country}. This contestant: {ac_country}."
                 return msg
             if not compare_with_unknown(voter.city, ac_city):
@@ -4100,7 +4158,7 @@ def vote_for_contestant(
                     "You are not in the same city as this contestant. "
                     "Update your profile city to match their city, or vote for contestants who are in your city."
                 )
-                if is_valid_location(voter.city) and is_valid_location(ac_city):
+                if show_theirs and is_valid_location(voter.city) and is_valid_location(ac_city):
                     msg += f" Your profile city: {voter.city}. This contestant's city: {ac_city}."
                 return msg
             return None
@@ -4110,7 +4168,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to the same continent and country. "
                     "Your continent on your profile does not match this contestant's continent."
                 )
-                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                if show_theirs and is_valid_location(voter.continent) and is_valid_location(ac_continent):
                     msg += f" Yours: {voter.continent}. Theirs: {ac_continent}."
                 return msg
             if not compare_with_unknown(voter.country, ac_country):
@@ -4139,7 +4197,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to voters in the same country. "
                     "Your country on your profile does not match this contestant's country."
                 )
-                if is_valid_location(voter.country) and is_valid_location(ac_country):
+                if show_theirs and is_valid_location(voter.country) and is_valid_location(ac_country):
                     msg += f" Your profile: {voter.country}. This contestant: {ac_country}."
                 return msg
             return None
@@ -4163,7 +4221,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to the same continent and region. "
                     "Your continent does not match this contestant's continent."
                 )
-                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                if show_theirs and is_valid_location(voter.continent) and is_valid_location(ac_continent):
                     msg += f" Yours: {voter.continent}. Theirs: {ac_continent}."
                 return msg
             v_region = getattr(voter, "region", None)
@@ -4172,7 +4230,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to voters in the same region. "
                     "Your region on your profile does not match this contestant's region."
                 )
-                if is_valid_location(v_region) and is_valid_location(ac_region):
+                if show_theirs and is_valid_location(v_region) and is_valid_location(ac_region):
                     msg += f" Your profile: {v_region}. This contestant: {ac_region}."
                 return msg
             return None
@@ -4182,7 +4240,7 @@ def vote_for_contestant(
                     "You cannot vote for this contestant because this season is limited to voters on the same continent. "
                     "Your continent on your profile does not match this contestant's continent."
                 )
-                if is_valid_location(voter.continent) and is_valid_location(ac_continent):
+                if show_theirs and is_valid_location(voter.continent) and is_valid_location(ac_continent):
                     msg += f" Your profile: {voter.continent}. This contestant: {ac_continent}."
                 return msg
             return None
@@ -4199,6 +4257,7 @@ def vote_for_contestant(
     # Canonical current-generation write. The service rechecks duplicate and
     # five-slot rules while holding a voter row lock, calculates points on the
     # server, and relies on the DB unique constraint as final authority.
+    from app.services.participation_safety import VoteUnavailable
     from app.services.voting_ranking import (
         VotingConflict,
         VotingValidationError,
@@ -4222,15 +4281,16 @@ def vote_for_contestant(
         )
         db.commit()
         db.refresh(new_voting)
+    except VoteUnavailable as exc:
+        db.rollback()
+        raise _vote_unavailable_404(db, current_user, contestant_id, exc) from exc
     except VotingConflict as exc:
         db.rollback()
         detail = {"code": exc.code, "message": exc.message, **exc.payload}
         replacement = detail.get("replaced_contestant")
         if isinstance(replacement, dict) and replacement.get("id"):
-            fifth = db.query(Contestant).filter(
-                Contestant.id == replacement["id"]
-            ).first()
-            replacement["name"] = fifth.title if fifth else "Unknown"
+            # Phase 8: never a restricted entry's title in a vote response.
+            replacement["name"] = _safe_entry_title(db, current_user, replacement["id"]) or "Unavailable entry"
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
     except VotingValidationError as exc:
         db.rollback()
@@ -4240,7 +4300,7 @@ def vote_for_contestant(
     from app.crud.crud_notification import crud_notification
     from app.models.notification import NotificationType
 
-    voter_name = current_user.full_name or current_user.username or "Someone"
+    voter_name = _vote_voter_name(db, current_user)
     try:
         crud_notification.create(
             db,
@@ -4472,7 +4532,7 @@ def replace_fifth_vote(
     contestant = crud_contestant.get(db, contestant_id)
     if not contestant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
-    _public_access_or_404(db, current_user, contestant)
+    _vote_precheck_or_404(db, current_user, contestant)
 
     if contestant.user_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot vote for your own submission")
@@ -4630,6 +4690,7 @@ def replace_fifth_vote(
             if not is_allowed:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
 
+    from app.services.participation_safety import VoteUnavailable
     from app.services.voting_ranking import (
         VotingConflict,
         VotingValidationError,
@@ -4650,6 +4711,9 @@ def replace_fifth_vote(
         )
         db.commit()
         db.refresh(new_voting)
+    except VoteUnavailable as exc:
+        db.rollback()
+        raise _vote_unavailable_404(db, current_user, contestant_id, exc) from exc
     except VotingConflict as exc:
         db.rollback()
         raise HTTPException(
@@ -4663,7 +4727,7 @@ def replace_fifth_vote(
     from app.crud.crud_notification import crud_notification
     from app.models.notification import NotificationType
 
-    voter_name = current_user.full_name or current_user.username or "Someone"
+    voter_name = _vote_voter_name(db, current_user)
     try:
         crud_notification.create(
             db,

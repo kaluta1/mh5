@@ -116,6 +116,13 @@ def _lock_voter(db: Session, voter_id: int) -> None:
         raise VotingValidationError("Voter does not exist.")
 
 
+def _vote_safety_gate(db: Session, *, voter_id: int, contestant_id: int) -> None:
+    """Phase 8: the authoritative eligibility check at the point of writing."""
+    from app.services.participation_safety import lock_and_check_vote
+
+    lock_and_check_vote(db, contestant_id=contestant_id, voter_id=voter_id)
+
+
 def _scope_query(
     db: Session,
     *,
@@ -179,8 +186,12 @@ def cast_myhigh5_vote(
     contest_id: int,
     bucket_key: str,
 ) -> ContestantVoting:
-    """Create one contextual MyHigh5 vote without committing the transaction."""
+    """Create one contextual MyHigh5 vote without committing the transaction.
+
+    Raises participation_safety.VoteUnavailable when the entry may not receive
+    a vote right now (checked on locked rows, in this transaction)."""
     _lock_voter(db, voter_id)
+    _vote_safety_gate(db, voter_id=voter_id, contestant_id=contestant_id)
     scope = _scope_query(
         db,
         voter_id=voter_id,
@@ -254,6 +265,7 @@ def replace_fifth_myhigh5_vote(
 ) -> tuple[ContestantVoting, int]:
     """Atomically replace position five; caller owns commit/rollback."""
     _lock_voter(db, voter_id)
+    _vote_safety_gate(db, voter_id=voter_id, contestant_id=contestant_id)
     scope = _scope_query(
         db,
         voter_id=voter_id,
@@ -335,6 +347,9 @@ def reorder_myhigh5_votes(
         raise VotingValidationError(
             "Reorder must contain exactly the current contest/season/category votes."
         )
+    from app.services.participation_safety import reorder_guard
+
+    reorder_guard(db, current, requested)
 
     result = []
     for position, contestant_id in enumerate(requested, start=1):

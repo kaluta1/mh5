@@ -35,15 +35,27 @@ def secure_top_high5_payload(db, current_user, payload):
     may not receive keeps its slot with content withheld (content_restricted),
     and authors are minimized (minor/UNKNOWN: username only, no place)."""
     import copy
+    from app.services import participation_safety as ps
     from app.services import viewer_access as va
 
     if not isinstance(payload, dict):
         return payload
     out = copy.deepcopy(payload)
     viewer = va.viewer_for(db, current_user)
+    # Phase 8 (runs on every request, after the singleflight, so a newly held
+    # contestant can never be served from a shared/stale result): only
+    # contestants currently ELIGIBLE_FOR_RANKING are output. Remaining rows
+    # keep their rank numbers, points, order and promotion flags exactly; a
+    # removed slot is not refilled. Viewer field filtering (Phase 7) is a
+    # separate, later step and never removes an eligible contestant.
+    ids = [r.get("contestant_id") for card in out.get("contests") or [] if isinstance(card, dict)
+           for r in (card.get("rows") or []) if isinstance(r, dict)]
+    eligible = ps.rankable_ids(db, [i for i in ids if isinstance(i, int)])
     for card in out.get("contests") or []:
         if isinstance(card, dict) and isinstance(card.get("rows"), list):
-            card["rows"] = va.secure_entry_refs(db, viewer, card["rows"], id_key="contestant_id")
+            rows = [r for r in card["rows"] if isinstance(r, dict) and r.get("contestant_id") in eligible]
+            card["rows"] = va.secure_entry_refs(db, viewer, rows, id_key="contestant_id")
+    out["contests"] = [c for c in out.get("contests") or [] if not isinstance(c, dict) or c.get("rows")]
     return out
 
 

@@ -38,16 +38,46 @@ def _require_graphql_admin(info: strawberry.Info) -> User:
     return user
 
 
-def map_user_to_type(user: User) -> UserType:
-    """Convert SQLAlchemy User to GraphQL UserType"""
+def map_user_to_type(user: User, db: Optional[Session] = None) -> UserType:
+    """Convert SQLAlchemy User to GraphQL UserType. With a session, the name and
+    place follow the user's age/consent display floor (Phase 7/8: a minor's or
+    UNKNOWN-age user's name and place are withheld)."""
+    name_ok = place_ok = True
+    if db is not None:
+        from app.services.viewer_access import PrivacyCache
+
+        perm = PrivacyCache(db).display(user)
+        name_ok, place_ok = perm["name"], perm["place"]
     return UserType(
         id=user.id,
         username=user.username,
-        full_name=user.full_name,
+        full_name=user.full_name if name_ok else None,
         avatar_url=user.avatar_url,
-        country=getattr(user, 'country', None),
-        city=getattr(user, 'city', None)
+        country=getattr(user, 'country', None) if place_ok else None,
+        city=getattr(user, 'city', None) if place_ok else None
     )
+
+
+def public_graphql_contestants(db: Session, contestants) -> list:
+    """Phase 8: GraphQL contestant lists (participants, round rosters, top
+    contestants) carry no per-viewer media protection, so they contain only
+    entries that are ELIGIBLE_FOR_RANKING and deliverable to ANY viewer
+    (public, GENERAL or historical). Everything else is omitted, never
+    substituted."""
+    from app.services import participation_safety as ps
+    from app.services import viewer_access as va
+
+    contestants = [c for c in contestants if c is not None]
+    records = ps.Records(db, [c.id for c in contestants])
+    governance = va.Governance.of(records.safety, records.moderation)
+    out = []
+    for c in contestants:
+        if not records.decide(c).eligible:
+            continue
+        access = va.entry_access(db, va.ANONYMOUS, c, governance)
+        if access.allowed and access.mode == va.Mode.PUBLIC and access.anonymous_deliverable:
+            out.append(c)
+    return out
 
 
 def map_contestant_to_type(contestant: Contestant, db: Session) -> ContestantType:
@@ -56,7 +86,7 @@ def map_contestant_to_type(contestant: Contestant, db: Session) -> ContestantTyp
     if contestant.user_id:
         user = db.query(User).filter(User.id == contestant.user_id).first()
         if user:
-            author = map_user_to_type(user)
+            author = map_user_to_type(user, db)
     
     # Get votes count from dynamic attribute or calculate
     votes_count = getattr(contestant, 'votes_count', 0)
@@ -302,7 +332,7 @@ def map_contest_in_round_to_type(contest: Contest, round_id: int, db: Session, c
     
     # Get participants list (Top 100)
     db_participants = participants_query.limit(100).all()
-    participants_list = [map_contestant_to_type(p, db) for p in db_participants]
+    participants_list = [map_contestant_to_type(p, db) for p in public_graphql_contestants(db, db_participants)]
 
     return ContestInRoundType(
         id=contest.id,
@@ -441,7 +471,7 @@ def map_round_to_type(
 
     if include_contestants:
         db_contestants = contestants_query.limit(100).all()
-        contestants = [map_contestant_to_type(c, db) for c in db_contestants]
+        contestants = [map_contestant_to_type(c, db) for c in public_graphql_contestants(db, db_contestants)]
         
     participants_count = contestants_query.count()
 
@@ -464,7 +494,7 @@ def map_round_to_type(
         
     top_contestants_query = top_contestants_query.order_by(ContestantRanking.total_votes.desc()).limit(3).all()
     
-    top_contestants_list = [map_contestant_to_type(c, db) for c in top_contestants_query]
+    top_contestants_list = [map_contestant_to_type(c, db) for c in public_graphql_contestants(db, top_contestants_query)]
     
     # Stats 
     
@@ -623,7 +653,7 @@ def map_contest_to_type(contest: Contest, db: Session, include_rounds: bool = Tr
                 logger.warning(f"[map_contest_to_type] Fallback 3 (ANY): Found {len(fallback3)}. Sample IDs: {[c.id for c in fallback3]}")
                 logger.warning(f"[map_contest_to_type] Sample contestants season_id/round_id: {[(c.id, c.season_id, c.round_id) for c in fallback3]}")
         
-        contestants_list = [map_contestant_to_type(c, db) for c in qs]
+        contestants_list = [map_contestant_to_type(c, db) for c in public_graphql_contestants(db, qs)]
         logger.info(f"[map_contest_to_type] Returning {len(contestants_list)} contestants")
 
     # Resolve Current User Participation

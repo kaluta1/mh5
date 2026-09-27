@@ -11,6 +11,7 @@ import { CheckCircle2, XCircle, Eye, MessageCircle, ThumbsUp, Image, Video, Cale
 import { MediaViewerModal, type MediaItem } from '@/components/media'
 import { UploadButton } from '@/components/ui/upload-button'
 import api from '@/lib/api'
+import { AdminEntryContestField, type EntryContestResolution } from '@/components/admin/admin-entry-contest-field'
 
 interface Comment {
   id: number
@@ -110,6 +111,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
     verification_status: 'pending' as 'pending' | 'verified' | 'rejected'
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Contest of a NEW admin-created entry (required only for seasons shared by several contests).
+  const [entryContestId, setEntryContestId] = useState('')
+  const [entryContest, setEntryContest] = useState<EntryContestResolution>({
+    contestId: null, selectionRequired: false, ready: false,
+  })
   const [selectedContestantIds, setSelectedContestantIds] = useState<number[]>([])
   const [bulkApproving, setBulkApproving] = useState(false)
 
@@ -421,6 +427,12 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!editingContestant && !entryContest.ready) {
+      addToast(entryContest.selectionRequired
+        ? 'Select the contest for this entry.'
+        : 'This season has no contest an entry can be created in.', 'error')
+      return
+    }
     setIsSubmitting(true)
     try {
       const payload = {
@@ -435,7 +447,8 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         await api.put(`/api/v1/admin/contestants/${editingContestant.id}`, payload)
         addToast(t('admin.contestants.update_success') || 'Candidat mis à jour avec succès', 'success')
       } else {
-        await api.post('/api/v1/admin/contestants', payload)
+        // The backend re-validates that this contest belongs to the season.
+        await api.post('/api/v1/admin/contestants', { ...payload, contest_id: entryContest.contestId })
         addToast(t('admin.contestants.create_success') || 'Candidat créé avec succès', 'success')
       }
       
@@ -459,6 +472,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   const handleCancel = () => {
     setShowForm(false)
     setEditingContestant(null)
+    setEntryContestId('')
     const defaultLevel = availableLevels.length > 0 ? availableLevels[0] : 'city'
     setFormData({
       user_id: '',
@@ -806,6 +820,15 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 )}
               </div>
 
+              {!editingContestant && (
+                <AdminEntryContestField
+                  seasonId={formData.season_id}
+                  value={entryContestId}
+                  onChange={setEntryContestId}
+                  onResolved={setEntryContest}
+                />
+              )}
+
               {/* Title */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
@@ -866,7 +889,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 <Button
                   type="submit"
                   className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || (!editingContestant && Boolean(formData.season_id) && !entryContest.ready)}
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {editingContestant ? (t('common.save') || 'Enregistrer') : (t('common.create') || 'Créer')}

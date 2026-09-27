@@ -4,6 +4,9 @@ import { normalizeMediaUrl } from '@/lib/media-url'
 
 const topHigh5InFlight = new Map<string, Promise<TopHigh5Response>>()
 
+/** Generic, reason-free message when an entry can't receive a vote (Phase 8). */
+export const VOTE_UNAVAILABLE_MESSAGE = "This entry isn't available for voting right now."
+
 /** axios validateStatus accepts 4xx — treat as errors so nominate/participate UI can show messages. */
 function throwIfParticipateError(
   response: { status: number; data?: unknown },
@@ -1080,6 +1083,13 @@ class ContestService {
         if (parsed) return parsed;
         return { success: false, code: 'conflict', data: response.data };
       }
+      if (response.status === 404) {
+        // The backend never says why an entry can't receive a vote (safety holds stay private).
+        const err: any = new Error(VOTE_UNAVAILABLE_MESSAGE);
+        err.code = 'vote_unavailable';
+        err.response = { status: response.status, data: { detail: VOTE_UNAVAILABLE_MESSAGE } };
+        throw err;
+      }
       if (response.status >= 400) {
         const d = response.data?.detail;
         const msg =
@@ -1111,6 +1121,12 @@ class ContestService {
             }
           : undefined,
     });
+    if (response.status === 404) {
+      const err: any = new Error(VOTE_UNAVAILABLE_MESSAGE);
+      err.code = 'vote_unavailable';
+      err.response = { status: response.status, data: { detail: VOTE_UNAVAILABLE_MESSAGE } };
+      throw err;
+    }
     if (response.status >= 400) {
       const detail = response.data?.detail;
       const msg =

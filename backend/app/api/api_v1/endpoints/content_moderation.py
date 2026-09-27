@@ -135,3 +135,40 @@ def resolve(item_id: int, body: ChildSafetyResolutionBody, db: Session = Depends
         code = status.HTTP_403_FORBIDDEN if exc.code == "FORBIDDEN" else status.HTTP_409_CONFLICT
         raise HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)})
     return _item(db, row)
+
+
+# ---------------------------------------------------------------------------
+# Phase 8: progression safety holds (staff review; codes only)
+# ---------------------------------------------------------------------------
+
+@router.get("/progression-holds")
+def progression_holds(status_filter: Optional[str] = Query(None, alias="status", pattern=r"^(HELD|RELEASED|REVIEW_REQUIRED)$"),
+                      limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db),
+                      _: User = Depends(require_content_moderator)):
+    """VISIBLE_TO_STAFF only: listing a hold never makes the entry eligible for
+    public voting, ranking or progression."""
+    from app.models.progression_safety import ProgressionSafetyHold
+    from app.services import participation_safety as ps
+
+    q = db.query(ProgressionSafetyHold)
+    q = q.filter(ProgressionSafetyHold.status == status_filter) if status_filter else \
+        q.filter(ProgressionSafetyHold.status.in_(["HELD", "REVIEW_REQUIRED"]))
+    return [ps.staff_hold_view(h) for h in q.order_by(ProgressionSafetyHold.id.asc()).limit(limit).all()]
+
+
+@router.post("/progression-holds/{hold_id}/recheck")
+def recheck_progression_hold(hold_id: int, db: Session = Depends(get_db),
+                             user: User = Depends(require_content_moderator)):
+    """Re-run the centralized gate for one hold. This is NOT an override: the
+    hold is released only if the entry is eligible now (resolved through the
+    normal Phase 5/6 paths) and the destination stage is still running."""
+    from app.models.progression_safety import ProgressionSafetyHold
+    from app.services import participation_safety as ps
+
+    hold = db.query(ProgressionSafetyHold).filter(ProgressionSafetyHold.id == hold_id).first()
+    if hold is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    ps.release_holds(db, contestant_ids=[hold.contestant_id], actor_id=user.id)
+    db.commit()
+    db.refresh(hold)
+    return ps.staff_hold_view(hold)

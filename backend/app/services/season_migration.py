@@ -422,10 +422,12 @@ class SeasonMigrationService:
             # Contestant.season_id==contest_id legacy comparison) -- kept
             # identical on purpose so finalization sees the same roster
             # promotion would have. Not this task's scope to change.
+            from app.services.participation_safety import ranking_pool_clause
+
             global_filters = [
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
-                Contestant.is_active == True,
+                ranking_pool_clause(),  # Phase 8: same pool as promotion (frozen ranking stays intact)
                 Contestant.is_deleted == False,
                 Contestant.season_id == contest.id,
                 Contestant.round_id == season.round_id,
@@ -1801,6 +1803,7 @@ class SeasonMigrationService:
         cohort_round_id: Optional[int] = None,
         ranking_bucket_key: Optional[str] = None,
         require_votes: bool = True,
+        include_safety_holds: bool = False,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -1815,8 +1818,16 @@ class SeasonMigrationService:
         explicitly: its candidates are already round/season/roster-resolved
         before this function ranks them, so a zero-vote candidate is a
         genuine contestant to display (with a zero score), not a row to hide.
+
+        `include_safety_holds` (Phase 8, promotion/freeze only): a contestant who
+        competed publicly and was later safety-held keeps their place in the
+        ranked pool, so nobody is moved up into their slot. The caller must
+        run the progression gate on every selected contestant.
         """
         import logging
+        from app.services.participation_safety import ranking_pool_clause
+
+        active_clause = ranking_pool_clause() if include_safety_holds else (Contestant.is_active == True)
         logger = logging.getLogger(__name__)
         
         # Vérifier d'abord combien de contestants sont liés à cette saison
@@ -1838,7 +1849,7 @@ class SeasonMigrationService:
         # Récupérer tous les contestants actifs et qualifiés de la saison via ContestantSeason
         season_filters = [
             ContestantSeason.season_id == season_id,
-            Contestant.is_active == True,
+            active_clause,
             Contestant.is_deleted == False,
         ]
         if active_links_only:
@@ -1983,7 +1994,7 @@ class SeasonMigrationService:
             )
             strict_contest_scope = False
             fallback_filters = [
-                Contestant.is_active == True,
+                active_clause,
                 Contestant.is_deleted == False,
             ]
             if fallback_round_id is not None:
@@ -2338,7 +2349,13 @@ class SeasonMigrationService:
 
         # Tous les contestants sont qualifiés par défaut
         migrated_contestant_ids = []
+        from app.services import participation_safety
+
         for contestant in contestants:
+            if not participation_safety.gate_progression(
+                db, contestant, to_season=city_season, contest_id=contest_id, reevaluate=False,
+            ):
+                continue  # Phase 8: held at entry stage (recorded, released on re-evaluation)
             try:
                 SeasonMigrationService._activate_contestant_season_link(db, contestant.id, city_season.id)
             except ForeignRoundActivationError as exc:
@@ -2456,6 +2473,8 @@ class SeasonMigrationService:
             )
         ).all()
         synced: list[int] = []
+        from app.services import participation_safety
+
         for contestant in contestants:
             if contestant.id in promoted_beyond:
                 # Keep prior-stage link inactive so Vote UI cannot show them twice.
@@ -2470,6 +2489,10 @@ class SeasonMigrationService:
                     stale.is_active = False
                 continue
 
+            if target_season is not None and not participation_safety.gate_progression(
+                db, contestant, to_season=target_season, contest_id=contest_id, reevaluate=False,
+            ):
+                continue  # Phase 8: not synced while safety-held (recorded, released on re-evaluation)
             try:
                 SeasonMigrationService._activate_contestant_season_link(
                     db, contestant.id, target_season_id
@@ -2801,10 +2824,12 @@ class SeasonMigrationService:
             # GLOBAL must preserve the canonical Past/Top High5 winner order from
             # the continental season. Reuse the same ranking helper so promotion
             # and display stay aligned.
+            from app.services.participation_safety import ranking_pool_clause
+
             global_filters = [
                 ContestantSeason.season_id == from_season.id,
                 ContestantSeason.is_active == True,
-                Contestant.is_active == True,
+                ranking_pool_clause(),  # Phase 8: held competitors keep their slot (never promoted)
                 Contestant.is_deleted == False,
                 Contestant.season_id == contest_id,
                 Contestant.round_id == from_season.round_id,
@@ -2854,6 +2879,7 @@ class SeasonMigrationService:
                 qualified_only=False,
                 strict_season_scope=True,
                 require_votes=False,
+                include_safety_holds=True,
             )
             for jurisdiction, location_contestants in continent_groups.items():
                 if location_contestants:
@@ -2896,6 +2922,7 @@ class SeasonMigrationService:
                 qualified_only=pool_qualified,
                 strict_season_scope=strict_scope,
                 uncapped=contest_mode == "nomination",
+                include_safety_holds=True,
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
@@ -2922,6 +2949,7 @@ class SeasonMigrationService:
                 strict_season_scope=strict_scope,
                 uncapped=contest_mode == "nomination",
                 require_votes=False,
+                include_safety_holds=True,
             )
             # Keyed by the FROM-level's own jurisdiction field (e.g. city for
             # CITY->COUNTRY, country for COUNTRY->REGIONAL) -- exactly what
@@ -3000,6 +3028,7 @@ class SeasonMigrationService:
                         strict_season_scope=True,
                         uncapped=True,
                         cohort_round_id=int(from_season.round_id),
+                        include_safety_holds=True,
                     )
                     # Only backfill freeze_groups from this retry if the
                     # earlier require_votes=False freeze pass also found
@@ -3137,9 +3166,23 @@ class SeasonMigrationService:
         
         # Désactiver les liens dans l'ancienne saison pour les promus et créer les nouveaux liens
         promoted_contestant_ids = []
+        held_contestant_ids = []
         promotion_base = datetime.utcnow()
+        from app.services import participation_safety
+
         for rank_idx, contestant in enumerate(selected_contestants):
             promotion_time = promotion_base + timedelta(seconds=rank_idx)
+
+            # Phase 8 progression gate (before ANY mutation). A qualifying but
+            # safety-held contestant is neither promoted nor demoted nor
+            # deleted: the hold is recorded, the source membership and ranking
+            # stay as they are, and no one else is promoted into the slot.
+            if not participation_safety.gate_progression(
+                db, contestant, to_season=to_season, from_season=from_season, contest_id=contest_id,
+            ):
+                logger.warning(f"  - Promotion held (safety) for contestant {contestant.id}")
+                held_contestant_ids.append(contestant.id)
+                continue
 
             # Créer/réactiver le lien ContestantSeason de destination. Passe par
             # le helper partagé pour garantir qu'aucune autre saison de même
@@ -3257,7 +3300,8 @@ class SeasonMigrationService:
             "from_season_id": from_season.id,
             "to_season_id": to_season.id,
             "promoted_count": len(selected_contestants),
-            "promoted_contestant_ids": promoted_contestant_ids
+            "promoted_contestant_ids": promoted_contestant_ids,
+            "held_contestant_ids": held_contestant_ids,
         }
     
 
@@ -3667,6 +3711,23 @@ class SeasonMigrationService:
                     # Continue with remaining contests — one UniqueViolation must not
                     # abort June regional / May continental / April global in the same run.
                     continue
+
+        # Phase 8: re-check open progression safety holds (backstop for the
+        # re-evaluation hooks). Released -> same destination, same lifecycle;
+        # stage timing passed -> administrator review. Never raises.
+        try:
+            from app.services.participation_safety import release_holds
+
+            released = release_holds(db, today=today)
+            db.commit()
+            if released.get("released") or released.get("review_required"):
+                results.append({"action": "progression_safety_holds", "result": released})
+        except Exception as e:
+            logger.error(f"Progression safety hold sweep failed: {type(e).__name__}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         processed = len(results)
         if processed > 0:

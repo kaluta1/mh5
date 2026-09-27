@@ -43,11 +43,12 @@ from .age_safety import UserAgeProfile, DobChangeRecord, AgeSafetyEvent, ChildSa
 from .guardian import Guardian, GuardianRelationship, GuardianConsent, PendingRegistration, UserPrivacyPreference
 from .contest_eligibility import ContestAgeEligibility, CategoryAgePolicy, ContestEntrySafety
 from .content_moderation import ContentModeration
+from .progression_safety import ProgressionSafetyHold
 
 __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",
     "Guardian", "GuardianRelationship", "GuardianConsent", "PendingRegistration", "UserPrivacyPreference",
-    "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety", "ContentModeration",
+    "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety", "ContentModeration", "ProgressionSafetyHold",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",

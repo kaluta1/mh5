@@ -2039,6 +2039,9 @@ async def update_contestant_status(
 class ContestantCreateRequest(BaseModel):
     user_id: int
     season_id: int
+    # The contest the entry belongs to. Required when the season is shared by
+    # several contests (its contest/category age rules must be applied).
+    contest_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     image_media_ids: Optional[str] = None
@@ -2148,6 +2151,33 @@ def get_seasons_by_level(
         for season in seasons
     ]
 
+def _season_entry_contests(db: Session, season_id: int) -> List[Contest]:
+    """Contests an entry in this season may belong to: linked to the season and
+    not deleted. The ONE rule shared by the admin form's contest choices and
+    POST /contestants validation."""
+    return (db.query(Contest)
+            .join(ContestSeasonLink, ContestSeasonLink.contest_id == Contest.id)
+            .filter(ContestSeasonLink.season_id == season_id, Contest.is_deleted == False)
+            .distinct().order_by(Contest.name.asc(), Contest.id.asc()).all())
+
+
+@router.get("/seasons/{season_id}/contests")
+def get_season_entry_contests(
+    season_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Contests an admin-created entry in this season may belong to (admin only).
+    More than one -> the admin must choose (contest_id on POST /contestants)."""
+    check_admin(current_user)
+    season = db.query(ContestSeason).filter(ContestSeason.id == season_id,
+                                            ContestSeason.is_deleted == False).first()
+    if not season:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saison non trouvée")
+    return [{"id": c.id, "name": c.name, "contest_mode": c.contest_mode}
+            for c in _season_entry_contests(db, season_id)]
+
+
 @router.post("/contestants", status_code=status.HTTP_201_CREATED)
 async def create_contestant(
     contestant_data: ContestantCreateRequest,
@@ -2190,21 +2220,51 @@ async def create_contestant(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cet utilisateur a déjà un candidat pour cette saison"
         )
-    
+
+    # Phase 8: the contest whose rules govern this NEW entry must be known
+    # (never guessed from a season shared by several contests).
+    linked_contest_ids = sorted({c.id for c in _season_entry_contests(db, season.id)})
+    if contestant_data.contest_id is not None:
+        if contestant_data.contest_id not in linked_contest_ids:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="This contest is not linked to the selected season.")
+        entry_contest_id = contestant_data.contest_id
+    elif len(linked_contest_ids) == 1:
+        entry_contest_id = linked_contest_ids[0]
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Select the contest for this entry (contest_id): the season is not linked to "
+                                   "exactly one contest.")
+    entry_contest = db.query(Contest).filter(Contest.id == entry_contest_id, Contest.is_deleted == False).first()
+    if entry_contest is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
     try:
-        # Créer le candidat
+        # Créer le candidat. Phase 8: it starts inactive; its public state is
+        # decided below by the Phase 5/6 evaluation, in this same transaction.
         new_contestant = Contestant(
             user_id=contestant_data.user_id,
             season_id=contestant_data.season_id,
+            contest_id=entry_contest.id,
             title=contestant_data.title,
             description=contestant_data.description,
             image_media_ids=contestant_data.image_media_ids,
             video_media_ids=contestant_data.video_media_ids,
-            verification_status=contestant_data.verification_status
+            verification_status=contestant_data.verification_status,
+            is_active=False,
         )
         db.add(new_contestant)
         db.flush()  # Pour obtenir l'ID du candidat
-        
+
+        # Phase 8: a NEW entry always gets its Phase 5 participation record and
+        # Phase 6 content record (the entrant is the submitter; admin creation
+        # approves nothing). Missing records are reserved for genuine
+        # pre-Phase-5 historical entries.
+        from app.services import contest_eligibility as _ce
+
+        _ce.record_admin_created_entry(db, new_contestant, entrant=user, contest=entry_contest,
+                                       admin_id=current_user.id)
+
         # Créer la liaison avec la saison via ContestantSeason
         contestant_season_link = ContestantSeason(
             contestant_id=new_contestant.id,
@@ -2220,9 +2280,12 @@ async def create_contestant(
             "id": new_contestant.id,
             "user_id": new_contestant.user_id,
             "season_id": new_contestant.season_id,
+            "contest_id": new_contestant.contest_id,
             "title": new_contestant.title,
             "description": new_contestant.description,
             "verification_status": new_contestant.verification_status,
+            # Staff view: whether the entry is public yet (reasons live in the moderation/eligibility tools).
+            "public": bool(new_contestant.is_active),
             "message": "Candidat créé avec succès"
         }
     except IntegrityError as e:
@@ -2263,6 +2326,29 @@ async def update_contestant(
         )
 
     try:
+        # Phase 8: manual stage change = progression. The same centralized gate
+        # as the scheduler runs BEFORE anything is changed; admin rights never
+        # bypass a safety hold (child-safety holds need the dedicated resolver).
+        if contestant_data.season_id is not None and contestant_data.season_id != contestant.season_id:
+            from app.services import participation_safety
+
+            target_season = db.query(ContestSeason).filter(
+                ContestSeason.id == contestant_data.season_id,
+                ContestSeason.is_deleted == False,
+            ).first()
+            if target_season is not None and not participation_safety.gate_progression(
+                db, contestant, to_season=target_season, contest_id=None,
+            ):
+                db.commit()  # only the hold record (+ Phase 5 re-evaluation); no requested change applied
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "PROGRESSION_SAFETY_HOLD",
+                        "message": "This entry can't change stage while a safety requirement is open. "
+                                   "See the progression holds review list.",
+                    },
+                )
+
         # Mettre à jour les champs du candidat
         if contestant_data.title is not None:
             contestant.title = contestant_data.title
@@ -2340,6 +2426,8 @@ async def update_contestant(
             "verification_status": contestant.verification_status,
             "message": "Candidat mis à jour avec succès"
         }
+    except HTTPException:
+        raise
     except ForeignRoundActivationError as e:
         db.rollback()
         raise HTTPException(

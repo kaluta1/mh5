@@ -132,6 +132,7 @@ def listing_clause(viewer: Viewer):
     restricted = exists().where(and_(
         ContentModeration.contestant_id == Contestant.id,
         or_(ContentModeration.rating.is_(None),
+            ContentModeration.state != "APPROVED",
             ~ContentModeration.rating.in_([r.value for r in viewer.allowed_ratings]))))
     return and_(public_entry_clause(), ~restricted)
 
@@ -185,6 +186,13 @@ class Governance:
         self.moderation = {r.contestant_id: r for r in
                            db.query(ContentModeration).filter(ContentModeration.contestant_id.in_(ids)).all()}
 
+    @classmethod
+    def of(cls, safety: Dict[int, ContestEntrySafety], moderation: Dict[int, ContentModeration]) -> "Governance":
+        """From records the caller already holds (e.g. rows locked in a vote transaction)."""
+        gov = cls.__new__(cls)
+        gov.safety, gov.moderation = dict(safety), dict(moderation)
+        return gov
+
 
 def entry_access(db: Session, viewer: Viewer, contestant: Optional[Contestant],
                  governance: Optional[Governance] = None) -> EntryAccess:
@@ -208,8 +216,11 @@ def entry_access(db: Session, viewer: Viewer, contestant: Optional[Contestant],
         return EntryAccess(False, denial=Denial.NOT_FOUND)
     public = safety is None or safety.exposure_status == EntryExposureStatus.PUBLIC.value
     rating = ContentRating(moderation.rating) if moderation is not None and moderation.rating else None
-    if moderation is not None and public and rating is None:
-        public = False  # a governed entry is never public without a final rating (fail closed)
+    if moderation is not None and public and (
+            rating is None or (moderation.state != "APPROVED" and rating != ContentRating.PROHIBITED)):
+        # A governed entry is public only when APPROVED with a final rating (fail
+        # closed). PROHIBITED falls through to the never-delivered branch below.
+        public = False
     if not public:
         if owner:
             return EntryAccess(True, Mode.OWNER, rating=rating)

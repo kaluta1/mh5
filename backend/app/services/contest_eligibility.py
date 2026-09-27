@@ -953,7 +953,18 @@ def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional
     if commit:
         db.commit()
         db.refresh(row)
+        if action == "ENTRY_ACTIVATED":
+            _release_progression_holds(db, [row.contestant_id], actor_id)
     return row
+
+
+def _release_progression_holds(db: Session, contestant_ids: Sequence[int], actor_id: Optional[int]) -> None:
+    """Phase 8: an entry that became public again may have a progression hold
+    waiting; release it through the same lifecycle (never raises)."""
+    from app.services.participation_safety import safe_release_holds_for
+
+    for cid in contestant_ids:
+        safe_release_holds_for(db, cid, actor_id=actor_id)
 
 
 def reevaluate_for_user(db: Session, user_id: int, *, trigger: str, today: date, actor_id: Optional[int] = None,
@@ -966,10 +977,13 @@ def reevaluate_for_user(db: Session, user_id: int, *, trigger: str, today: date,
                     ContestEntrySafety.exposure_status.in_([EntryExposureStatus.PUBLIC.value,
                                                             EntryExposureStatus.HELD.value]))
             .all())
+    before = {r.id: r.exposure_status for r in rows}
     for row in rows:
         reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, now=now, commit=False)
     if rows:
         db.commit()
+        _release_progression_holds(db, [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
+                                        and r.exposure_status == EntryExposureStatus.PUBLIC.value], actor_id)
     return len(rows)
 
 
@@ -986,6 +1000,8 @@ def reevaluate_open_entries(db: Session, *, trigger: str, today: date, actor_id:
         reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, commit=False)
     db.commit()
     changed = sum(1 for r in rows if before[r.id] != r.exposure_status)
+    _release_progression_holds(db, [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
+                                    and r.exposure_status == EntryExposureStatus.PUBLIC.value], actor_id)
     return {"evaluated": len(rows), "changed": changed}
 
 
@@ -1359,3 +1375,46 @@ def owner_view(row: Optional[ContestEntrySafety], db: Optional[Session] = None) 
         else:
             view["content_status"] = cs.member_status(gate).value
     return view
+
+
+# ---------------------------------------------------------------------------
+# Administrator-created entries (Phase 8 follow-up)
+# ---------------------------------------------------------------------------
+
+def record_admin_created_entry(db: Session, contestant: Contestant, *, entrant: User, contest: Optional[Contest],
+                               admin_id: int, today: Optional[date] = None,
+                               now: Optional[datetime] = None) -> ContestEntryDecision:
+    """Govern an entry an administrator creates on a member's behalf exactly like
+    that member's own submission, in the CALLER's transaction (nothing is
+    committed here). The entrant, never the administrator, is the submitter:
+    admin creation is not an approval, grants no guardian authority and waives
+    no requirement. A nomination-mode contest yields an unclaimed nomination
+    (the nominee claim remains required; the nominator can issue the claim link
+    through the normal endpoint). Content runs through the internal Phase 6
+    classifier only (no external provider call); anything not automatically
+    clear waits for a moderator."""
+    from app.services.age_policy_engine import utc_today
+
+    today, now = today or utc_today(), now or datetime.utcnow()
+    kind = (ContestEntryKind.NOMINATION
+            if (getattr(contest, "contest_mode", "") or "").strip().lower() == "nomination"
+            else ContestEntryKind.PERSONAL_SUBMISSION)
+    inputs = EntryInputs(title=contestant.title, description=contestant.description,
+                         image_media_ids=contestant.image_media_ids, video_media_ids=contestant.video_media_ids)
+    if kind == ContestEntryKind.NOMINATION:
+        decision = evaluate_nomination(db, entrant, contest, inputs, nominee_age_declaration=NomineeAgeDeclaration.UNKNOWN,
+                                       today=today, now=now)
+        declaration = NomineeAgeDeclaration.UNKNOWN
+    else:
+        decision = evaluate_personal_submission(db, entrant, contest, inputs, today=today, now=now)
+        declaration = None
+    contestant.is_active = decision.public
+    if kind == ContestEntryKind.NOMINATION:
+        contestant.entry_type = "nomination"
+    row = record_new_entry(db, contestant, decision, kind=kind, submitted_by=entrant,
+                           contest_id=getattr(contest, "id", None), nominee_age_declaration=declaration, now=now)
+    db.add(AuditTrail(table_name="contest_entry_safety", record_id=row.id, action="ENTRY_CREATED_BY_ADMIN",
+                      old_values=None, new_values={"contestant_id": contestant.id, "exposure_status": row.exposure_status,
+                                                   "reason_codes": row.reason_codes}, user_id=admin_id))
+    db.flush()
+    return decision

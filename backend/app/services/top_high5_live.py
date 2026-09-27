@@ -104,6 +104,7 @@ from app.models.contests import Contestant, ContestantSeason, ContestSeason, Sea
 from app.models.round import Round, RoundStatus
 from app.services.season_migration import SeasonMigrationService
 from app.services.voting_ranking import aggregate_rankings
+from app.services.participation_safety import ranking_pool_clause
 from app.services.contest_category_integrity import dedupe_contestants_by_nominator
 
 
@@ -350,13 +351,18 @@ def resolve_live_top_high5(
     # cohort-integrity guard: only a contestant whose own immutable
     # round_id equals the target round is trusted, regardless of how many
     # other ContestantSeason rows they may have at other rounds.
+    # Phase 8: a contestant who competed publicly and was later safety-held
+    # stays in the ranked pool (ranking_pool_clause) so nobody moves up into
+    # their slot; the public payload then drops every contestant that is not
+    # currently ELIGIBLE_FOR_RANKING (see secure_top_high5_payload), so a
+    # level can show fewer than five and never a substitute.
     member_rows = (
         db.query(Contestant)
         .join(ContestantSeason, ContestantSeason.contestant_id == Contestant.id)
         .options(joinedload(Contestant.user))
         .filter(
             ContestantSeason.season_id == target_season.id,
-            Contestant.is_active == True,
+            ranking_pool_clause(),
             Contestant.is_deleted == False,
             Contestant.round_id == target_round.id,
         )
