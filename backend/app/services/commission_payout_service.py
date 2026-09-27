@@ -15,6 +15,12 @@ from app.models.accounting import ChartOfAccounts, JournalEntry
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission, CommissionStatus
 from app.models.user import User
 from app.services.accounting_service import accounting_service
+from app.services.financial_eligibility import (
+    FinancialEligibilityHold,
+    FinancialOperation,
+    evaluate as evaluate_financial_eligibility,
+    record_decision,
+)
 from app.services.financial_integrity import money, positive_money
 from app.services.nowpayments_service import (
     payout_config_status,
@@ -83,6 +89,16 @@ def _assert_payout_accounts(db: Session) -> None:
         raise ValueError(f"Payout accounting is not configured; missing accounts: {', '.join(missing)}")
 
 
+def _require_withdrawal_eligibility(db: Session, user: User, *, commit_audit: bool) -> None:
+    """Child/Teen Safety Phase 10: value may leave the platform only for a member
+    the central gate allows (CURRENT state). A hold never touches commissions,
+    balances or history; it only stops this NEW payout."""
+    decision = evaluate_financial_eligibility(db, user, FinancialOperation.WITHDRAWAL)
+    if not decision.allowed:
+        record_decision(db, decision, user_id=user.id, commit=commit_audit)
+        raise FinancialEligibilityHold(decision)
+
+
 def _find_cashout_by_intent(db: Session, intent_ref: str) -> Optional[AffiliateCashoutRequest]:
     return (
         db.query(AffiliateCashoutRequest)
@@ -111,7 +127,12 @@ def _reserve_cashout(
     locked_user = db.query(User).filter(User.id == user_id).with_for_update().one()
     existing = _find_cashout_by_intent(db, intent_ref)
     if existing:
-        return existing, [], False
+        return existing, [], False  # idempotent replay: no new action, so no new decision
+    try:
+        _require_withdrawal_eligibility(db, locked_user, commit_audit=False)
+    except FinancialEligibilityHold:
+        db.commit()  # the lock is released; only the audit event is written
+        raise
 
     other_active = (
         db.query(AffiliateCashoutRequest.id)
@@ -237,6 +258,26 @@ def _execute_cashout_intent(
     wallet = str(cashout.wallet_snapshot or "").strip()
     net = money(cashout.net_amount)
 
+    # Phase 10 TOCTOU: re-check CURRENT eligibility immediately before provider
+    # I/O. A hold releases this intent's own reservation (nothing is paid, no
+    # journal is posted, the commissions return to the available balance) and
+    # marks the intent failed, so a replay of the same Idempotency-Key never pays.
+    beneficiary = db.query(User).filter(User.id == cashout.user_id).with_for_update().one()
+    decision = evaluate_financial_eligibility(db, beneficiary, FinancialOperation.WITHDRAWAL)
+    if not decision.allowed:
+        for commission in (
+            db.query(AffiliateCommission)
+            .filter(AffiliateCommission.id.in_(commission_ids), AffiliateCommission.payout_reference == intent_ref)
+            .with_for_update()
+            .all()
+        ):
+            commission.payout_reference = None
+        cashout.status = "failed"
+        cashout.processed_at = datetime.utcnow()
+        record_decision(db, decision, user_id=beneficiary.id, subject={"cashout_id": int(cashout.id)}, commit=False)
+        db.commit()
+        raise FinancialEligibilityHold(decision)
+
     cashout.status = "processing"
     db.commit()
 
@@ -311,6 +352,8 @@ def trigger_commission_payout_sync(
     if not payouts_configured() or not (beneficiary.usdt_wallet_address or "").strip():
         return False
     _wallet, payout_currency = _validated_payout_target(beneficiary)
+    # Phase 10: checked before the commission row is touched (it stays as earned).
+    _require_withdrawal_eligibility(db, beneficiary, commit_audit=True)
 
     locked = (
         db.query(AffiliateCommission)
@@ -355,6 +398,9 @@ def process_commission_payouts_sync(db: Session, commissions: List[AffiliateComm
         try:
             if trigger_commission_payout_sync(db, beneficiary, commission):
                 paid += 1
+        except FinancialEligibilityHold:
+            # Earning preserved as-is; only the automatic payout waits.
+            logger.info("Commission %s payout held by financial eligibility", commission.id)
         except ValueError:
             logger.exception("Commission %s payout stopped for reconciliation", commission.id)
     return paid

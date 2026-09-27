@@ -5,6 +5,7 @@ import { Users } from 'lucide-react'
 import api from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
 import { useBusinessModelSummary } from '@/components/dashboard/business-model-overview'
+import { apiErrorText } from '@/lib/financial-eligibility'
 
 type PoolMe = {
   membership: null | {
@@ -21,8 +22,8 @@ type PaymentCreated = { invoice_url?: string | null; pay_address?: string; pay_a
 
 function errorDetail(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
-    const detail = (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
-    if (detail) return String(detail)
+    const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+    if (detail) return apiErrorText(detail, 'Request failed')
   }
   return e instanceof Error ? e.message : 'Request failed'
 }

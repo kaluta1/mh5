@@ -70,6 +70,12 @@ async def initiate_kyc_session(
     country_iso: Optional[str],
     residential_address: Optional[str],
 ) -> Dict[str, Any]:
+    # Child/Teen Safety Phase 10: no identity data leaves for a provider unless
+    # the central gate allows KYC_INITIATION for this person NOW (confirmed adults
+    # only; UNKNOWN -> HOLD, minors -> REVIEW_REQUIRED). Raises FinancialEligibilityHold.
+    from app.services import financial_eligibility as fe
+
+    fe.require(db, user, fe.FinancialOperation.KYC_INITIATION)
     if is_kaluta_active():
         return await kaluta_kyc_service.create_session(
             external_id=reference,

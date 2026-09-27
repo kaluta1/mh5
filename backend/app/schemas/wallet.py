@@ -57,6 +57,10 @@ class WithdrawPreviewResponse(BaseModel):
     net_amount: float
     wallet_configured: bool
     payout_currency: Optional[str] = None
+    # Phase 10: the member's OWN withdrawal eligibility (ALLOWED / HOLD /
+    # REVIEW_REQUIRED) and a safe next step; never a reason code.
+    eligibility_status: Optional[str] = None
+    eligibility_next_step: Optional[str] = None
 
 
 class WithdrawResponse(BaseModel):

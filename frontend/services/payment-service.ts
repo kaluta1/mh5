@@ -2,6 +2,7 @@
  * Payment Service — NOWPayments crypto checkout
  */
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
+import { apiErrorText } from '@/lib/financial-eligibility'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -112,7 +113,7 @@ class PaymentService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.detail || 'Failed to create payment')
+      throw new Error(apiErrorText(error.detail, 'Failed to create payment'))
     }
 
     return response.json()

@@ -216,15 +216,21 @@ class AgeSafetyEventType(str, enum.Enum):
     USER_BLOCKED = "USER_BLOCKED"
     USER_UNBLOCKED = "USER_UNBLOCKED"
     INTERACTION_REPORTED = "INTERACTION_REPORTED"
+    # Phase 10 (prize / KYC initiation / financial eligibility). Codes and ids only.
+    FINANCIAL_ACTION_HELD = "FINANCIAL_ACTION_HELD"
+    FINANCIAL_ACTION_REVIEW_REQUIRED = "FINANCIAL_ACTION_REVIEW_REQUIRED"
 
 
 ENFORCEMENT_ALL_JURISDICTIONS = "*"
 # Operations whose jurisdiction-policy enforcement can be switched on. Phase 3 added
-# ACCOUNT_CREATION; Phase 5 adds the contest-entry operations. Later phases add theirs.
+# ACCOUNT_CREATION; Phase 5 adds the contest-entry operations; Phase 10 adds the
+# prize-contract and payment operations (financial_eligibility). All default OFF.
 ENFORCEABLE_OPERATIONS = frozenset({
     PolicyOperation.ACCOUNT_CREATION,
     PolicyOperation.PERSONAL_SUBMISSION,
     PolicyOperation.NOMINATION,
+    PolicyOperation.PRIZE_CONTRACT,
+    PolicyOperation.PAYMENT,
 })
 
 

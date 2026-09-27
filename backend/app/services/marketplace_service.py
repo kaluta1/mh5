@@ -150,10 +150,29 @@ def _open_dispute(db: Session, order: MarketOrder) -> Optional[MarketDispute]:
     return db.query(MarketDispute).filter(MarketDispute.order_id == order.id, MarketDispute.status == "OPEN").first()
 
 
+def _require_financial(db: Session, user_id: int, operation, subject: dict) -> None:
+    """Child/Teen Safety Phase 10 central gate (raises FinancialEligibilityHold)."""
+    from app.models.user import User
+    from app.services import financial_eligibility as fe
+
+    fe.require(db, db.query(User).filter(User.id == user_id).first(), operation, subject=subject)
+
+
+def _require_seller_release(db: Session, order: MarketOrder) -> None:
+    from app.services.financial_eligibility import FinancialOperation
+
+    _require_financial(db, order.seller_user_id, FinancialOperation.WITHDRAWAL, {"market_order_id": int(order.id)})
+
+
 def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: int) -> MarketOrder:
+    from app.services.financial_eligibility import FinancialOperation
+
     seller_id, seller_base = _resolve_item(db, item_type, item_id)
     if seller_id == int(buyer_user_id):
         raise MarketplaceError("You cannot buy your own item")
+    # Phase 10: the buyer pays and the seller will receive value off-platform.
+    _require_financial(db, buyer_user_id, FinancialOperation.PAYMENT, {"market_item_type": item_type})
+    _require_financial(db, seller_id, FinancialOperation.WITHDRAWAL, {"market_item_type": item_type})
     base, markup, total = price_for_seller_base(seller_base)
     order = MarketOrder(
         buyer_user_id=buyer_user_id, seller_user_id=seller_id, item_type=item_type, item_id=item_id, currency="USD",
@@ -187,6 +206,7 @@ def confirm_receipt(db: Session, order: MarketOrder, *, buyer_user_id: int) -> N
         raise MarketplaceError("Only the buyer can confirm receipt")
     if _open_dispute(db, order):
         raise MarketplaceError("An open dispute blocks release")
+    _require_seller_release(db, order)  # Phase 10: CURRENT seller state before any release
     _transition(db, order, BUYER_CONFIRMED, actor_user_id=buyer_user_id, actor_role="BUYER")
     order.confirmed_at = datetime.utcnow()
     _transition(db, order, RELEASE_PENDING, actor_user_id=None, actor_role="SYSTEM", note="Release requested from custodian")
@@ -212,6 +232,8 @@ def resolve_dispute(db: Session, order: MarketOrder, *, admin_user_id: int, outc
         raise MarketplaceError("No open dispute on this order")
     if outcome not in ("RELEASE", "REFUND"):
         raise MarketplaceError("outcome must be RELEASE or REFUND")
+    if outcome == "RELEASE":
+        _require_seller_release(db, order)  # Phase 10: an admin release is not a bypass; refunds are unaffected
     dispute.status = "RESOLVED_RELEASE" if outcome == "RELEASE" else "RESOLVED_REFUND"
     dispute.resolution_note = note
     dispute.resolved_by_user_id = admin_user_id

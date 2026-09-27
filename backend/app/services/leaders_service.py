@@ -247,6 +247,18 @@ def record_external_payout(db: Session, *, line_id: int, reference: str) -> Lead
     period = db.query(LeadersPeriod).filter(LeadersPeriod.id == line.period_id).one()
     if period.status != "POSTED" or line.payout_status != "UNPAID" or money(line.reward_amount) <= 0:
         raise LeadersError("Only an unpaid reward of a POSTED period can be paid")
+    # Child/Teen Safety Phase 10: the same central gate as every other payout.
+    # The admin role is not a bypass; a hold keeps the line UNPAID (the earned
+    # reward and its allocation are untouched) until the member's state changes.
+    from app.models.user import User
+    from app.services import financial_eligibility as fe
+
+    beneficiary = db.query(User).filter(User.id == line.user_id).first()
+    decision = fe.evaluate(db, beneficiary, fe.FinancialOperation.WITHDRAWAL)
+    if not decision.allowed:
+        # Nothing has been written yet in this transaction, so the audit commits alone.
+        fe.record_decision(db, decision, user_id=line.user_id, subject={"leaders_line_id": int(line.id)})
+        raise LeadersError("This payout is held by the eligibility review and cannot be recorded yet")
     post_entry(
         db, source_type=SourceType.LEADERS_PERIOD, source_id=period.id, posting_type="LEADERS_PAYOUT",
         key_suffix=f"line:{line.id}",

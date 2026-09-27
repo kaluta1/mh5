@@ -82,7 +82,9 @@ def world(db):
 def _user(db, email, *, sponsor=None, wallet=True, active=True) -> User:
     row = User(email=email, hashed_password="x", username=email.split("@")[0], is_active=active, is_deleted=False,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=email.split("@")[0].upper(),
-               usdt_wallet_address=("0x" + "1" * 40) if wallet else None)
+               usdt_wallet_address=("0x" + "1" * 40) if wallet else None,
+               # Phase 10: a confirmed adult (UNKNOWN age is never adult for payouts/payments).
+               date_of_birth=datetime(1990, 1, 1))
     db.add(row)
     db.flush()
     return row

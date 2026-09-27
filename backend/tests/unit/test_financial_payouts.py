@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -19,6 +20,7 @@ def _setup(db):
         is_deleted=False,
         usdt_wallet_address="0x" + "a" * 40,
         payout_currency="usdtbsc",
+        date_of_birth=date(1990, 1, 1),  # Phase 10: a confirmed adult (UNKNOWN is never adult)
     )
     source = User(
         email="source@test.com",

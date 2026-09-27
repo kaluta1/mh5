@@ -14,6 +14,7 @@ import { Loader2, Wallet, AlertTriangle } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { apiErrorText, financialHoldMessage, isFinancialActionAvailable } from '@/lib/financial-eligibility'
 
 type WithdrawPreview = {
   available_to_withdraw: number
@@ -22,6 +23,8 @@ type WithdrawPreview = {
   net_amount: number
   wallet_configured: boolean
   payout_currency?: string
+  eligibility_status?: string | null
+  eligibility_next_step?: string | null
 }
 
 type Props = {
@@ -70,8 +73,14 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
 
   const parsedAmount = parseFloat(amount) || 0
   const min = preview?.minimum_withdrawal ?? 100
+  const eligible = isFinancialActionAvailable(preview?.eligibility_status)
+  const holdMessage = financialHoldMessage(preview?.eligibility_status, preview?.eligibility_next_step)
 
   const handleWithdraw = async () => {
+    if (!eligible) {
+      addToast(holdMessage || 'Withdrawal is not available for your account yet.', 'error')
+      return
+    }
     if (!preview?.wallet_configured) {
       addToast(t('dashboard.wallet.setup_wallet_first') || 'Add a payout wallet in Settings first.', 'error')
       return
@@ -102,7 +111,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data.detail || 'Withdrawal failed')
+        throw new Error(apiErrorText(data.detail, 'Withdrawal failed'))
       }
       addToast(
         t('dashboard.wallet.withdraw_success') ||
@@ -139,6 +148,16 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
           </div>
         ) : (
           <div className="space-y-4">
+            {holdMessage && (
+              <div
+                role="status"
+                data-testid="withdraw-held"
+                className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-100"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                {holdMessage}
+              </div>
+            )}
             {!preview?.wallet_configured && (
               <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-100">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -182,7 +201,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
 
             <Button
               className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-              disabled={submitting || !preview?.wallet_configured || parsedAmount < min}
+              disabled={submitting || !eligible || !preview?.wallet_configured || parsedAmount < min}
               onClick={() => void handleWithdraw()}
             >
               {submitting ? (

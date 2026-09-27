@@ -30,6 +30,7 @@ from app.models.business_model import (
 from app.models.user import User
 from app.services import leaders_service, legacy_pool_migration, marketplace_service
 from app.services import referral_pool_service as pool
+from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 from app.services.new_model_revenue import COMMISSION_BASE_DEFINITION, RevenuePolicyMissing, compute_breakdown, get_policy
 from app.services.new_model_reference_data import (
     LEADERS_MAX_MEMBERS,
@@ -222,6 +223,9 @@ def _run(db: Session, fn):
     except (marketplace_service.MarketplaceError, leaders_service.LeadersError, pool.ReferralPoolError) as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FinancialEligibilityHold as exc:  # Phase 10: generic body, no reason codes
+        db.rollback()
+        raise http_error(exc) from None
 
 
 @router.post("/marketplace/orders", status_code=status.HTTP_201_CREATED)

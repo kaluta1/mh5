@@ -1166,7 +1166,9 @@ def test_enforcement_can_be_switched_on_only_for_approved_operations(db):
     with pytest.raises(ValueError):
         enforce(db, PolicyOperation.VOTING)  # Phase 8
     with pytest.raises(ValueError):
-        enforce(db, PolicyOperation.PRIZE_CONTRACT)  # Phase 10
+        enforce(db, PolicyOperation.LIVESTREAM)  # no phase has approved it
+    # Phase 10 approved the prize-contract and payment operations (default OFF).
+    assert enforce(db, PolicyOperation.PRIZE_CONTRACT).enabled is True
 
 
 def test_frontend_participate_route_carries_the_nominee_declaration(client, db, api_world):

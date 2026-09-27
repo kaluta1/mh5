@@ -30,6 +30,7 @@ from app.services.kyc_provider_dispatch import (
     sync_verification_from_provider,
     verification_provider_enum,
 )
+from app.services import financial_eligibility as _fe
 from app.models.kyc import KYCStatus, DocumentType, VerificationProvider
 from app.schemas.kyc import (
     KYCVerification, KYCVerificationCreate, KYCVerificationUpdate,
@@ -178,6 +179,16 @@ def _admin_document_view_url(
     )
 
 
+def _guard_kyc_initiation(db: Session, user: User) -> None:
+    """Child/Teen Safety Phase 10: KYC collects identity documents and may send
+    them to an external provider. Only for a person the central gate allows
+    (KYC never grants age, guardian or financial eligibility by itself)."""
+    try:
+        _fe.require(db, user, _fe.FinancialOperation.KYC_INITIATION)
+    except _fe.FinancialEligibilityHold as exc:
+        raise _fe.http_error(exc) from None
+
+
 @router.post("/initiate")
 async def initiate_shufti_verification(
     *,
@@ -199,6 +210,7 @@ async def initiate_shufti_verification(
     - IN_PROGRESS/PENDING: Réutiliser si la session provider est encore valide
     - REJECTED/REQUIRES_REVIEW/EXPIRED: Permettre de reprendre avec nouvelle référence
     """
+    _guard_kyc_initiation(db, current_user)
     # Récupérer l'enregistrement KYC existant (il ne peut y en avoir qu'un par user)
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
 
@@ -591,6 +603,7 @@ def submit_kyc_verification(
     """
     Soumettre une nouvelle demande de vérification KYC
     """
+    _guard_kyc_initiation(db, current_user)
     # Vérifier si l'utilisateur a déjà une vérification en cours
     existing_verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
     if existing_verification and existing_verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
@@ -743,6 +756,7 @@ def upload_kyc_document(
     """
     Télécharger des documents pour une vérification KYC
     """
+    _guard_kyc_initiation(db, current_user)
     verification = crud_kyc.kyc_verification.get(db, id=verification_id)
     if not verification:
         raise HTTPException(
@@ -1071,6 +1085,7 @@ async def submit_proof_of_address(
     """
     Étape 2 : fichiers justificatif (image ou PDF) + texte saisi ; correspondance heuristique avec l’adresse verrouillée.
     """
+    _guard_kyc_initiation(db, current_user)
     name_on_document = (name_on_document or "").strip()
     address_as_shown_on_document = (address_as_shown_on_document or "").strip()
     if len(name_on_document) < 2:

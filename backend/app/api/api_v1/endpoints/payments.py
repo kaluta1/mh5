@@ -211,6 +211,16 @@ async def create_payment(
             raise HTTPException(status_code=409, detail="Payment creation is already in progress")
         return _stored_payment_response(existing)
 
+    # Child/Teen Safety Phase 10: a NEW payment (deposit row, seat reservation,
+    # provider invoice) only for a member the central gate allows. An idempotent
+    # replay above creates nothing new and is answered as before.
+    from app.services.financial_eligibility import FinancialEligibilityHold, FinancialOperation, http_error, require
+
+    try:
+        require(db, current_user, FinancialOperation.PAYMENT, subject={"product_code": product_code})
+    except FinancialEligibilityHold as exc:
+        raise http_error(exc) from None
+
     pay_currency = normalize_pay_currency(
         request.pay_currency
         or settings.NOWPAYMENTS_DEFAULT_PAY_CURRENCY

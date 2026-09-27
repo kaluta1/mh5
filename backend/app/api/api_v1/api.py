@@ -126,6 +126,12 @@ from app.api.api_v1.endpoints import interactions as interaction_endpoints  # no
 api_router.include_router(interaction_endpoints.router, prefix="/interactions", tags=["Interaction safety"])
 api_router.include_router(interaction_endpoints.ads_router, prefix="/ads", tags=["Advertising safety"])
 
+from app.api.api_v1.endpoints import financial_eligibility as financial_eligibility_endpoints  # noqa: E402
+
+# Phase 10: the member's own prize/financial eligibility status (read-only).
+api_router.include_router(financial_eligibility_endpoints.router, prefix="/financial-eligibility",
+                          tags=["Financial eligibility"])
+
 from app.api.api_v1.endpoints import guardian as guardian_endpoints  # noqa: E402
 
 api_router.include_router(guardian_endpoints.router, prefix="/guardian", tags=["Guardian consent"])

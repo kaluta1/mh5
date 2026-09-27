@@ -324,6 +324,9 @@ def preview_withdrawal(
         fee = preview.fee
         net = preview.net_to_member
 
+    from app.services import financial_eligibility as fe
+
+    eligibility = fe.evaluate(db, current_user, fe.FinancialOperation.WITHDRAWAL)
     return WithdrawPreviewResponse(
         available_to_withdraw=float(available),
         minimum_withdrawal=float(MIN_WITHDRAWAL),
@@ -331,6 +334,8 @@ def preview_withdrawal(
         net_amount=float(net),
         wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
         payout_currency=current_user.payout_currency or "usdtbsc",
+        eligibility_status=eligibility.outcome.value,
+        eligibility_next_step=eligibility.next_step,
     )
 
 
@@ -346,6 +351,7 @@ def request_withdrawal(
     Min $100; fee 1% (min $20, max $1000) per MYHIGH5 chart of accounts.
     """
     from app.services.commission_payout_service import process_manual_withdrawal_sync
+    from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 
     try:
         result = process_manual_withdrawal_sync(
@@ -362,6 +368,9 @@ def request_withdrawal(
         db.commit()
     except HTTPException:
         raise
+    except FinancialEligibilityHold as exc:
+        # Phase 10: generic member-facing body; balances and commissions untouched.
+        raise http_error(exc) from None
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
