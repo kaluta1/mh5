@@ -36,7 +36,7 @@ from .referral_share import ReferralShareLink, ReferralShareClick, ReferralShare
 from .business_model import (
     BusinessModelVersion, RevenuePolicy, RevenueRecognition, ReferralPoolConfig, ReferralPoolMembership,
     ReferralPoolAssignment, ReferralPoolMigrationRun, LeadersPeriod, LeadersAllocationLine,
-    MarketOrder, MarketOrderEvent, MarketDispute,
+    MarketOrder, MarketOrderEvent, MarketDispute, AffiliateRateQualification,
 )
 from .age_policy import AgePolicy
 from .age_safety import UserAgeProfile, DobChangeRecord, AgeSafetyEvent, ChildSafetyEnforcement

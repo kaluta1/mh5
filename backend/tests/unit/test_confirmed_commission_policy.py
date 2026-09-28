@@ -1,6 +1,7 @@
 """Client-confirmed (2026-09-25) NEW_V2 commission rules:
-Referral Pool 20% direct + Leaders revenue, KYC on the full fee, full-price products,
-marketplace 20% of markup, Leaders ranking on PAID direct commission only."""
+KYC on the full fee, full-price products, marketplace 20% of markup, Leaders ranking on PAID
+direct commission only. The Referral Pool was retired on 2026-09-28: its historical postings
+(20% direct + Leaders revenue) are preserved and still reverse exactly; no new pool activity."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,7 +15,7 @@ from app.core.config import settings
 from app.models.accounting import JournalEntry, JournalLine
 from app.models.affiliate import AffiliateCommission, CommissionStatus
 from app.models.business_model import LeadersPeriod, ReferralPoolMembership, RevenuePolicy, RevenueRecognition
-from app.models.payment import DepositStatus, ProductType
+from app.models.payment import ProductType
 from app.services import leaders_service, legacy_pool_migration, marketplace_service
 from app.services import referral_pool_service as pool
 from app.services.commission_distribution import process_payment_validation
@@ -27,6 +28,7 @@ from tests.unit.test_new_business_model import (  # noqa: F401  (fixtures)
     _balance,
     _commission,
     _deposit,
+    _historical_pool_purchase,
     _legacy_world,
     _listing,
     _retired_legacy,
@@ -50,24 +52,18 @@ def _chain(db, prefix):
     return payer, direct, uplines
 
 
-def _buy_pool_seat(db, buyer):
-    seat = pool.reserve_for_purchase(db, buyer)
-    deposit = _deposit(db, buyer, REFERRAL_POOL_PRODUCT_CODE)
-    pool.attach_deposit(db, seat, deposit.id)
-    return seat, deposit
 
 
 def _journal_lines_for(db, entry):
     return db.query(JournalLine).filter(JournalLine.entry_id == entry.id).all()
 
 
-# ================================================================ A. Referral Pool
+# ================================================================ A. Referral Pool (retired; history preserved)
 
-def test_pool_payment_pays_direct_sponsor_exactly_20_and_no_upline(world):
+def test_historical_pool_payment_kept_20_direct_and_no_upline(world):
     db = world
     payer, direct, uplines = _chain(db, "rp")
-    _, deposit = _buy_pool_seat(db, payer)
-    process_payment_validation(db, deposit, defer_commit=True)
+    deposit = _historical_pool_purchase(db, payer)
     db.commit()
 
     rows = db.query(AffiliateCommission).all()
@@ -79,18 +75,15 @@ def test_pool_payment_pays_direct_sponsor_exactly_20_and_no_upline(world):
     assert c.revenue_category == "REFERRAL_POOL_ENTRY" and c.business_model_version == NEW_MODEL_VERSION
     upline_ids = [u.id for u in uplines]  # Level 2..10
     assert db.query(AffiliateCommission).filter(AffiliateCommission.user_id.in_(upline_ids)).count() == 0
-    assert _balance(db, "2002") == 0 and _balance(db, "2104") == 0  # no multi-level / Founding payable
-    # Revenue is the full $100; commission is a separate expense/payable.
     assert _balance(db, "1001") == Decimal("100.00") and _balance(db, "4008") == Decimal("-100.00")
     assert _balance(db, "5001") == Decimal("20.00") and _balance(db, "2001") == Decimal("-20.00")
     _assert_all_journals_balance(db)
 
 
-def test_pool_payment_enters_leaders_revenue_base(world):
+def test_historical_pool_revenue_stays_in_its_leaders_month(world):
     db = world
     payer, _direct, _ = _chain(db, "lr")
-    _, deposit = _buy_pool_seat(db, payer)
-    process_payment_validation(db, deposit, defer_commit=True)
+    _historical_pool_purchase(db, payer)
     db.commit()
     rec = db.query(RevenueRecognition).one()
     assert (rec.product_code, rec.website_revenue_amount, rec.leaders_revenue_eligible) == (
@@ -99,30 +92,27 @@ def test_pool_payment_enters_leaders_revenue_base(world):
     assert leaders_service.eligible_company_revenue(db, now.year, now.month) == Decimal("100.00")
 
 
-def test_failed_or_pending_pool_payment_creates_no_commission_and_no_leaders_revenue(world):
+def test_late_pool_payment_after_retirement_creates_no_commission_or_leaders_revenue(world):
     db = world
-    payer, _direct, _ = _chain(db, "fp")
-    pending_seat, pending_dep = _buy_pool_seat(db, payer)
-    pending_dep.status = DepositStatus.PENDING
-    db.commit()
-    # Pending invoice: seat reserved only, nothing earned or recognized.
-    assert pending_seat.status == pool.RESERVED
+    payer, direct, _ = _chain(db, "fp")
+    deposit = _deposit(db, payer, REFERRAL_POOL_PRODUCT_CODE)
+    for _ in range(2):
+        process_payment_validation(db, deposit, defer_commit=True)
+        db.commit()
     assert db.query(AffiliateCommission).count() == 0 and db.query(RevenueRecognition).count() == 0
-    # Invoice fails: reservation released, still nothing earned.
-    pending_dep.status = DepositStatus.FAILED
-    pool.release_reservation(db, pending_seat, "invoice failed")
-    db.commit()
-    assert pending_seat.status == pool.CANCELLED
-    assert db.query(AffiliateCommission).count() == 0 and db.query(RevenueRecognition).count() == 0
-    assert db.query(JournalEntry).count() == 0
+    assert db.query(ReferralPoolMembership).count() == 0
+    assert [e.posting_type for e in entries_for_source(db, SourceType.DEPOSIT, deposit.id)] == [PostingType.RECEIPT]
+    assert _balance(db, "2100") == Decimal("-100.00") and _balance(db, "2001") == 0
     now = datetime.utcnow()
     assert leaders_service.eligible_company_revenue(db, now.year, now.month) == Decimal("0.00")
+    _assert_all_journals_balance(db)
 
 
-def test_pool_payment_retry_cannot_duplicate_commission_journal_or_seat(world):
+def test_historical_pool_retry_cannot_duplicate_commission_journal_or_seat(world):
     db = world
     payer, _direct, _ = _chain(db, "rt")
-    _, deposit = _buy_pool_seat(db, payer)
+    deposit = _historical_pool_purchase(db, payer)
+    db.commit()
     for _ in range(3):
         process_payment_validation(db, deposit, defer_commit=True)
         db.commit()
@@ -132,20 +122,18 @@ def test_pool_payment_retry_cannot_duplicate_commission_journal_or_seat(world):
     assert [e.posting_type for e in deposit_entries] == [PostingType.RECOGNITION]
     commission_entries = entries_for_source(db, SourceType.COMMISSION, c.id)
     assert [e.posting_type for e in commission_entries] == [PostingType.COMMISSION_ACCRUAL]
-    assert all(e.idempotency_key for e in deposit_entries + commission_entries)
     assert db.query(RevenueRecognition).count() == 1
     assert db.query(ReferralPoolMembership).filter(ReferralPoolMembership.status == pool.ACTIVE).count() == 1
     assert _balance(db, "2001") == Decimal("-20.00")
     _assert_all_journals_balance(db)
 
 
-def test_pool_refund_reverses_the_20_commission_and_leaders_revenue(world):
+def test_historical_pool_refund_reverses_the_20_commission_and_leaders_revenue(world):
     from app.services.financial_reversal import reverse_provider_refund
 
     db = world
     payer, _direct, _ = _chain(db, "rf")
-    _, deposit = _buy_pool_seat(db, payer)
-    process_payment_validation(db, deposit, defer_commit=True)
+    deposit = _historical_pool_purchase(db, payer)
     db.commit()
     assert reverse_provider_refund(db, deposit, {"refund_amount": "100.00"}) is True
     db.commit()
@@ -156,27 +144,18 @@ def test_pool_refund_reverses_the_20_commission_and_leaders_revenue(world):
     _assert_all_journals_balance(db)
 
 
-def test_legacy_founding_migration_creates_no_commission_revenue_or_journal(world):
+def test_legacy_founding_migration_is_retired_and_creates_nothing(world):
     db = world
-    users, _d = _legacy_world(db)
-    # Give the migrated members a sponsor: a paid pool entry would pay them $20, the migration must not.
-    sponsor = _user(db, "legacy-sponsor@t.com")
-    for u in users.values():
-        u.sponsor_id = sponsor.id
-    db.commit()
+    _legacy_world(db)
     journals_before = db.query(JournalEntry).count()
     lines_before = db.query(JournalLine).count()
     built = legacy_pool_migration.build_manifest(db)
-    result = legacy_pool_migration.execute(db, expected_sha256=built["sha256"], operator="test")
-    db.commit()
-    assert result["inserted_deposit_ids"]
-    assert db.query(ReferralPoolMembership).filter_by(entitlement_source=pool.SOURCE_LEGACY).count() == len(
-        result["inserted_deposit_ids"])
-    assert db.query(AffiliateCommission).count() == 0
-    assert db.query(RevenueRecognition).count() == 0
+    with pytest.raises(legacy_pool_migration.MigrationAborted):
+        legacy_pool_migration.execute(db, expected_sha256=built["sha256"], operator="test")
+    db.rollback()
+    assert db.query(ReferralPoolMembership).count() == 0
+    assert db.query(AffiliateCommission).count() == 0 and db.query(RevenueRecognition).count() == 0
     assert (db.query(JournalEntry).count(), db.query(JournalLine).count()) == (journals_before, lines_before)
-    now = datetime.utcnow()
-    assert leaders_service.eligible_company_revenue(db, now.year, now.month) == Decimal("0.00")
 
 
 # ================================================================ B. KYC
@@ -402,7 +381,7 @@ def test_policy_rows_state_the_confirmed_rules(world):
     assert "PROVISIONAL" not in (pool_policy.notes or "") and "PROVISIONAL" not in (get_policy(db, "kyc").notes or "")
     assert COMMISSION_BASE_DEFINITION == "GROSS_LESS_SELLER_BASE"
     summary = bm_api._commission_policy(db)
-    assert summary["referral_pool"]["direct_commission"] == 20.0 and summary["referral_pool"]["leaders_revenue_eligible"]
+    assert "referral_pool" not in summary  # retired: no longer advertised as a commission example
     assert (summary["kyc"]["commission_base"], summary["kyc"]["direct_commission"]) == (10.0, 2.0)
     assert [p["direct_commission"] for p in summary["other_products"]] == [2.0, 10.0, 20.0]
     mk = summary["marketplace"]

@@ -4,8 +4,8 @@
     python scripts/referral_pool_legacy_migration.py --out manifest.json   # also writes the full manifest
     python scripts/referral_pool_legacy_migration.py --execute --manifest-sha256 <sha> --operator <name>
 
-The execute path recomputes the manifest and refuses to run unless its SHA-256 equals the
-reviewed one. It commits only after in-transaction reconciliation passes.
+RETIRED 2026-09-28 with the Referral Pool: --execute always aborts (nothing is written).
+The dry run remains a read-only audit of the migration that already ran.
 """
 from __future__ import annotations
 

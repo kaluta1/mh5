@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Crown, Users, ShoppingBag, Megaphone, Target, DollarSign } from "lucide-react"
+import { Crown, Users, Megaphone, Target, DollarSign, TrendingUp } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 
 export function WaysToEarn() {
@@ -9,10 +9,10 @@ export function WaysToEarn() {
 
   const earningMethods = [
     {
-      key: 'referral_pool',
-      icon: Users,
-      title: t('landing.ways_to_earn.referral_pool.title'),
-      description: t('landing.ways_to_earn.referral_pool.description')
+      key: 'qualification',
+      icon: TrendingUp,
+      title: t('landing.ways_to_earn.qualification.title'),
+      description: t('landing.ways_to_earn.qualification.description')
     },
     {
       key: 'leaders',
@@ -25,18 +25,6 @@ export function WaysToEarn() {
       icon: Users,
       title: t('landing.ways_to_earn.kyc_payments.title'),
       description: t('landing.ways_to_earn.kyc_payments.description')
-    },
-    {
-      key: 'club_memberships',
-      icon: Users,
-      title: t('landing.ways_to_earn.club_memberships.title'),
-      description: t('landing.ways_to_earn.club_memberships.description')
-    },
-    {
-      key: 'shop_purchases',
-      icon: ShoppingBag,
-      title: t('landing.ways_to_earn.shop_purchases.title'),
-      description: t('landing.ways_to_earn.shop_purchases.description')
     },
     {
       key: 'ad_revenue',

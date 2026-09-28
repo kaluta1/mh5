@@ -382,14 +382,15 @@ def test_34b_expired_completion_token_rejected(consent_world, client, register, 
     assert members(db).count() == 0
 
 
-def test_36_to_38_completion_uses_normal_atomic_path_with_sponsor(world, client, register, outbox, accept_admin_review):
+def test_36_to_38_completion_uses_normal_atomic_path_organic_gets_no_sponsor(world, client, register, outbox, accept_admin_review):
     db = world
     add_policy(db)
     enforce(db, "TZ")
-    member = _pool_member(db, "pool_member_p4@example.com")
+    member = _pool_member(db, "pool_member_p4@example.com")  # Referral Pool retired: never assigned
     minor, _ = full_flow(client, register, outbox, db)
-    assert (minor.sponsor_id, minor.sponsor_source) == (member.id, "REFERRAL_POOL")
-    assert db.query(ReferralPoolAssignment).filter(ReferralPoolAssignment.referred_user_id == minor.id).count() == 1
+    assert (minor.sponsor_id, minor.sponsor_source) == (None, "NONE")
+    assert db.query(ReferralPoolAssignment).count() == 0
+    assert db.query(User).filter(User.sponsor_id == member.id).count() == 0
     profile = db.query(UserAgeProfile).filter(UserAgeProfile.user_id == minor.id).one()
     assert profile.registration_decision == RegistrationDecision.ALLOWED_WITH_GUARDIAN_CONSENT.value
     assert profile.assurance_level == "SELF_DECLARED_DOB"

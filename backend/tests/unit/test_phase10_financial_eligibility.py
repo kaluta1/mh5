@@ -543,25 +543,34 @@ def test_PAY_A_C_unknown_ordinary_payment_is_not_an_adult_classification(client,
         assert not fe.evaluate(db, u, op).allowed, op                           # D-H: adult-only stays closed
 
 
-def test_PAY_B_M_unknown_referral_pool_payment_keeps_business_rules(client, world, fake_payment_provider):
-    from app.models.business_model import ReferralPoolMembership
-    from app.services.new_model_reference_data import REFERRAL_POOL_PRODUCT_CODE
-
+def test_PAY_B_M_unknown_membership_payment_keeps_business_rules(client, world, fake_payment_provider):
+    """(Was the $100 Referral Pool entry; the pool is retired, so a NEW_V2 platform product is used.)"""
     db = world
     u = unknown(db)
     jl, je = db.query(JournalLine).count(), db.query(JournalEntry).count()
     comm = db.query(AffiliateCommission).count()
-    r = pay(client, u, REFERRAL_POOL_PRODUCT_CODE, "100.00", key="pool-1")
+    r = pay(client, u, "annual_membership", "50.00", key="annual-1")
     assert r.status_code == 200, r.text                                          # B: no new DOB requirement
-    assert fake_payment_provider[0]["price_amount"] == Decimal("100.00")         # M: price unchanged
-    again = pay(client, u, REFERRAL_POOL_PRODUCT_CODE, "100.00", key="pool-1")  # L: idempotent replay
+    assert fake_payment_provider[0]["price_amount"] == Decimal("50.00")          # M: price unchanged
+    again = pay(client, u, "annual_membership", "50.00", key="annual-1")        # L: idempotent replay
     assert again.status_code == 200 and again.json()["deposit_id"] == r.json()["deposit_id"]
     assert len(fake_payment_provider) == 1
     assert db.query(Deposit).filter(Deposit.user_id == u.id).count() == 1
-    assert db.query(ReferralPoolMembership).filter(ReferralPoolMembership.user_id == u.id).count() == 1
     # M: nothing is recognised, committed or journalled at invoice time (unchanged: that happens on confirmation).
     assert (db.query(JournalLine).count(), db.query(JournalEntry).count(), db.query(AffiliateCommission).count()) \
         == (jl, je, comm)
+
+
+def test_PAY_retired_referral_pool_checkout_is_gone_for_everyone(client, world, fake_payment_provider):
+    from app.models.business_model import ReferralPoolMembership
+    from app.services.new_model_reference_data import REFERRAL_POOL_PRODUCT_CODE
+
+    db = world
+    for u in (unknown(db), person(db, 30)):
+        r = pay(client, u, REFERRAL_POOL_PRODUCT_CODE, "100.00", key=f"pool-{u.id}")
+        assert r.status_code == 410 and "retired" in r.json()["detail"].lower()
+    assert fake_payment_provider == []
+    assert db.query(Deposit).count() == 0 and db.query(ReferralPoolMembership).count() == 0
 
 
 def test_PAY_I_explicit_jurisdiction_restriction_blocks_unknown_before_any_deposit(client, db, no_payment_provider):

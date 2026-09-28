@@ -249,3 +249,25 @@ class MarketDispute(Base):
     resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class AffiliateRateQualification(Base):
+    """Permanent qualified direct-affiliate rate (client rule confirmed 2026-09-28).
+
+    Written once, at the moment the rule was first met; the application never updates or
+    deletes it, so a later change to the referrals (KYC revoked, account closed, sponsor
+    edited) cannot take back a rate that was legitimately earned. The derivation that
+    produced it is kept alongside for audit.
+    """
+
+    __tablename__ = "affiliate_rate_qualifications"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_affiliate_rate_qualification_user"),)
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    rule_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    qualified_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    qualified_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    window_deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    qualifying_referral_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    required_referral_count: Mapped[int] = mapped_column(Integer, nullable=False)

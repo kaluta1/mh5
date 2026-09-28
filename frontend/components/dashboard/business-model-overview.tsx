@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/language-context'
 export type BusinessModelSummary = {
   business_model_version: string | null
   direct_commission_rate: number
-  referral_pool: { price_usd: number; capacity: number; seats_in_use: number; active_members: number; is_open: boolean }
+  referral_pool: { retired: boolean; is_open: boolean }
   leaders: { pool_rate: number; max_members: number }
   marketplace: { markup_rate: number; enabled: boolean }
 }
@@ -47,7 +47,6 @@ function Section({ icon: Icon, title, children }: { icon: typeof Users; title: s
 export function BusinessModelOverview() {
   const { t } = useLanguage()
   const summary = useBusinessModelSummary()
-  const pool = summary?.referral_pool
 
   return (
     <div className="space-y-6">
@@ -59,19 +58,6 @@ export function BusinessModelOverview() {
       <Section icon={Percent} title={t('business_model.direct_title')}>
         <p>{t('business_model.direct_body')}</p>
         <p className="text-gray-500 dark:text-gray-400">{t('business_model.direct_example')}</p>
-      </Section>
-
-      <Section icon={Users} title={t('business_model.pool_title')}>
-        <p>{t('business_model.pool_body')}</p>
-        <p className="text-gray-500 dark:text-gray-400">{t('business_model.pool_legacy_note')}</p>
-        {pool && (
-          <p className="font-medium text-gray-800 dark:text-gray-200">
-            {t('business_model.pool_seats')}: {pool.seats_in_use.toLocaleString()} / {pool.capacity.toLocaleString()}
-          </p>
-        )}
-        <Link href="/dashboard/referral-pool" className="inline-block text-sm font-medium text-myhigh5-primary underline underline-offset-4">
-          {t('business_model.learn_more')}
-        </Link>
       </Section>
 
       <Section icon={Crown} title={t('business_model.leaders_title')}>
@@ -87,6 +73,14 @@ export function BusinessModelOverview() {
         {summary && !summary.marketplace.enabled && (
           <p className="text-gray-500 dark:text-gray-400">{t('business_model.marketplace_pending')}</p>
         )}
+      </Section>
+
+      <Section icon={Users} title={t('business_model.pool_title')}>
+        <p>{t('business_model.pool_body')}</p>
+        <p className="text-gray-500 dark:text-gray-400">{t('business_model.pool_legacy_note')}</p>
+        <Link href="/dashboard/referral-pool" className="inline-block text-sm font-medium text-myhigh5-primary underline underline-offset-4">
+          {t('business_model.pool_history_link')}
+        </Link>
       </Section>
 
       <p className="text-sm text-gray-500 dark:text-gray-400">{t('business_model.history_note')}</p>

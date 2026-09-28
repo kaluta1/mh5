@@ -2,7 +2,7 @@ import AdminBusinessModel from '@/components/admin/admin-business-model'
 
 export const metadata = {
     title: 'Business model | Admin | MyHigh5',
-    description: 'Direct affiliate, Referral Pool, MyHigh5 Leaders and marketplace administration',
+    description: 'Direct affiliate, MyHigh5 Leaders and marketplace administration (Referral Pool history)',
 }
 
 export default function BusinessModelAdminPage() {

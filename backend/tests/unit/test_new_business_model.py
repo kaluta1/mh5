@@ -1,5 +1,6 @@
-"""NEW_V2 business model: direct affiliate, Referral Pool, legacy Founding migration,
-MyHigh5 Leaders, structured accounting, marketplace custody/dispute and the cutover."""
+"""NEW_V2 business model: direct affiliate, the retired Referral Pool (history only), legacy
+Founding migration audit, MyHigh5 Leaders, structured accounting, marketplace custody/dispute
+and the cutover."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -19,7 +20,6 @@ from app.models.business_model import (
     LeadersPeriod,
     MarketOrder,
     ReferralPoolAssignment,
-    ReferralPoolConfig,
     ReferralPoolMembership,
     RevenueRecognition,
 )
@@ -239,39 +239,100 @@ def test_legacy_refund_text_match_no_longer_collides_5_with_51(world):
     assert Decimal(str(reversal.total_debit)) == Decimal("50.00")  # only #5 mirrored, not #51
 
 
-# ================================================================ referral pool
+# ================================================================ referral pool (retired 2026-09-28)
 
-def test_referral_pool_purchase_activates_seat_books_revenue_and_pays_direct_sponsor_20(world):
+def _historical_pool_purchase(db, buyer, *, seat_number=1) -> Deposit:
+    """Recreate what a pre-retirement $100 pool purchase left behind: an ACTIVE seat and the
+    NEW_V2 recognition + 20% direct commission (the generic posting path it used)."""
+    from app.services.new_model_payments import _recognize
+
+    deposit = _deposit(db, buyer, REFERRAL_POOL_PRODUCT_CODE)
+    db.add(ReferralPoolMembership(user_id=buyer.id, status=pool.ACTIVE, seat_number=seat_number,
+                                  entitlement_source=pool.SOURCE_PAID, source_deposit_id=deposit.id,
+                                  joined_at=datetime.utcnow(), assignment_eligible=True))
+    db.flush()
+    _recognize(db, deposit, credit_from="1001")
+    db.flush()
+    return deposit
+
+
+def test_every_pool_writer_is_retired(world):
+    db = world
+    u = _user(db, "w@t.com")
+    for call in (lambda: pool.reserve_for_purchase(db, u),
+                 lambda: pool.activate_from_deposit(db, object()),
+                 lambda: pool.grant_legacy_seat(db, user_id=u.id, deposit_id=1, run_id="r"),
+                 lambda: pool.pick_pool_member(db, exclude_user_id=u.id),
+                 lambda: pool.record_assignment(db, referred_user_id=u.id, pick=None)):
+        with pytest.raises(pool.ReferralPoolRetired):
+            call()
+    assert db.query(ReferralPoolMembership).count() == 0 and db.query(ReferralPoolAssignment).count() == 0
+
+
+def test_pool_payment_confirmed_after_retirement_is_held_not_earned(world):
+    """An invoice created before retirement but paid after: no seat, revenue or commission; cash held in 2100."""
     db = world
     sponsor = _user(db, "ps@t.com")
     buyer = _user(db, "pb@t.com", sponsor=sponsor)
-    seat = pool.reserve_for_purchase(db, buyer)
     deposit = _deposit(db, buyer, REFERRAL_POOL_PRODUCT_CODE)
-    pool.attach_deposit(db, seat, deposit.id)
+    db.add(ReferralPoolMembership(user_id=buyer.id, status=pool.RESERVED, seat_number=1, entitlement_source=pool.SOURCE_PAID,
+                                  source_deposit_id=deposit.id, reserved_at=datetime.utcnow(),
+                                  reservation_expires_at=datetime.utcnow() + timedelta(minutes=30)))
+    db.commit()
     process_payment_validation(db, deposit, defer_commit=True)
     db.commit()
     m = db.query(ReferralPoolMembership).one()
-    assert (m.status, m.entitlement_source, m.source_deposit_id, m.seat_number) == (pool.ACTIVE, pool.SOURCE_PAID, deposit.id, 1)
-    assert _balance(db, "4008") == Decimal("-100.00")
-    c = db.query(AffiliateCommission).one()  # confirmed policy: direct sponsor earns 20%
-    assert (c.user_id, c.level, c.base_amount, c.commission_amount) == (sponsor.id, 1, Decimal("100.00"), Decimal("20.00"))
+    assert (m.status, m.seat_number) == (pool.CANCELLED, None)
+    assert pool.seats_in_use(db) == 0 and pool.active_members(db) == 0
+    assert db.query(AffiliateCommission).count() == 0 and db.query(RevenueRecognition).count() == 0
+    assert _balance(db, "1001") == Decimal("100.00") and _balance(db, "2100") == Decimal("-100.00")
+    assert _balance(db, "4008") == 0 and _balance(db, "2001") == 0
+    assert [e.posting_type for e in entries_for_source(db, SourceType.DEPOSIT, deposit.id)] == [PostingType.RECEIPT]
+    assert deposit.status == DepositStatus.VALIDATED  # never auto-refunded
+    _assert_all_journals_balance(db)
 
 
-def test_pool_capacity_is_enforced_and_expired_or_failed_reservations_free_seats(world):
+def test_late_pool_payment_retries_post_one_hold_only(world):
     db = world
-    db.query(ReferralPoolConfig).one().capacity = 2
-    u1, u2, u3 = (_user(db, f"c{i}@t.com") for i in range(3))
-    s1 = pool.reserve_for_purchase(db, u1)
-    pool.reserve_for_purchase(db, u2)
-    with pytest.raises(pool.PoolFull):
-        pool.reserve_for_purchase(db, u3)
-    pool.release_reservation(db, s1, "invoice failed")
-    s3 = pool.reserve_for_purchase(db, u3)
-    assert s3.seat_number == 1
-    s3.reservation_expires_at = datetime.utcnow() - timedelta(minutes=1)
-    db.flush()
-    assert pool.reserve_for_purchase(db, u1).seat_number == 1  # expired seat reclaimed
-    assert pool.seats_in_use(db) == 2
+    buyer = _user(db, "retry@t.com")
+    deposit = _deposit(db, buyer, REFERRAL_POOL_PRODUCT_CODE)
+    for _ in range(3):
+        process_payment_validation(db, deposit, defer_commit=True)
+        db.commit()
+    assert len(entries_for_source(db, SourceType.DEPOSIT, deposit.id)) == 1
+    assert _balance(db, "2100") == Decimal("-100.00")
+    assert db.query(ReferralPoolMembership).count() == 0
+
+
+def test_historical_pool_purchase_is_preserved_and_reprocessing_adds_nothing(world):
+    db = world
+    sponsor = _user(db, "hs@t.com")
+    buyer = _user(db, "hb@t.com", sponsor=sponsor)
+    deposit = _historical_pool_purchase(db, buyer)
+    db.commit()
+    before = (db.query(JournalEntry).count(), db.query(JournalLine).count(), db.query(AffiliateCommission).count())
+    process_payment_validation(db, deposit, defer_commit=True)  # e.g. a replayed webhook
+    db.commit()
+    assert (db.query(JournalEntry).count(), db.query(JournalLine).count(), db.query(AffiliateCommission).count()) == before
+    m = db.query(ReferralPoolMembership).one()
+    assert (m.status, m.seat_number, m.source_deposit_id) == (pool.ACTIVE, 1, deposit.id)
+    assert _balance(db, "4008") == Decimal("-100.00") and _balance(db, "2100") == 0
+    c = db.query(AffiliateCommission).one()
+    assert (c.user_id, c.commission_amount) == (sponsor.id, Decimal("20.00"))
+
+
+def test_historical_pool_refund_still_reverses_exactly(world):
+    db = world
+    sponsor = _user(db, "rs@t.com")
+    buyer = _user(db, "rb@t.com", sponsor=sponsor)
+    deposit = _historical_pool_purchase(db, buyer)
+    db.commit()
+    assert reverse_provider_refund(db, deposit, {"refund_amount": "100.00"}) is True
+    db.commit()
+    assert db.query(AffiliateCommission).one().status == CommissionStatus.CANCELLED
+    assert _balance(db, "4008") == 0 and _balance(db, "2001") == 0 and _balance(db, "5001") == 0
+    assert db.query(ReferralPoolMembership).one().status == pool.REFUNDED
+    _assert_all_journals_balance(db)
 
 
 def test_database_rejects_two_holders_of_the_same_seat(world):
@@ -285,34 +346,19 @@ def test_database_rejects_two_holders_of_the_same_seat(world):
     db.rollback()
 
 
-def test_race_on_the_last_seat_never_creates_member_capacity_plus_one(world, monkeypatch):
-    """Simulates the stale read of a concurrent buyer: both pick seat 1; the DB lets only one hold it."""
-    db = world
-    db.query(ReferralPoolConfig).one().capacity = 1
-    first, second = _user(db, "r1@t.com"), _user(db, "r2@t.com")
-    pool.reserve_for_purchase(db, first)
-    monkeypatch.setattr(pool, "_lowest_free_seat", lambda _db, _cap: 1)  # stale view: seat 1 looks free
-    with pytest.raises(pool.ReferralPoolError):
-        pool.reserve_for_purchase(db, second)
-    assert db.query(ReferralPoolMembership).filter(ReferralPoolMembership.status.in_(pool.SEAT_STATUSES)).count() == 1
+def test_expired_historical_reservation_is_released_by_the_scheduler_hook(world):
+    from app.services.payment_scheduler import _release_pool_seat_for_deposit
 
-
-def test_payment_after_lapsed_reservation_with_full_pool_goes_to_review_not_over_capacity(world):
     db = world
-    db.query(ReferralPoolConfig).one().capacity = 1
-    late, other = _user(db, "late@t.com"), _user(db, "other@t.com")
-    seat = pool.reserve_for_purchase(db, late)
-    deposit = _deposit(db, late, REFERRAL_POOL_PRODUCT_CODE)
-    pool.attach_deposit(db, seat, deposit.id)
-    seat.reservation_expires_at = datetime.utcnow() - timedelta(minutes=1)
+    u = _user(db, "exp@t.com")
+    deposit = _deposit(db, u, REFERRAL_POOL_PRODUCT_CODE, status=DepositStatus.PENDING)
+    db.add(ReferralPoolMembership(user_id=u.id, status=pool.RESERVED, seat_number=3, entitlement_source=pool.SOURCE_PAID,
+                                  source_deposit_id=deposit.id))
     db.flush()
-    pool.reserve_for_purchase(db, other)  # lapsed seat is reclaimed by someone else
-    process_payment_validation(db, deposit, defer_commit=True)
-    db.commit()
-    parked = db.query(ReferralPoolMembership).filter_by(source_deposit_id=deposit.id).one()
-    assert parked.status == pool.CAPACITY_REVIEW and parked.seat_number is None
-    assert pool.seats_in_use(db) == 1
-    assert _balance(db, "2100") == Decimal("-100.00") and _balance(db, "4008") == 0
+    _release_pool_seat_for_deposit(db, deposit.id)
+    m = db.query(ReferralPoolMembership).one()
+    assert (m.status, m.seat_number) == (pool.CANCELLED, None)
+    assert db.query(JournalEntry).count() == 0
 
 
 # ================================================================ sponsor assignment
@@ -330,7 +376,7 @@ def _pool_member(db, email) -> User:
     return u
 
 
-def test_personal_referral_wins_over_pool(world):
+def test_personal_referral_sets_direct_sponsor(world):
     db = world
     _pool_member(db, "pm@t.com")
     personal = _user(db, "personal@t.com")
@@ -340,33 +386,53 @@ def test_personal_referral_wins_over_pool(world):
     assert db.query(ReferralPoolAssignment).count() == 0
 
 
-def test_organic_and_invalid_code_signups_get_fair_pool_sponsors_with_audit(world):
+def test_organic_and_invalid_code_signups_get_no_sponsor_even_with_active_pool_members(world):
     db = world
     a, b = _pool_member(db, "pa@t.com"), _pool_member(db, "pb@t.com")
     first = _register(db, "o1@t.com")
     second = _register(db, "o2@t.com", "NOT-A-REAL-CODE")
-    assert {first.sponsor_id, second.sponsor_id} == {a.id, b.id}  # fewest-assignments tier -> one each
-    assert first.sponsor_source == second.sponsor_source == "REFERRAL_POOL"
-    rows = db.query(ReferralPoolAssignment).all()
-    assert {r.referred_user_id for r in rows} == {first.id, second.id}
-    assert all(r.method == "FAIR_RANDOM_V1" and r.candidate_count == 2 for r in rows)
+    for u in (first, second):
+        assert (u.sponsor_id, u.sponsor_source) == (None, "NONE")
+    assert db.query(ReferralPoolAssignment).count() == 0
+    assert {m.assignments_count for m in db.query(ReferralPoolMembership).all()} == {0}
+    assert db.query(User).filter(User.sponsor_id.in_([a.id, b.id])).count() == 0
 
 
-def test_no_pool_member_leaves_no_sponsor_and_join_code_cannot_overwrite_assigned_sponsor(world):
+def test_inactive_sponsor_code_is_ignored_safely(world):
     db = world
-    lonely = _register(db, "lonely@t.com")
-    assert lonely.sponsor_id is None and lonely.sponsor_source == "NONE"
+    inactive = _user(db, "inactive@t.com", active=False)
+    db.commit()
+    u = _register(db, "viainactive@t.com", inactive.personal_referral_code)
+    assert (u.sponsor_id, u.sponsor_source) == (None, "NONE")
+
+
+def test_many_organic_signups_never_create_pool_rows(world):
+    db = world
+    _pool_member(db, "pm3@t.com")
+    seats_before = pool.seats_in_use(db)
+    for i in range(5):
+        _register(db, f"burst{i}@t.com")
+    assert db.query(ReferralPoolAssignment).count() == 0
+    assert pool.seats_in_use(db) == seats_before
+
+
+def test_historical_pool_sponsor_is_kept_and_join_code_cannot_overwrite_it(world):
+    db = world
     member = _pool_member(db, "pm2@t.com")
-    assigned = _register(db, "assigned@t.com")
-    assert assigned.sponsor_id == member.id
+    historical = _user(db, "historical@t.com", sponsor=member)
+    historical.sponsor_source = "REFERRAL_POOL"
+    db.add(ReferralPoolAssignment(referred_user_id=historical.id, pool_member_user_id=member.id, membership_id=1,
+                                  method="FAIR_RANDOM_V1", candidate_count=1, min_assignment_count=0,
+                                  assigned_at=datetime.utcnow()))
     other = _user(db, "other2@t.com")
     db.commit()
-    result = affiliate_tree.join_via_referral(db, assigned.id, other.personal_referral_code)
+    result = affiliate_tree.join_via_referral(db, historical.id, other.personal_referral_code)
     assert result["success"] is False
-    db.refresh(assigned)
-    assert assigned.sponsor_id == member.id
+    db.refresh(historical)
+    assert (historical.sponsor_id, historical.sponsor_source) == (member.id, "REFERRAL_POOL")
+    assert db.query(ReferralPoolAssignment).count() == 1
     with pytest.raises(IntegrityError):  # a user can never get a second pool assignment
-        db.add(ReferralPoolAssignment(referred_user_id=assigned.id, pool_member_user_id=member.id, membership_id=1,
+        db.add(ReferralPoolAssignment(referred_user_id=historical.id, pool_member_user_id=member.id, membership_id=1,
                                       method="X", candidate_count=1, min_assignment_count=0, assigned_at=datetime.utcnow()))
         db.flush()
     db.rollback()
@@ -423,37 +489,16 @@ def test_legacy_founding_classification_by_payment_evidence(world):
     assert d["efm"].id not in by_dep  # EFM is never a $100 Founding product
 
 
-def test_legacy_migration_executes_only_reviewed_manifest_is_idempotent_and_changes_no_money(world):
-    db = world
-    users, d = _legacy_world(db)
-    built = legacy_pool_migration.build_manifest(db)
-    with pytest.raises(legacy_pool_migration.MigrationAborted):
-        legacy_pool_migration.execute(db, expected_sha256="0" * 64, operator="test")
-    db.rollback()
-    result = legacy_pool_migration.execute(db, expected_sha256=built["sha256"], operator="test")
-    db.commit()
-    assert sorted(result["inserted_deposit_ids"]) == sorted([d["mfm"].id, d["fm"].id, d["dup1"].id])
-    seats = db.query(ReferralPoolMembership).all()
-    assert {s.user_id for s in seats} == {users["mfm"].id, users["fm"].id, users["dup"].id}
-    assert all(s.entitlement_source == pool.SOURCE_LEGACY and s.status == pool.ACTIVE for s in seats)
-    assert db.query(Deposit).count() == result["before"]["deposits"]  # no payment manufactured
-    assert result["before"]["journal_lines"] == result["after"]["journal_lines"]
-    rerun = legacy_pool_migration.build_manifest(db)
-    assert rerun["manifest"]["to_insert_deposit_ids"] == []
-    again = legacy_pool_migration.execute(db, expected_sha256=rerun["sha256"], operator="test")
-    assert again["inserted_deposit_ids"] == []
-
-
-def test_legacy_migration_refuses_to_exceed_capacity(world):
+def test_legacy_migration_execute_is_retired_and_writes_nothing(world):
     db = world
     _legacy_world(db)
-    db.query(ReferralPoolConfig).one().capacity = 2
-    db.commit()
-    built = legacy_pool_migration.build_manifest(db)
-    assert built["manifest"]["would_exceed_capacity_by"] == 1
-    with pytest.raises(legacy_pool_migration.MigrationAborted):
+    built = legacy_pool_migration.build_manifest(db)  # the read-only audit still works
+    assert built["manifest"]["counts"][legacy_pool_migration.AUTOMATIC] == 3
+    before = legacy_pool_migration.reconciliation_snapshot(db)
+    with pytest.raises(legacy_pool_migration.MigrationAborted, match="retired"):
         legacy_pool_migration.execute(db, expected_sha256=built["sha256"], operator="test")
     db.rollback()
+    assert legacy_pool_migration.reconciliation_snapshot(db) == before
     assert db.query(ReferralPoolMembership).count() == 0
 
 

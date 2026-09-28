@@ -332,12 +332,14 @@ def test_27_personal_sponsor_behavior_unchanged(world, register):
     assert db.query(ReferralPoolAssignment).count() == 0
 
 
-def test_28_organic_referral_pool_assignment_for_allowed_case(world, register):
+def test_28_organic_signup_allowed_without_invitation_gets_no_sponsor(world, register):
+    """Referral Pool retired (2026-09-28): an allowed organic signup succeeds with no invented sponsor."""
     db = world
     member = _pool_member(db, "pool_member2@example.com")
     user = created(db, register()[0])
-    assert (user.sponsor_id, user.sponsor_source) == (member.id, "REFERRAL_POOL")
-    assert db.query(ReferralPoolAssignment).filter(ReferralPoolAssignment.referred_user_id == user.id).count() == 1
+    assert (user.sponsor_id, user.sponsor_source) == (None, "NONE")
+    assert db.query(ReferralPoolAssignment).count() == 0
+    assert db.query(User).filter(User.sponsor_id == member.id).count() == 0
 
 
 def test_28b_failure_inside_registration_transaction_rolls_back_everything(world):

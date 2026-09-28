@@ -110,7 +110,7 @@ export default function AdminBusinessModel() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Business model (NEW_V2)</h1>
-        <p className="text-sm text-gray-500">Direct affiliate, Referral Pool, MyHigh5 Leaders and marketplace custody. All financial actions are audited.</p>
+        <p className="text-sm text-gray-500">Direct affiliate, MyHigh5 Leaders and marketplace custody. The Referral Pool is retired (read-only history). All financial actions are audited.</p>
       </div>
       <div className="flex flex-wrap gap-2" role="tablist">
         {TABS.map((t) => (
@@ -127,7 +127,7 @@ export default function AdminBusinessModel() {
           <Card title="Version">
             <p className="text-sm">{overview.version} effective {overview.effective_at} · legacy model enabled: {String(overview.legacy_business_model_enabled)}</p>
           </Card>
-          <Card title="Referral Pool">
+          <Card title="Referral Pool (retired, history only)">
             <p className="text-sm">Seats {overview.referral_pool.seats_in_use} / {overview.referral_pool.capacity} · assignments {overview.referral_pool.assignments} · method {overview.referral_pool.assignment_method}</p>
             <p className="text-sm">By status: {JSON.stringify(overview.referral_pool.by_status)} · active by source: {JSON.stringify(overview.referral_pool.active_by_source)}</p>
           </Card>
@@ -139,11 +139,14 @@ export default function AdminBusinessModel() {
 
       {tab === 'Referral Pool' && (
         <>
+          <p role="note" className="text-sm text-gray-600 dark:text-gray-300">
+            The Referral Pool is retired: no new enrollment, seats or referral assignments can be created. Historical records below are read-only.
+          </p>
           {manifest && (
             <Card title="Legacy $100 Founding migration (read-only dry run)">
               <p className="text-sm">Manifest SHA-256: <code className="break-all">{migration?.sha256}</code></p>
               <p className="text-sm">Counts: {JSON.stringify(manifest.counts)} · to insert: {manifest.to_insert_deposit_ids.length} · capacity overflow: {manifest.would_exceed_capacity_by}</p>
-              <p className="text-sm">Execution runs only on the server with the reviewed hash (scripts/referral_pool_legacy_migration.py).</p>
+              <p className="text-sm">Execution is retired; this dry run is kept as an audit of the migration that already ran.</p>
               <h3 className="text-sm font-semibold mt-2">Manual review cases</h3>
               <Table rows={manual} cols={['deposit_id', 'user_id', 'product_code', 'amount', 'reasons']} />
               <h3 className="text-sm font-semibold mt-2">All evidence</h3>

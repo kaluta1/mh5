@@ -247,6 +247,10 @@ class CRUDAffiliateTree:
             mark_join_code_assignment(db, user)
         db.add(user)
         db.add(new_tree)
+        if first_assignment:
+            from app.services.affiliate_rate_policy import record_for_sponsor_of
+
+            record_for_sponsor_of(db, int(user_id))  # an already-verified referral may complete qualification
         db.commit()
         db.refresh(new_tree)
         

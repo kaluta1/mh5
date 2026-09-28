@@ -1,4 +1,9 @@
-"""NEW_V2 accounting for validated deposits (platform-sold products and the Referral Pool).
+"""NEW_V2 accounting for validated deposits (platform-sold products).
+
+The Referral Pool is retired (2026-09-28). Historical pool postings are kept and still
+reverse exactly on a provider refund. A pool invoice created before retirement but confirmed
+after it gets no seat, no revenue and no commission: the real cash is held in 2100 for a
+manual business decision (never auto-refunded or redistributed).
 
 Every journal is linked by (source_type=DEPOSIT, source_id=deposit.id, posting_type) and a
 unique idempotency key. Revenue is recognized gross of affiliate commission; the direct
@@ -75,9 +80,31 @@ def _recognize(db: Session, deposit: Deposit, *, credit_from: str, recognized_at
     )
 
 
+def _hold_retired_pool_payment(db: Session, deposit: Deposit) -> None:
+    """A Referral Pool payment confirmed after retirement: cash held for review, nothing earned."""
+    if entries_for_source(db, SourceType.DEPOSIT, deposit.id):
+        return  # already posted (historical recognition or an earlier hold): a retry adds nothing
+    from app.services import referral_pool_service as pool
+
+    pool.release_reservation_for_deposit(
+        db, deposit.id, f"Referral Pool retired before payment of deposit #{deposit.id} was confirmed; held for review"
+    )
+    post_entry(
+        db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
+        lines=[Line("1001", debit=money(deposit.amount), description="Cash received"),
+               Line("2100", credit=money(deposit.amount),
+                    description="Referral Pool retired: payment held for manual review (no seat, revenue or commission)")],
+        description=f"NEW_V2 retired Referral Pool payment held for review - deposit {deposit.id}",
+    )
+    logger.warning("Referral Pool payment confirmed after retirement (deposit %s); cash held in 2100", deposit.id)
+
+
 def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
     """Post a validated NEW_V2 deposit. Never commits; safe to call repeatedly."""
     product = _product(db, deposit)
+    if product.code == REFERRAL_POOL_PRODUCT_CODE:
+        _hold_retired_pool_payment(db, deposit)
+        return
     try:
         policy = get_policy(db, product.code)
     except RevenuePolicyMissing:
@@ -90,20 +117,6 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
         )
         logger.warning("No NEW_V2 revenue policy for product %s (deposit %s); receipt held in 2100", product.code, deposit.id)
         return
-
-    if product.code == REFERRAL_POOL_PRODUCT_CODE:
-        from app.services import referral_pool_service as pool
-
-        membership = pool.activate_from_deposit(db, deposit)
-        if membership.status != pool.ACTIVE:
-            post_entry(
-                db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
-                lines=[Line("1001", debit=money(deposit.amount), description="Cash received"),
-                       Line("2100", credit=money(deposit.amount),
-                            description=f"Referral Pool payment held for review ({membership.status})")],
-                description=f"NEW_V2 Referral Pool payment held for review - deposit {deposit.id}",
-            )
-            return
 
     if policy.deferred_account_code:
         # Service not yet performed (e.g. KYC): cash to deferred revenue; recognized later.

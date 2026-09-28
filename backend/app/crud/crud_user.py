@@ -128,7 +128,7 @@ class CRUDUser:
         from app.services.sponsor_assignment import PERSONAL_REFERRAL, assign_at_registration
 
         if active_new_model_version(db) is not None:
-            # NEW_V2: personal referral first, else a Referral Pool member, else no sponsor.
+            # NEW_V2: a valid personal referral, else no sponsor (the Referral Pool is retired).
             assign_at_registration(db, db_obj, personal_sponsor)
         elif personal_sponsor and personal_sponsor.is_active is not False and personal_sponsor.is_deleted is not True:
             db_obj.sponsor_id = personal_sponsor.id

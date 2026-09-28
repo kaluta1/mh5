@@ -132,16 +132,6 @@ async def get_payment_currencies():
         return {"currencies": [default]}
 
 
-def _release_pool_reservation(db: Session, deposit_id: int) -> None:
-    """Invoice creation failed: a reserved Referral Pool seat must not stay consumed."""
-    from app.models.business_model import ReferralPoolMembership
-    from app.services import referral_pool_service as pool
-
-    seat = db.query(ReferralPoolMembership).filter(ReferralPoolMembership.source_deposit_id == deposit_id).first()
-    if seat is not None:
-        pool.release_reservation(db, seat, "Invoice creation failed")
-
-
 @router.post("/create", response_model=PaymentResponse)
 async def create_payment(
     request: CreatePaymentRequest,
@@ -163,6 +153,13 @@ async def create_payment(
 
     if is_legacy_founding_product(product_code) and not legacy_business_model_enabled():
         raise HTTPException(status_code=410, detail=f"Founding membership enrollment: {RETIRED_MESSAGE}")
+
+    from app.services.new_model_reference_data import REFERRAL_POOL_PRODUCT_CODE
+    from app.services.referral_pool_service import RETIRED_MESSAGE as POOL_RETIRED_MESSAGE
+
+    if product_code == REFERRAL_POOL_PRODUCT_CODE:
+        # Retired 2026-09-28: no deposit, seat or provider invoice is created.
+        raise HTTPException(status_code=410, detail=POOL_RETIRED_MESSAGE)
 
     try:
         expected_amount, expected_currency = authoritative_product_terms(product)
@@ -228,7 +225,6 @@ async def create_payment(
     ) or "usdtbsc"
 
     from app.services.new_model_ledger import model_version_for_new_event
-    from app.services.new_model_reference_data import REFERRAL_POOL_PRODUCT_CODE
 
     deposit = Deposit(
         user_id=current_user.id,
@@ -241,17 +237,6 @@ async def create_payment(
         business_model_version=model_version_for_new_event(db),
     )
     db.add(deposit)
-    if product_code == REFERRAL_POOL_PRODUCT_CODE:
-        from app.services import referral_pool_service as pool
-
-        # A seat is reserved before any invoice exists, so capacity can never be oversold.
-        try:
-            seat = pool.reserve_for_purchase(db, current_user)
-            db.flush()
-            pool.attach_deposit(db, seat, deposit.id)
-        except pool.ReferralPoolError as exc:
-            db.rollback()
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         db.commit()
     except IntegrityError as exc:
@@ -280,14 +265,12 @@ async def create_payment(
     except NowPaymentsError as exc:
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
-        _release_pool_reservation(db, deposit_id)
         db.commit()
         logger.error("NOWPayments create error: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
-        _release_pool_reservation(db, deposit_id)
         db.commit()
         logger.error("Payment creation error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

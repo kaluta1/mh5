@@ -1,8 +1,11 @@
 """The one place that sets ``users.sponsor_id`` under the NEW_V2 model.
 
-Priority at registration: valid personal referral -> Referral Pool member -> no sponsor.
-Assignment is one-time: an existing sponsor is never overwritten (row lock + NULL check),
-and a user can receive at most one pool assignment (unique referred_user_id).
+Priority at registration: valid personal referral -> no sponsor.
+The Referral Pool is retired (2026-09-28): an organic signup (no code, or a code that does
+not resolve to an eligible member) is never given an invented sponsor.
+Assignment is one-time: an existing sponsor is never overwritten (row lock + NULL check).
+
+``REFERRAL_POOL`` stays defined only to read historical rows whose sponsor came from the pool.
 """
 from __future__ import annotations
 
@@ -12,11 +15,10 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.services import referral_pool_service as pool
 
 PERSONAL_REFERRAL = "PERSONAL_REFERRAL"
 JOIN_CODE = "JOIN_CODE"
-REFERRAL_POOL = "REFERRAL_POOL"
+REFERRAL_POOL = "REFERRAL_POOL"  # historical provenance only; never assigned any more
 NONE = "NONE"
 
 
@@ -41,14 +43,6 @@ def assign_at_registration(db: Session, user: User, personal_sponsor: Optional[U
         locked.sponsor_assigned_at = now
         db.flush()
         return PERSONAL_REFERRAL
-    pick = pool.pick_pool_member(db, exclude_user_id=locked.id)
-    if pick is not None:
-        locked.sponsor_id = pick.membership.user_id
-        locked.sponsor_source = REFERRAL_POOL
-        locked.sponsor_assigned_at = now
-        pool.record_assignment(db, referred_user_id=locked.id, pick=pick)
-        db.flush()
-        return REFERRAL_POOL
     locked.sponsor_source = NONE
     locked.sponsor_assigned_at = now
     db.flush()

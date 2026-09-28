@@ -1,5 +1,8 @@
-"""NEW_V2 business model API: Direct Affiliate summary, Referral Pool, MyHigh5 Leaders,
-marketplace orders/disputes (member) and their admin controls."""
+"""NEW_V2 business model API: Direct Affiliate summary, MyHigh5 Leaders, marketplace
+orders/disputes (member) and their admin controls.
+
+The Referral Pool is retired (2026-09-28): only read-only history remains here
+(a member's own past membership, admin member/assignment/migration listings)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -38,8 +41,6 @@ from app.services.new_model_reference_data import (
     MARKETPLACE_MARKUP_RATE,
     MARKETPLACE_PRODUCT_CODE,
     NEW_MODEL_VERSION,
-    REFERRAL_POOL_PRICE,
-    REFERRAL_POOL_PRODUCT_CODE,
 )
 
 router = APIRouter()
@@ -79,12 +80,38 @@ def _commission_policy(db: Session) -> dict:
         "commission_base_definition": COMMISSION_BASE_DEFINITION,
         "provider_cost_reduces_commission_base": False,
         "affiliate_levels": 1,
-        "referral_pool": _policy_example(db, REFERRAL_POOL_PRODUCT_CODE, str(REFERRAL_POOL_PRICE)),
         "kyc": _policy_example(db, "kyc", "10.00"),
         "other_products": [_policy_example(db, "annual_membership", g) for g in ("10.00", "50.00", "100.00")],
         "marketplace": _policy_example(db, MARKETPLACE_PRODUCT_CODE, str(total), str(base)),
         "leaders_revenue_definition": leaders_service.REVENUE_DEFINITION,
         "leaders_ranking_definition": leaders_service.RANKING_DEFINITION,
+    }
+
+
+def _direct_rate_rules() -> dict:
+    from app.services import affiliate_rate_policy as rates
+
+    return {
+        "standard_rate": _num(rates.STANDARD_DIRECT_RATE),
+        "qualified_rate": _num(rates.QUALIFIED_DIRECT_RATE),
+        "required_kyc_verified_direct_referrals": rates.QUALIFICATION_DIRECT_REFERRALS,
+        "window_months_from_registration": rates.QUALIFICATION_WINDOW_MONTHS,
+        "permanent": True,
+        "applies_to": sorted(rates.DYNAMIC_RATE_REVENUE_CATEGORIES),
+    }
+
+
+def _ad_revenue_rules() -> dict:
+    from app.services import ad_revenue_policy as ads
+
+    return {
+        "contest_page": {
+            "personal_submission": {"owner_rate": _num(ads.PERSONAL_OWNER_RATE), "direct_sponsor_rate": _num(ads.CONTEST_PAGE_SPONSOR_RATE)},
+            "nomination": {"owner_rate": _num(ads.NOMINATION_OWNER_RATE), "direct_sponsor_rate": _num(ads.CONTEST_PAGE_SPONSOR_RATE)},
+            "class_follows_creative_through_levels": True,
+            "applies_to_annual_ads": False,
+        },
+        "payouts_live": False,  # policy defined; no advertising revenue event is wired yet
     }
 
 
@@ -94,19 +121,14 @@ def _commission_policy(db: Session) -> dict:
 def business_model_summary(db: Session = Depends(get_db)):
     """Public figures for the website copy (no personal data)."""
     version = db.query(BusinessModelVersion).filter(BusinessModelVersion.version == NEW_MODEL_VERSION).first()
-    cfg = pool.get_config(db)
     return {
         "business_model_version": NEW_MODEL_VERSION if version else None,
         "effective_at": version.effective_at.isoformat() + "Z" if version else None,
         "direct_commission_rate": 0.20,
         "affiliate_levels": 1,
-        "referral_pool": {
-            "price_usd": _num(REFERRAL_POOL_PRICE),
-            "capacity": int(cfg.capacity),
-            "seats_in_use": pool.seats_in_use(db),
-            "active_members": pool.active_members(db),
-            "is_open": bool(cfg.is_open) and pool.seats_in_use(db) < int(cfg.capacity),
-        },
+        "referral_pool": {"retired": True, "is_open": False},
+        "direct_affiliate_rates": _direct_rate_rules(),
+        "ad_revenue": _ad_revenue_rules(),
         "leaders": {"pool_rate": _num(LEADERS_POOL_RATE), "max_members": LEADERS_MAX_MEMBERS},
         "marketplace": {"markup_rate": _num(MARKETPLACE_MARKUP_RATE), "enabled": bool(settings.MARKETPLACE_ENABLED)},
         "commission_policy": _commission_policy(db),
@@ -123,6 +145,7 @@ def my_referral_pool(db: Session = Depends(get_db), current_user: User = Depends
     )
     current = next((r for r in rows if r.status in pool.SEAT_STATUSES), None)
     return {
+        "retired": True,
         "membership": None if current is None else {
             "status": current.status,
             "entitlement_source": current.entitlement_source,
@@ -133,6 +156,23 @@ def my_referral_pool(db: Session = Depends(get_db), current_user: User = Depends
         "assigned_referrals": db.query(func.count(ReferralPoolAssignment.id))
         .filter(ReferralPoolAssignment.pool_member_user_id == current_user.id).scalar(),
         "history": [{"status": r.status, "source": r.entitlement_source, "created_at": r.created_at.isoformat() + "Z"} for r in rows],
+    }
+
+
+@router.get("/affiliate-rate/me")
+def my_affiliate_rate(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The member's own direct-affiliate rate status (read-only; qualification is recorded when it happens)."""
+    from app.services import affiliate_rate_policy as rates
+
+    st = rates.evaluate(db, current_user, record=False)
+    return {
+        "rate": _num(st.rate),
+        "permanently_qualified": st.permanently_qualified,
+        "qualified_at": st.qualified_at.isoformat() + "Z" if st.qualified_at else None,
+        "qualifying_direct_referrals": st.qualifying_referral_count,
+        "required_direct_referrals": st.required_referral_count,
+        "window_deadline": st.window_deadline.isoformat() + "Z",
+        "applies_to": sorted(rates.DYNAMIC_RATE_REVENUE_CATEGORIES),
     }
 
 
@@ -284,7 +324,7 @@ def admin_overview(db: Session = Depends(get_db)):
         "version": NEW_MODEL_VERSION if version else None,
         "effective_at": version.effective_at.isoformat() + "Z" if version else None,
         "legacy_business_model_enabled": bool(settings.LEGACY_BUSINESS_MODEL_ENABLED),
-        "referral_pool": {"capacity": int(cfg.capacity), "seats_in_use": pool.seats_in_use(db), "by_status": by_status,
+        "referral_pool": {"retired": True, "capacity": int(cfg.capacity), "seats_in_use": pool.seats_in_use(db), "by_status": by_status,
                           "active_by_source": by_source, "assignments": db.query(func.count(ReferralPoolAssignment.id)).scalar(),
                           "assignment_method": cfg.assignment_method},
         "marketplace": marketplace_service.reconciliation(db) | {"enabled": bool(settings.MARKETPLACE_ENABLED)},

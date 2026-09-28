@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
 import { Button } from '@/components/ui/button'
-import { Home, ArrowLeft, Search, Trophy, Users, HelpCircle } from 'lucide-react'
+import { Home, ArrowLeft, Search, Trophy, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/sections/footer'
@@ -15,7 +15,6 @@ export default function NotFound() {
   const quickLinks = [
     { href: '/', label: t('navigation.home') || 'Accueil', icon: Home },
     { href: '/contests', label: t('navigation.contests') || 'Concours', icon: Trophy },
-    { href: '/clubs', label: t('navigation.clubs') || 'Clubs', icon: Users },
     { href: '/about', label: t('navigation.about') || 'À propos', icon: HelpCircle },
   ]
 

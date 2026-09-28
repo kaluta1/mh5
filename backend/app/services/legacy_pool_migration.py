@@ -9,13 +9,15 @@ Evidence is IDs and payment records only (never names). Classes:
 Execution is only from a manifest whose SHA-256 was reviewed; it inserts pool seats
 (entitlement_source=LEGACY_FOUNDING_MIGRATION, source_deposit_id=<original deposit>) and
 never creates, alters or charges a payment.
+
+RETIRED 2026-09-28 with the Referral Pool: ``execute`` refuses to run. The classification and
+manifest remain as a read-only audit of the migration that already ran.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-import uuid
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from typing import Optional
@@ -25,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.models.accounting import ChartOfAccounts, JournalEntry, JournalLine
 from app.models.affiliate import AffiliateCommission
-from app.models.business_model import ReferralPoolMembership, ReferralPoolMigrationRun
+from app.models.business_model import ReferralPoolMembership
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.user import User
 from app.services import referral_pool_service as pool
@@ -168,34 +170,9 @@ def reconciliation_snapshot(db: Session) -> dict:
 
 
 def execute(db: Session, *, expected_sha256: str, operator: str) -> dict:
-    """Insert seats for AUTOMATIC_ELIGIBLE deposits of an approved manifest. Idempotent."""
-    before = reconciliation_snapshot(db)
-    built = build_manifest(db)
-    if built["sha256"] != expected_sha256:
-        raise MigrationAborted("Manifest changed since review (SHA-256 mismatch); re-run the dry run")
-    manifest = built["manifest"]
-    if manifest["would_exceed_capacity_by"] > 0:
-        raise MigrationAborted("Migration would exceed Referral Pool capacity")
-    run_id = f"legacy-founding-{uuid.uuid4().hex[:12]}"
-    inserted = []
-    by_deposit = {c["deposit_id"]: c for c in manifest["candidates"]}
-    for deposit_id in manifest["to_insert_deposit_ids"]:
-        row = pool.grant_legacy_seat(db, user_id=by_deposit[deposit_id]["user_id"], deposit_id=deposit_id, run_id=run_id)
-        if row is not None:
-            inserted.append(deposit_id)
-    db.add(ReferralPoolMigrationRun(
-        run_id=run_id, manifest_sha256=built["sha256"], operator=operator,
-        automatic_eligible=manifest["counts"][AUTOMATIC], manual_review=manifest["counts"][MANUAL],
-        not_eligible=manifest["counts"][NOT_ELIGIBLE], inserted=len(inserted),
-        manifest_json=json.dumps(manifest, sort_keys=True),
-    ))
-    db.flush()
-    after = reconciliation_snapshot(db)
-    for key in ("users", "deposits", "deposit_amount_sum", "journal_entries", "journal_lines", "affiliate_commissions"):
-        if before[key] != after[key]:
-            raise MigrationAborted(f"Reconciliation failed: {key} changed ({before[key]} -> {after[key]})")
-    if after["pool_memberships"] - before["pool_memberships"] != len(inserted):
-        raise MigrationAborted("Reconciliation failed: unexpected pool membership delta")
-    if after["pool_seats_in_use"] > manifest["capacity"]:
-        raise MigrationAborted("Reconciliation failed: capacity exceeded")
-    return {"run_id": run_id, "inserted_deposit_ids": inserted, "before": before, "after": after}
+    """RETIRED (2026-09-28): the Referral Pool accepts no new seats, so no migration can run.
+
+    The one production run (recorded in referral_pool_migration_runs) and its seats are kept
+    as history; ``build_manifest``/``classify`` remain available as a read-only audit.
+    """
+    raise MigrationAborted(f"Legacy Founding -> Referral Pool migration is retired: {pool.RETIRED_MESSAGE}")

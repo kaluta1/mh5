@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
 import { useLanguage } from "@/contexts/language-context"
+import { publishedTeamMembers } from "@/lib/about-team"
 import { Button } from "@/components/ui/button"
 import { 
   Heart, 
@@ -83,10 +84,7 @@ export default function AboutPage() {
   }
 
 
-  const team = [
-    { name: "Shafi Kaluta Abedi", roleKey: "team.founder_president", image: "/team/shafi-kaluta-abedi.png" },
-    { name: "Morice Wangwe", roleKey: "team.director_ict", image: "/team/morice-wangwe.png" },
-  ]
+  const team = publishedTeamMembers()
 
   const teamLabels: Record<string, Record<string, string>> = {
     en: {
@@ -234,7 +232,7 @@ export default function AboutPage() {
                 {t('pages.about.team.subtitle') || "Des passionnés dédiés à votre succès"}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            <div className={`grid grid-cols-1 ${team.length > 1 ? "md:grid-cols-2" : ""} gap-6 max-w-4xl mx-auto`}>
               {team.map((member, index) => (
                 <div
                   key={index}
@@ -245,7 +243,7 @@ export default function AboutPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={member.image}
-                        alt={member.name}
+                        alt={member.roleKey ? `${member.name} - ${getLabel(teamLabels, member.roleKey)}` : member.name}
                         className="w-full h-full object-cover object-top"
                       />
                     ) : (
@@ -256,7 +254,7 @@ export default function AboutPage() {
                     {member.name}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {getLabel(teamLabels, member.roleKey)}
+                    {member.roleKey ? getLabel(teamLabels, member.roleKey) : null}
                   </p>
                 </div>
               ))}

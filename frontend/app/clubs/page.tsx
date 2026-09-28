@@ -22,6 +22,12 @@ import {
   ArrowRight
 } from "lucide-react"
 
+// Clubs are not production-ready: no live club directory, memberships, payments or club
+// creation. The public demo preview and the "Create your own Club" promotion stay hidden
+// until the feature ships; flip these only when it is real.
+const CLUBS_PUBLIC_PREVIEW = false
+const CLUB_CREATION_PROMO = false
+
 // Données de démonstration pour les clubs
 const demoClubs = [
   {
@@ -128,6 +134,26 @@ export default function ClubsPage() {
     const matchesPremium = !showPremiumOnly || club.isPrivate
     return matchesSearch && matchesCategory && matchesPremium
   })
+
+  if (!CLUBS_PUBLIC_PREVIEW) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <Header />
+        <main className="pt-24 pb-16">
+          <section className="container px-4 md:px-6 py-16">
+            <div role="status" className="max-w-2xl mx-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-8 text-center shadow-sm">
+              <Users className="w-12 h-12 mx-auto mb-4 text-myhigh5-primary" aria-hidden="true" />
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+                {t('pages.clubs.unavailable_title')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-300">{t('pages.clubs.unavailable_body')}</p>
+            </div>
+          </section>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-myhigh5-blue-50 via-white to-myhigh5-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -297,7 +323,8 @@ export default function ClubsPage() {
           )}
         </section>
 
-        {/* Create Club CTA */}
+        {/* Create Club CTA (hidden until club creation is real) */}
+        {CLUB_CREATION_PROMO && (
         <section className="container px-4 md:px-6 py-12">
           <div className="bg-gradient-to-r from-myhigh5-primary to-myhigh5-secondary rounded-3xl p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-8 items-center">
@@ -346,6 +373,7 @@ export default function ClubsPage() {
             </div>
           </div>
         </section>
+        )}
       </main>
       
       <Footer />

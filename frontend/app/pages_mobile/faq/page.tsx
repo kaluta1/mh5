@@ -11,8 +11,6 @@ import {
   Vote, 
   Grid3x3,
   Wallet,
-  Users,
-  Store,
   TrendingUp,
   Award,
   Sparkles
@@ -31,10 +29,6 @@ export default function FAQMobilePage() {
     {
       question: t('landing.faq.question_2'),
       answer: t('landing.faq.answer_2')
-    },
-    {
-      question: t('landing.faq.question_3'),
-      answer: t('landing.faq.answer_3')
     },
     {
       question: t('landing.faq.question_leaders'),
@@ -91,16 +85,6 @@ export default function FAQMobilePage() {
       icon: Wallet,
       title: t('landing.ways_to_earn.kyc_payments.title') || 'Paiements KYC',
       description: t('landing.ways_to_earn.kyc_payments.description') || 'Gagnez des commissions lorsque les membres de votre réseau complètent leur vérification KYC'
-    },
-    {
-      icon: Users,
-      title: t('landing.ways_to_earn.club_memberships.title') || 'Adhésions aux Clubs',
-      description: t('landing.ways_to_earn.club_memberships.description') || 'Gagnez des commissions sur les frais d\'adhésion aux clubs payants.'
-    },
-    {
-      icon: Store,
-      title: t('landing.ways_to_earn.shop_purchases.title') || 'Achats en Boutique',
-      description: t('landing.ways_to_earn.shop_purchases.description') || 'Gagnez des commissions sur les achats de contenu numérique dans la boutique MyHigh5.'
     },
     {
       icon: TrendingUp,

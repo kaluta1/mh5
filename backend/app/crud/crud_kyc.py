@@ -177,6 +177,9 @@ class CRUDKYCVerification:
             )
         except Exception:
             logger.exception("FMP referral accrual after KYC approval (auto PoA) failed")
+        from app.services.affiliate_rate_policy import record_for_sponsor_of
+
+        record_for_sponsor_of(db, int(verification.user_id))  # permanent 40% qualification, if just met
         db.commit()
         db.refresh(verification)
         self._create_audit_log(
@@ -217,6 +220,9 @@ class CRUDKYCVerification:
                 )
             except Exception:
                 logger.exception("FMP referral accrual after KYC approval (admin) failed")
+            from app.services.affiliate_rate_policy import record_for_sponsor_of
+
+            record_for_sponsor_of(db, int(verification.user_id))  # permanent 40% qualification, if just met
             db.commit()
             db.refresh(verification)
             

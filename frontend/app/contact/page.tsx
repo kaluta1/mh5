@@ -54,26 +54,28 @@ export default function ContactPage() {
     { icon: MapPin, action: "#", ...contactMethodsData[language]?.[2] || contactMethodsData.en[2] }
   ]
 
+  // Confirmed client wording (Shafi Abeid). The site renders in English only, so every
+  // language uses the confirmed text until approved translations are supplied.
+  const participationAnswer =
+    "Create an account and complete your profile. You can then nominate your favorite creatives by submitting them to participate in contests starting at the country level.\n\n" +
+    "If you want to participate personally by submitting your own creative, your entry will start at the city level. You must first verify your account before submitting your own creative."
+
   const faqData: Record<string, { question: string; answer: string }[]> = {
     en: [
-      { question: "How to participate in a contest?", answer: "Create an account, verify it, complete your profile, and click 'Participate' on the contest of your choice." },
+      { question: "How to participate in a contest?", answer: participationAnswer },
       { question: "How does the MyHigh5 voting system work?", answer: "Select up to 5 favorites and rank them by drag-and-drop. 1st gets 5 points, 2nd 4 points, etc." },
-      { question: "How to create a Fan Club?", answer: "After identity verification, go to your dashboard and click 'Create a Club'." }
     ],
     fr: [
-      { question: "Comment participer à un concours ?", answer: "Créez un compte, vérifiez-le, complétez votre profil et cliquez sur 'Participer' sur le concours de votre choix." },
+      { question: "Comment participer à un concours ?", answer: participationAnswer },
       { question: "Comment fonctionne le système de vote MyHigh5 ?", answer: "Sélectionnez jusqu'à 5 favoris et classez-les par glisser-déposer. Le 1er reçoit 5 points, le 2ème 4 points, etc." },
-      { question: "Comment créer un Fan Club ?", answer: "Après vérification de votre identité, accédez à votre tableau de bord et cliquez sur 'Créer un Club'." }
     ],
     es: [
-      { question: "¿Cómo participar en un concurso?", answer: "Crea una cuenta, verifícala, completa tu perfil y haz clic en 'Participar' en el concurso de tu elección." },
+      { question: "¿Cómo participar en un concurso?", answer: participationAnswer },
       { question: "¿Cómo funciona el sistema de votación MyHigh5?", answer: "Selecciona hasta 5 favoritos y ordénalos arrastrando y soltando. El 1º recibe 5 puntos, el 2º 4 puntos, etc." },
-      { question: "¿Cómo crear un Fan Club?", answer: "Después de verificar tu identidad, ve a tu panel y haz clic en 'Crear un Club'." }
     ],
     de: [
-      { question: "Wie nehme ich an einem Wettbewerb teil?", answer: "Erstellen Sie ein Konto, verifizieren Sie es, vervollständigen Sie Ihr Profil und klicken Sie auf 'Teilnehmen' beim Wettbewerb Ihrer Wahl." },
+      { question: "Wie nehme ich an einem Wettbewerb teil?", answer: participationAnswer },
       { question: "Wie funktioniert das MyHigh5-Abstimmungssystem?", answer: "Wählen Sie bis zu 5 Favoriten aus und ordnen Sie sie per Drag-and-Drop. Der 1. erhält 5 Punkte, der 2. 4 Punkte, usw." },
-      { question: "Wie erstelle ich einen Fan Club?", answer: "Nach der Identitätsüberprüfung gehen Sie zu Ihrem Dashboard und klicken Sie auf 'Club erstellen'." },
     ]
   }
   const faqItems = faqData[language] || faqData.en

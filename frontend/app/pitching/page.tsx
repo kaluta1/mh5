@@ -66,7 +66,6 @@ export default function MyHigh5LandingPage() {
     Platform: [
       { label: "Home", href: "/" },
       { label: "Contests", href: "/contests" },
-      { label: "Clubs", href: "/clubs" },
       { label: "Sponsors", href: "/dashboard/sponsored" },
     ],
     Company: [

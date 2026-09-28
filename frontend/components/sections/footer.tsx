@@ -18,7 +18,6 @@ import {
   Globe,
   Trophy,
   Users,
-  Sparkles,
   ArrowRight,
   CheckCircle
 } from "lucide-react"
@@ -105,7 +104,6 @@ export function Footer() {
   const quickLinks = [
     { name: t('footer.quick_links.about'), href: "/about", icon: Users },
     { name: t('footer.quick_links.contests'), href: "/contests", icon: Trophy },
-    { name: t('navigation.clubs'), href: "/clubs", icon: Sparkles },
     { name: t('navigation.contact'), href: "/contact", icon: Mail },
   ]
 
