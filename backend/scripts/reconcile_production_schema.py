@@ -111,7 +111,11 @@ STATEMENTS = [
     DO $$
     BEGIN
         IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'verificationprovider') THEN
-            ALTER TYPE verificationprovider ADD VALUE IF NOT EXISTS 'kaluta';
+            -- enum NAME, as SQLAlchemy writes it (lowercase 'kaluta' was the bug; see a8b9c0d1e2f3)
+            IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                           WHERE t.typname = 'verificationprovider' AND e.enumlabel IN ('KALUTA', 'kaluta')) THEN
+                ALTER TYPE verificationprovider ADD VALUE 'KALUTA';
+            END IF;
         END IF;
     END $$
     """,

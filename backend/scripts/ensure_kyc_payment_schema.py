@@ -75,7 +75,7 @@ COLUMNS: dict[str, dict[str, str]] = {
 ENUM_VALUES: dict[str, list[str]] = {
     "kycstatus": ["PENDING_PROOF_OF_ADDRESS"],
     "depositstatus": ["partially_paid", "failed"],
-    "verificationprovider": ["kaluta"],
+    "verificationprovider": ["KALUTA"],  # enum NAME (see migration a8b9c0d1e2f3)
 }
 
 
