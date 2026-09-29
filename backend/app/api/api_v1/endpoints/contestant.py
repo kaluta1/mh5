@@ -774,10 +774,10 @@ def _nomination_stage_voting_allowed(
     if not sl:
         return contest_status_service.round_voting_open_at(round_obj, when)
 
-    stage_open, _ = contest_status_service.season_stage_voting_status(round_obj, lvl, when)
-    if stage_open is True:
-        return True
-
+    # The nomination calendar is authoritative for nomination stages. The
+    # round's stage columns hold the PARTICIPATION schedule (one month later
+    # per level), so reading them here kept e.g. an August nomination cohort's
+    # Country vote open through October, until the promotion pass ran.
     vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
     if vote_open:
         today = when.date() if hasattr(when, "date") else when
@@ -786,13 +786,60 @@ def _nomination_stage_voting_allowed(
             return False
         if vote_close and today > vote_close:
             return False
-        if stage_open is False:
-            return False
         return True
 
-    if stage_open is False:
-        return False
+    # Calendar not derivable (legacy round without a month): previous behaviour.
+    stage_open, _ = contest_status_service.season_stage_voting_status(round_obj, lvl, when)
+    if stage_open is not None:
+        return bool(stage_open)
     return contest_status_service.round_voting_open_at(round_obj, when)
+
+
+def _closed_stage_reason_for_season(db: Session, season_id: int, contest, when) -> Optional[str]:
+    """Reason text when the season's own stage voting window is closed, else None.
+
+    Same rule as casting a vote: nomination stages follow the nomination vote
+    calendar; participation stages follow their round stage window, and a stage
+    whose window has ended is never reopened by the broader round window.
+    """
+    from app.models.contests import ContestSeason
+    from app.services.contest_status import contest_status_service
+
+    season = db.query(ContestSeason).filter(ContestSeason.id == int(season_id)).first()
+    round_obj = getattr(season, "round", None) if season is not None else None
+    if season is None or round_obj is None:
+        return None
+    lvl = season.level.value if hasattr(season.level, "value") else str(season.level)
+    lvl = (lvl or "").lower()
+    if _normalize_contest_mode(getattr(contest, "contest_mode", None)) == "nomination":
+        if lvl == "city":
+            lvl = "country"
+        if _nomination_stage_voting_allowed(round_obj, lvl, when):
+            return None
+        return _nomination_stage_voting_message(round_obj, lvl, when) or "Vote in this stage is not open."
+    open_status, msg = contest_status_service.season_stage_voting_status(round_obj, lvl, when)
+    if open_status is False:
+        return msg or "Vote in this stage is not open."
+    return None
+
+
+def _nomination_stage_voting_message(round_obj, season_level: Optional[str], when) -> str:
+    """User-facing reason for a closed nomination stage (nomination calendar)."""
+    from app.services.season_migration import SeasonMigrationService
+
+    sl = _season_level_to_enum((season_level or "").lower())
+    if round_obj is None or sl is None:
+        return ""
+    vote_open = SeasonMigrationService._nomination_vote_open_date_for_level(round_obj, sl)
+    vote_close = SeasonMigrationService._nomination_vote_close_date_for_level(round_obj, sl)
+    today = when.date() if hasattr(when, "date") else when
+    rname = getattr(round_obj, "name", None) or "This round"
+    lvl = (season_level or "").lower()
+    if vote_open and today < vote_open:
+        return f"Voting for {rname} {lvl} level starts on {vote_open}."
+    if vote_close and today > vote_close:
+        return f"Voting for {rname} {lvl} level ended on {vote_close}."
+    return ""
 
 
 def _bucket_key_for_contest(contest: Contest) -> str:
@@ -1746,6 +1793,14 @@ def reorder_my_votes(
     ).first()
     if scope_contest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
+
+    # Reordering moves points between existing votes, so it is a vote change:
+    # refused once this stage's voting window has closed.
+    from app.services.contest_status import contest_status_service as _css
+
+    closed_reason = _closed_stage_reason_for_season(db, int(season_id), scope_contest, _css._utc_now())
+    if closed_reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=closed_reason)
 
     from app.services.voting_ranking import (
         VotingValidationError,
@@ -4035,9 +4090,11 @@ def vote_for_contestant(
 
     if contest_mode_norm == "nomination" and vote_round_obj:
         if not _nomination_stage_voting_allowed(vote_round_obj, season_level, now_vote):
-            _, stage_msg = contest_status_service.season_stage_voting_status(
-                vote_round_obj, (season_level or "").lower(), now_vote
-            )
+            stage_msg = _nomination_stage_voting_message(vote_round_obj, season_level, now_vote)
+            if not stage_msg:
+                _, stage_msg = contest_status_service.season_stage_voting_status(
+                    vote_round_obj, (season_level or "").lower(), now_vote
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=stage_msg or "Vote in this stage is not open yet.",
@@ -4651,9 +4708,11 @@ def replace_fifth_vote(
 
     if contest_mode_norm == "nomination" and vote_round_obj:
         if not _nomination_stage_voting_allowed(vote_round_obj, season_level, now_vote):
-            _, stage_msg = contest_status_service.season_stage_voting_status(
-                vote_round_obj, (season_level or "").lower(), now_vote
-            )
+            stage_msg = _nomination_stage_voting_message(vote_round_obj, season_level, now_vote)
+            if not stage_msg:
+                _, stage_msg = contest_status_service.season_stage_voting_status(
+                    vote_round_obj, (season_level or "").lower(), now_vote
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=stage_msg or "Vote in this stage is not open yet.",

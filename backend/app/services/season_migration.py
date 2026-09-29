@@ -21,26 +21,59 @@ logger = logging.getLogger(__name__)
 SEASON_MIGRATION_LOCK_KEY = 875321001
 
 
-def _try_acquire_migration_lock(db: Session) -> bool:
-    """Best-effort non-blocking advisory lock. No-op (always True) outside Postgres."""
+def _open_migration_lock_connection(db: Session):
+    """Dedicated connection that owns the session-level migration lock.
+
+    The lock must be acquired and released by the SAME PostgreSQL session. The
+    ORM session commits many times during a run, and every commit hands its
+    connection back to the pool, so a lock taken through ``db`` could be
+    released on a different pooled connection (a no-op) while the original
+    one kept it. A separate AUTOCOMMIT connection owns the lock for the whole
+    run instead. None outside PostgreSQL (SQLite tests: locking is a no-op).
+    """
     bind = db.get_bind()
     if not bind or bind.dialect.name != "postgresql":
+        return None
+    engine = getattr(bind, "engine", bind)
+    return engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+
+
+def _try_acquire_migration_lock(lock_conn) -> bool:
+    """Best-effort non-blocking advisory lock. No-op (always True) outside Postgres."""
+    if lock_conn is None:
         return True
     return bool(
-        db.execute(
+        lock_conn.execute(
             text("SELECT pg_try_advisory_lock(:key)"), {"key": SEASON_MIGRATION_LOCK_KEY}
         ).scalar()
     )
 
 
-def _release_migration_lock(db: Session) -> None:
-    bind = db.get_bind()
-    if not bind or bind.dialect.name != "postgresql":
+def _release_migration_lock(lock_conn, acquired: bool) -> None:
+    """Unlock on the owning connection, then close it. If the unlock cannot be
+    confirmed, invalidate the connection: closing the PostgreSQL session is the
+    one thing guaranteed to drop a session-level lock."""
+    if lock_conn is None:
         return
     try:
-        db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SEASON_MIGRATION_LOCK_KEY})
+        if acquired:
+            released = lock_conn.execute(
+                text("SELECT pg_advisory_unlock(:key)"), {"key": SEASON_MIGRATION_LOCK_KEY}
+            ).scalar()
+            if not released:
+                logger.warning("Season migration advisory lock was not held at release; closing its session")
+                lock_conn.invalidate()
     except Exception:
-        logger.warning("Failed to release season migration advisory lock", exc_info=True)
+        logger.warning("Failed to release season migration advisory lock; closing its session", exc_info=True)
+        try:
+            lock_conn.invalidate()
+        except Exception:
+            pass
+    finally:
+        try:
+            lock_conn.close()
+        except Exception:
+            pass
 
 from app.models.contest import Contest
 from app.models.contests import (
@@ -94,6 +127,37 @@ class SeasonMigrationService:
         if int(contestant_round_id) != int(season_round_id):
             return "ROUND_MISMATCH"
         return None
+
+    # ------------------------------------------------------------------
+    # Entry origin (personal submission vs nomination)
+    #
+    # Origin is fixed at submission from the contest's mode and stored on the
+    # entry (Contestant.entry_type, mirrored by ContestEntrySafety.entry_kind);
+    # progression never rewrites it. The lifecycle calendar follows the
+    # contest's mode, and ranking pools are contest-scoped, so the two
+    # lifecycles never share a pool. As a defensive guard, an entry whose
+    # stored origin POSITIVELY contradicts a personal-participation contest
+    # (entry_type == "nomination") never progresses on the personal calendar.
+    # The reverse is not inferred: entry_type defaults to "participation", and
+    # nomination-contest rows carrying that default (e.g. legacy/admin-created)
+    # are genuine nominees -- the contest mode stays authoritative for them.
+    # ------------------------------------------------------------------
+    @staticmethod
+    def origin_matches_mode_clause(contest_mode: Optional[str]):
+        from sqlalchemy import true
+        from app.services.contest_category_integrity import normalize_contest_mode
+
+        if normalize_contest_mode(contest_mode) == "nomination":
+            return true()
+        return or_(Contestant.entry_type.is_(None), Contestant.entry_type != "nomination")
+
+    @staticmethod
+    def origin_matches_mode(contestant: Contestant, contest_mode: Optional[str]) -> bool:
+        from app.services.contest_category_integrity import normalize_contest_mode
+
+        if normalize_contest_mode(contest_mode) == "nomination":
+            return True
+        return (getattr(contestant, "entry_type", None) or "").strip().lower() != "nomination"
 
     @staticmethod
     def _add_months(base: date, months: int) -> date:
@@ -430,6 +494,7 @@ class SeasonMigrationService:
                 ContestantSeason.season_id == season.id,
                 ContestantSeason.is_active == True,
                 ranking_pool_clause(),  # Phase 8: same pool as promotion (frozen ranking stays intact)
+                SeasonMigrationService.origin_matches_mode_clause(contest_mode),
                 Contestant.is_deleted == False,
                 Contestant.season_id == contest.id,
                 Contestant.round_id == season.round_id,
@@ -1734,59 +1799,60 @@ class SeasonMigrationService:
         # Lock per (round_id, level) via hashtext so unrelated rounds/levels
         # don't serialize against each other; reentrant/no-op on the same
         # session, safe no-op on SQLite (tests).
+        #
+        # Transaction-scoped on purpose: the insert below commits, and a commit
+        # returns the ORM session's connection to the pool. A session-level lock
+        # would then be "released" on whichever pooled connection the session
+        # picked up next (a no-op) and stay held by the original one, making the
+        # next creator of this key wait for statement_timeout. An xact lock ends
+        # with the transaction that took it (commit or rollback) on the very
+        # connection that holds it, so no pooled connection can keep it.
         bind = db.get_bind()
         use_lock = bool(bind) and bind.dialect.name == "postgresql"
         composite_key = f"{round_id}:{level.value}"
         if use_lock:
             db.execute(
-                text("SELECT pg_advisory_lock(:ns, hashtext(:composite))"),
+                text("SELECT pg_advisory_xact_lock(:ns, hashtext(:composite))"),
                 {"ns": SEASON_MIGRATION_LOCK_KEY, "composite": composite_key},
             )
-        try:
-            query = db.query(ContestSeason).filter(
-                and_(
-                    ContestSeason.level == level,
-                    ContestSeason.is_deleted == False,
-                )
+        query = db.query(ContestSeason).filter(
+            and_(
+                ContestSeason.level == level,
+                ContestSeason.is_deleted == False,
             )
-            if round_id is not None:
-                query = query.filter(ContestSeason.round_id == round_id)
+        )
+        if round_id is not None:
+            query = query.filter(ContestSeason.round_id == round_id)
 
-            season = query.order_by(ContestSeason.id.asc()).first()
+        season = query.order_by(ContestSeason.id.asc()).first()
 
-            if not season:
-                season = ContestSeason(
-                    title=title,
-                    level=level,
-                    is_deleted=False,
-                    round_id=round_id,
-                )
-                db.add(season)
-                try:
-                    db.commit()
-                    db.refresh(season)
-                except IntegrityError:
-                    # Defense in depth in case a DB-level unique constraint is
-                    # added later, or this is ever reached without the lock.
-                    db.rollback()
-                    requery = db.query(ContestSeason).filter(
-                        and_(
-                            ContestSeason.level == level,
-                            ContestSeason.round_id == round_id,
-                            ContestSeason.is_deleted == False,
-                        )
-                    ).order_by(ContestSeason.id.asc()).first()
-                    if requery is None:
-                        raise
-                    season = requery
+        if not season:
+            season = ContestSeason(
+                title=title,
+                level=level,
+                is_deleted=False,
+                round_id=round_id,
+            )
+            db.add(season)
+            try:
+                db.commit()
+                db.refresh(season)
+            except IntegrityError:
+                # Defense in depth in case a DB-level unique constraint is
+                # added later, or this is ever reached without the lock.
+                db.rollback()
+                requery = db.query(ContestSeason).filter(
+                    and_(
+                        ContestSeason.level == level,
+                        ContestSeason.round_id == round_id,
+                        ContestSeason.is_deleted == False,
+                    )
+                ).order_by(ContestSeason.id.asc()).first()
+                if requery is None:
+                    raise
+                season = requery
 
-            return season
-        finally:
-            if use_lock:
-                db.execute(
-                    text("SELECT pg_advisory_unlock(:ns, hashtext(:composite))"),
-                    {"ns": SEASON_MIGRATION_LOCK_KEY, "composite": composite_key},
-                )
+        return season
 
     @staticmethod
     def get_top_contestants_by_location(
@@ -1806,6 +1872,7 @@ class SeasonMigrationService:
         ranking_bucket_key: Optional[str] = None,
         require_votes: bool = True,
         include_safety_holds: bool = False,
+        origin_mode: Optional[str] = None,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
@@ -1825,6 +1892,11 @@ class SeasonMigrationService:
         competed publicly and was later safety-held keeps their place in the
         ranked pool, so nobody is moved up into their slot. The caller must
         run the progression gate on every selected contestant.
+
+        `origin_mode` (promotion/freeze only): keep only entries whose origin
+        (personal submission / nomination) matches that contest mode, so a
+        cohort is never ranked together with entries of the other lifecycle.
+        Applied after every fallback tier, before grouping and ranking.
         """
         import logging
         from app.services.participation_safety import ranking_pool_clause
@@ -2096,6 +2168,19 @@ class SeasonMigrationService:
                     fallback_candidates = [c for c in fallback_candidates if c.continent]
                 contestants = fallback_candidates
 
+        if origin_mode is not None and contestants:
+            kept = [
+                c for c in contestants
+                if SeasonMigrationService.origin_matches_mode(c, origin_mode)
+            ]
+            if len(kept) != len(contestants):
+                logger.warning(
+                    "  - Excluded %s entr(y/ies) whose origin does not match contest mode %s "
+                    "(season %s, contest %s)",
+                    len(contestants) - len(kept), origin_mode, season_id, contest_id,
+                )
+            contestants = kept
+
         if not contestants:
             # Vérifier pourquoi aucun contestant n'est trouvé
             base_q = db.query(Contestant).join(
@@ -2342,7 +2427,9 @@ class SeasonMigrationService:
                 Contestant.season_id == contest_id,
                 Contestant.round_id == round_id,
                 Contestant.is_active == True,
-                Contestant.is_deleted == False
+                Contestant.is_deleted == False,
+                # City exists only in the personal-submission lifecycle.
+                SeasonMigrationService.origin_matches_mode_clause("participation"),
             )
         ).all()
 
@@ -2466,12 +2553,14 @@ class SeasonMigrationService:
                 db, contest_id, round_id, target_season.level
             )
 
+        contest_mode = db.query(Contest.contest_mode).filter(Contest.id == contest_id).scalar()
         contestants = db.query(Contestant).filter(
             and_(
                 Contestant.season_id == contest_id,
                 Contestant.round_id == round_id,
                 Contestant.is_active == True,
                 Contestant.is_deleted == False,
+                SeasonMigrationService.origin_matches_mode_clause(contest_mode),
             )
         ).all()
         synced: list[int] = []
@@ -2832,6 +2921,7 @@ class SeasonMigrationService:
                 ContestantSeason.season_id == from_season.id,
                 ContestantSeason.is_active == True,
                 ranking_pool_clause(),  # Phase 8: held competitors keep their slot (never promoted)
+                SeasonMigrationService.origin_matches_mode_clause(contest_mode),
                 Contestant.is_deleted == False,
                 Contestant.season_id == contest_id,
                 Contestant.round_id == from_season.round_id,
@@ -2882,6 +2972,7 @@ class SeasonMigrationService:
                 strict_season_scope=True,
                 require_votes=False,
                 include_safety_holds=True,
+                origin_mode=contest_mode,
             )
             for jurisdiction, location_contestants in continent_groups.items():
                 if location_contestants:
@@ -2925,6 +3016,7 @@ class SeasonMigrationService:
                 strict_season_scope=strict_scope,
                 uncapped=contest_mode == "nomination",
                 include_safety_holds=True,
+                origin_mode=contest_mode,
             )
             
             logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
@@ -2952,6 +3044,7 @@ class SeasonMigrationService:
                 uncapped=contest_mode == "nomination",
                 require_votes=False,
                 include_safety_holds=True,
+                origin_mode=contest_mode,
             )
             # Keyed by the FROM-level's own jurisdiction field (e.g. city for
             # CITY->COUNTRY, country for COUNTRY->REGIONAL) -- exactly what
@@ -3009,6 +3102,10 @@ class SeasonMigrationService:
                     qualified_only=False,
                     cohort_round_id=int(from_season.round_id),
                 )
+                retry = [
+                    c for c in retry
+                    if SeasonMigrationService.origin_matches_mode(c, contest_mode)
+                ]
                 selected_contestants = retry[:limit]
             else:
                 location_field_map = {
@@ -3031,6 +3128,7 @@ class SeasonMigrationService:
                         uncapped=True,
                         cohort_round_id=int(from_season.round_id),
                         include_safety_holds=True,
+                        origin_mode=contest_mode,
                     )
                     # Only backfill freeze_groups from this retry if the
                     # earlier require_votes=False freeze pass also found
@@ -3345,18 +3443,20 @@ class SeasonMigrationService:
         ]
         contest_context_service.preflight_monthly_rounds(db, periods)
 
-        if not _try_acquire_migration_lock(db):
-            logger.info(
-                "Season migration already running in another process; skipping this pass."
-            )
-            return {"processed": 0, "results": [], "skipped": "locked"}
-
+        lock_conn = _open_migration_lock_connection(db)
+        acquired = False
         try:
+            acquired = _try_acquire_migration_lock(lock_conn)
+            if not acquired:
+                logger.info(
+                    "Season migration already running in another process; skipping this pass."
+                )
+                return {"processed": 0, "results": [], "skipped": "locked"}
             return SeasonMigrationService._check_and_process_migrations_locked(
                 db, rc_table, contest_status_service, allow_multi_hop=allow_multi_hop
             )
         finally:
-            _release_migration_lock(db)
+            _release_migration_lock(lock_conn, acquired)
 
     @staticmethod
     def _check_and_process_migrations_locked(
@@ -3421,6 +3521,9 @@ class SeasonMigrationService:
             contest_status_service.update_contest_statuses(db)
         except Exception as e:
             logger.warning(f"Error updating contest statuses: {e}")
+            # A failed statement leaves the session's transaction aborted; every
+            # later query in this pass would fail with InFailedSqlTransaction.
+            db.rollback()
         
         # ============================================================
         # STEP 1: Init seasons - PARTICIPATION → CITY, NOMINATION → COUNTRY
@@ -3465,6 +3568,8 @@ class SeasonMigrationService:
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": result})
                         except Exception as e:
                             logger.error(f"Error migrating contest {cid} to city: {e}")
+                            # Keep the pass usable for the remaining contests.
+                            db.rollback()
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_participation_city", "result": {"error": str(e)}})
 
                 elif contest_mode == "nomination":
@@ -3498,6 +3603,8 @@ class SeasonMigrationService:
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_nomination_country", "result": result})
                         except Exception as e:
                             logger.error(f"Error migrating contest {cid} to country: {e}")
+                            # Keep the pass usable for the remaining contests.
+                            db.rollback()
                             results.append({"contest_id": cid, "round_id": round_obj.id, "action": "init_nomination_country", "result": {"error": str(e)}})
         
         # ============================================================
@@ -3547,11 +3654,25 @@ class SeasonMigrationService:
             elif season.level == SeasonLevel.GLOBAL:
                 # Terminal level: nothing to promote to, but its own Top
                 # High5 still needs freezing once its voting closes.
-                results.extend(
-                    SeasonMigrationService._finalize_global_top_high5(
-                        db, season, round_obj, today
+                try:
+                    results.extend(
+                        SeasonMigrationService._finalize_global_top_high5(
+                            db, season, round_obj, today
+                        )
                     )
-                )
+                except Exception as e:
+                    # Same policy as promotions below: one failing season must
+                    # not abort every other due transition in this pass.
+                    logger.error(
+                        f"Error finalizing GLOBAL Top High5 for season {season.id}: {e}",
+                        exc_info=True,
+                    )
+                    db.rollback()
+                    results.append({
+                        "round_id": round_obj.id,
+                        "action": "finalize_global_top_high5",
+                        "result": {"error": str(e)},
+                    })
                 continue
 
             if not next_level:
@@ -3614,7 +3735,24 @@ class SeasonMigrationService:
                 contest_ids_to_promote = filter_contest_ids_one_per_category(
                     db, contest_ids_to_promote
                 )
-                contest_ids_to_promote.sort()
+                # Personal-participation contests take the same COUNTRY->REGIONAL
+                # hop on their own calendar (Country M+2 -> Regional M+3). They
+                # are collected from this season's active links exactly like
+                # every other level; _promotion_due_for_contest below applies
+                # the participation dates, so the two timelines never merge.
+                participation_links = (
+                    db.query(ContestSeasonLink.contest_id)
+                    .join(Contest, Contest.id == ContestSeasonLink.contest_id)
+                    .filter(
+                        ContestSeasonLink.season_id == season.id,
+                        ContestSeasonLink.is_active == True,
+                        func.lower(func.trim(Contest.contest_mode)) == "participation",
+                    )
+                    .all()
+                )
+                contest_ids_to_promote = sorted(
+                    set(contest_ids_to_promote) | {int(r[0]) for r in participation_links}
+                )
             else:
                 contest_links = (
                     db.query(ContestSeasonLink)

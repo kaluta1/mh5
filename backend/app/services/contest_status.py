@@ -120,9 +120,10 @@ class ContestStatusService:
         """
         Stage fields on Round (e.g. country_season_start_date / country_season_end_date) describe
         one calendar slice; country voting for an April round often starts the next month
-        (voting_start_date / voting_end_date). If the stage window says closed or not started
-        but round_voting_open_at is True, treat voting as open. If stage dates are missing,
-        fall back to the round voting calendar when present.
+        (voting_start_date / voting_end_date). If the stage window has not started yet but
+        round_voting_open_at is True, treat voting as open. Once the stage window has ended
+        (after 23:59:59 UTC on its end date) it is closed, whatever the round window says.
+        If stage dates are missing, fall back to the round voting calendar when present.
         """
         if not round_obj:
             return None, ""
@@ -165,8 +166,10 @@ class ContestStatusService:
                 return True, ""
             return False, f"Voting for {rname} {lvl} level starts on {start_date}."
         if when > end_dt:
-            if rv_open:
-                return True, ""
+            # A stage whose own voting month has ended stays closed. The broader
+            # round window spans several months and must not reopen it: otherwise
+            # a vote cast after the stage closed (e.g. 00:00:30 on the 1st, before
+            # the promotion pass runs) could still change who advances.
             return False, f"Voting for {rname} {lvl} level ended on {end_date}."
         return True, ""
 
