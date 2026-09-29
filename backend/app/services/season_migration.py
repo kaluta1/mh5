@@ -347,7 +347,9 @@ class SeasonMigrationService:
             ),
         }
         end_d, start_d = participation_triggers.get((from_level, to_level), (None, None))
-        if end_d and end_d <= today:
+        # Stage end dates are inclusive (voting runs through 23:59:59 on end_d),
+        # so the stage is only over once today is strictly after end_d.
+        if end_d and end_d < today:
             return True
         if start_d and start_d <= today:
             return True
@@ -368,7 +370,7 @@ class SeasonMigrationService:
             return bool(vote_close and today > vote_close)
         return bool(
             getattr(round_obj, "global_end_date", None)
-            and round_obj.global_end_date <= today
+            and round_obj.global_end_date < today
         )
 
     @staticmethod

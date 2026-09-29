@@ -204,3 +204,38 @@ def test_participation_uses_round_stage_dates_not_nomination_calendar():
         )
         is True
     )
+
+
+@pytest.mark.parametrize(
+    "from_level,to_level,last_day,next_first",
+    [
+        (SeasonLevel.CITY, SeasonLevel.COUNTRY, date(2026, 4, 30), date(2026, 5, 1)),
+        (SeasonLevel.COUNTRY, SeasonLevel.REGIONAL, date(2026, 5, 31), date(2026, 6, 1)),
+        (SeasonLevel.REGIONAL, SeasonLevel.CONTINENT, date(2026, 6, 30), date(2026, 7, 1)),
+    ],
+)
+def test_participation_does_not_promote_on_last_voting_day(
+    from_level, to_level, last_day, next_first
+):
+    # Stage end dates are inclusive: voting is still open on the last day.
+    rnd = _march_round()
+    due = SeasonMigrationService._promotion_due_for_contest
+    assert due(rnd, from_level, to_level, "participation", last_day) is False
+    assert due(rnd, from_level, to_level, "participation", next_first) is True
+
+
+def test_participation_promotes_day_after_end_when_start_missing():
+    rnd = _march_round()
+    rnd.country_season_start_date = None
+    due = SeasonMigrationService._promotion_due_for_contest
+    args = (rnd, SeasonLevel.CITY, SeasonLevel.COUNTRY, "participation")
+    assert due(*args, date(2026, 4, 30)) is False
+    assert due(*args, date(2026, 5, 1)) is True
+
+
+def test_participation_global_finalization_waits_past_last_day():
+    rnd = _march_round()
+    rnd.global_end_date = date(2026, 8, 31)
+    fin = SeasonMigrationService._global_finalization_due
+    assert fin(rnd, "participation", date(2026, 8, 31)) is False
+    assert fin(rnd, "participation", date(2026, 9, 1)) is True
