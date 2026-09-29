@@ -396,21 +396,36 @@ class SeasonMigrationService:
             (SeasonLevel.CITY, SeasonLevel.COUNTRY): (
                 round_obj.city_season_end_date,
                 round_obj.country_season_start_date,
+                round_obj.country_season_end_date,
             ),
             (SeasonLevel.COUNTRY, SeasonLevel.REGIONAL): (
                 round_obj.country_season_end_date,
                 round_obj.regional_start_date,
+                round_obj.regional_end_date,
             ),
             (SeasonLevel.REGIONAL, SeasonLevel.CONTINENT): (
                 round_obj.regional_end_date,
                 round_obj.continental_start_date,
+                round_obj.continental_end_date,
             ),
             (SeasonLevel.CONTINENT, SeasonLevel.GLOBAL): (
                 round_obj.continental_end_date,
                 round_obj.global_start_date,
+                round_obj.global_end_date,
             ),
         }
-        end_d, start_d = participation_triggers.get((from_level, to_level), (None, None))
+        end_d, start_d, dest_end = participation_triggers.get(
+            (from_level, to_level), (None, None, None)
+        )
+        # Historical immutability: a cohort may only ENTER a stage whose voting
+        # month has not ended yet. Entering a finished stage has no business
+        # meaning (nobody can vote there), so a cohort past that point is
+        # historical and is never touched -- even when today's predicates would
+        # otherwise call it "due" (e.g. old cohorts after a code change). A
+        # cohort that merely missed scheduler runs still catches up during the
+        # destination month. Unknown destination calendar: fail closed.
+        if not dest_end or dest_end < today:
+            return False
         # Stage end dates are inclusive (voting runs through 23:59:59 on end_d),
         # so the stage is only over once today is strictly after end_d.
         if end_d and end_d < today:
@@ -3552,6 +3567,10 @@ class SeasonMigrationService:
 
                 if contest_mode == "participation":
                     if not round_obj.city_season_start_date or round_obj.city_season_start_date > today:
+                        continue
+                    # Same historical-immutability rule as promotions: City is only
+                    # entered while the City voting month is still open.
+                    if not round_obj.city_season_end_date or round_obj.city_season_end_date < today:
                         continue
                     # PARTICIPATION → init CITY
                     existing_link = db.query(ContestSeasonLink).join(ContestSeason).filter(
