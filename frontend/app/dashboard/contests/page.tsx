@@ -980,15 +980,24 @@ function ContestsPageContent() {
         params.set('rosterOnly', 'false')
       }
 
-      const level =
-        nominationMigrationLevel !== 'all'
+      // Nominate tab = the round's nomination history for the selected country: no
+      // stage level, so the opened roster is the same population as the card count
+      // (that round's nominees, promoted later or not). Only Vote sends contestLevel.
+      const isNominateBrowse = rowMode === 'nomination' && activeDisplayTab?.kind === 'nominate'
+      const level = isNominateBrowse
+        ? ''
+        : nominationMigrationLevel !== 'all'
           ? nominationMigrationLevel
           : normalizeContestLevel(String(contestStatus ?? ''))
       if (level) {
         params.set('contestLevel', level)
       }
       const region = filterRegion || regionalPoolForCountry(filterCountry) || regionalPoolForCountry(user?.country)
-      if (level === 'regional') {
+      if (isNominateBrowse) {
+        const countryValue =
+          filterCountry && filterCountry !== 'all' && filterCountry !== '' ? filterCountry : (user?.country || '')
+        if (countryValue && countryValue !== 'all') params.set('country', countryValue)
+      } else if (level === 'regional') {
         if (region) params.set('region', region)
       } else if (level === 'continental' || level === 'global') {
         if (filterContinent && filterContinent !== 'all') {

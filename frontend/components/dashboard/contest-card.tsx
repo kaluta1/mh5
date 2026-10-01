@@ -11,6 +11,7 @@ import { useClock } from '@/contexts/clock-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { MediaImage } from '@/components/ui/media-image'
+import { isNominationOpen, nominationCtaState } from '@/lib/nomination-cta'
 
 interface TopContestant {
   id: number
@@ -43,6 +44,8 @@ interface ContestCardProps {
   userGender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   canParticipate?: boolean
   isRoundClosed?: boolean
+  /** Backend authority for the selected round's submission window (round.is_submission_open). */
+  isSubmissionOpen?: boolean
   isKycVerified?: boolean
   // Top contestants for preview
   topContestants?: TopContestant[]
@@ -171,6 +174,7 @@ export const ContestCard = React.memo(function ContestCard({
   userGender,
   canParticipate: userCanParticipate = true,
   isRoundClosed = false,
+  isSubmissionOpen,
   isKycVerified = false,
   topContestants = [],
   // Verification requirements - KYC n'est PAS requis par défaut
@@ -249,6 +253,13 @@ export const ContestCard = React.memo(function ContestCard({
     }
     return true
   }
+
+  // A zero count only invites a first nomination while nominating is actually possible.
+  // A closed (historical) round or the Vote view shows a neutral, non-action state instead.
+  const nominationCta = nominationCtaState({
+    contestants,
+    nominationOpen: isNominationOpen({ isRoundClosed, isSubmissionOpen, isVoteMode }),
+  })
 
   // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil
   // Le KYC est requis uniquement si le concours l'exige
@@ -669,8 +680,10 @@ export const ContestCard = React.memo(function ContestCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
                 <Eye className="w-3.5 h-3.5 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
                 <span className="relative z-10 font-semibold group-hover/view:text-white transition-colors duration-300">
-                  {contestants === 0 && isNomination
+                  {isNomination && nominationCta === 'be_first'
                     ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
+                    : isNomination && nominationCta === 'none'
+                    ? (t('dashboard.contests.no_nominations') || 'No nominations')
                     : (
                       <>
                         {t('dashboard.contests.view') || 'View'}{' '}
@@ -684,6 +697,14 @@ export const ContestCard = React.memo(function ContestCard({
               </Button>
             </>
           ) : (
+            isNomination && nominationCta === 'none' ? (
+            <div
+              data-testid="contest-card-no-nominations"
+              className="w-full flex items-center justify-center h-11 text-sm font-semibold rounded-xl whitespace-nowrap bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800/80 dark:text-gray-400 dark:border-gray-700"
+            >
+              {t('dashboard.contests.no_nominations') || 'No nominations'}
+            </div>
+            ) : (
             <Button
               onClick={(e) => {
                 e.stopPropagation()
@@ -694,7 +715,7 @@ export const ContestCard = React.memo(function ContestCard({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/view:translate-x-full transition-transform duration-500" />
               <Eye className="w-3.5 h-3.5 mr-1.5 relative z-10 group-hover/view:scale-110 transition-transform duration-300 flex-shrink-0" />
               <span className="relative z-10 font-semibold group-hover/view:drop-shadow-sm transition-all duration-300">
-                {contestants === 0 && isNomination
+                {isNomination && nominationCta === 'be_first'
                   ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
                   : (
                     <>
@@ -707,6 +728,7 @@ export const ContestCard = React.memo(function ContestCard({
               </span>
               <ArrowRight className="w-3.5 h-3.5 ml-1.5 group-hover/view:translate-x-1 group-hover/view:scale-110 transition-all duration-300 relative z-10 flex-shrink-0" />
             </Button>
+            )
           )}
         </div>
       </div>

@@ -134,6 +134,18 @@ def _infer_nomination_ui_level_from_geo(
     return None
 
 
+def country_vote_stage_explicitly_requested(requested_ui_level: Optional[str]) -> bool:
+    """True only when the caller explicitly asked for the Country stage (Vote flow).
+
+    Nominees already active above Country are hidden from the live Country
+    voting roster so nobody is listed/voted twice. That rule belongs to the
+    stage view only: a Country level merely inferred from ``filterCountry``
+    (Nominate tab / historical round browse) is the round's nomination history
+    and must keep every nominee of that round, promoted later or not.
+    """
+    return _normalize_requested_ui_level(requested_ui_level) == "country"
+
+
 def _regional_season_pair_for_nomination_round(
     db: Session,
     contest_id: int,
@@ -1367,11 +1379,13 @@ class CRUDContest:
             base_entries_query = base_entries_query.filter(regional_voting_pools_sql_predicate())
             entries_query = entries_query.filter(regional_voting_pools_sql_predicate())
 
-        # Once a nominee is active at regional+, exclude from country-level counts/lists.
+        # Once a nominee is active at regional+, exclude from the Country VOTE stage
+        # counts/lists. Not for the round's nomination history (no explicit level).
         if (
             contest_mode == "nomination"
             and season_level_lower_for_count in ("country", "city")
             and display_round_for_scope is not None
+            and country_vote_stage_explicitly_requested(requested_ui_level)
         ):
             from app.services.season_migration import SeasonMigrationService
 
@@ -2416,15 +2430,14 @@ class CRUDContest:
             # Disabled intentionally (see note above).
             pass
 
-        # Country nomination roster should only contain contestants that have not
-        # already advanced to higher active levels for this contest+round.
+        # The Country VOTE roster should only contain contestants that have not
+        # already advanced to higher active levels for this contest+round. The
+        # round's nomination history (Country merely inferred from filterCountry,
+        # or no level at all) keeps nominees that were promoted later.
         if (
             contest_mode == "nomination"
             and target_round_id is not None
-            and (
-                str(season_level or "").lower() in ("country", "city")
-                or ui_level_norm == "country"
-            )
+            and country_vote_stage_explicitly_requested(requested_ui_level)
         ):
             from app.services.season_migration import SeasonMigrationService
 

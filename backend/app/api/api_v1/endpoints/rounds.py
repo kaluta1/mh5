@@ -174,7 +174,11 @@ def _cheap_round_entry_count(
             q = q.filter(
                 (Contestant.entry_type == "nomination") | (Contestant.entry_type.is_(None))
             )
-            if wl == "country" or wl is None:
+            # Same rule as the exact roster count: promoted nominees leave the
+            # Country VOTE stage only, never the round's nomination history.
+            from app.crud.crud_contest import country_vote_stage_explicitly_requested
+
+            if country_vote_stage_explicitly_requested(wanted_level):
                 from app.services.season_migration import SeasonMigrationService
 
                 promoted = SeasonMigrationService.contestant_ids_active_beyond_level(
