@@ -2843,7 +2843,24 @@ def create_contestant(
     if contest_for_mode and hasattr(contest_for_mode, "contest_mode"):
         contest_mode_value = _normalize_contest_mode(contest_for_mode.contest_mode)
     submission_entry_type = "nomination" if contest_mode_value == "nomination" else "participation"
-    
+
+    # Initial competition level (management rule): a new nomination starts at
+    # COUNTRY, a new participation at CITY. It follows from the contest's mode
+    # and is never chosen by the submitter. A body that names another level is
+    # rejected, and so is the legacy "season id in the URL" form when that
+    # season is not the initial level -- higher levels are reached only
+    # through the progression system.
+    from app.services import submission_level as _submission_level
+
+    try:
+        initial_level = _submission_level.enforce_initial_submission_level(
+            submission_entry_type, contestant_data.requested_levels
+        )
+        if season is not None:
+            _submission_level.enforce_initial_submission_level(submission_entry_type, [season.level])
+    except _submission_level.SubmissionLevelError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
     # Participation: one submission per user per round + contest (season_id stores contest.id).
     # Nominations: user_id is the nominator — one nomination per category per round across
     # all contest rows (duplicate DB contests must not allow two Gospel nominations).
@@ -2955,6 +2972,21 @@ def create_contestant(
                 registration_date=existing.registration_date,
                 message="Submission already exists for this round. Returning existing submission.",
             )
+
+    # The entry is grouped by the submitter's country (nomination, Country
+    # stage) or city (participation, City stage), copied from the profile at
+    # creation. Without it the entry could never be ranked, so say so now
+    # instead of inventing a location.
+    try:
+        _submission_level.require_submission_geography(
+            submission_entry_type,
+            city=current_user.city,
+            country=current_user.country or (
+                contestant_data.nominator_country if submission_entry_type == "nomination" else None
+            ),
+        )
+    except _submission_level.SubmissionLevelError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
     from app.services.contest_entry_eligibility import raise_if_user_missing_contest_entry_requirements
     from app.models.contest import Contest as ContestModelForEligibility
@@ -3227,10 +3259,12 @@ def create_contestant(
         from datetime import datetime
 
         real_contest_id = int(season_id)
-        if submission_entry_type == "nomination":
+        # initial_level (validated above) is COUNTRY for a nomination and CITY
+        # for a participation; nothing in the request can change it.
+        if initial_level == SeasonLevel.COUNTRY:
             entry_season = SeasonMigrationService.get_or_create_season(
                 db,
-                level=SeasonLevel.COUNTRY,
+                level=initial_level,
                 title="Saison Country",
                 round_id=target_round_id,
                 contest_id=real_contest_id,
@@ -3260,7 +3294,7 @@ def create_contestant(
         else:
             entry_season = SeasonMigrationService.get_or_create_season(
                 db,
-                level=SeasonLevel.CITY,
+                level=initial_level,
                 title="Saison City",
                 round_id=target_round_id,
             )

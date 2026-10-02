@@ -19,6 +19,7 @@ import { normalizeMediaUrl } from '@/lib/media-url'
 import { rewriteLocalhostUrl } from '@/lib/config'
 import { COUNTRIES_DATA } from '@/lib/countries-data'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
+import { showCompetitionStageSelector, stageFilterForView } from '@/lib/submission-level'
 import {
   cohortRoundForVoteGeographyLevel,
   computeDisplayRounds,
@@ -408,6 +409,14 @@ function ContestsPageContent() {
       setNominationMigrationLevel('all')
     }
   }, [showVoteGeographyLevels, nominationMigrationLevel])
+
+  // Submit view: a new participation always starts at City (a nomination at
+  // Country) and the level is decided by the server, so there is no stage to
+  // choose and a stage picked earlier in Vote must not keep filtering the list.
+  useEffect(() => {
+    const allowed = stageFilterForView(activeDisplayTab?.kind, filterLevel)
+    if (allowed !== filterLevel) setFilterLevel(allowed)
+  }, [activeDisplayTab?.kind, filterLevel])
 
   useEffect(() => {
     if (categoryTab !== 'participations') return
@@ -1446,8 +1455,13 @@ function ContestsPageContent() {
         </div>
         )}
 
-        {/* Level filters directly under tabs: Vote / Nominate & Vote rounds show Country, Regional, … on Nominate; Participations uses same when voting round selected */}
-        {categoryTab === 'participations' && (
+        {/* Competition-stage chips are a Vote control. In Submit the level is not a choice
+            (participation starts at City, nomination at Country), so nothing is shown. */}
+        {categoryTab === 'participations' && showCompetitionStageSelector({
+          kind: activeDisplayTab?.kind,
+          categoryTab,
+          showVoteGeographyLevels,
+        }) && (
           <div className="mb-6 flex items-center gap-2 flex-wrap">
             <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
             <span className="text-sm text-gray-500 mr-1">{t('dashboard.contests.filter_level') || 'Level'}:</span>
@@ -1472,7 +1486,11 @@ function ContestsPageContent() {
         {/* Vote-stage chips belong to the Vote view. In the Nominate view the level is always
             reset to "all" (see effect above), so they would be inert when the selected month
             happens to be the live vote round. */}
-        {categoryTab === 'nomination' && showVoteGeographyLevels && activeDisplayTab?.kind !== 'nominate' && (
+        {categoryTab === 'nomination' && showCompetitionStageSelector({
+          kind: activeDisplayTab?.kind,
+          categoryTab,
+          showVoteGeographyLevels,
+        }) && (
           <div className="mb-6 space-y-2">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {t('dashboard.contests.vote_level_explainer') ||

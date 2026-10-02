@@ -843,7 +843,9 @@ from app.models.guardian import GuardianConsent, GuardianRelationship  # noqa: E
 def admin_scope(db, mode="participation", *, contests=1):
     rnd = make_round(db, _add_months(date(TODAY.year, TODAY.month, 1), -1))
     cts = [contest(db, mode=mode) for _ in range(contests)]
-    s = ContestSeason(round_id=rnd.id, title="Admin season", level=SeasonLevel.CITY)
+    # A new entry starts at its initial level: Country for nominations, City for participations.
+    s = ContestSeason(round_id=rnd.id, title="Admin season",
+                      level=SeasonLevel.COUNTRY if mode == "nomination" else SeasonLevel.CITY)
     db.add(s)
     db.flush()
     for ct in cts:

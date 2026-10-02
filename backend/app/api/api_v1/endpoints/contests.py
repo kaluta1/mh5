@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from datetime import datetime
 
 from app.api.deps import get_current_active_user, get_current_active_user_optional
@@ -54,6 +54,20 @@ class ParticipateRequest(BaseModel):
     # Nominations (Child/Teen Safety s.12): the nominator's attestation about the
     # nominee's age. Never verification; omitted = UNKNOWN (entry held).
     nominee_age_declaration: Optional[NomineeAgeDeclaration] = None
+    # Captured, never trusted: a level named in the body is validated against
+    # the initial level of the contest's mode (app.services.submission_level).
+    requested_levels: List[str] = []
+
+    @model_validator(mode='before')
+    @classmethod
+    def capture_requested_levels(cls, data: Any) -> Any:
+        from app.services.submission_level import requested_levels_from_payload
+
+        if isinstance(data, dict):
+            named = requested_levels_from_payload(data)
+            if named:
+                data = {**data, "requested_levels": [*(data.get("requested_levels") or []), *named]}
+        return data
 
 
 class VideoLinkValidationRequest(BaseModel):
@@ -682,6 +696,7 @@ def participate_in_contest(
         nominator_country=request.nominator_country,
         round_id=request.round_id,
         nominee_age_declaration=request.nominee_age_declaration,
+        requested_levels=request.requested_levels,
     )
     
     # Import the create_contestant function from contestant module

@@ -2239,6 +2239,16 @@ async def create_contestant(
     if entry_contest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contest not found")
 
+    # A NEW entry starts at its initial level whoever creates it: COUNTRY for a
+    # nomination contest, CITY for a participation contest. Moving an existing
+    # entry further is progression, not creation.
+    from app.services import submission_level as _submission_level
+
+    try:
+        _submission_level.enforce_initial_submission_level(entry_contest.contest_mode, [season.level])
+    except _submission_level.SubmissionLevelError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
     try:
         # Créer le candidat. Phase 8: it starts inactive; its public state is
         # decided below by the Phase 5/6 evaluation, in this same transaction.

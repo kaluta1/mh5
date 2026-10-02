@@ -79,6 +79,9 @@ def born(years: int, days: int = 0, on: date = TODAY) -> datetime:
 
 def person(db, age=None, *, country="Tanzania", admin=False, dob=None, **extra) -> User:
     uid = uuid.uuid4().hex[:8]
+    # A complete profile location: participations start at City level and
+    # nominations at Country level, so both are required to submit.
+    extra.setdefault("city", "Arusha")
     u = User(email=f"p5_{uid}@example.com", hashed_password="unused", username=f"p5_{uid}", is_active=True,
              is_admin=admin, country=country, date_of_birth=dob or (born(age) if age is not None else None), **extra)
     db.add(u)

@@ -1,6 +1,6 @@
 from typing import Optional, List, Union, Any
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 import json
 
 from app.core.child_safety import NomineeAgeDeclaration
@@ -19,6 +19,22 @@ class ContestantCreate(BaseModel):
     # Nominations only (Child/Teen Safety s.12): the nominator's statement about
     # the nominee's age. An attestation, never verification. Omitted = UNKNOWN.
     nominee_age_declaration: Optional[NomineeAgeDeclaration] = None
+    # Not an input a client is expected to send. Any competition level named in
+    # the raw body (level / contest_level / season_level / stage ...) is
+    # captured here so the endpoint can REJECT a submission that tries to start
+    # above its initial level (see app.services.submission_level).
+    requested_levels: List[str] = []
+
+    @model_validator(mode='before')
+    @classmethod
+    def capture_requested_levels(cls, data: Any) -> Any:
+        from app.services.submission_level import requested_levels_from_payload
+
+        if isinstance(data, dict):
+            named = requested_levels_from_payload(data)
+            if named:
+                data = {**data, "requested_levels": [*(data.get("requested_levels") or []), *named]}
+        return data
 
     @field_validator('image_media_ids', 'video_media_ids', mode='before')
     @classmethod
