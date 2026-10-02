@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
 from app.models.contest import Contest
 from app.models.contests import (
     ContestSeason,
@@ -36,6 +38,18 @@ from app.models.contests import (
 from app.models.round import Round, RoundStatus, round_contests
 from app.models.user import User
 from app.services.season_migration import SeasonMigrationService
+
+
+@pytest.fixture(autouse=True)
+def _corrected_finalization_rule_already_active(monkeypatch):
+    """These scenarios use synthetic cohorts dated before 2026-10-02. They model
+    stages that close while the corrected GLOBAL finalization rule is in force,
+    so the rule's activation date is moved before them. The guard for stages
+    that closed under the previous rule is covered by
+    test_global_finalization_historical_guard.py."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GLOBAL_FINALIZATION_ACTIVE_FROM", "2000-01-01", raising=False)
 
 
 def _user(db, suffix: str) -> User:

@@ -196,6 +196,11 @@ class Settings(BaseModel):
     NOWPAYMENTS_PASSWORD: str = os.getenv("NOWPAYMENTS_PASSWORD", "")
     NOWPAYMENTS_PAYOUT_TOTP_SECRET: str = os.getenv("NOWPAYMENTS_PAYOUT_TOTP_SECRET", "")
 
+    # GLOBAL Top High5 finalization: first Global-stage closing date the
+    # AUTOMATIC scheduler finalizes (YYYY-MM-DD). Empty = the built-in rule
+    # activation date. See SeasonMigrationService.global_stage_is_historical.
+    GLOBAL_FINALIZATION_ACTIVE_FROM: str = os.getenv("GLOBAL_FINALIZATION_ACTIVE_FROM", "")
+
     # CONTENT MODERATION (Sightengine)
     ENABLE_CONTENT_MODERATION: bool = os.getenv("ENABLE_CONTENT_MODERATION", "false").lower() == "true"
     SIGHTENGINE_API_USER: str = os.getenv("SIGHTENGINE_API_USER", "")

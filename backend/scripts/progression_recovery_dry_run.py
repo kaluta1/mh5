@@ -96,7 +96,8 @@ def main() -> int:
     parser.add_argument("--legacy-audit", action="store_true",
                         help="also classify every legacy entry whose season_id collides with a season id")
     parser.add_argument("--global-finalizations", action="store_true",
-                        help="also list GLOBAL stages whose Top High5 freeze is due")
+                        help="also list the GLOBAL Top High5 freezes the automatic scheduler would make, and "
+                             "separately the historical ones it skips")
     parser.add_argument("--quiet", action="store_true", help="print only the totals")
     args = parser.parse_args()
 
@@ -121,6 +122,11 @@ def main() -> int:
             report["pending_global_finalizations"] = pending_global_finalizations(
                 db, today=today, round_ids=args.rounds
             )
+            report["historical_global_finalizations_skipped"] = [
+                item for item in pending_global_finalizations(
+                    db, today=today, round_ids=args.rounds, include_historical=True
+                ) if item["historical"]
+            ]
         if args.legacy_audit:
             report["legacy_audit"] = audit_legacy_collisions(db)
     finally:
@@ -147,7 +153,13 @@ def main() -> int:
             print("  ", key, value)
     if "pending_global_finalizations" in report:
         print()
-        print("GLOBAL FINALIZATIONS DUE:", len(report["pending_global_finalizations"]))
+        automatic = report["pending_global_finalizations"]
+        skipped = report["historical_global_finalizations_skipped"]
+        print("GLOBAL FINALIZATIONS THE AUTOMATIC SCHEDULER WOULD MAKE:", len(automatic), "contests,",
+              sum(len(item["would_freeze"]) for item in automatic), "rows")
+        print("HISTORICAL GLOBAL STAGES SKIPPED (explicit authorization only):", len(skipped), "contests,",
+              sum(len(item["would_freeze"]) for item in skipped), "rows, rounds",
+              sorted({item["round_id"] for item in skipped}))
     print()
     print("NO DATABASE WRITE WAS MADE.")
     return 0

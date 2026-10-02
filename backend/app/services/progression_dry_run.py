@@ -545,9 +545,15 @@ def pending_global_finalizations(
     *,
     today: Optional[date] = None,
     round_ids: Optional[Iterable[int]] = None,
+    include_historical: bool = False,
 ) -> List[dict]:
     """GLOBAL stages whose voting is over and whose Top High5 is not frozen
-    yet: what the scheduler's finalization step would freeze. Read-only."""
+    yet. Read-only.
+
+    Default: exactly what the automatic scheduler would freeze, i.e. without
+    the stages that closed before the corrected finalization rule took effect.
+    ``include_historical=True`` lists those too: what an explicit, separately
+    authorized historical finalization would freeze."""
     from app.services import progression_ranking
 
     today = today or date.today()
@@ -581,6 +587,9 @@ def pending_global_finalizations(
                 continue
             if not SeasonMigrationService._global_finalization_due(round_obj, _mode(contest), today):
                 continue
+            historical = SeasonMigrationService.global_stage_is_historical(round_obj, _mode(contest))
+            if historical and not include_historical:
+                continue
             already = (
                 db.query(TopHigh5Result.id)
                 .filter(
@@ -606,6 +615,8 @@ def pending_global_finalizations(
                 "contest_id": contest.id,
                 "contest_name": contest.name,
                 "global_season_id": season.id,
+                "stage_closed_on": str(SeasonMigrationService._global_stage_close_date(round_obj, _mode(contest))),
+                "historical": historical,
                 "members": len(members),
                 "would_freeze": [
                     {

@@ -41,6 +41,18 @@ LEVELS = [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL, SeasonLev
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
+def _corrected_finalization_rule_already_active(monkeypatch):
+    """These scenarios use synthetic cohorts dated before 2026-10-02. They model
+    stages that close while the corrected GLOBAL finalization rule is in force,
+    so the rule's activation date is moved before them. The guard for stages
+    that closed under the previous rule is covered by
+    test_global_finalization_historical_guard.py."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GLOBAL_FINALIZATION_ACTIVE_FROM", "2000-01-01", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _quiet_scheduler_prints(monkeypatch):
     """The migration service prints progress lines containing non-ASCII marks;
     a Windows cp1252 console/capture cannot encode them. Output is irrelevant here."""

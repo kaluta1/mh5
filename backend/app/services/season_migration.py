@@ -469,22 +469,71 @@ class SeasonMigrationService:
         return False
 
     @staticmethod
+    def _global_stage_close_date(round_obj: Round, contest_mode: str) -> Optional[date]:
+        """Last voting day of this cohort's GLOBAL stage on its own calendar
+        (nomination offsets, or the round's global_end_date), or None."""
+        mode = (contest_mode or "").strip().lower()
+        if mode == "nomination":
+            return SeasonMigrationService._nomination_vote_close_date_for_level(
+                round_obj, SeasonLevel.GLOBAL
+            )
+        close = getattr(round_obj, "global_end_date", None)
+        if isinstance(close, datetime):
+            return close.date()
+        return close
+
+    @staticmethod
     def _global_finalization_due(round_obj: Round, contest_mode: str, today: date) -> bool:
         """
         Whether GLOBAL voting for this round/contest has closed. GLOBAL has no
         next level, so nothing else gates finalizing (freezing, not promoting)
         its own Top High5 result.
         """
-        mode = (contest_mode or "").strip().lower()
-        if mode == "nomination":
-            vote_close = SeasonMigrationService._nomination_vote_close_date_for_level(
-                round_obj, SeasonLevel.GLOBAL
-            )
-            return bool(vote_close and today > vote_close)
-        return bool(
-            getattr(round_obj, "global_end_date", None)
-            and round_obj.global_end_date < today
-        )
+        close = SeasonMigrationService._global_stage_close_date(round_obj, contest_mode)
+        return bool(close and close < today)
+
+    # The corrected finalization rule (a finalist needs no vote; ranking on
+    # cumulative points) was confirmed by management on this date. A GLOBAL
+    # stage whose voting closed BEFORE it was closed, and left unfrozen, under
+    # the previous rule. Overridable with GLOBAL_FINALIZATION_ACTIVE_FROM.
+    GLOBAL_FINALIZATION_RULE_ACTIVE_FROM: ClassVar[date] = date(2026, 10, 2)
+
+    @staticmethod
+    def global_finalization_active_from() -> date:
+        """First GLOBAL-stage closing date the automatic scheduler finalizes."""
+        from app.core.config import settings
+
+        raw = (getattr(settings, "GLOBAL_FINALIZATION_ACTIVE_FROM", "") or "").strip()
+        if raw:
+            try:
+                return date.fromisoformat(raw)
+            except ValueError:
+                # A malformed override must never widen what gets frozen.
+                logger.error(
+                    "GLOBAL_FINALIZATION_ACTIVE_FROM=%r is not YYYY-MM-DD; using the built-in date", raw
+                )
+        return SeasonMigrationService.GLOBAL_FINALIZATION_RULE_ACTIVE_FROM
+
+    @staticmethod
+    def global_stage_is_historical(round_obj: Round, contest_mode: str) -> bool:
+        """
+        True for a GLOBAL stage whose own voting window closed before the
+        corrected finalization rule took effect.
+
+        Finalizing is a hand-over that belongs to the moment a stage closes.
+        A stage that closed under the previous rule was already evaluated by
+        that rule and left without a frozen result; freezing it now would be
+        the scheduler silently re-deciding history. So the AUTOMATIC pass
+        finalizes only stages that close on or after the activation date,
+        judged by each stage's own lifecycle date -- never by round or contest
+        ids. Older stages are left exactly as they are and can only be
+        finalized by an explicit, separately authorized call
+        (`_finalize_global_top_high5(..., include_historical=True)`).
+
+        An unknown closing date is never "due", so it is not finalized at all.
+        """
+        close = SeasonMigrationService._global_stage_close_date(round_obj, contest_mode)
+        return bool(close and close < SeasonMigrationService.global_finalization_active_from())
 
     @staticmethod
     def _global_final_members(db: Session, contest: Contest, season: ContestSeason) -> List[Contestant]:
@@ -520,13 +569,19 @@ class SeasonMigrationService:
         season: ContestSeason,
         round_obj: Round,
         today: date,
+        *,
+        include_historical: bool = False,
     ) -> List[dict]:
         """
         GLOBAL never gets promoted further, so it never runs through
         promote_to_next_level. Freeze its own Top High5 here once voting has
-        closed, reusing the same canonical ranking helper
-        (rank_contestant_ids_like_top_high5) the Continental->Global
-        promotion path already trusts.
+        closed, ranked with the canonical progression rule.
+
+        `include_historical` (server-internal, default False = what the
+        scheduler does): also finalize a stage that closed before the
+        corrected rule took effect (see global_stage_is_historical). Only an
+        explicit, authorized historical reconciliation passes True; there is
+        no API parameter for it.
         """
         outcomes: List[dict] = []
         contest_links = (
@@ -545,6 +600,12 @@ class SeasonMigrationService:
 
             contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
             if not SeasonMigrationService._global_finalization_due(round_obj, contest_mode, today):
+                continue
+            if not include_historical and SeasonMigrationService.global_stage_is_historical(
+                round_obj, contest_mode
+            ):
+                # Closed under the previous rule: never frozen retroactively
+                # by the automatic pass.
                 continue
 
             already_frozen = (
