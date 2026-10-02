@@ -58,30 +58,24 @@
       "badge": "Pata kipato",
       "title": "Njia tofauti za kupata kipato",
       "kyc_payments": {
-        "title": "Malipo ya KYC",
-        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+        "title": "Malipo ya KYC"
       },
       "founding_membership": {
         "title": "Uanachama wa Mwanzilishi",
-        "description": "Pata kamisheni wanachama wa mtandao wako wanapojiunga kama waanzilishi.",
-        "commission": "$20 Kiwango cha 1, $2 Viwango vya 2-10"
+        "description": "Pata kamisheni wanachama wa mtandao wako wanapojiunga kama waanzilishi."
       },
       "annual_membership": {
         "title": "Ada ya Uanachama wa Mwaka",
-        "description": "Pata kamisheni waanzilishi wanapolipa ada ya mwaka.",
-        "commission": "$10 Kiwango cha 1, $1 Viwango vya 2-10"
+        "description": "Pata kamisheni waanzilishi wanapolipa ada ya mwaka."
       },
       "club_memberships": {
-        "title": "Uanachama wa Vilabu",
-        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+        "title": "Uanachama wa Vilabu"
       },
       "shop_purchases": {
-        "title": "Ununuzi wa Duka",
-        "commission": "20% Kiwango cha 1, 2% Viwango vya 2-10"
+        "title": "Ununuzi wa Duka"
       },
       "ad_revenue": {
-        "title": "Mgawanyo wa Mapato ya Matangazo",
-        "commission": "10% Kiwango cha 1, 1% Viwango vya 2-10"
+        "title": "Mgawanyo wa Mapato ya Matangazo"
       },
       "ad_campaigns": {
         "title": "Kampeni za Matangazo",
@@ -198,7 +192,6 @@
     "no_commissions_desc": "You don't have any commissions yet. Refer users to start earning!",
     "level": "Level",
     "direct": "Direct",
-    "indirect": "Indirect",
     "source": "Source",
     "amount": "Amount",
     "date": "Date",
@@ -222,16 +215,12 @@
       "CONTEST_PARTICIPATION": "Commission on contest participations from your referrals",
       "KYC_PAYMENT": "Commission on KYC verification payments",
       "EFM_MEMBERSHIP": "Commission on EFM memberships from your referrals",
-      "FOUNDING_MEMBERSHIP_FEE": "$20 direct / $2 indirect (L2-10) on FM fee ($100)",
-      "ANNUAL_MEMBERSHIP_FEE": "$10 direct / $1 indirect (L2-10) on annual fee ($50)",
       "MONTHLY_REVENUE_POOL": "Share of 5% monthly net revenue pool",
       "ANNUAL_PROFIT_POOL": "Share of 10% annual post-tax profit pool"
     },
     "rates": {
       "founding_direct": "$20 per direct referral",
-      "founding_indirect": "$2 per indirect referral (L2-10)",
-      "annual_direct": "$10 per direct referral",
-      "annual_indirect": "$1 per indirect referral (L2-10)"
+      "annual_direct": "$10 per direct referral"
     },
     "sort_by_date": "By date",
     "sort_by_amount": "By amount",

@@ -19,8 +19,8 @@ class CommissionType(str, enum.Enum):
     EFM_MEMBERSHIP = "EFM_MEMBERSHIP"                      # Abonnement EFM
     
     # Commissions Founding Members
-    FOUNDING_MEMBERSHIP_FEE = "FOUNDING_MEMBERSHIP_FEE"    # 100$ fee - 20$ direct, 2$ indirect L2-10
-    ANNUAL_MEMBERSHIP_FEE = "ANNUAL_MEMBERSHIP_FEE"        # 50$/an - 10$ direct, 1$ indirect L2-10
+    FOUNDING_MEMBERSHIP_FEE = "FOUNDING_MEMBERSHIP_FEE"    # historical: Founding Member fee (retired program)
+    ANNUAL_MEMBERSHIP_FEE = "ANNUAL_MEMBERSHIP_FEE"        # annual membership fee (direct sponsor only)
     MONTHLY_REVENUE_POOL = "MONTHLY_REVENUE_POOL"          # 10% revenus nets mensuels (pool FM)
     ANNUAL_PROFIT_POOL = "ANNUAL_PROFIT_POOL"              # 20% profits annuels après taxes
 
@@ -47,9 +47,14 @@ class CommissionRule(Base):
     commission_type: Mapped[CommissionType] = mapped_column(SQLEnum(CommissionType), nullable=False)
     
     # Configuration des pourcentages
+    # LEGACY table of the retired commission engine; the active program reads
+    # revenue_policies (NEW_V2) and is direct referrals only. Stored rows keep
+    # the historical 10-level values for audit; a NEW row defaults to no
+    # indirect percentage and a single level (application-side defaults only,
+    # no schema change).
     direct_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=10.0)    # Ex: 10.0 pour 10%
-    indirect_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=1.0)   # Ex: 1.0 pour 1%
-    max_levels: Mapped[int] = mapped_column(Integer, default=10)
+    indirect_percentage: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0)   # historical rows: 1.0
+    max_levels: Mapped[int] = mapped_column(Integer, default=1)                      # historical rows: 10
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -95,7 +100,9 @@ class AffiliateCommission(Base):
     
     # Type de commission (pour rétrocompatibilité et cas spéciaux comme les pools)
     commission_type: Mapped[CommissionType] = mapped_column(SQLEnum(CommissionType), nullable=False)
-    level: Mapped[int] = mapped_column(Integer, nullable=False)  # Niveau d'affiliation (1 = direct, 2-10 = indirect)
+    # 1 = direct. New rows are always 1 (the program is direct referrals only);
+    # 2-10 exist only on historical rows of the retired 10-level program.
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
     
     # Montants
     base_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant de base de la transaction

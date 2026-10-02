@@ -351,3 +351,55 @@ def test_admin_user_detail_tree_is_not_reachable_by_a_member(client, chain):
     db, a, *_ = chain
     r = client.get(f"/api/v1/admin/users/{a.id}", headers=auth(a))
     assert r.status_code in (401, 403, 404)
+
+
+# ---------------------------------------------------------------------------
+# Legacy configuration cannot be mistaken for, or turned back into, the policy
+# ---------------------------------------------------------------------------
+
+def test_active_direct_rate_is_the_revenue_policy_and_is_unchanged(world):
+    from app.models.business_model import RevenuePolicy
+
+    rates = {p.product_code: Decimal(str(p.commission_rate)) for p in world.query(RevenuePolicy).all()
+             if p.commission_eligible}
+    assert rates and set(rates.values()) == {Decimal("0.2000")}       # the approved 20% direct rate
+
+
+def test_legacy_rule_seed_is_direct_only_and_never_rewrites_historical_rows(world):
+    from app.models.affiliate import CommissionRule
+    from app.scripts.init_commission_rules import init_commission_rules
+
+    db = world
+    # A historical row of the retired 10-level program already in the table.
+    db.add(CommissionRule(product_code="kyc", commission_type=CommissionType.KYC_PAYMENT,
+                          direct_percentage=10.0, indirect_percentage=1.0, max_levels=10, is_active=True))
+    db.commit()
+    init_commission_rules(db)
+    rules = {r.product_code: (float(r.direct_percentage), float(r.indirect_percentage), r.max_levels)
+             for r in db.query(CommissionRule).all()}
+    assert rules["kyc"] == (10.0, 1.0, 10)                      # audit history kept exactly
+    seeded = {code: values for code, values in rules.items() if code != "kyc"}
+    assert seeded and all(values == (10.0, 0.0, 1) for values in seeded.values())   # new rows: no levels 2-10
+
+
+def test_new_commission_rule_defaults_to_one_level_and_no_indirect_rate(world):
+    from app.models.affiliate import CommissionRule
+
+    db = world
+    db.add(CommissionRule(product_code="x_product", commission_type=CommissionType.KYC_PAYMENT))
+    db.commit()
+    rule = db.query(CommissionRule).filter(CommissionRule.product_code == "x_product").one()
+    assert (float(rule.indirect_percentage), rule.max_levels) == (0.0, 1)
+
+
+def test_no_seed_or_fallback_still_configures_levels_two_to_ten():
+    import inspect
+
+    from app import initial_data
+    from app.services.commission_distribution import DEFAULT_COMMISSION_CONFIG
+
+    assert "affiliate_indirect" not in inspect.getsource(initial_data.create_product_types).replace(
+        "level 2-10", "")
+    for config in DEFAULT_COMMISSION_CONFIG.values():
+        assert config["max_levels"] == 1 and config["indirect_amount"] == 0
+

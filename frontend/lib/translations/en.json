@@ -87,7 +87,6 @@
     },
     "affiliate": {
       "title": "Affiliate Program",
-      "description": "Earn up to 10 levels deep from referrals",
       "revenue_share": "20% to participants, 5% to sponsors"
     },
     "carousel": {
@@ -108,33 +107,27 @@
       },
       "kyc_payments": {
         "title": "KYC Payments",
-        "description": "Earn 20% of MyHigh5's revenue when members you referred directly complete paid verification.",
-        "commission": "10% on Level 1, 1% on Levels 2-10"
+        "description": "Earn 20% of MyHigh5's revenue when members you referred directly complete paid verification."
       },
       "founding_membership": {
         "title": "Founding Membership",
-        "description": "Earn commissions when members in your network join as Founding Members ($100).",
-        "commission": "10% on Level 1 ($10), 1% on Levels 2-10 ($1 each)"
+        "description": "Earn commissions when members in your network join as Founding Members ($100)."
       },
       "annual_membership": {
         "title": "Annual Membership Fee",
-        "description": "Earn commissions when Founding Members pay annual membership fees ($50).",
-        "commission": "10% on Level 1 ($5), 1% on Levels 2-10 ($0.50 each)"
+        "description": "Earn commissions when Founding Members pay annual membership fees ($50)."
       },
       "club_memberships": {
         "title": "Club Memberships",
-        "description": "Earn 20% of MyHigh5's 20% fee when members you referred directly subscribe to paid clubs.",
-        "commission": "10% on Level 1, 1% on Levels 2-10"
+        "description": "Earn 20% of MyHigh5's 20% fee when members you referred directly subscribe to paid clubs."
       },
       "shop_purchases": {
         "title": "Shop Purchases",
-        "description": "Earn 20% of MyHigh5's 20% fee on digital purchases by members you referred directly.",
-        "commission": "10% on Level 1, 1% on Levels 2-10"
+        "description": "Earn 20% of MyHigh5's 20% fee on digital purchases by members you referred directly."
       },
       "ad_revenue": {
         "title": "Contest Page Ad Revenue Sharing",
-        "description": "Earn from the ads shown on your contest page. Personal submission (starting at City level): you receive 20% of the page's ad revenue and your direct sponsor receives an extra 1%. Nomination (starting at Country level): the nominated creative receives 10% and their direct sponsor receives an extra 1%. The original share stays with the creative at every later contest level. Annual Ads are not included in contest-page revenue sharing.",
-        "commission": "10% on Level 1, 1% on Levels 2-10"
+        "description": "Earn from the ads shown on your contest page. Personal submission (starting at City level): you receive 20% of the page's ad revenue and your direct sponsor receives an extra 1%. Nomination (starting at Country level): the nominated creative receives 10% and their direct sponsor receives an extra 1%. The original share stays with the creative at every later contest level. Annual Ads are not included in contest-page revenue sharing."
       },
       "ad_campaigns": {
         "title": "Ad Slots Bought by Your Referrals",
@@ -352,7 +345,6 @@
     "no_commissions_desc": "You don't have any commissions yet. Refer users to start earning!",
     "level": "Level",
     "direct": "Direct",
-    "indirect": "Indirect",
     "source": "Source",
     "amount": "Amount",
     "date": "Date",
@@ -376,16 +368,12 @@
       "CONTEST_PARTICIPATION": "Commission on contest participations from your referrals",
       "KYC_PAYMENT": "Commission on KYC verification payments",
       "EFM_MEMBERSHIP": "Commission on EFM memberships from your referrals",
-      "FOUNDING_MEMBERSHIP_FEE": "$20 direct / $2 indirect (L2-10) on FM fee ($100)",
-      "ANNUAL_MEMBERSHIP_FEE": "$10 direct / $1 indirect (L2-10) on annual fee ($50)",
       "MONTHLY_REVENUE_POOL": "Share of 5% monthly net revenue pool",
       "ANNUAL_PROFIT_POOL": "Share of 10% annual post-tax profit pool"
     },
     "rates": {
       "founding_direct": "$20 per direct referral",
-      "founding_indirect": "$2 per indirect referral (L2-10)",
-      "annual_direct": "$10 per direct referral",
-      "annual_indirect": "$1 per indirect referral (L2-10)"
+      "annual_direct": "$10 per direct referral"
     },
     "sort_by_date": "By date",
     "sort_by_amount": "By amount",
@@ -1112,16 +1100,9 @@
       "kyc_requires_review": "Kyc Requires Review",
       "all_affiliates": "All Affiliates",
       "affiliates_found": "Affiliates Found",
-      "levels": "levels",
-      "total_tooltip_title": "Total Tooltip Title",
-      "total_tooltip_desc": "Total Tooltip Desc",
       "direct_referrals": "Directs",
       "direct_tooltip_title": "Referrals Directs",
-      "direct_tooltip_desc": "Direct Tooltip Desc",
       "earned": "Earned",
-      "indirect_referrals": "Indirects",
-      "indirect_tooltip_title": "Indirect referrals",
-      "indirect_tooltip_desc": "Earn from referrals in levels 2–10 of your network.",
       "active_tooltip_title": "Active Tooltip Title",
       "active_tooltip_desc": "Active Tooltip Desc",
       "kyc_verified": "Kyc Verified",
@@ -1131,17 +1112,14 @@
       "commissions_tooltip_desc": "Commissions Tooltip Desc",
       "commission_structure": "Commission Structure",
       "search_placeholder": "Search by name or email...",
-      "all_levels": "All levels",
       "all_statuses": "All statuses",
       "inactive": "Inactive",
       "all_kyc_statuses": "All KYC",
       "affiliate": "Affiliate",
       "col_affiliate_hint": "Col Affiliate Hint",
-      "col_level_hint": "Col Level Hint",
       "kyc_status_label": "KYC",
       "col_kyc_hint": "Col Kyc Hint",
       "referrals_count": "Referrals",
-      "col_referrals_hint": "Col Referrals Hint",
       "col_earnings_hint": "Col Earnings Hint",
       "status": "Status",
       "col_status_hint": "Col Status Hint",
@@ -1166,12 +1144,8 @@
       "link_register": "Link Register",
       "link_home": "Link Home",
       "link_contestants": "Contests page link",
-      "ten_levels": "10 commission levels",
       "direct_commission": "Direct commission",
-      "indirect_commission": "Indirect",
-      "indirect_description": "Earn 1% on each level of your network, up to level 10.",
       "total_potential": "Total potential",
-      "max_commission": "Maximum commission across 10 levels",
       "cookie_tracking": "Cookie tracking: 30 days",
       "your_affiliates": "Affiliates",
       "pending_invitations": "Pending",

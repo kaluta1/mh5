@@ -125,7 +125,6 @@
     "no_commissions_desc": "You don't have any commissions yet. Refer users to start earning!",
     "level": "Level",
     "direct": "Direct",
-    "indirect": "Indirect",
     "source": "Source",
     "amount": "Amount",
     "date": "Date",
@@ -149,16 +148,12 @@
       "CONTEST_PARTICIPATION": "Commission on contest participations from your referrals",
       "KYC_PAYMENT": "Commission on KYC verification payments",
       "EFM_MEMBERSHIP": "Commission on EFM memberships from your referrals",
-      "FOUNDING_MEMBERSHIP_FEE": "$20 direct / $2 indirect (L2-10) on FM fee ($100)",
-      "ANNUAL_MEMBERSHIP_FEE": "$10 direct / $1 indirect (L2-10) on annual fee ($50)",
       "MONTHLY_REVENUE_POOL": "Share of 5% monthly net revenue pool",
       "ANNUAL_PROFIT_POOL": "Share of 10% annual post-tax profit pool"
     },
     "rates": {
       "founding_direct": "$20 per direct referral",
-      "founding_indirect": "$2 per indirect referral (L2-10)",
-      "annual_direct": "$10 per direct referral",
-      "annual_indirect": "$1 per indirect referral (L2-10)"
+      "annual_direct": "$10 per direct referral"
     },
     "sort_by_date": "By date",
     "sort_by_amount": "By amount",

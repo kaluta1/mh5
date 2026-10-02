@@ -1,6 +1,12 @@
 /**
  * MyHigh5 Chart of Accounts — shared codes and distribution math (mirrors backend
- * `app/accounting/distribution_formulas.py`). Use for admin UI previews and validation.
+ * `app/accounting/distribution_formulas.py`).
+ *
+ * LEGACY: the "level 1 / levels 2-10" splits below are the accounting of the
+ * RETIRED 10-level affiliate program. They are kept as a reference for reading
+ * historical journals only. The active program is direct referrals only (level 1)
+ * and nothing in the application imports these helpers; never use them to
+ * describe or preview the current commission policy.
  */
 
 const round2 = (n: number) => Math.round(n * 100) / 100

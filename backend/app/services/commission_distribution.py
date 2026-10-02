@@ -24,15 +24,15 @@ from app.services.financial_integrity import money
 logger = logging.getLogger(__name__)
 
 
-# Configuration des commissions par type de produit
-# REMARQUE: Cette configuration est maintenue comme fallback si la règle n'est pas en BD
+# LEGACY fallback of the retired engine, used only when the legacy model is
+# re-enabled and no commission_rules row exists. Direct sponsor only.
 DEFAULT_COMMISSION_CONFIG = {
     # KYC Service (10$)
     "kyc": {
         "commission_type": CommissionType.KYC_PAYMENT,
         "direct_amount": Decimal("1.00"),    # Legacy values as fallback
-        "indirect_amount": Decimal("0.10"),
-        "max_levels": 10
+        "indirect_amount": Decimal("0.00"),
+        "max_levels": 1
     }
 }
 

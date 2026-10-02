@@ -125,7 +125,6 @@
     "no_commissions_desc": "Vous n'avez pas encore de commissions. Parrainez des utilisateurs pour commencer à gagner !",
     "level": "Niveau",
     "direct": "Direct",
-    "indirect": "Indirect",
     "source": "Source",
     "amount": "Montant",
     "date": "Date",
@@ -149,16 +148,12 @@
       "CONTEST_PARTICIPATION": "Commission sur les participations aux concours de vos filleuls",
       "KYC_PAYMENT": "Commission sur les paiements de vérification KYC",
       "EFM_MEMBERSHIP": "Commission sur les abonnements EFM de vos filleuls",
-      "FOUNDING_MEMBERSHIP_FEE": "20$ direct / 2$ indirect (N2-10) sur l'adhésion FM (100$)",
-      "ANNUAL_MEMBERSHIP_FEE": "10$ direct / 1$ indirect (N2-10) sur la cotisation annuelle (50$)",
       "MONTHLY_REVENUE_POOL": "Part du pool mensuel de 5% des revenus nets",
       "ANNUAL_PROFIT_POOL": "Part du pool annuel de 10% des profits après taxes"
     },
     "rates": {
       "founding_direct": "20$ par parrainage direct",
-      "founding_indirect": "2$ par parrainage indirect (N2-10)",
-      "annual_direct": "10$ par parrainage direct",
-      "annual_indirect": "1$ par parrainage indirect (N2-10)"
+      "annual_direct": "10$ par parrainage direct"
     },
     "sort_by_date": "Par date",
     "sort_by_amount": "Par montant",

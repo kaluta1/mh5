@@ -1,6 +1,13 @@
 """
 Pure distribution math for MyHigh5 payment flows (Singapore-oriented CoA).
 
+LEGACY NOTE: every "L1 / L2-L10" split in this module is the accounting of the
+RETIRED 10-level program. It is kept only so journals of legacy (pre NEW_V2)
+deposits can still be read, re-derived and reversed exactly. The active
+affiliate program is direct referrals only (level 1); its postings are made by
+app.services.new_model_revenue / new_model_payments, not here. Do not use these
+splits to describe or compute the current commission policy.
+
 **Founding Members 10% pool (ledger 2104)** accrues on gross for every flow we model here (KYC fee, annual/founding membership gross, ad shares, and 10% of club *markup*), before month-end
 allocation (2104 → 2105). Payment journals implement the same policy in `payment_accounting`.
 

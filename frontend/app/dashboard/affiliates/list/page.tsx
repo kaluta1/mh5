@@ -281,7 +281,7 @@ export default function AffiliatesListPage() {
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <p className="font-semibold mb-1">{t('dashboard.affiliates.direct_tooltip_title') || 'Referrals Directs'}</p>
             <p className="text-gray-300 text-xs mb-2">
-              {t('dashboard.affiliates.direct_tooltip_desc') || 'Utilisateurs que vous avez directement parrainés (niveau 1). Vous gagnez 10% de commission sur leurs paiements KYC.'}
+              {t('business_model.direct_body')}
             </p>
             <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
               <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>

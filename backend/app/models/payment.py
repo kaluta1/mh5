@@ -104,9 +104,11 @@ class ProductType(Base):
     affiliate_direct_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant fixe (ex: 20$)
     affiliate_direct_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # OU pourcentage (ex: 0.20)
     
-    # Commission Niveaux 2-10 (parrainages indirects)
-    affiliate_indirect_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Montant fixe (ex: 2$)
-    affiliate_indirect_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)  # OU pourcentage (ex: 0.02)
+    # LEGACY columns of the retired 10-level program (levels 2-10). No code reads
+    # them: the active affiliate program is direct referrals only and its rate
+    # comes from revenue_policies. Kept so historical rows are not altered.
+    affiliate_indirect_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    affiliate_indirect_rate: Mapped[Optional[float]] = mapped_column(Numeric(5, 4), nullable=True)
     
     # Relations
     deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="product_type")

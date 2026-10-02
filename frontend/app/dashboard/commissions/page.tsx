@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
 import { dedupeCommissionRows } from '@/lib/dedupe-commissions'
+import { formatCommissionRate } from '@/lib/commission-rate'
 import type { AxiosError } from 'axios'
 
 interface Commission {
@@ -668,7 +669,7 @@ export default function CommissionsPage() {
                       +{formatCurrency(commission.amount)}
                     </p>
                     <p className={`text-xs ${commission.type === 'direct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                      {commission.type === 'direct' ? '10%' : '1%'}
+                      {formatCommissionRate(commission.amount, commission.baseAmount)}
                     </p>
                   </div>
                 </div>

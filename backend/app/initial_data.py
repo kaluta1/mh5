@@ -203,7 +203,13 @@ def create_base_locations(db: Session) -> None:
 
 
 def create_product_types(db: Session) -> None:
-    """Crée les types de produits avec configuration des commissions d'affiliation"""
+    """Crée les types de produits (seed for a new environment).
+
+    The ``affiliate_*`` values below are LEGACY product-type fields that no
+    commission code reads. The active affiliate program is direct referrals
+    only (level 1) and is paid from ``revenue_policies`` (NEW_V2). Indirect
+    (level 2-10) values are therefore no longer seeded at all.
+    """
     try:
         from app.models.payment import ProductType
         
@@ -222,7 +228,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": False,
                 "has_affiliate_commission": True,
                 "affiliate_direct_amount": 20.00,   # 20$ par parrainage direct
-                "affiliate_indirect_amount": 2.00,  # 2$ par parrainage indirect (N2-10)
             },
             {
                 "code": "annual_membership",
@@ -235,7 +240,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": False,
                 "has_affiliate_commission": True,
                 "affiliate_direct_amount": 10.00,   # 10$ par parrainage direct
-                "affiliate_indirect_amount": 1.00,  # 1$ par parrainage indirect (N2-10)
             },
             # ============================================
             # KYC
@@ -251,7 +255,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": True,
                 "has_affiliate_commission": True,
                 "affiliate_direct_rate": 0.20,      # 20% du montant
-                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
             },
             # ============================================
             # EFM (Enhanced Features Membership)
@@ -267,7 +270,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": False,
                 "has_affiliate_commission": True,
                 "affiliate_direct_rate": 0.20,      # 20% du montant
-                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
             },
             # ============================================
             # CLUB MEMBERSHIP
@@ -283,7 +285,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": False,
                 "has_affiliate_commission": True,
                 "affiliate_direct_rate": 0.20,      # 20% du montant
-                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
             },
             # ============================================
             # CONTEST PARTICIPATION
@@ -299,7 +300,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": True,
                 "has_affiliate_commission": True,
                 "affiliate_direct_rate": 0.20,      # 20% du montant
-                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
             },
             # ============================================
             # SHOP PURCHASE
@@ -315,7 +315,6 @@ def create_product_types(db: Session) -> None:
                 "is_consumable": True,
                 "has_affiliate_commission": True,
                 "affiliate_direct_rate": 0.20,      # 20% du montant
-                "affiliate_indirect_rate": 0.02,    # 2% du montant (N2-10)
             },
         ]
         

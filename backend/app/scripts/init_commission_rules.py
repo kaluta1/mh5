@@ -6,37 +6,47 @@ logger = logging.getLogger(__name__)
 
 def init_commission_rules(db: Session):
     """
-    Initialise les règles de commission par défaut si elles n'existent pas.
-    Règles: 10% direct, 1% indirect (Level 2-10).
+    LEGACY seed of the `commission_rules` table. NOT the current policy.
+
+    `commission_rules` belongs to the retired pre-NEW_V2 commission engine
+    (app.services.commission_distribution), which creates nothing unless the
+    legacy model is re-enabled. The active affiliate program is direct
+    referrals only (level 1) and its rate comes from `revenue_policies`
+    (NEW_V2), never from this table.
+
+    A fresh environment is seeded direct-only: no indirect percentage and one
+    level. Existing rows (the historical 10% / 1% / 10-level configuration) are
+    never modified by this function, so the audit trail of what the old program
+    paid stays intact.
     """
     rules = [
         {
             "product_code": "kyc",
             "commission_type": CommissionType.KYC_PAYMENT,
             "direct_percentage": 10.0,
-            "indirect_percentage": 1.0,
-            "max_levels": 10
+            "indirect_percentage": 0.0,
+            "max_levels": 1
         },
         {
             "product_code": "mfm_membership",
             "commission_type": CommissionType.FOUNDING_MEMBERSHIP_FEE,
             "direct_percentage": 10.0,
-            "indirect_percentage": 1.0,
-            "max_levels": 10
+            "indirect_percentage": 0.0,
+            "max_levels": 1
         },
         {
             "product_code": "annual_membership",
             "commission_type": CommissionType.ANNUAL_MEMBERSHIP_FEE,
             "direct_percentage": 10.0,
-            "indirect_percentage": 1.0,
-            "max_levels": 10
+            "indirect_percentage": 0.0,
+            "max_levels": 1
         },
         {
             "product_code": "efm_membership",
             "commission_type": CommissionType.EFM_MEMBERSHIP,
             "direct_percentage": 10.0,
-            "indirect_percentage": 1.0,
-            "max_levels": 10
+            "indirect_percentage": 0.0,
+            "max_levels": 1
         }
     ]
     
