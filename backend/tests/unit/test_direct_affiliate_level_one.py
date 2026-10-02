@@ -495,3 +495,32 @@ def test_genealogy_and_list_agree_for_every_member(client, chain):
     for member in (a, b, c, d):
         tree = _genealogy(client, member)
         assert sorted(x["user_id"] for x in tree["referrals"]) == sorted(ids(listed(client, member)))
+
+
+# ---------------------------------------------------------------------------
+# Commission history pagination contract (what the commissions page relies on)
+# ---------------------------------------------------------------------------
+
+def test_commission_history_page_size_is_capped_and_pages_cover_everything(client, chain):
+    db, a, b, c, d = chain
+    start = datetime.utcnow() - timedelta(days=400)
+    for i in range(230):
+        db.add(AffiliateCommission(user_id=a.id, source_user_id=b.id, commission_type=CommissionType.KYC_PAYMENT,
+                                   level=1, commission_amount=Decimal("2.00"), base_amount=Decimal("10.00"),
+                                   status=CommissionStatus.PAID if i % 2 else CommissionStatus.PENDING,
+                                   transaction_date=start + timedelta(days=i),
+                                   business_model_version=NEW_MODEL_VERSION))
+    db.commit()
+    url = f"{API}/commissions"
+    assert client.get(url, headers=auth(a), params={"limit": 200}).status_code == 422      # the old page request
+    assert client.get(url, headers=auth(a), params={"limit": 101}).status_code == 422
+    seen = []
+    for skip in (0, 100, 200, 300):
+        r = client.get(url, headers=auth(a), params={"limit": 100, "skip": skip, "sort_by": "date"})
+        assert r.status_code == 200, r.text
+        seen += [row["id"] for row in r.json()]
+    assert len(seen) == 230 and len(set(seen)) == 230                                      # nothing lost, nothing repeated
+    paid = client.get(url, headers=auth(a), params={"limit": 100, "skip": 100, "status": "paid"}).json()
+    assert len(paid) == 15 and all(row["status"] == "paid" for row in paid)                # 115 paid rows: page 2 has 15
+    assert client.get(url, headers=auth(d), params={"limit": 100}).json() == []            # empty history is a 200
+    assert client.get(url).status_code in (401, 403)

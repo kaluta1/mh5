@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
 import { dedupeCommissionRows } from '@/lib/dedupe-commissions'
 import { formatCommissionRate } from '@/lib/commission-rate'
+import { COMMISSIONS_ENDPOINT, loadAllCommissions } from '@/lib/commissions-loader'
 import type { AxiosError } from 'axios'
 
 interface Commission {
@@ -85,6 +86,7 @@ export default function CommissionsPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [listLoading, setListLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [historyTruncated, setHistoryTruncated] = useState(false)
 
   const mapCommissionRow = (c: Record<string, unknown>): Commission => ({
     id: String(c.id ?? ''),
@@ -123,10 +125,9 @@ export default function CommissionsPage() {
         return
       }
 
+      // Page size and offset are owned by loadAllCommissions (API maximum per page).
       const listParams: Record<string, string | number> = {
         sort_by: sortBy,
-        limit: 200,
-        skip: 0,
       }
       if (typeFilter !== 'all') {
         listParams.product_type = typeFilter
@@ -153,28 +154,24 @@ export default function CommissionsPage() {
         console.warn('Commissions stats unavailable, continuing with list data', statsError)
       }
 
-      const commissionsResponse = await api.get<Record<string, unknown>[]>(
-        '/api/v1/affiliates/commissions',
-        { params: listParams },
+      const result = await loadAllCommissions(
+        (params) => api.get<unknown>(COMMISSIONS_ENDPOINT, { params }),
+        listParams,
       )
 
-      if (commissionsResponse.status !== 200) {
-        const body = commissionsResponse.data as unknown
-        let detail = commissionsResponse.statusText
-        if (body && typeof body === 'object' && 'detail' in body) {
-          const d = (body as { detail?: unknown }).detail
-          detail = typeof d === 'string' ? d : JSON.stringify(d)
-        }
+      if (result.ok === false) {
+        // The technical payload goes to the console, not to the member.
+        console.error('Commissions request failed', result.status, result.detail)
         setCommissions([])
+        setHistoryTruncated(false)
         setLoadError(
-          `${t('dashboard.commissions.load_failed') || 'Could not load commissions'} (${commissionsResponse.status}): ${detail}`.slice(0, 400),
+          `${t('dashboard.commissions.load_failed') || 'Could not load commissions'}. ${t('dashboard.commissions.try_again') || 'Please try again.'}`,
         )
         return
       }
 
-      const raw = commissionsResponse.data
-      const rows = Array.isArray(raw) ? raw : []
-      const mapped = rows.map((c) => mapCommissionRow(c as Record<string, unknown>))
+      setHistoryTruncated(result.truncated)
+      const mapped = result.rows.map((c) => mapCommissionRow(c))
       const deduped = dedupeCommissionRows(mapped)
       deduped.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -450,6 +447,12 @@ export default function CommissionsPage() {
             {t('dashboard.leaderboard.refresh') || 'Refresh'}
           </button>
         </div>
+      )}
+
+      {historyTruncated && !loadError && (
+        <p className="text-sm text-amber-700 dark:text-amber-300" role="status">
+          {t('dashboard.commissions.history_truncated') || 'Only your most recent commissions are shown.'}
+        </p>
       )}
 
       {/* Stats Cards */}

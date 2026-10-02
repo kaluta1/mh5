@@ -1218,7 +1218,9 @@
       "no_commissions": "No commissions",
       "no_commissions_description": "No Commissions Description",
       "go_to_affiliates": "Go To Affiliates",
-      "filter_all": "Filter All"
+      "filter_all": "Filter All",
+      "try_again": "Please try again.",
+      "history_truncated": "Only your most recent commissions are shown."
     },
     "following": {
       "unfollow": "Unfollowed",
