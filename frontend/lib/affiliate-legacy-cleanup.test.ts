@@ -62,6 +62,15 @@ describe('translations', () => {
     expect(offenders).toEqual([])
   })
 
+  it('no language states a commission percentage on the clubs page', () => {
+    for (const file of files) {
+      const data = JSON.parse(readFileSync(join(dir, file), 'utf8'))
+      const copy = data.pages?.clubs?.cta?.feature3
+      if (copy !== undefined) expect(copy, file).not.toMatch(/\d+\s?%/)
+    }
+    expect(read('app', 'clubs', 'page.tsx')).not.toMatch(/\d+\s?% de commission/)
+  })
+
   it('keeps the approved direct-only explanation', () => {
     const en = JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8'))
     expect(en.business_model.direct_body).toMatch(/directly/i)

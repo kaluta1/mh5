@@ -352,7 +352,7 @@ export default function ClubsPage() {
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                       <TrendingUp className="w-3 h-3" />
                     </div>
-                    <span>{t('pages.clubs.cta.feature3') || "20% de commission sur les ventes"}</span>
+                    <span>{t('pages.clubs.cta.feature3') || "Commission d'affiliation directe sur les ventes"}</span>
                   </li>
                 </ul>
                 <Button 

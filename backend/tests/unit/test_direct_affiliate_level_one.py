@@ -403,3 +403,95 @@ def test_no_seed_or_fallback_still_configures_levels_two_to_ten():
     for config in DEFAULT_COMMISSION_CONFIG.values():
         assert config["max_levels"] == 1 and config["indirect_amount"] == 0
 
+
+
+# ---------------------------------------------------------------------------
+# Genealogy reads the canonical relationship (users.sponsor_id), not affiliate_tree
+# ---------------------------------------------------------------------------
+
+def _genealogy(client, user):
+    r = client.get(f"{API}/genealogy/1", headers=auth(user))
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _tree_snapshot(db):
+    db.expire_all()
+    return sorted((t.id, t.user_id, t.sponsor_id, t.level, t.path) for t in db.query(AffiliateTree).all())
+
+
+def _sponsors(db, *users):
+    db.expire_all()
+    return [(u.id, u.sponsor_id) for u in users]
+
+
+def test_genealogy_lists_direct_referrals_missing_from_affiliate_tree(client, chain):
+    db, a, b, c, d = chain
+    # Two more direct referrals of A that the legacy table never recorded.
+    e = _user(db, "e@t.com", sponsor=a)
+    f = _user(db, "f@t.com", sponsor=a)
+    db.commit()
+    tree_before, sponsors_before = _tree_snapshot(db), _sponsors(db, a, b, c, d, e, f)
+
+    tree = _genealogy(client, a)
+    assert sorted(child["user_id"] for child in tree["referrals"]) == sorted([b.id, e.id, f.id])
+    assert tree["total_descendants"] == 3
+    assert all(child["level"] == 1 and child["referrals"] == [] and child["total_descendants"] == 0
+               for child in tree["referrals"])
+    # Same level-1 population as the member-facing list and the statistics.
+    assert sorted(ids(listed(client, a))) == sorted(child["user_id"] for child in tree["referrals"])
+    assert client.get(f"{API}/stats", headers=auth(a)).json()["direct_referrals"] == 3
+    assert client.get(f"{API}/referrals/count", headers=auth(a)).json() == {"count": 3}
+    # Reading changed nothing: legacy table and sponsor relationships are untouched.
+    assert _tree_snapshot(db) == tree_before
+    assert _sponsors(db, a, b, c, d, e, f) == sponsors_before
+
+
+def test_genealogy_works_with_no_affiliate_tree_rows_at_all(client, chain):
+    db, a, b, c, d = chain
+    db.query(AffiliateTree).delete()
+    db.commit()
+    assert [x["user_id"] for x in _genealogy(client, a)["referrals"]] == [b.id]
+    assert [x["user_id"] for x in _genealogy(client, b)["referrals"]] == [c.id]
+    assert [x["user_id"] for x in _genealogy(client, c)["referrals"]] == [d.id]
+    assert _genealogy(client, d)["referrals"] == []
+    assert db.query(AffiliateTree).count() == 0          # nothing was backfilled
+
+
+def test_genealogy_chain_never_shows_a_level_two_descendant(client, chain):
+    db, a, b, c, d = chain
+    for member, child in ((a, b), (b, c), (c, d)):
+        tree = _genealogy(client, member)
+        assert tree["user_id"] == member.id
+        assert [x["user_id"] for x in tree["referrals"]] == [child.id]
+        assert tree["referrals"][0]["referrals"] == []
+    seen_by_a = {x["user_id"] for x in _genealogy(client, a)["referrals"]}
+    assert not seen_by_a & {c.id, d.id}
+
+
+def test_genealogy_ignores_stale_affiliate_tree_rows(client, chain):
+    db, a, b, c, d = chain
+    # A stale legacy row claims D sits directly under A; users.sponsor_id says C.
+    db.add(AffiliateTree(user_id=_user(db, "g@t.com", sponsor=c).id, sponsor_id=a.id, level=1, path=f"/{a.id}"))
+    db.commit()
+    assert [x["user_id"] for x in _genealogy(client, a)["referrals"]] == [b.id]
+
+
+def test_genealogy_identity_comes_from_the_token_and_depth_stays_rejected(client, chain):
+    db, a, b, c, d = chain
+    for params in ({"user_id": b.id}, {"sponsor_id": b.id}, {"affiliate_id": c.id}):
+        r = client.get(f"{API}/genealogy/1", headers=auth(a), params=params)
+        assert r.status_code == 200 and r.json()["user_id"] == a.id
+        assert [x["user_id"] for x in r.json()["referrals"]] == [b.id]
+    assert client.get(f"{API}/genealogy/1").status_code in (401, 403)
+    for depth in range(2, 11):
+        assert client.get(f"{API}/genealogy/{depth}", headers=auth(a)).status_code == 400
+
+
+def test_genealogy_and_list_agree_for_every_member(client, chain):
+    db, a, b, c, d = chain
+    _user(db, "h@t.com", sponsor=b)
+    db.commit()
+    for member in (a, b, c, d):
+        tree = _genealogy(client, member)
+        assert sorted(x["user_id"] for x in tree["referrals"]) == sorted(ids(listed(client, member)))

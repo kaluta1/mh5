@@ -261,7 +261,13 @@ class CRUDAffiliateTree:
     
     def get_genealogy(self, db: Session, user_id: int, levels: int = ACTIVE_AFFILIATE_LEVELS) -> dict:
         """The member and their DIRECT referrals. Never deeper: whatever depth
-        is asked for, it is capped at the active program's single level."""
+        is asked for, it is capped at the active program's single level.
+
+        Children come from the canonical relationship ``users.sponsor_id`` (the
+        same population as the member-facing affiliate list and statistics),
+        NOT from the legacy ``affiliate_tree`` table: that table was only ever
+        written for part of the membership, so reading it left direct referrals
+        out. ``affiliate_tree`` is neither read nor written here."""
         levels = min(max(int(levels), 0), ACTIVE_AFFILIATE_LEVELS)
         user = db.query(User).filter(User.id == user_id).first()
         
@@ -274,12 +280,12 @@ class CRUDAffiliateTree:
             
             children = []
             if current_level < levels:
-                direct = db.query(AffiliateTree).filter(
-                    AffiliateTree.sponsor_id == uid
-                ).all()
-                
-                for d in direct:
-                    child = build_tree(d.user_id, current_level + 1, ancestors | {uid})
+                direct_ids = [row[0] for row in db.query(User.id).filter(
+                    User.sponsor_id == uid, User.id != uid
+                ).order_by(User.id).all()]
+
+                for child_id in direct_ids:
+                    child = build_tree(child_id, current_level + 1, ancestors | {uid})
                     if child:
                         children.append(child)
             
