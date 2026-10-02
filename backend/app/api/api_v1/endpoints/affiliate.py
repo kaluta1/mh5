@@ -88,31 +88,28 @@ def get_referrals_count(
 
 
 @router.get("/referrals/all")
-def get_all_referrals_multilevel(
+def get_all_referrals(
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    level: int = None,
+    level: Optional[int] = Query(None, ge=1, le=1, description="Only level 1 exists (direct referrals)."),
     status: str = None,
     search: str = None,
     kyc_status: str = None
 ):
     """
-    Récupérer tous les filleuls (directs et indirects) jusqu'au niveau 10.
-    
-    - **level**: Filtrer par niveau (1-10)
-    - **status**: Filtrer par statut utilisateur ('active' ou 'inactive')
-    - **search**: Rechercher par nom, email ou username
-    - **kyc_status**: Filtrer par statut KYC ('none', 'pending', 'in_progress', 'approved', 'rejected', 'expired', 'requires_review')
-    
-    Retourne les referrals avec:
-    - Niveau dans l'arbre (1 = direct, 2-10 = indirect)
-    - Commissions générées
-    - Statut KYC
-    - Nombre de leurs propres filleuls
+    The member's affiliates: DIRECT referrals only (level 1).
+
+    The affiliate program has a single level. Only users whose direct sponsor
+    is the authenticated member are returned; nobody below them is read,
+    counted or listed. A request for level 2-10 is rejected (422).
+
+    - **status**: 'active' or 'inactive'
+    - **search**: name, email or username
+    - **kyc_status**: 'none', 'pending', 'in_progress', 'approved', 'rejected', 'expired', 'requires_review'
     """
-    return crud_user.get_all_referrals_multilevel(
+    return crud_user.get_direct_referrals_detailed(
         db=db,
         user_id=current_user.id,
         skip=skip,
@@ -253,8 +250,10 @@ def get_affiliate_stats(
     current_user = Depends(deps.get_current_active_user)
 ):
     """
-    Récupérer les statistiques d'affiliation de l'utilisateur.
-    Inclut le code de parrainage, les statistiques par niveau, et les taux de conversion.
+    Affiliate statistics of the authenticated member, direct referrals only:
+    total_affiliates == direct_referrals, conversion_rate = direct referrals /
+    referral-link clicks, total_commissions = lifetime earned (with the
+    historical level 2-10 part reported separately).
     """
     stats = affiliate_tree.get_user_stats(
         db=db, user_id=current_user.id
@@ -288,17 +287,18 @@ def join_via_referral(
 
 @router.get("/genealogy/{levels}")
 def get_genealogy(
-    levels: int = 10,
+    levels: int = 1,
     db: Session = Depends(deps.get_db),
     current_user = Depends(deps.get_current_active_user)
 ):
     """
-    Récupérer la généalogie d'affiliation sur X niveaux.
+    The member and their direct referrals. The affiliate program has one
+    level, so a deeper genealogy is refused.
     """
-    if levels > 10:
+    if levels > 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 10 niveaux autorisés"
+            detail="The affiliate program is direct referrals only (1 level)."
         )
     
     genealogy = affiliate_tree.get_genealogy(

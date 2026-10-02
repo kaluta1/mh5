@@ -232,10 +232,16 @@ class LevelStats(BaseModel):
 
 class AffiliateStats(BaseModel):
     """Statistiques d'affiliation d'un utilisateur"""
+    # The program is direct referrals only: total_affiliates == direct_referrals
+    # and indirect_referrals is always 0 (kept for API compatibility).
     total_affiliates: int = 0
     direct_referrals: int = 0
     indirect_referrals: int = 0
+    # Lifetime commissions earned (approved + paid), then the same amount split
+    # into the active direct program and historical level 2-10 rows.
     total_commissions: float = 0.0
+    direct_commissions: float = 0.0
+    historical_indirect_commissions: float = 0.0
     pending_commissions: float = 0.0
     revenue_shared: float = 0.0
     referral_code: Optional[str] = None

@@ -8,6 +8,15 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 
 
+# The ACTIVE affiliate program is direct referrals only (management rule,
+# 2026-10-03): a member earns from, and sees, only the users whose
+# users.sponsor_id is that member. The sponsor relationship itself stays
+# stored (history, audit, cycle checks); it is simply never walked beyond one
+# hop for commissions, statistics or the member-facing lists.
+ACTIVE_AFFILIATE_LEVELS = 1
+
+# Depth of the RETIRED 10-level program. Kept only to read historical rows
+# (commission level 2-10) and for the admin audit view of the stored tree.
 MAX_AFFILIATE_LEVELS = 10
 MAX_CYCLE_CHECK_DEPTH = 100
 

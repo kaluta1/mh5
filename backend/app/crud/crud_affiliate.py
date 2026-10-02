@@ -10,8 +10,11 @@ from app.models.affiliate import (
     CommissionStatus, CommissionType
 )
 from app.models.user import User
-from app.core.commission_config import level_rate, MAX_LEVELS
-from app.services.affiliate_hierarchy import AffiliateHierarchyError, validate_sponsor_assignment
+from app.services.affiliate_hierarchy import (
+    ACTIVE_AFFILIATE_LEVELS,
+    AffiliateHierarchyError,
+    validate_sponsor_assignment,
+)
 
 
 class CRUDAffiliateTree:
@@ -72,11 +75,6 @@ class CRUDAffiliateTree:
                 AffiliateCommission.user_id == sponsor_id
             ).scalar() or 0.0
             
-            # Nombre de ses propres parrainages
-            sub_referrals = db.query(func.count(AffiliateTree.id)).filter(
-                AffiliateTree.sponsor_id == tree.user_id
-            ).scalar() or 0
-            
             result.append({
                 "id": tree.id,
                 "user_id": tree.user_id,
@@ -87,35 +85,35 @@ class CRUDAffiliateTree:
                 "joined_at": tree.join_date.isoformat() if tree.join_date else None,
                 "status": "active" if tree.is_active else "inactive",
                 "commissions_generated": float(commissions),
-                "referrals_count": sub_referrals
             })
-        
+
         return result
     
     def get_user_stats(self, db: Session, user_id: int) -> dict:
         """Récupère les statistiques complètes d'affiliation."""
         user = db.query(User).filter(User.id == user_id).first()
         
-        # Parrainages directs (niveau 1) - utiliser User.sponsor_id
+        # The affiliate program is DIRECT referrals only (level 1): the canonical
+        # relationship is users.sponsor_id == user_id. No descendant is counted.
         direct_referrals = db.query(func.count(User.id)).filter(
             User.sponsor_id == user_id
         ).scalar() or 0
-        
-        # Parrainages indirects (niveaux 2-10) via AffiliateTree si disponible
-        tree = self.get_by_user(db, user_id)
-        indirect_referrals = 0
-        
-        if tree and tree.path:
-            # Compter tous les utilisateurs dont le path contient notre user_id
-            indirect_referrals = db.query(func.count(AffiliateTree.id)).filter(
-                AffiliateTree.path.like(f"%/{user_id}/%"),
-                AffiliateTree.sponsor_id != user_id  # Exclure les directs
-            ).scalar() or 0
-        
-        # Commissions totales gagnées
-        total_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+
+        # Total commissions = lifetime commissions earned (approved + paid): the
+        # ledger truth, unchanged. It is split so the historical level 2-10 rows
+        # of the retired program are never mistaken for the active program.
+        earned_filter = (
             AffiliateCommission.user_id == user_id,
-            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID])
+            AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PAID]),
+        )
+        total_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            *earned_filter
+        ).scalar() or 0.0
+        direct_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            *earned_filter, AffiliateCommission.level <= ACTIVE_AFFILIATE_LEVELS
+        ).scalar() or 0.0
+        historical_indirect_earned = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
+            *earned_filter, AffiliateCommission.level > ACTIVE_AFFILIATE_LEVELS
         ).scalar() or 0.0
         
         # Commissions en attente
@@ -136,7 +134,8 @@ class CRUDAffiliateTree:
             FoundingMember.is_active == True
         ).first()
         
-        # Taux de conversion basé sur le nombre de filleuls directs
+        # Conversion rate = direct referrals / clicks on the member's referral
+        # link * 100 (0 when there is no click). Level-1 scope by construction.
         clicks = 0
         conversions = direct_referrals  # Les filleuls sont les conversions
         
@@ -151,10 +150,14 @@ class CRUDAffiliateTree:
         conversion_rate = (conversions / clicks * 100) if clicks > 0 else 0.0
         
         return {
-            "total_affiliates": direct_referrals + indirect_referrals,
+            "total_affiliates": direct_referrals,
             "direct_referrals": direct_referrals,
-            "indirect_referrals": indirect_referrals,
+            # Kept for API compatibility: there are no indirect affiliates in
+            # the active program.
+            "indirect_referrals": 0,
             "total_commissions": float(total_earned),
+            "direct_commissions": float(direct_earned),
+            "historical_indirect_commissions": float(historical_indirect_earned),
             "pending_commissions": float(pending_commissions),
             "revenue_shared": float(revenue_shared),
             "referral_code": user.personal_referral_code if user else None,
@@ -167,9 +170,9 @@ class CRUDAffiliateTree:
         }
     
     def _get_level_stats(self, db: Session, user_id: int) -> List[dict]:
-        """Récupère les statistiques par niveau (1-10)."""
+        """Statistics of the active program: level 1 (direct) only."""
         stats = []
-        for level in range(1, 11):
+        for level in range(1, ACTIVE_AFFILIATE_LEVELS + 1):
             # Commissions par niveau
             level_commissions = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
                 AffiliateCommission.user_id == user_id,
@@ -256,8 +259,10 @@ class CRUDAffiliateTree:
         
         return {"success": True, "tree": new_tree}
     
-    def get_genealogy(self, db: Session, user_id: int, levels: int = 10) -> dict:
-        """Récupère la généalogie sur X niveaux."""
+    def get_genealogy(self, db: Session, user_id: int, levels: int = ACTIVE_AFFILIATE_LEVELS) -> dict:
+        """The member and their DIRECT referrals. Never deeper: whatever depth
+        is asked for, it is capped at the active program's single level."""
+        levels = min(max(int(levels), 0), ACTIVE_AFFILIATE_LEVELS)
         user = db.query(User).filter(User.id == user_id).first()
         
         def build_tree(uid: int, current_level: int, ancestors: frozenset[int]) -> dict:
@@ -278,9 +283,11 @@ class CRUDAffiliateTree:
                     if child:
                         children.append(child)
             
-            # Commissions générées
+            # Commissions this node generated FOR THE REQUESTING MEMBER (not what
+            # it generated for anyone else in the stored tree).
             commissions = db.query(func.sum(AffiliateCommission.commission_amount)).filter(
-                AffiliateCommission.source_user_id == uid
+                AffiliateCommission.source_user_id == uid,
+                AffiliateCommission.user_id == user_id,
             ).scalar() or 0.0
             
             return {
@@ -297,10 +304,6 @@ class CRUDAffiliateTree:
 
 
 class CRUDAffiliateCommission:
-    # Taux de commission par niveau (niveau 1 = parrain direct = 20%, niveaux 2-10 = 2%)
-    # Canonical rates: see app.core.commission_config (10% direct, 1% indirect).
-    COMMISSION_RATES = {i: level_rate(i) for i in range(1, MAX_LEVELS + 1)}
-
     @staticmethod
     def _dedupe_commission_records(commissions: List[AffiliateCommission]) -> List[AffiliateCommission]:
         """
@@ -349,58 +352,7 @@ class CRUDAffiliateCommission:
         raise RuntimeError(
             "Legacy reference-based commission creation is disabled; use deposit-backed distribution"
         )
-        """
-        Crée des commissions pour tous les sponsors dans la hiérarchie.
-        Retourne la liste des commissions créées.
-        """
-        commissions_created = []
-        
-        # Trouver le parrain direct de l'utilisateur
-        source_user = db.query(User).filter(User.id == source_user_id).first()
-        if not source_user or not source_user.sponsor_id:
-            return commissions_created
-        
-        # Remonter l'arbre des parrains jusqu'au niveau max
-        current_sponsor_id = source_user.sponsor_id
-        level = 1
-        
-        while current_sponsor_id and level <= MAX_LEVELS:
-            rate = level_rate(level)
-            if rate <= 0:
-                break
-            
-            commission_amount = base_amount * rate
-            
-            # Créer la commission
-            commission = AffiliateCommission(
-                user_id=current_sponsor_id,  # Le parrain qui reçoit
-                source_user_id=source_user_id,  # L'utilisateur qui a payé
-                commission_type=commission_type,
-                level=level,
-                min_amount=base_amount,
-                commission_rate=rate,
-                commission_amount=commission_amount,
-                reference_id=reference_id,
-                reference_type=reference_type,
-                status=CommissionStatus.APPROVED,  # Auto-approuvé
-                transaction_date=datetime.utcnow()
-            )
-            
-            db.add(commission)
-            commissions_created.append(commission)
-            
-            # Trouver le parrain du parrain pour le niveau suivant
-            sponsor = db.query(User).filter(User.id == current_sponsor_id).first()
-            current_sponsor_id = sponsor.sponsor_id if sponsor else None
-            level += 1
-        
-        if commissions_created:
-            db.commit()
-            for c in commissions_created:
-                db.refresh(c)
-        
-        return commissions_created
-    
+
     def get_user_commissions(
         self, db: Session, user_id: int, skip: int = 0, limit: int = 10,
         commission_type: Optional[str] = None

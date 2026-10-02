@@ -15,7 +15,10 @@ class ProductCommission(TypedDict):
     currency: str
 
 
-# Canonical rates: 10% direct, 1% indirect (levels 2-10) — matches DB commission_rules seed.
+# LEGACY values of the retired 10-level program (DB commission_rules seed). They
+# describe historical rows only: the active affiliate program is direct
+# referrals only (level 1), see affiliate_hierarchy.ACTIVE_AFFILIATE_LEVELS, and
+# its rate comes from the NEW_V2 revenue policy, not from here.
 DIRECT_RATE = 0.10
 INDIRECT_RATE = 0.01
 MAX_LEVELS = 10
@@ -63,7 +66,7 @@ def get_commission_display(product_code: str) -> dict[str, str | float | int]:
 
 
 def level_rate(level: int) -> float:
-    """Return commission rate for affiliate level (1=direct, 2-10=indirect)."""
+    """Historical rate of the retired 10-level program (1=direct, 2-10=indirect)."""
     if level == 1:
         return DIRECT_RATE
     if 2 <= level <= MAX_LEVELS:

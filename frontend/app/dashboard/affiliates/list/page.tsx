@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import {
   Users,
   Search,
-  Filter,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -20,8 +19,7 @@ import {
   ArrowLeft,
   CheckCircle,
   Clock,
-  UserPlus,
-  GitBranch
+  UserPlus
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -70,7 +68,6 @@ export default function AffiliatesListPage() {
   const [filteredAffiliates, setFilteredAffiliates] = useState<Affiliate[]>([])
   const [pageLoading, setPageLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [levelFilter, setLevelFilter] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [kycStatusFilter, setKycStatusFilter] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -93,16 +90,12 @@ export default function AffiliatesListPage() {
       setPageLoading(true)
       loadAffiliatesData()
     }
-  }, [levelFilter, statusFilter, kycStatusFilter])
+  }, [statusFilter, kycStatusFilter])
 
   // Filtrage local pour la recherche (plus rapide)
   useEffect(() => {
     filterAffiliates()
   }, [searchQuery, affiliates])
-
-  const formatGroupedLevelLabel = (level: number, count: number) => {
-    return `Level ${level} referrals (total: ${count})`
-  }
 
   const loadAffiliatesData = async () => {
     try {
@@ -112,8 +105,9 @@ export default function AffiliatesListPage() {
         return
       }
 
+      // The affiliate program is direct referrals only: the API returns level 1 and
+      // there is no level to choose.
       const apiParams: Record<string, string | number> = { limit: 10 }
-      if (levelFilter !== null) apiParams.level = levelFilter
       if (statusFilter) apiParams.status = statusFilter
       if (kycStatusFilter) apiParams.kyc_status = kycStatusFilter
       if (searchQuery) apiParams.search = searchQuery
@@ -127,27 +121,17 @@ export default function AffiliatesListPage() {
           total_all_levels?: number
           kyc_stats?: Record<string, unknown> | null
         }
-        const countsByLevel: Record<number, number> = Object.entries(data.level_stats || {}).reduce(
-          (acc, [level, stat]: [string, any]) => {
-            acc[Number(level)] = Number(stat?.count || 0)
-            return acc
-          },
-          {} as Record<number, number>
-        )
-
         // Transform API data to match Affiliate interface
         const transformedAffiliates: Affiliate[] = (data.referrals || []).map((r: any) => ({
           id: r.id?.toString() || '',
-          name: (r.level || 1) === 1
-            ? (r.username || 'N/A')
-            : formatGroupedLevelLabel(r.level || 1, countsByLevel[r.level || 1] || 0),
-          email: (r.level || 1) === 1 ? (r.email || '') : '',
+          name: r.username || 'N/A',
+          email: r.email || '',
           avatar: r.avatar_url,
           joinedAt: r.created_at || new Date().toISOString(),
-          level: r.level || 1,
+          level: 1,
           totalEarnings: r.commissions_generated || 0,
           status: r.is_active ? 'active' : 'inactive',
-          referrals: r.referrals_count || 0,
+          referrals: 0,
           identity_verified: r.identity_verified,
           has_paid_kyc: r.has_paid_kyc,
           kyc_status: r.kyc_status as KYCStatusType
@@ -183,11 +167,6 @@ export default function AffiliatesListPage() {
 
     setFilteredAffiliates(filtered)
     setCurrentPage(1)
-  }
-
-  const getLevelBadge = (level: number) => {
-    const opacity = Math.max(100 - (level - 1) * 10, 20)
-    return `bg-myhigh5-primary/${opacity} text-white`
   }
 
   const getKycStatusBadge = (status: KYCStatusType | undefined) => {
@@ -277,34 +256,14 @@ export default function AffiliatesListPage() {
               {t('dashboard.affiliates.all_affiliates') || 'Tous les affiliés'}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              {totalCount} {t('dashboard.affiliates.affiliates_found') || 'affiliés trouvés'} ({Object.keys(levelStats).length} {t('dashboard.affiliates.levels') || 'niveaux'})
+              {totalCount} {t('dashboard.affiliates.affiliates_found') || 'affiliés trouvés'}
             </p>
           </div>
         </div>
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {/* Total */}
-        <div className="relative group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 cursor-help transition-all hover:shadow-lg hover:border-myhigh5-primary/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-myhigh5-primary/10 flex items-center justify-center">
-              <Users className="w-5 h-5 text-myhigh5-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCount}</p>
-              <p className="text-xs text-gray-500">{t('dashboard.affiliates.total_affiliates')}</p>
-            </div>
-          </div>
-          {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-            <p className="font-semibold mb-1">{t('dashboard.affiliates.total_tooltip_title') || 'Total Affiliés'}</p>
-            <p className="text-gray-300 text-xs">
-              {t('dashboard.affiliates.total_tooltip_desc') || 'Nombre total de personnes dans votre réseau d\'affiliation, tous niveaux confondus (1 à 10).'}
-            </p>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Direct (Level 1) */}
         <div className="relative group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 cursor-help transition-all hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-800">
           <div className="flex items-center gap-3">
@@ -327,31 +286,6 @@ export default function AffiliatesListPage() {
             <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
               <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>
               <span className="font-bold text-blue-400">{formatCurrency(levelStats[1]?.commissions || 0)}</span>
-            </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
-          </div>
-        </div>
-        {/* Indirect (Levels 2-10) */}
-        <div className="relative group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 cursor-help transition-all hover:shadow-lg hover:border-purple-200 dark:hover:border-purple-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              <GitBranch className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {Object.entries(levelStats).filter(([lvl]) => Number(lvl) > 1).reduce((sum, [, stat]) => sum + stat.count, 0)}
-              </p>
-              <p className="text-xs text-gray-500">{t('dashboard.affiliates.indirect_referrals') || 'Indirects'}</p>
-            </div>
-          </div>
-          {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-            <p className="font-semibold mb-1">{t('dashboard.affiliates.indirect_tooltip_title') || 'Referrals Indirects'}</p>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
-              <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>
-              <span className="font-bold text-purple-400">
-                {formatCurrency(Object.entries(levelStats).filter(([lvl]) => Number(lvl) > 1).reduce((sum, [, stat]) => sum + stat.commissions, 0))}
-              </span>
             </div>
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
           </div>
@@ -436,8 +370,8 @@ export default function AffiliatesListPage() {
               {t('dashboard.affiliates.commission_structure') || 'Structure des commissions KYC'}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span className="font-semibold text-myhigh5-primary">10%</span> {t('dashboard.affiliates.level')} 1 (direct) •
-              <span className="font-semibold text-purple-600 dark:text-purple-400 ml-1">1%</span> {t('dashboard.affiliates.levels')} 2-10 (indirect)
+              {t('business_model.direct_body') ||
+                'Only your direct referrals count: there are no level 2 to 10 commissions.'}
             </p>
           </div>
         </div>
@@ -454,21 +388,6 @@ export default function AffiliatesListPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 rounded-lg"
             />
-          </div>
-
-          {/* Level Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={levelFilter ?? ''}
-              onChange={(e) => setLevelFilter(e.target.value ? Number(e.target.value) : null)}
-              className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">{t('dashboard.affiliates.all_levels') || 'Tous les niveaux'}</option>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
-                <option key={level} value={level}>{t('dashboard.affiliates.level')} {level}</option>
-              ))}
-            </select>
           </div>
 
           {/* Status Filter */}
@@ -503,7 +422,7 @@ export default function AffiliatesListPage() {
       {/* Affiliates Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
         {/* Table Header */}
-        <div className="hidden md:grid md:grid-cols-7 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400">
+        <div className="hidden md:grid md:grid-cols-5 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400">
           {/* Affilié */}
           <div className="col-span-2 relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.affiliate') || 'Affilié'}</span>
@@ -511,22 +430,11 @@ export default function AffiliatesListPage() {
               {t('dashboard.affiliates.col_affiliate_hint') || 'Informations sur le membre de votre réseau'}
             </div>
           </div>
-          {/* Niveau */}
-          <div className="text-center relative group cursor-help">
-            <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.level')}</span>
-          </div>
           {/* KYC */}
           <div className="text-center relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.kyc_status_label') || 'KYC'}</span>
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
               {t('dashboard.affiliates.col_kyc_hint') || 'Statut de vérification d\'identité (commission perçue si approuvé)'}
-            </div>
-          </div>
-          {/* Parrainages */}
-          <div className="text-center relative group cursor-help">
-            <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.referrals_count') || 'Parrainages'}</span>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_referrals_hint') || 'Nombre de personnes parrainées par cet affilié'}
             </div>
           </div>
           {/* Gains */}
@@ -552,7 +460,7 @@ export default function AffiliatesListPage() {
               key={affiliate.id}
               className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
-              <div className="md:grid md:grid-cols-7 md:gap-4 md:items-center space-y-3 md:space-y-0">
+              <div className="md:grid md:grid-cols-5 md:gap-4 md:items-center space-y-3 md:space-y-0">
                 {/* Affiliate Info */}
                 <div className="col-span-2 flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-myhigh5-primary flex items-center justify-center text-white font-semibold shadow-lg shadow-myhigh5-primary/20 flex-shrink-0">
@@ -574,25 +482,12 @@ export default function AffiliatesListPage() {
                   </div>
                 </div>
 
-                {/* Level */}
-                <div className="flex md:justify-center">
-                  <span className={`text-xs font-medium px-3 py-1 rounded-full ${getLevelBadge(affiliate.level)}`}>
-                    {t('dashboard.affiliates.level')} {affiliate.level}
-                  </span>
-                </div>
-
                 {/* KYC Status */}
                 <div className="flex md:justify-center items-center gap-2">
                   <span className="md:hidden text-sm text-gray-500">KYC:</span>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ${getKycStatusBadge(affiliate.kyc_status).className}`}>
                     {getKycStatusBadge(affiliate.kyc_status).label}
                   </span>
-                </div>
-
-                {/* Referrals */}
-                <div className="flex md:justify-center items-center gap-2">
-                  <span className="md:hidden text-sm text-gray-500">{t('dashboard.affiliates.referrals_count') || 'Parrainages'}:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{affiliate.referrals}</span>
                 </div>
 
                 {/* Earnings */}

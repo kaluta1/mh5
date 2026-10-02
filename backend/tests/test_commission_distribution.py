@@ -1,8 +1,9 @@
 """Tests for commission distribution idempotency and sponsor-cycle protection.
 
-The 10-level engine is retired for future activity; these tests exercise it with the
+The legacy engine is retired for future activity; these tests exercise it with the
 legacy model explicitly re-enabled (the emergency rollback lever), so its safety
-properties stay covered.
+properties stay covered. Even re-enabled, and even with a stored rule that still says
+"10 levels", it pays the DIRECT sponsor only: the affiliate program is level 1 only.
 """
 
 from unittest.mock import MagicMock, patch
@@ -88,8 +89,9 @@ def _run_distribution(users: dict[int, User], deposit: Deposit) -> list[Affiliat
     return created
 
 
-def test_sponsor_cycle_pays_each_beneficiary_once():
-    """Loop 1→2→3→1 must not create duplicate rows for user 1 on one deposit."""
+def test_only_the_direct_sponsor_is_paid_even_with_a_ten_level_rule_and_a_cycle():
+    """Payer 100 -> 1 -> 2 -> 3 -> 1 (cycle), stored rule max_levels=10: only user 1,
+    the direct sponsor, receives a commission. Nobody above is walked or paid."""
     users = {
         100: _user(100, 1),
         1: _user(1, 2),
@@ -97,9 +99,14 @@ def test_sponsor_cycle_pays_each_beneficiary_once():
         3: _user(3, 1),
     }
     created = _run_distribution(users, _deposit())
-    beneficiary_ids = [c.user_id for c in created]
-    assert beneficiary_ids == [1, 2, 3]
-    assert len(beneficiary_ids) == len(set(beneficiary_ids))
+    assert [(c.user_id, c.level) for c in created] == [(1, 1)]
+    assert float(created[0].commission_amount) == 1.0          # the unchanged direct percentage of the rule
+
+
+def test_ineligible_direct_sponsor_gets_nothing_and_nobody_above_is_paid():
+    users = {100: _user(100, 1), 1: _user(1, 2), 2: _user(2, None)}
+    users[1].is_active = False
+    assert _run_distribution(users, _deposit()) == []
 
 
 def test_skips_when_commissions_already_exist_for_deposit():

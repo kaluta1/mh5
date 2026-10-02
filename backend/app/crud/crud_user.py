@@ -335,16 +335,56 @@ class CRUDUser:
         
         return result
     
-    def get_all_referrals_multilevel(
-        self, db: Session, user_id: int, 
+    def get_direct_referrals_detailed(
+        self, db: Session, user_id: int,
         skip: int = 0, limit: int = 10,
         level_filter: int = None, status_filter: str = None,
         search_query: str = None, kyc_status_filter: str = None
     ) -> dict:
         """
-        Récupère tous les referrals (directs et indirects) jusqu'au niveau 10
-        avec les commissions générées par chacun.
+        The member-facing affiliate list: ONLY the users whose direct sponsor is
+        ``user_id`` (users.sponsor_id == user_id). Nothing below them is read,
+        counted or returned, and a referral's own referral count is not exposed.
         """
+        from app.services.affiliate_hierarchy import ACTIVE_AFFILIATE_LEVELS
+
+        data = self._referral_listing(
+            db, user_id, skip=skip, limit=limit, level_filter=level_filter,
+            status_filter=status_filter, search_query=search_query,
+            kyc_status_filter=kyc_status_filter, max_levels=ACTIVE_AFFILIATE_LEVELS,
+        )
+        for row in data["referrals"]:
+            row.pop("referrals_count", None)
+        return data
+
+    def get_sponsor_tree_for_admin(
+        self, db: Session, user_id: int,
+        skip: int = 0, limit: int = 10,
+        level_filter: int = None, status_filter: str = None,
+        search_query: str = None, kyc_status_filter: str = None
+    ) -> dict:
+        """
+        ADMIN / AUDIT ONLY: the stored sponsor tree below a user, up to the
+        depth of the retired 10-level program. It describes historical
+        relationships; it is not the active affiliate program (level 1 only)
+        and must never be served to a member or used to compute commissions.
+        """
+        from app.services.affiliate_hierarchy import MAX_AFFILIATE_LEVELS
+
+        return self._referral_listing(
+            db, user_id, skip=skip, limit=limit, level_filter=level_filter,
+            status_filter=status_filter, search_query=search_query,
+            kyc_status_filter=kyc_status_filter, max_levels=MAX_AFFILIATE_LEVELS,
+        )
+
+    def _referral_listing(
+        self, db: Session, user_id: int,
+        skip: int = 0, limit: int = 10,
+        level_filter: int = None, status_filter: str = None,
+        search_query: str = None, kyc_status_filter: str = None,
+        max_levels: int = 1,
+    ) -> dict:
+        """Referrals of ``user_id`` down to ``max_levels`` hops of users.sponsor_id."""
         from app.models.affiliate import AffiliateCommission, CommissionStatus
         from app.models.payment import Deposit, DepositStatus
         from app.models.kyc import KYCVerification, KYCStatus
@@ -354,8 +394,8 @@ class CRUDUser:
         
         def get_referrals_at_level(sponsor_ids: List[int], current_level: int):
             """Récupère les referrals d'un niveau donné"""
-            if current_level > 10 or not sponsor_ids:
-                return []
+            if current_level > max_levels or not sponsor_ids:
+                return [], []
             
             referrals = db.query(User).filter(User.sponsor_id.in_(sponsor_ids)).all()
             level_referrals = []
@@ -417,7 +457,7 @@ class CRUDUser:
         
         # Parcourir tous les niveaux
         current_sponsor_ids = [user_id]
-        for level in range(1, 11):
+        for level in range(1, max_levels + 1):
             level_referrals, next_ids = get_referrals_at_level(current_sponsor_ids, level)
             all_referrals.extend(level_referrals)
             current_sponsor_ids = next_ids

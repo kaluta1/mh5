@@ -3028,9 +3028,10 @@ def get_user_details(
                 'created_at': r.created_at.isoformat() if r.created_at else None
             })
         
-        # Récupérer l'arbre d'affiliation sur 10 niveaux
+        # Stored sponsor tree (historical depth of the retired 10-level program).
+        # Audit view only: the active affiliate program is level 1 (direct) only.
         from app.crud import user as crud_user
-        affiliate_tree_data = crud_user.get_all_referrals_multilevel(
+        affiliate_tree_data = crud_user.get_sponsor_tree_for_admin(
             db=db,
             user_id=user.id,
             skip=0,

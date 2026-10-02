@@ -84,7 +84,6 @@ export default function AffiliatesPage() {
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
   const [showLinksDialog, setShowLinksDialog] = useState(false)
   const [showCommissionsDialog, setShowCommissionsDialog] = useState(false)
-  const [totalAffiliates, setTotalAffiliates] = useState(0)
   const [directAffiliates, setDirectAffiliates] = useState(0)
   const [totalCommissions, setTotalCommissions] = useState(0)
   const [conversionRate, setConversionRate] = useState(0)
@@ -157,7 +156,6 @@ export default function AffiliatesPage() {
         const code = stats.referral_code || ''
         setReferralCode(code)
         setReferralLinks(generateReferralLinks(code))
-        setTotalAffiliates(stats.total_affiliates || 0)
         setDirectAffiliates(stats.direct_referrals || 0)
         setTotalCommissions(stats.total_commissions || 0)
         setConversionRate(stats.conversion_rate || 0)
@@ -169,7 +167,6 @@ export default function AffiliatesPage() {
           const code = (stats.referral_code as string) || ''
           setReferralCode(code)
           setReferralLinks(generateReferralLinks(code))
-          setTotalAffiliates((stats.total_affiliates as number) || 0)
           setDirectAffiliates((stats.direct_referrals as number) || 0)
           setTotalCommissions((stats.total_commissions as number) || 0)
           setConversionRate((stats.conversion_rate as number) || 0)
@@ -390,18 +387,9 @@ export default function AffiliatesPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-myhigh5-primary/10 dark:bg-myhigh5-primary/20 flex items-center justify-center">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-myhigh5-primary" />
-            </div>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{totalAffiliates}</p>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.total_affiliates')}</p>
-        </div>
-
+      {/* Stats Cards. The affiliate program is direct referrals only (level 1), so there
+          is one affiliates figure: the member's direct affiliates. */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">

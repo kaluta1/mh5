@@ -1,8 +1,11 @@
 """
 Service de distribution des commissions d'affiliation.
 
-Règles de commission (MyHigh5 — init_commission_rules.py):
-- KYC, MFM, annual, EFM: L1 10%, L2–L10 1% each (max 10 levels)
+Legacy (pre NEW_V2) commission writer. It is retired (see legacy_business_model)
+and, even if it is ever re-enabled, it pays the DIRECT sponsor only: the
+affiliate program is level 1 only, so the sponsor chain is never walked
+(affiliate_hierarchy.ACTIVE_AFFILIATE_LEVELS). Historical level 2-10 rows
+written by the old 10-level rules are left exactly as they are.
 - Commission accrual commits independently of any external payout side effect
 """
 
@@ -16,7 +19,7 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
-from app.services.affiliate_hierarchy import MAX_AFFILIATE_LEVELS
+from app.services.affiliate_hierarchy import ACTIVE_AFFILIATE_LEVELS
 from app.services.financial_integrity import money
 logger = logging.getLogger(__name__)
 
@@ -135,7 +138,8 @@ def distribute_commissions(
     level = 1
     visited_sponsor_ids: set[int] = {int(deposit.user_id)}
     
-    max_levels = min(max(int(config["max_levels"] or 0), 0), MAX_AFFILIATE_LEVELS)
+    # Direct sponsor only, whatever a stored commission rule says about levels.
+    max_levels = min(max(int(config["max_levels"] or 0), 0), ACTIVE_AFFILIATE_LEVELS)
     
     while current_sponsor_id and level <= max_levels:
         if current_sponsor_id in visited_sponsor_ids:
@@ -162,15 +166,14 @@ def distribute_commissions(
             break
 
         if sponsor.is_active is False or sponsor.is_deleted is True:
+            # Direct-only: an ineligible direct sponsor means no commission.
+            # It never rolls up to that sponsor's own sponsor.
             logger.warning(
-                "Ineligible sponsor %s skipped for deposit %s at level %s",
+                "Ineligible direct sponsor %s for deposit %s; no commission created",
                 sponsor.id,
                 deposit.id,
-                level,
             )
-            current_sponsor_id = sponsor.sponsor_id
-            level += 1
-            continue
+            break
 
         if deposit.id:
             duplicate = (
