@@ -40,7 +40,12 @@ from app.services.contestant_contest_resolution import (
     contestant_belongs_to_contest_clause,
     explain_contest_resolution,
 )
-from app.services.progression_dry_run import simulate_due_progressions, simulate_hop
+from app.services.progression_dry_run import (
+    audit_legacy_collisions,
+    pending_global_finalizations,
+    simulate_due_progressions,
+    simulate_hop,
+)
 from app.services.progression_ranking import ProgressionScore, progression_sort_key, rank_group
 from app.services.season_migration import SeasonMigrationService
 from app.services.voting_ranking import (
@@ -555,6 +560,77 @@ def test_partially_completed_progression_is_finished_consistently(db, clock):
 
 
 # ---------------------------------------------------------------------------
+# CONTINENTAL -> GLOBAL: one worldwide pool per contest (shipped scope kept)
+# ---------------------------------------------------------------------------
+
+def _continental_cohort(db, clock):
+    """Six African and four European entries of one contest at Continental."""
+    rnd, ct = cohort(db)
+    continent_season = season(db, rnd, ct, SeasonLevel.CONTINENT)
+    africa = nominees(db, ct, rnd, 6, country="Tanzania", start_day=1)
+    europe = nominees(db, ct, rnd, 4, country="France", start_day=10)
+    for c in europe:
+        c.continent, c.region = "Europe", "Western Europe"
+    for c in africa + europe:
+        member(db, c, continent_season)
+    db.commit()
+    clock(datetime(2026, 9, 1, 0, 30))
+    return rnd, ct, continent_season, africa, europe
+
+
+def _to_global(db, ct, continent_season):
+    out = SeasonMigrationService.promote_to_next_level(
+        db, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL, ct.id, from_season_id=continent_season.id)
+    db.commit()
+    return out
+
+
+def test_global_takes_the_worldwide_top_five_not_five_per_continent(db, clock):
+    rnd, ct, continent_season, africa, europe = _continental_cohort(db, clock)
+    country = season(db, rnd, ct, SeasonLevel.COUNTRY, link=False)
+    # Cumulative: points earned at Country still count at Continental.
+    votes(db, europe[3], ct, country, 40)
+    votes(db, africa[5], ct, country, 30)
+    votes(db, europe[0], ct, continent_season, 20)
+    votes(db, africa[0], ct, continent_season, 10)
+    db.commit()
+
+    out = _to_global(db, ct, continent_season)
+    # Ten entries on two continents -> five advance in total, ranked together.
+    assert out["promoted_contestant_ids"] == [europe[3].id, africa[5].id, europe[0].id, africa[0].id, africa[1].id]
+    assert out["unplaced"] == []
+    assert active_ids(db, rnd, SeasonLevel.GLOBAL, ct) == set(out["promoted_contestant_ids"])
+
+    # Each continent's own Top High5 is still frozen separately.
+    frozen = db.query(TopHigh5Result).filter(TopHigh5Result.contest_id == ct.id,
+                                             TopHigh5Result.level == SeasonLevel.CONTINENT).all()
+    by_continent = {}
+    for row in sorted(frozen, key=lambda r: r.rank):
+        by_continent.setdefault(row.jurisdiction, []).append((row.contestant_id, row.total_points, row.migrated))
+    assert by_continent["Africa"] == [(africa[5].id, 30, True), (africa[0].id, 10, True), (africa[1].id, 0, True),
+                                      (africa[2].id, 0, False), (africa[3].id, 0, False)]
+    assert by_continent["Europe"] == [(europe[3].id, 40, True), (europe[0].id, 20, True),
+                                      (europe[1].id, 0, False), (europe[2].id, 0, False)]
+
+
+def test_global_with_zero_votes_takes_the_five_earliest_worldwide(db, clock):
+    rnd, ct, continent_season, africa, europe = _continental_cohort(db, clock)
+    out = _to_global(db, ct, continent_season)
+    assert out["promoted_contestant_ids"] == [c.id for c in africa[:5]]
+    assert not any(c.id in out["promoted_contestant_ids"] for c in europe)
+
+
+def test_entry_without_a_continent_still_competes_for_global(db, clock):
+    rnd, ct, continent_season, africa, europe = _continental_cohort(db, clock)
+    stray = europe[0]
+    stray.continent, stray.country, stray.nominator_country = None, "Atlantis", None
+    votes(db, stray, ct, continent_season, 9)
+    db.commit()
+    out = _to_global(db, ct, continent_season)
+    assert out["promoted_contestant_ids"][0] == stray.id and out["unplaced"] == []
+
+
+# ---------------------------------------------------------------------------
 # RETRY: joined_at
 # ---------------------------------------------------------------------------
 
@@ -726,14 +802,30 @@ def test_ambiguous_collision_contest_not_in_the_entry_round_stays_rejected(db):
     assert explain_contest_resolution(db, c, ct.id).code == "AMBIGUOUS_COLLISION_CONTEST_NOT_IN_ENTRY_ROUND"
 
 
-def test_ambiguous_collision_season_uniquely_linked_elsewhere_stays_rejected(db):
+def test_unique_link_of_a_foreign_round_season_never_claims_a_legacy_entry(db):
+    """Production shape (read-only check, 2026-10-02): old City season 5 has one
+    active link, to an unrelated contest. Its link says nothing about a July
+    Comedy nominee whose season_id is 5 only because the Comedy contest is 5."""
     _, _, rnd, contests = _legacy_world(db)
     ct, other = contests["Comedy"], contests["DJ"]
     c = legacy_entry(db, ct, rnd)
     db.add(ContestSeasonLink(contest_id=other.id, season_id=ct.id, is_active=True))
     db.commit()
-    assert resolved_ids(db, ct) == set()
-    assert explain_contest_resolution(db, c, ct.id).code == "AMBIGUOUS_COLLISION_SEASON_UNIQUELY_LINKED_ELSEWHERE"
+    assert resolved_ids(db, ct) == {c.id}
+    assert resolved_ids(db, other) == set()
+    assert explain_contest_resolution(db, c, ct.id).code == LEGACY_COLLISION_ROUND_VERIFIED
+    assert explain_contest_resolution(db, c, other.id).belongs is False
+
+
+def test_unique_link_still_resolves_a_genuine_same_round_season_reference(db):
+    old_rnd, old_seasons, _, contests = _legacy_world(db)
+    ct, other = contests["Comedy"], contests["DJ"]
+    db.execute(round_contests.insert().values(round_id=old_rnd.id, contest_id=other.id))
+    c = legacy_entry(db, ct, old_rnd)          # season_id is a season of the entry's OWN round
+    db.add(ContestSeasonLink(contest_id=other.id, season_id=ct.id, is_active=True))
+    db.commit()
+    assert resolved_ids(db, other) == {c.id} and resolved_ids(db, ct) == set()
+    assert explain_contest_resolution(db, c, other.id).code == "UNIQUE_SEASON_LINK"
 
 
 def test_explanation_always_agrees_with_the_sql_clause(db):
@@ -776,6 +868,69 @@ def test_frozen_and_live_top_high5_follow_the_promotion_order(db, clock):
     assert [r["contestant_id"] for r in rows] == expected
     assert [(r["stars_points"], r["stage_points"], r["carried_points"]) for r in rows[:2]] == [(9, 9, 0), (9, 9, 0)]
     assert all(r["migrates_next_stage"] for r in rows)
+
+
+# ---------------------------------------------------------------------------
+# VOTE PAGE: the displayed score and order are the ranking engine's
+# ---------------------------------------------------------------------------
+
+def test_vote_page_shows_the_cumulative_score_with_its_breakdown(db, clock):
+    from app.crud.crud_contest import contest as contest_crud
+    from app.schemas.contest import ContestantEnriched
+
+    rnd, ct = cohort(db)
+    e = nominees(db, ct, rnd, 4)
+    run_pass(db, clock, datetime(2026, 6, 1, 0, 30))
+    country = season_for(db, rnd, SeasonLevel.COUNTRY)
+    for c, pts in zip(e, (20, 15, 10, 5)):
+        votes(db, c, ct, country, pts)
+    db.commit()
+
+    # Country stage: nothing carried yet, the score is the stage score.
+    rows = contest_crud.get_contest_with_enriched_contestants(db, ct.id, round_id=rnd.id)["contestants"]
+    assert [(r["id"], r["rank"], r["total_points"], r["stage_points"], r["carried_points"]) for r in rows] == [
+        (e[0].id, 1, 20, 20, 0), (e[1].id, 2, 15, 15, 0), (e[2].id, 3, 10, 10, 0), (e[3].id, 4, 5, 5, 0)]
+
+    run_pass(db, clock, datetime(2026, 7, 1, 0, 30))
+    regional = season_for(db, rnd, SeasonLevel.REGIONAL)
+    votes(db, e[3], ct, regional, 12)
+    db.commit()
+    votes_before = sorted((v.id, v.season_id, v.contestant_id, v.points) for v in db.query(ContestantVoting).all())
+
+    rows = contest_crud.get_contest_with_enriched_contestants(db, ct.id, round_id=rnd.id)["contestants"]
+    got = [(r["id"], r["rank"], r["total_points"], r["stage_points"], r["carried_points"], r["cumulative_points"],
+            r["votes_count"]) for r in rows]
+    # Regional does not restart from zero: e[3] is 5 carried + 12 new = 17, behind e[0]'s carried 20.
+    assert got == [(e[0].id, 1, 20, 0, 20, 20, 0), (e[3].id, 2, 17, 12, 5, 17, 1),
+                   (e[1].id, 3, 15, 0, 15, 15, 0), (e[2].id, 4, 10, 0, 10, 10, 0)]
+    assert all(r["season"]["level"] == "regional" for r in rows)
+    # Vote details stay this stage's own rows; nothing was copied or created.
+    assert [len(r["votes"]) for r in rows] == [0, 1, 0, 0]
+    assert sorted((v.id, v.season_id, v.contestant_id, v.points) for v in db.query(ContestantVoting).all()) == votes_before
+    # The API schema carries the explicit fields.
+    parsed = ContestantEnriched(**rows[1])
+    assert (parsed.total_points, parsed.stage_points, parsed.carried_points, parsed.cumulative_points) == (17, 12, 5, 17)
+    # The roster order is exactly the order promotion would use.
+    scores = score_of(db, ct, rnd, SeasonLevel.REGIONAL, e)
+    assert [r["id"] for r in rows] == [c.id for c in rank_group(e, scores)]
+
+
+def test_vote_page_counts_votes_whose_bucket_key_keeps_the_contest_type_case(db, clock):
+    """Production shape: the DJ contest's type is 'Music' and its votes are
+    stored under 'ty:Music:nomination'. The page must count them."""
+    from app.crud.crud_contest import contest as contest_crud
+
+    rnd, ct = cohort(db)
+    ct.contest_type = "Music"
+    db.commit()
+    (a,) = nominees(db, ct, rnd, 1)
+    run_pass(db, clock, datetime(2026, 6, 1, 0, 30))
+    country = season_for(db, rnd, SeasonLevel.COUNTRY)
+    votes(db, a, ct, country, 5)
+    db.commit()
+    assert db.query(ContestantVoting).one().vote_bucket_key == "ty:Music:nomination"
+    (row,) = contest_crud.get_contest_with_enriched_contestants(db, ct.id, round_id=rnd.id)["contestants"]
+    assert (row["total_points"], row["stage_points"]) == (5, 5)
 
 
 # ---------------------------------------------------------------------------
@@ -857,3 +1012,85 @@ def test_dry_run_reports_safety_hold_and_unresolved_legacy_entry(db, clock):
     assert excluded["contestant_id"] == stray.id
     assert excluded["contest_resolution"] == "AMBIGUOUS_COLLISION_VOTES_NAME_ANOTHER_CONTEST"
     assert not db.new and not db.dirty and not db.deleted
+
+
+def test_dry_run_reconciliation_lists_frozen_rows_that_no_longer_match(db, clock):
+    """Production shape: the old code froze a stuck stage with stage-only
+    points, id order and migrated=False. The dry-run lists every such row."""
+    rnd, ct = cohort(db)
+    e = nominees(db, ct, rnd, 3)
+    run_pass(db, clock, datetime(2026, 6, 1, 0, 30))
+    country = season_for(db, rnd, SeasonLevel.COUNTRY)
+    votes(db, e[2], ct, country, 7)
+    for rank, (c, pts) in enumerate(((e[0], 0), (e[2], 0), (e[1], 0)), start=1):
+        db.add(TopHigh5Result(contestant_id=c.id, contest_id=ct.id, level=SeasonLevel.COUNTRY,
+                              jurisdiction="Tanzania", round_id=rnd.id, from_season_id=country.id,
+                              rank=rank, total_points=pts, total_votes=0, migrated=False))
+    db.commit()
+    before = [(r.id, r.rank, r.contestant_id, r.total_points, r.migrated) for r in db.query(TopHigh5Result).all()]
+
+    hop = simulate_hop(db, contest=ct, from_season=country)
+    rows = {r["rank"]: r for r in hop["top_high5_reconciliation"]}
+    assert (rows[1]["existing_contestant_id"], rows[1]["corrected_contestant_id"],
+            rows[1]["corrected_cumulative_points"]) == (e[0].id, e[2].id, 7)
+    assert "DIFFERENT_ENTRY_AT_RANK" in rows[1]["reason"]
+    assert "MIGRATED_FLAG_WOULD_BE_STALE_AFTER_PROMOTION" in rows[3]["reason"]
+    assert all(r["needs_reconciliation"] for r in rows.values())
+    assert hop["summary"]["frozen_rows_needing_reconciliation"] == 3
+    assert (hop["summary"]["source_contestants"], hop["summary"]["eligible"], hop["summary"]["would_advance"]) == (3, 3, 3)
+    assert {row["regional_pool"] for row in hop["entries"]} == {"East Africa"}
+    db.rollback()
+    assert [(r.id, r.rank, r.contestant_id, r.total_points, r.migrated) for r in db.query(TopHigh5Result).all()] == before
+
+    # Write-once is kept by the real promotion too: the rows are left for an approved reconciliation.
+    run_pass(db, clock, datetime(2026, 7, 1, 0, 30))
+    assert [(r.id, r.rank, r.contestant_id, r.total_points, r.migrated) for r in db.query(TopHigh5Result).all()] == before
+
+
+def test_legacy_audit_classifies_every_colliding_row(db):
+    old_rnd, _, rnd, contests = _legacy_world(db)
+    dj, comedy, handsome = contests["DJ"], contests["Comedy"], contests["Handsome"]
+    safe = legacy_entry(db, dj, rnd, day=1)
+    same_round = legacy_entry(db, comedy, old_rnd, day=2)
+    conflict = legacy_entry(db, comedy, rnd, day=3)
+    votes(db, conflict, dj, season(db, rnd, dj, SeasonLevel.COUNTRY), 5)
+    db.execute(round_contests.delete().where(round_contests.c.contest_id == handsome.id))
+    unresolved = legacy_entry(db, handsome, rnd, day=4)
+    entry(db, dj, rnd, k=9, origin="nomination", when=submitted(9))      # explicit contest_id: not audited
+    db.commit()
+
+    audit = audit_legacy_collisions(db)
+    status = {row["contestant_id"]: (row["status"], row["code"]) for row in audit["entries"]}
+    assert status == {
+        safe.id: ("RESOLVED_SAFELY", LEGACY_COLLISION_ROUND_VERIFIED),
+        same_round.id: ("AMBIGUOUS", "AMBIGUOUS_COLLISION_SAME_ROUND"),
+        conflict.id: ("CONFLICT", "AMBIGUOUS_COLLISION_VOTES_NAME_ANOTHER_CONTEST"),
+        unresolved.id: ("UNRESOLVED", "AMBIGUOUS_COLLISION_CONTEST_NOT_IN_ENTRY_ROUND"),
+    }
+    assert audit["total"] == 4
+    assert audit["counts"] == {"RESOLVED_SAFELY": 1, "AMBIGUOUS": 1, "CONFLICT": 1, "UNRESOLVED": 1}
+    assert not db.new and not db.dirty and not db.deleted
+    assert all(c.contest_id is None for c in (safe, same_round, conflict, unresolved))   # nothing backfilled
+
+
+def test_pending_global_finalization_preview_matches_the_real_freeze(db, clock):
+    rnd, ct = cohort(db)
+    e = nominees(db, ct, rnd, 6)
+    for month in (6, 7, 8, 9):
+        run_pass(db, clock, datetime(2026, month, 1, 0, 30))
+    global_season = season_for(db, rnd, SeasonLevel.GLOBAL)
+    votes(db, e[4], ct, global_season, 5)
+    db.commit()
+    assert pending_global_finalizations(db, today=date(2026, 9, 30)) == []      # voting still open
+    (preview,) = pending_global_finalizations(db, today=date(2026, 10, 1))
+    assert not db.new and not db.dirty and not db.deleted
+    assert db.query(TopHigh5Result).filter(TopHigh5Result.level == SeasonLevel.GLOBAL).count() == 0
+    expected = [e[4].id, e[0].id, e[1].id, e[2].id, e[3].id]
+    assert [row["contestant_id"] for row in preview["would_freeze"]] == expected
+
+    run_pass(db, clock, datetime(2026, 10, 1, 0, 30))
+    frozen = (db.query(TopHigh5Result).filter(TopHigh5Result.level == SeasonLevel.GLOBAL)
+              .order_by(TopHigh5Result.rank).all())
+    assert [r.contestant_id for r in frozen] == expected
+    assert pending_global_finalizations(db, today=date(2026, 10, 1)) == []
+

@@ -55,7 +55,8 @@ The system promotes contestants step-by-step:
 
 ### Promotion limits
 
-- Every step uses the same rule: the **top 5 of each group** of the source level advance (per city, per country, per regional bloc, per continent).
+- Every step uses the same ranking and takes the **top 5 of each group**: per city (City -> Country), per country (Country -> Regional) and per regional bloc (Regional -> Continental).
+- **Continental -> Global** is one worldwide pool per contest: the top 5 of the whole continental stage advance, whatever their continent.
 - Fewer than 5 entries in a group: all of them advance. Exactly one entry: it advances automatically.
 - One nominator can hold only one of a group's winner slots (their best-ranked entry).
 
@@ -94,7 +95,7 @@ When promoting **COUNTRY -> REGIONAL** with limit 5 (per country grouping):
 - Promoted: **Aisha, Brian, Clara, David, Eva**
 - Not promoted: **Faisal**
 
-Then for **CONTINENT -> GLOBAL**: the top 5 of each continent advance, ranked on the points they have accumulated since their first stage.
+Then for **CONTINENT -> GLOBAL**: the top 5 of the contest's whole continental stage advance, ranked on the points they have accumulated since their first stage.
 
 If Brian and Clara are tied on points, shares, likes and comments, then views decides.
 If views also tie, the entry submitted earlier wins.

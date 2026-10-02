@@ -2968,6 +2968,31 @@ class CRUDContest:
                 logger.exception("Canonical ranking aggregate failed: %s", exc)
                 raise
 
+        # Competition score (management rule, 2026-10-02): voting points are
+        # cumulative across the phases of a cohort. The score shown on the
+        # vote page and the order of the roster come from the same scorer
+        # promotion uses, so what a voter sees is what decides who advances:
+        #   total_points = cumulative_points = carried_points + stage_points.
+        # `votes` / `votes_count` stay this stage's own vote rows; nothing is
+        # copied from an earlier stage.
+        stage_points_by_contestant: Dict[int, int] = dict(points_by_contestant)
+        carried_points_by_contestant: Dict[int, int] = {}
+        progression_scores: Dict[int, Any] = {}
+        if contestant_ids and season and contest_obj is not None and getattr(season, "level", None) is not None:
+            from app.services import progression_ranking
+
+            progression_scores = progression_ranking.score_candidates(
+                db,
+                contest=contest_obj,
+                round_obj=season.round,
+                level=season.level,
+                contestants=contestants,
+            )
+            for cid, score in progression_scores.items():
+                stage_points_by_contestant[cid] = score.stage_points
+                carried_points_by_contestant[cid] = score.carried_points
+                points_by_contestant[cid] = score.cumulative_points
+
         from app.models.contests import ContestantSeason
         from app.services.season_migration import SeasonMigrationService
 
@@ -2994,6 +3019,13 @@ class CRUDContest:
             }
 
         def _roster_order_key_for_id(cid: int) -> tuple:
+            score = progression_scores.get(cid)
+            if score is not None:
+                # Canonical order: cumulative points, shares, likes, comments,
+                # views, earlier submission, id.
+                from app.services.progression_ranking import progression_sort_key
+
+                return progression_sort_key(score)
             if use_prior_stage_order:
                 return SeasonMigrationService.roster_order_key(
                     cid,
@@ -3322,6 +3354,9 @@ class CRUDContest:
                 "rank": ranks.get(contestant.id),
                 "votes_count": votes_count_by_contestant.get(contestant.id, 0),
                 "total_points": points_by_contestant.get(contestant.id, 0),
+                "stage_points": stage_points_by_contestant.get(contestant.id, 0),
+                "carried_points": carried_points_by_contestant.get(contestant.id, 0),
+                "cumulative_points": points_by_contestant.get(contestant.id, 0),
                 "images_count": images_count,
                 "videos_count": videos_count,
                 "favorites_count": len(favorites_by_contestant.get(contestant.id, [])),
@@ -3352,7 +3387,7 @@ class CRUDContest:
         
         # Sort by votes descending first (most votes first), then by rank
         # This ensures contestants with most participants/votes appear at top immediately
-        if use_prior_stage_order:
+        if use_prior_stage_order or progression_scores:
             enriched_contestants.sort(key=lambda x: _roster_order_key_for_id(x["id"]))
         else:
             enriched_contestants.sort(key=lambda x: (

@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import * as React from 'react'
 import { Play, ChevronLeft, ChevronRight, Clock, Info, Lock, ThumbsUp } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
+import { formatPoints } from '@/lib/points-display'
 import { useAuth } from '@/hooks/use-auth'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
@@ -124,7 +125,10 @@ interface ContestantCardProps {
   avatar: string
   participationTitle?: string
   votes: number
+  /** Ranking score: carried points + points of the current stage. */
   totalPoints?: number
+  carriedPoints?: number
+  stagePoints?: number
   isVotingOpenForRound?: boolean
   rank?: number
   imagesCount?: number
@@ -176,6 +180,8 @@ export function ContestantCard({
   participationTitle,
   votes,
   totalPoints = 0,
+  carriedPoints,
+  stagePoints,
   isVotingOpenForRound = true,
   rank,
   imagesCount = 0,
@@ -691,7 +697,7 @@ export function ContestantCard({
                       onMouseEnter={currentUserId === userId ? onHoverVotes : undefined}
                       onMouseLeave={currentUserId === userId ? onHoverEnd : undefined}
                     >
-                      {totalPoints} pts
+                      {formatPoints(totalPoints, carriedPoints, stagePoints)}
                     </p>
                   </TooltipTrigger>
                   <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">

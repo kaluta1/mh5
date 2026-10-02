@@ -108,10 +108,20 @@ def simulate_hop(
     winner_ids = {int(c.id) for c in selection.winners}
     unplaced_reason = {int(item["contestant_id"]): item["reason"] for item in selection.unplaced}
 
+    # Rank inside the scope the hop competes in: the group for every hop,
+    # the contest's whole continental pool for Continental -> Global.
     rank_in_group: Dict[int, int] = {}
-    for _group, ranked in selection.ranked_groups.items():
-        for position, contestant in enumerate(ranked, start=1):
+    if to_level == SeasonLevel.GLOBAL:
+        from app.services import progression_ranking
+
+        for position, contestant in enumerate(
+            progression_ranking.rank_group(selection.pool, selection.scores), start=1
+        ):
             rank_in_group[int(contestant.id)] = position
+    else:
+        for _group, ranked in selection.ranked_groups.items():
+            for position, contestant in enumerate(ranked, start=1):
+                rank_in_group[int(contestant.id)] = position
 
     destination = (
         db.query(ContestSeason)
@@ -188,6 +198,13 @@ def simulate_hop(
             "safety_eligible": bool(safety.eligible),
             "safety_reason_codes": list(safety.reasons or ()),
             "destination_stage": to_level.value if qualifies else None,
+            "regional_pool": (
+                selection.destination_label.get(cid)
+                or SeasonMigrationService.regional_pool_label_for_raw_country(
+                    contestant.country or contestant.nominator_country
+                )
+            ),
+            "ranking_scope": "worldwide" if to_level == SeasonLevel.GLOBAL else selection.location_field,
             "contest_resolution": explain_contest_resolution(db, contestant, contest.id).code,
         })
 
@@ -264,9 +281,61 @@ def simulate_hop(
         .all()
     )
     frozen_by_group: Dict[str, List[int]] = {}
+    frozen_rows_by_group: Dict[str, List[TopHigh5Result]] = {}
     for row in frozen:
         frozen_by_group.setdefault(row.jurisdiction, []).append(int(row.contestant_id))
+        frozen_rows_by_group.setdefault(row.jurisdiction, []).append(row)
     corrected_by_group = {group: [int(c.id) for c in top] for group, top in selection.freeze_groups}
+
+    # Row-level reconciliation: the frozen row at each rank next to what the
+    # corrected ranking puts there. Nothing is changed.
+    reconciliation = []
+    winner_id_set = {int(c.id) for c in selection.winners}
+    for group in sorted(set(frozen_rows_by_group) | set(corrected_by_group), key=str):
+        existing = {int(r.rank): r for r in frozen_rows_by_group.get(group, [])}
+        corrected = corrected_by_group.get(group, [])
+        for rank in sorted(set(existing) | set(range(1, len(corrected) + 1))):
+            old = existing.get(rank)
+            new_id = corrected[rank - 1] if rank <= len(corrected) else None
+            new_score = selection.scores.get(new_id) if new_id is not None else None
+            reasons = []
+            if old is None:
+                reasons.append("NO_FROZEN_ROW")
+            elif new_id is None:
+                reasons.append("FROZEN_ENTRY_NOT_IN_CORRECTED_TOP5")
+            else:
+                if int(old.contestant_id) != new_id:
+                    reasons.append(
+                        "DIFFERENT_ENTRY_AT_RANK"
+                        if int(old.contestant_id) in corrected
+                        else "FROZEN_ENTRY_NOT_IN_CORRECTED_TOP5"
+                    )
+                elif int(old.total_points or 0) != int(new_score.cumulative_points):
+                    reasons.append("POINTS_DIFFER_STAGE_ONLY_VS_CUMULATIVE")
+                elif (old.shares, old.likes, old.comments, old.views) != (
+                    new_score.shares, new_score.likes, new_score.comments, new_score.views
+                ):
+                    reasons.append("ENGAGEMENT_VALUES_DIFFER")
+                if bool(old.migrated) != (int(old.contestant_id) in winner_id_set):
+                    reasons.append("MIGRATED_FLAG_WOULD_BE_STALE_AFTER_PROMOTION")
+            reconciliation.append({
+                "round_id": from_season.round_id,
+                "stage": from_level.value,
+                "contest_id": contest.id,
+                "contest_name": contest.name,
+                "group": group,
+                "rank": rank,
+                "existing_row_id": old.id if old is not None else None,
+                "existing_contestant_id": int(old.contestant_id) if old is not None else None,
+                "existing_points": int(old.total_points or 0) if old is not None else None,
+                "existing_migrated": bool(old.migrated) if old is not None else None,
+                "corrected_contestant_id": new_id,
+                "corrected_cumulative_points": new_score.cumulative_points if new_score is not None else None,
+                "corrected_would_advance": (new_id in winner_id_set) if new_id is not None else None,
+                "needs_reconciliation": bool(reasons) and old is not None,
+                "reason": ";".join(reasons) or "MATCHES",
+            })
+    report["top_high5_reconciliation"] = reconciliation
     report["top_high5"] = {
         "already_frozen_rows": len(frozen),
         "groups_frozen_and_matching": sorted(
@@ -280,6 +349,16 @@ def simulate_hop(
 
     report["summary"] = {
         "pool": len(selection.pool),
+        "source_contestants": len(selection.pool) + len(report["excluded_legacy_entries"]),
+        "eligible": len(selection.pool),
+        "blocked_by_safety": sum(1 for e in report["entries"] if e["outcome"] == "QUALIFIES_BUT_SAFETY_HELD"),
+        "blocked_by_unresolved_legacy_ownership": sum(
+            1 for e in report["excluded_legacy_entries"] if not e["resolved_to_this_contest"]
+        ),
+        "blocked_by_missing_regional_pool": sum(
+            1 for item in selection.unplaced if item["reason"] == "NO_REGIONAL_POOL_CONFIGURED"
+        ),
+        "frozen_rows_needing_reconciliation": sum(1 for r in reconciliation if r["needs_reconciliation"]),
         "groups": len(selection.ranked_groups),
         "would_advance": sum(1 for e in report["entries"] if e["outcome"] == "ADVANCES"),
         "qualify_but_safety_held": sum(1 for e in report["entries"] if e["outcome"] == "QUALIFIES_BUT_SAFETY_HELD"),
@@ -455,3 +534,169 @@ def simulate_due_progressions(
     }
     _assert_untouched(db)
     return {"totals": totals, "transitions": hops}
+
+
+# ---------------------------------------------------------------------------
+# GLOBAL finalization that is due (it freezes Top High5 rows when it runs)
+# ---------------------------------------------------------------------------
+
+def pending_global_finalizations(
+    db: Session,
+    *,
+    today: Optional[date] = None,
+    round_ids: Optional[Iterable[int]] = None,
+) -> List[dict]:
+    """GLOBAL stages whose voting is over and whose Top High5 is not frozen
+    yet: what the scheduler's finalization step would freeze. Read-only."""
+    from app.services import progression_ranking
+
+    today = today or date.today()
+    wanted_rounds = {int(v) for v in round_ids} if round_ids else None
+    out: List[dict] = []
+    seasons = (
+        db.query(ContestSeason)
+        .filter(
+            ContestSeason.level == SeasonLevel.GLOBAL,
+            ContestSeason.is_deleted == False,  # noqa: E712
+            ContestSeason.round_id.isnot(None),
+        )
+        .order_by(ContestSeason.id.asc())
+        .all()
+    )
+    for season in seasons:
+        round_obj = season.round
+        if round_obj is None or round_obj.status == RoundStatus.CANCELLED:
+            continue
+        if wanted_rounds is not None and int(round_obj.id) not in wanted_rounds:
+            continue
+        links = (
+            db.query(ContestSeasonLink.contest_id)
+            .filter(ContestSeasonLink.season_id == season.id, ContestSeasonLink.is_active == True)  # noqa: E712
+            .order_by(ContestSeasonLink.contest_id.asc())
+            .all()
+        )
+        for (cid,) in links:
+            contest = db.query(Contest).filter(Contest.id == cid).first()
+            if contest is None:
+                continue
+            if not SeasonMigrationService._global_finalization_due(round_obj, _mode(contest), today):
+                continue
+            already = (
+                db.query(TopHigh5Result.id)
+                .filter(
+                    TopHigh5Result.contest_id == contest.id,
+                    TopHigh5Result.level == SeasonLevel.GLOBAL,
+                    TopHigh5Result.jurisdiction == "Global",
+                    TopHigh5Result.round_id == season.round_id,
+                )
+                .first()
+            )
+            if already:
+                continue
+            members = SeasonMigrationService._global_final_members(db, contest, season)
+            if not members:
+                continue
+            scores = progression_ranking.score_candidates(
+                db, contest=contest, round_obj=round_obj, level=SeasonLevel.GLOBAL, contestants=members
+            )
+            ranked = progression_ranking.rank_group(members, scores)[:5]
+            out.append({
+                "round_id": season.round_id,
+                "round_name": round_obj.name,
+                "contest_id": contest.id,
+                "contest_name": contest.name,
+                "global_season_id": season.id,
+                "members": len(members),
+                "would_freeze": [
+                    {
+                        "rank": position,
+                        "contestant_id": int(c.id),
+                        "cumulative_points": scores[int(c.id)].cumulative_points,
+                        "contest_resolution": explain_contest_resolution(db, c, contest.id).code,
+                    }
+                    for position, c in enumerate(ranked, start=1)
+                ],
+            })
+    _assert_untouched(db)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Legacy ownership audit
+# ---------------------------------------------------------------------------
+
+def audit_legacy_collisions(db: Session) -> dict:
+    """Classify every entry without a contest_id whose season_id is both a
+    ContestSeason id and a Contest id (the historical collision). Read-only.
+
+    RESOLVED_SAFELY  the legacy contest is proven by round evidence
+    AMBIGUOUS        season_id may be the entry's own season (same round) or
+                     the entry has no round: not provable either way
+    CONFLICT         evidence names a different contest (votes, or another
+                     case resolves the row to another contest)
+    UNRESOLVED       nothing resolves it (e.g. contest not in the entry's round)
+    """
+    from app.models.voting import ContestantVoting
+
+    rows = (
+        db.query(Contestant)
+        .filter(
+            Contestant.contest_id.is_(None),
+            Contestant.season_id.in_(select(ContestSeason.id)),
+            Contestant.season_id.in_(select(Contest.id)),
+        )
+        .order_by(Contestant.id.asc())
+        .all()
+    )
+    names = {int(c.id): c.name for c in db.query(Contest).filter(Contest.id.in_({int(r.season_id) for r in rows} or {-1}))}
+    entries = []
+    for row in rows:
+        legacy_contest_id = int(row.season_id)
+        resolution = explain_contest_resolution(db, row, legacy_contest_id)
+        # Only an active season link (Case C) or the entry's own votes (Case D)
+        # can resolve such a row to a contest other than its legacy one.
+        other_candidates = {
+            int(r[0])
+            for r in db.query(ContestSeasonLink.contest_id)
+            .filter(ContestSeasonLink.season_id == row.season_id, ContestSeasonLink.is_active == True)  # noqa: E712
+            .all()
+        } | {
+            int(r[0])
+            for r in db.query(ContestantVoting.contest_id)
+            .filter(ContestantVoting.contestant_id == row.id, ContestantVoting.contest_id.isnot(None))
+            .distinct()
+            .all()
+        }
+        other_candidates.discard(legacy_contest_id)
+        claimed_by = sorted(
+            cid for cid in other_candidates if explain_contest_resolution(db, row, cid).belongs
+        )
+        if claimed_by or resolution.code == "AMBIGUOUS_COLLISION_VOTES_NAME_ANOTHER_CONTEST":
+            status = "CONFLICT"
+        elif resolution.belongs and resolution.code in LEGACY_COLLISION_CODES:
+            status = "RESOLVED_SAFELY"
+        elif resolution.belongs:
+            status = "RESOLVED_SAFELY"
+        elif resolution.code in ("AMBIGUOUS_COLLISION_SAME_ROUND", "AMBIGUOUS_COLLISION_ENTRY_ROUND_UNKNOWN"):
+            status = "AMBIGUOUS"
+        else:
+            status = "UNRESOLVED"
+        entries.append({
+            "contestant_id": int(row.id),
+            "round_id": row.round_id,
+            "legacy_contest_id": legacy_contest_id,
+            "legacy_contest_name": names.get(legacy_contest_id),
+            "status": status,
+            "code": resolution.code,
+            "also_resolves_to_contests": claimed_by,
+            "is_active": bool(row.is_active),
+            "is_deleted": bool(row.is_deleted),
+        })
+    counts: Dict[str, int] = {}
+    by_contest: Dict[str, Dict[str, int]] = {}
+    for entry in entries:
+        counts[entry["status"]] = counts.get(entry["status"], 0) + 1
+        bucket = by_contest.setdefault(f"{entry['legacy_contest_id']}:{entry['legacy_contest_name']}", {})
+        bucket[entry["status"]] = bucket.get(entry["status"], 0) + 1
+    _assert_untouched(db)
+    return {"total": len(entries), "counts": counts, "by_contest": by_contest, "entries": entries}

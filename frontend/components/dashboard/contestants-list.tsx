@@ -27,6 +27,9 @@ interface Contestant {
   participationTitle?: string
   description: string
   votes: number
+  totalPoints?: number
+  carriedPoints?: number
+  stagePoints?: number
   rank?: number
   imagesCount: number
   videosCount: number
@@ -210,6 +213,9 @@ export function ContestantsList({
             avatar={contestant.avatar}
             participationTitle={contestant.participationTitle}
             votes={contestant.votes}
+            totalPoints={contestant.totalPoints}
+            carriedPoints={contestant.carriedPoints}
+            stagePoints={contestant.stagePoints}
             rank={contestant.rank}
             imagesCount={contestant.imagesCount}
             videosCount={contestant.videosCount}

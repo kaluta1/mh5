@@ -487,6 +487,34 @@ class SeasonMigrationService:
         )
 
     @staticmethod
+    def _global_final_members(db: Session, contest: Contest, season: ContestSeason) -> List[Contestant]:
+        """GLOBAL-season members of one contest (read-only), resolved through
+        the shared contest-ownership clause like every other level."""
+        from app.services.participation_safety import ranking_pool_clause
+
+        contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
+        global_filters = [
+            ContestantSeason.season_id == season.id,
+            ContestantSeason.is_active == True,
+            ranking_pool_clause(),  # Phase 8: same pool as promotion (frozen ranking stays intact)
+            SeasonMigrationService.origin_matches_mode_clause(contest_mode),
+            Contestant.is_deleted == False,
+            contestant_belongs_to_contest_clause(contest.id),
+            Contestant.round_id == season.round_id,
+            or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
+        ]
+        if season.round is not None:
+            from app.core.nomination_calendar import nomination_cohort_created_at_filters
+
+            global_filters.extend(nomination_cohort_created_at_filters(season.round))
+        return (
+            db.query(Contestant)
+            .join(ContestantSeason)
+            .filter(and_(*global_filters))
+            .all()
+        )
+
+    @staticmethod
     def _finalize_global_top_high5(
         db: Session,
         season: ContestSeason,
@@ -532,31 +560,7 @@ class SeasonMigrationService:
             if already_frozen:
                 continue
 
-            # GLOBAL-season members of this contest, resolved through the
-            # shared contest-ownership clause like every other level.
-            from app.services.participation_safety import ranking_pool_clause
-
-            global_filters = [
-                ContestantSeason.season_id == season.id,
-                ContestantSeason.is_active == True,
-                ranking_pool_clause(),  # Phase 8: same pool as promotion (frozen ranking stays intact)
-                SeasonMigrationService.origin_matches_mode_clause(contest_mode),
-                Contestant.is_deleted == False,
-                contestant_belongs_to_contest_clause(contest.id),
-                Contestant.round_id == season.round_id,
-                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
-            ]
-            if season.round is not None:
-                from app.core.nomination_calendar import nomination_cohort_created_at_filters
-
-                global_filters.extend(nomination_cohort_created_at_filters(season.round))
-
-            members = (
-                db.query(Contestant)
-                .join(ContestantSeason)
-                .filter(and_(*global_filters))
-                .all()
-            )
+            members = SeasonMigrationService._global_final_members(db, contest, season)
             if not members:
                 continue
 
@@ -2500,12 +2504,17 @@ class SeasonMigrationService:
         single selection used by promotion, by the Top High5 freeze and by the
         recovery dry-run, so all three always agree.
 
-        One rule for every hop (City->Country, Country->Regional,
-        Regional->Continental, Continental->Global): inside each competition
-        group of the source level, order by cumulative voting points, then
-        shares, likes, comments, views and the earlier submission; the top
-        `limit` advance. No vote is required: with fewer than `limit` entries
-        all of them advance, a sole entry advances on its own.
+        One ranking rule for every hop: order by cumulative voting points,
+        then shares, likes, comments, views and the earlier submission; the
+        top `limit` advance. No vote is required: with fewer than `limit`
+        entries all of them advance, a sole entry advances on its own.
+
+        Competition scope (unchanged from the shipped behaviour):
+        City->Country per city, Country->Regional per country,
+        Regional->Continental per regional bloc, and Continental->Global ONE
+        worldwide pool per contest -- the top `limit` of the whole
+        continental season, whatever their continent. Each continent's own
+        Top High5 is still frozen separately.
 
         An entry that cannot be placed -- its country has no configured
         regional bloc, or it carries no value for the grouping field -- is
@@ -2557,6 +2566,18 @@ class SeasonMigrationService:
         selection.scores = pool.scores
         selection.ranked_groups = pool.ranked_groups
         selection.group_of = pool.group_of
+
+        if to_level == SeasonLevel.GLOBAL:
+            # One worldwide pool per contest. The continent only decides which
+            # continental Top High5 an entry is frozen under; an entry without
+            # a continent still competes for Global.
+            from app.services import progression_ranking
+
+            for jurisdiction, ranked in pool.ranked_groups.items():
+                if ranked:
+                    selection.freeze_groups.append((jurisdiction, ranked[:5]))
+            selection.winners = progression_ranking.rank_group(pool.pool, pool.scores)[:limit]
+            return selection
 
         for contestant in pool.ungrouped:
             selection.protected_ids.add(contestant.id)
@@ -3003,10 +3024,11 @@ class SeasonMigrationService:
     ) -> dict:
         """
         Promouvoit les meilleurs contestants d'un niveau vers le niveau supérieur.
-        Every hop uses the same rule (see select_progression_winners): the top
-        `limit` of each competition group of the source level, ranked by
-        cumulative voting points and the engagement tie-breakers. Votes are
-        never copied to the destination season.
+        Every hop uses the same ranking (see select_progression_winners):
+        cumulative voting points and the engagement tie-breakers, top `limit`
+        per competition group -- per city/country/regional bloc, and one
+        worldwide pool per contest for Continental->Global. Votes are never
+        copied to the destination season.
         """
         # Récupérer la saison source via le lien contest-season.
         # If from_season_id is provided, force that season to avoid ambiguity when

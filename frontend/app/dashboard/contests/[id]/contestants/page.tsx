@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPoints } from '@/lib/points-display'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/contexts/language-context'
@@ -29,6 +30,7 @@ interface ContestantData {
   title: string; description: string
   author_name: string; author_country: string; author_city: string; author_avatar_url: string | null
   rank: number; votes_count: number; total_points: number; images_count: number; videos_count: number
+  stage_points?: number; carried_points?: number; cumulative_points?: number
   favorites_count: number; reactions_count: number; comments_count: number
   is_in_favorites: boolean; can_vote: boolean; has_voted: boolean
   image_media_ids: string; video_media_ids: string
@@ -405,7 +407,7 @@ export default function ContestantsListPage() {
 
                       {/* Vote count */}
                       <div className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <ThumbsUp className="w-3 h-3" /> {contestant.total_points ?? 0} pts
+                        <ThumbsUp className="w-3 h-3" /> {formatPoints(contestant.total_points, contestant.carried_points, contestant.stage_points)}
                       </div>
 
                       {/* Video indicator */}

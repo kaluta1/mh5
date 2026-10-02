@@ -280,7 +280,12 @@ class ContestantEnriched(BaseModel):
     # Stats
     rank: Optional[int] = None
     votes_count: int = 0
+    # Ranking score: voting points carried from the completed previous stages
+    # plus the points earned in this stage (total_points == cumulative_points).
     total_points: int = 0
+    stage_points: int = 0
+    carried_points: int = 0
+    cumulative_points: int = 0
     images_count: int = 0
     videos_count: int = 0
     favorites_count: int = 0

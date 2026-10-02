@@ -42,6 +42,9 @@ interface Contestant {
   participationTitle?: string
   description: string
   votes: number
+  totalPoints?: number
+  carriedPoints?: number
+  stagePoints?: number
   rank?: number
   imagesCount: number
   videosCount: number
@@ -351,6 +354,8 @@ export default function ContestDetailPage() {
           description: ct.description ?? '',
           votes: ct.votes_count ?? 0,
           totalPoints: ct.total_points ?? 0,
+          carriedPoints: ct.carried_points ?? 0,
+          stagePoints: ct.stage_points ?? ct.total_points ?? 0,
           isVotingOpenForRound: !viewOnly && ct.is_voting_open_for_round !== false,
           rank: ct.rank,
           imagesCount: ct.images_count ?? images.length,

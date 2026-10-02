@@ -32,14 +32,18 @@ if BACKEND_ROOT not in sys.path:
 from sqlalchemy import text  # noqa: E402
 
 from app.db.session import SessionLocal  # noqa: E402
-from app.services.progression_dry_run import simulate_due_progressions  # noqa: E402
+from app.services.progression_dry_run import (  # noqa: E402
+    audit_legacy_collisions,
+    pending_global_finalizations,
+    simulate_due_progressions,
+)
 
 ENTRY_COLUMNS = [
     "round_id", "round_name", "contest_id", "contest_name", "category_id", "source_season_id",
     "source_stage", "contestant_id", "entry_title", "nominator_user_id", "nominator_username",
     "group", "previous_stage_points", "current_stage_points", "cumulative_points", "shares",
     "likes", "comments", "views", "submitted_at", "rank", "qualifies", "outcome",
-    "destination_stage", "safety_eligible", "contest_resolution",
+    "destination_stage", "regional_pool", "ranking_scope", "safety_eligible", "contest_resolution",
 ]
 
 
@@ -89,6 +93,11 @@ def main() -> int:
     parser.add_argument("--include-empty", action="store_true", help="also list due transitions with no entry at all")
     parser.add_argument("--json", dest="json_out", help="write the full report to this file")
     parser.add_argument("--csv", dest="csv_out", help="write one row per entry to this file")
+    parser.add_argument("--legacy-audit", action="store_true",
+                        help="also classify every legacy entry whose season_id collides with a season id")
+    parser.add_argument("--global-finalizations", action="store_true",
+                        help="also list GLOBAL stages whose Top High5 freeze is due")
+    parser.add_argument("--quiet", action="store_true", help="print only the totals")
     args = parser.parse_args()
 
     today = date.fromisoformat(args.as_of) if args.as_of else date.today()
@@ -97,6 +106,10 @@ def main() -> int:
         if db.get_bind().dialect.name == "postgresql":
             # The database enforces it: any write in this transaction fails.
             db.execute(text("SET TRANSACTION READ ONLY"))
+            read_only = db.execute(text("SHOW transaction_read_only")).scalar()
+            if str(read_only).lower() != "on":
+                raise SystemExit("refusing to run: the transaction is not READ ONLY")
+            print("transaction_read_only =", read_only)
         report = simulate_due_progressions(
             db,
             today=today,
@@ -104,6 +117,12 @@ def main() -> int:
             contest_ids=args.contests,
             include_empty=args.include_empty,
         )
+        if args.global_finalizations:
+            report["pending_global_finalizations"] = pending_global_finalizations(
+                db, today=today, round_ids=args.rounds
+            )
+        if args.legacy_audit:
+            report["legacy_audit"] = audit_legacy_collisions(db)
     finally:
         db.rollback()
         db.close()
@@ -116,7 +135,19 @@ def main() -> int:
             writer = csv.DictWriter(handle, fieldnames=ENTRY_COLUMNS)
             writer.writeheader()
             writer.writerows(_rows(report))
-    _print_text(report)
+    if args.quiet:
+        print(json.dumps(report["totals"], indent=2))
+    else:
+        _print_text(report)
+    if "legacy_audit" in report:
+        audit = report["legacy_audit"]
+        print()
+        print("LEGACY AUDIT:", audit["total"], audit["counts"])
+        for key, value in sorted(audit["by_contest"].items()):
+            print("  ", key, value)
+    if "pending_global_finalizations" in report:
+        print()
+        print("GLOBAL FINALIZATIONS DUE:", len(report["pending_global_finalizations"]))
     print()
     print("NO DATABASE WRITE WAS MADE.")
     return 0
