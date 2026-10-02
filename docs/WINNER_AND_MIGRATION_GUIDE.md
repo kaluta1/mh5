@@ -7,14 +7,20 @@ It uses names as examples so non-technical teams can validate results easily.
 
 For contestants in the same comparison group, ranking is decided in this exact order:
 
-1. **Total stars (points)** - higher wins
-2. **Total shares** - if stars tie
+1. **Total voting points (stars)** - higher wins
+2. **Total shares** - if points tie
 3. **Total likes** - if shares tie
 4. **Total comments** - if likes tie
 5. **Total views** - if comments tie
-6. **First contestant** - if everything ties, the earlier contestant wins (system uses lower internal id)
+6. **Earlier submission** - if everything ties, the entry submitted first wins
 
-If two contestants are equal on all engagement metrics, the one who entered first in the system is ranked higher.
+Rules confirmed by management on 2026-10-02:
+
+- A voter ranks up to five entries. Position 1 earns 5 points, position 2 earns 4, then 3, 2 and 1. Ranking uses total **points**, never the number of votes.
+- Points are **cumulative across phases**. The score an entry competes with at a stage is everything it earned in the earlier stages of the same cohort plus the points earned in that stage (Country 120 + Regional 40 = 160 at Regional). Votes are never copied: each vote stays in the stage it was cast in and the total is calculated from them.
+- Shares, likes, comments and views only break ties. They are never converted into points.
+- **No vote is required.** If nobody in a group has points, the tie-breakers decide.
+- If two entries are equal on everything including the submission time, the lower internal id is used only to keep the order stable.
 
 ---
 
@@ -49,15 +55,26 @@ The system promotes contestants step-by-step:
 
 ### Promotion limits
 
-- For **CITY/COUNTRY/REGIONAL/CONTINENT** steps: top contestants are selected **per location group** (for example per city, per country, per region, depending on step).
-- For **GLOBAL**: top contestants are selected from the full source season (overall ranking).
+- Every step uses the same rule: the **top 5 of each group** of the source level advance (per city, per country, per regional bloc, per continent).
+- Fewer than 5 entries in a group: all of them advance. Exactly one entry: it advances automatically.
+- One nominator can hold only one of a group's winner slots (their best-ranked entry).
 
 ### Important behavior
 
-- If there are no fresh votes in a later season, contestants are still ranked using:
-  stars (possibly zero) -> shares -> likes -> comments -> views -> first contestant.
+- A stage with no votes still promotes its top 5, ranked by carried points and the tie-breakers.
 - Non-selected contestants in that source season are marked as not qualified.
 - Selected contestants are linked to the destination season and the contest season link is moved forward.
+- A winner whose country has no configured regional bloc cannot be placed. That entry is left untouched (still qualified, still in its Country stage) and logged as `PROGRESSION_UNPLACED`, so it can be recovered once a bloc is configured.
+- A winner on a child-safety hold is not promoted and nobody is promoted in their place.
+- Running the promotion again changes nothing: no duplicate memberships, seasons or Top High5 rows, and no rewritten timestamps.
+
+### Checking before promoting (read-only)
+
+```bash
+PYTHONPATH=. python scripts/progression_recovery_dry_run.py --round 28 --csv entries.csv
+```
+
+Lists every due transition with each entry's previous-stage points, current-stage points, cumulative points, tie-breakers, rank and whether it would advance. It writes nothing.
 
 ---
 
@@ -77,12 +94,10 @@ When promoting **COUNTRY -> REGIONAL** with limit 5 (per country grouping):
 - Promoted: **Aisha, Brian, Clara, David, Eva**
 - Not promoted: **Faisal**
 
-Then for **CONTINENT -> GLOBAL** with limit 3:
+Then for **CONTINENT -> GLOBAL**: the top 5 of each continent advance, ranked on the points they have accumulated since their first stage.
 
-- Final winners: **Aisha, Brian, Clara**
-
-If Brian and Clara are tied on stars, shares, likes, comments, then views decides.
-If views also tie, earlier contestant wins.
+If Brian and Clara are tied on points, shares, likes and comments, then views decides.
+If views also tie, the entry submitted earlier wins.
 
 ---
 
@@ -125,4 +140,4 @@ pandoc docs/WINNER_AND_MIGRATION_GUIDE.md -o docs/Winner_and_Migration_Guide.pdf
 
 ## 7) One-line business summary
 
-**Winner ranking = stars first, then engagement tie-breaks (shares -> likes -> comments -> views), then first contestant; migration moves top-ranked contestants level-by-level until global winners are determined.**
+**Winner ranking = cumulative voting points first, then engagement tie-breaks (shares -> likes -> comments -> views), then the earlier submission; the top 5 of each group move level-by-level, with or without votes, until global winners are determined.**

@@ -102,10 +102,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.contest import Contest
 from app.models.contests import Contestant, ContestantSeason, ContestSeason, SeasonLevel
 from app.models.round import Round, RoundStatus
+from app.services import progression_ranking
 from app.services.season_migration import SeasonMigrationService
-from app.services.voting_ranking import aggregate_rankings
 from app.services.participation_safety import ranking_pool_clause
-from app.services.contest_category_integrity import dedupe_contestants_by_nominator
 
 
 _LEVEL_ORDER = [
@@ -301,8 +300,12 @@ def _row_dict(contest: Contest, contestant: Contestant, rank: int, ranking_row, 
         "region": contestant.region,
         "continent": contestant.continent,
         "registered_at": registered_at.isoformat() if registered_at else None,
+        # Ranking score: voting points carried from the completed previous
+        # stages plus the points earned at this level (see progression_ranking).
         "stars_points": ranking_row.total_points,
         "votes_count": ranking_row.total_votes,
+        "stage_points": getattr(ranking_row, "stage_points", ranking_row.total_points),
+        "carried_points": getattr(ranking_row, "carried_points", 0),
         "shares": ranking_row.shares,
         "likes": ranking_row.likes,
         "comments": ranking_row.comments,
@@ -371,7 +374,9 @@ def resolve_live_top_high5(
 
     by_contest: dict[int, list[Contestant]] = {}
     for contestant in member_rows:
-        contest_id = contestant.season_id
+        # The dedicated contest link is authoritative when present; legacy
+        # rows keep the season_id-as-contest convention.
+        contest_id = contestant.contest_id if contestant.contest_id is not None else contestant.season_id
         if contest_id is None:
             continue
         by_contest.setdefault(contest_id, []).append(contestant)
@@ -450,18 +455,17 @@ def resolve_live_top_high5(
         if not candidate_ids:
             continue
 
-        bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
-        ranking_rows = aggregate_rankings(
+        # The same canonical ranking promotion uses, so the displayed Top
+        # High5 is the order winners advance in: cumulative voting points
+        # through this level, then shares, likes, comments, views and the
+        # earlier submission. Zero-vote entries are ranked like any other.
+        rank_by_id = progression_ranking.score_candidates(
             db,
-            season_ids=[target_season.id],
-            contestant_ids=candidate_ids,
-            contest_id=contest_id,
-            bucket_key=bucket_key,
-            # Documented, already-shipped zero-vote-inclusion display rule
-            # (display-only, never a promotion signal) -- unchanged.
-            require_votes=False,
+            contest=contest,
+            round_obj=target_round,
+            level=level,
+            contestants=candidates,
         )
-        rank_by_id = {row.contestant_id: row for row in ranking_rows}
 
         by_jurisdiction: dict[str, list[Contestant]] = {}
         for c in candidates:
@@ -483,11 +487,7 @@ def resolve_live_top_high5(
                 }
 
         for jurisdiction, members in by_jurisdiction.items():
-            members.sort(key=lambda c: rank_by_id[c.id].rank)
-            members = dedupe_contestants_by_nominator(
-                members,
-                points_by_contestant={cid: row.total_points for cid, row in rank_by_id.items()},
-            )
+            members = progression_ranking.rank_group(members, rank_by_id)
             top = members[:limit]
             if not top:
                 continue

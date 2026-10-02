@@ -816,9 +816,9 @@ def test_AN_ranking_order_and_tie_behaviour_unchanged(db):
     assert [r.contestant_id for r in ranked] == [entries[1][0].id, entries[2][0].id, entries[3][0].id,
                                                   entries[0][0].id]           # promotion: lower id wins a tie
     _, out = top_high5(db, SeasonLevel.REGIONAL, today=target_today_for(SeasonLevel.REGIONAL, month))
-    # The live TopHigh5 display keeps its pre-existing tie presentation (the
-    # nominator-dedupe step orders equal points by the higher id) - unchanged.
-    assert [r["contestant_id"] for r in rows_of(out)] == [entries[2][0].id, entries[1][0].id, entries[3][0].id,
+    # The live TopHigh5 display ranks exactly like promotion (2026-10-02
+    # management rule): equal points and engagement -> the earlier entry first.
+    assert [r["contestant_id"] for r in rows_of(out)] == [entries[1][0].id, entries[2][0].id, entries[3][0].id,
                                                           entries[0][0].id]
     assert [r["stars_points"] for r in rows_of(out)] == [30, 30, 20, 10]
     assert [r["rank"] for r in rows_of(out)] == [1, 2, 3, 4]

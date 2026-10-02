@@ -102,6 +102,40 @@ class ForeignRoundActivationError(ValueError):
     the destination season's round."""
 
 
+class ProgressionPool:
+    """What get_top_contestants_by_location saw while ranking one source
+    season with the canonical progression rule. Filled in place."""
+
+    def __init__(self) -> None:
+        self.pool: List[Contestant] = []                       # every candidate entry
+        self.scores: Dict[int, object] = {}                    # contestant id -> ProgressionScore
+        self.ranked_groups: Dict[str, List[Contestant]] = {}   # group -> full ranked list
+        self.ungrouped: List[Contestant] = []                  # no value for the grouping field
+        self.group_of: Dict[int, str] = {}                     # contestant id -> group
+
+
+class ProgressionSelection:
+    """Outcome of ranking one source season for one hop. Pure data: building
+    it reads the database and changes nothing."""
+
+    def __init__(self, location_field: str, limit: int) -> None:
+        self.location_field = location_field
+        self.limit = limit
+        self.pool: List[Contestant] = []
+        self.scores: Dict[int, object] = {}
+        self.ranked_groups: Dict[str, List[Contestant]] = {}
+        self.group_of: Dict[int, str] = {}
+        # (jurisdiction, first five) of every group: this level's Top High5.
+        self.freeze_groups: List[tuple] = []
+        # Entries that advance, group by group, in rank order.
+        self.winners: List[Contestant] = []
+        # Destination label to stamp on a winner (Country -> Regional bloc).
+        self.destination_label: Dict[int, str] = {}
+        # Entries that cannot be placed. They are left exactly as they are.
+        self.unplaced: List[dict] = []
+        self.protected_ids: set = set()
+
+
 class SeasonMigrationService:
     """Service pour gérer les migrations de saisons"""
 
@@ -498,11 +532,8 @@ class SeasonMigrationService:
             if already_frozen:
                 continue
 
-            # Same GLOBAL-season member filter promote_to_next_level's own
-            # Continental->Global branch uses (including its known
-            # Contestant.season_id==contest_id legacy comparison) -- kept
-            # identical on purpose so finalization sees the same roster
-            # promotion would have. Not this task's scope to change.
+            # GLOBAL-season members of this contest, resolved through the
+            # shared contest-ownership clause like every other level.
             from app.services.participation_safety import ranking_pool_clause
 
             global_filters = [
@@ -511,7 +542,7 @@ class SeasonMigrationService:
                 ranking_pool_clause(),  # Phase 8: same pool as promotion (frozen ranking stays intact)
                 SeasonMigrationService.origin_matches_mode_clause(contest_mode),
                 Contestant.is_deleted == False,
-                Contestant.season_id == contest.id,
+                contestant_belongs_to_contest_clause(contest.id),
                 Contestant.round_id == season.round_id,
                 or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
             ]
@@ -529,13 +560,18 @@ class SeasonMigrationService:
             if not members:
                 continue
 
-            ranked_ids = SeasonMigrationService.rank_contestant_ids_like_top_high5(
-                db, contest, season, members
+            # Final ranking: cumulative voting points through GLOBAL and the
+            # engagement tie-breakers; a finalist needs no vote to be ranked.
+            from app.services import progression_ranking
+
+            global_scores = progression_ranking.score_candidates(
+                db,
+                contest=contest,
+                round_obj=round_obj,
+                level=SeasonLevel.GLOBAL,
+                contestants=members,
             )
-            members_by_id = {c.id: c for c in members if c.id is not None}
-            ranked_contestants = [
-                members_by_id[cid] for cid in ranked_ids[:5] if cid in members_by_id
-            ]
+            ranked_contestants = progression_ranking.rank_group(members, global_scores)[:5]
             if not ranked_contestants:
                 continue
 
@@ -547,6 +583,7 @@ class SeasonMigrationService:
                 from_season=season,
                 to_season=None,
                 ranked_contestants=ranked_contestants,
+                scores=global_scores,
             )
             if not written:
                 continue
@@ -725,6 +762,15 @@ class SeasonMigrationService:
         "north_africa": "North Africa",
         "central_africa": "Central Africa",
     }
+    # Continent of each CONFIGURED bloc (a property of the blocs above, not a
+    # new geography model): used only when an entry has no stored continent.
+    REGIONAL_POOL_CONTINENT: ClassVar[Dict[str, str]] = {
+        "east_africa": "Africa",
+        "west_africa": "Africa",
+        "southern_africa": "Africa",
+        "north_africa": "Africa",
+        "central_africa": "Africa",
+    }
 
     @staticmethod
     def _region_key(raw_region: Optional[str]) -> Optional[str]:
@@ -785,6 +831,19 @@ class SeasonMigrationService:
         return SeasonMigrationService.regional_pool_label_for_id(
             SeasonMigrationService.regional_pool_id_for_raw_country(raw_country)
         )
+
+    @staticmethod
+    def continent_label_for(contestant: Contestant) -> Optional[str]:
+        """Continental competition group of an entry: its stored continent, or
+        the continent of its configured regional bloc when the profile field
+        is empty. None when neither is known (never guessed)."""
+        stored = getattr(contestant, "continent", None)
+        if stored and str(stored).strip():
+            return stored
+        pool_id = SeasonMigrationService.regional_pool_id_for_raw_country(
+            getattr(contestant, "country", None) or getattr(contestant, "nominator_country", None)
+        )
+        return SeasonMigrationService.REGIONAL_POOL_CONTINENT.get(pool_id) if pool_id else None
 
     @staticmethod
     def nominee_regional_pool_id(contestant: Contestant) -> Optional[str]:
@@ -1211,59 +1270,25 @@ class SeasonMigrationService:
         season: ContestSeason,
         members: List[Contestant],
     ) -> List[int]:
-        """Canonical Top High5 / Past-tab ordering for one location group."""
-        contestant_ids = [c.id for c in members if c.id is not None]
-        if not contestant_ids:
+        """Canonical Top High5 / Past-tab ordering for one location group.
+
+        Same rule as promotion (see progression_ranking): cumulative voting
+        points through this season's level, then shares, likes, comments,
+        views and the earlier submission. Zero-vote members are ranked too.
+        """
+        from app.services import progression_ranking
+
+        members = [c for c in members if c.id is not None]
+        if not members:
             return []
-
-        bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
-        points_season_ids = [season.id]
-        if season.level == SeasonLevel.REGIONAL:
-            sibling_rows = (
-                db.query(ContestSeason.id)
-                .filter(ContestSeason.round_id == season.round_id)
-                .filter(ContestSeason.is_deleted == False)
-                .filter(
-                    ContestSeason.level.in_(
-                        [SeasonLevel.CITY, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL]
-                    )
-                )
-                .distinct()
-                .all()
-            )
-            sibling_ids = [r[0] for r in sibling_rows if r and r[0] is not None]
-            if sibling_ids:
-                points_season_ids = list({*points_season_ids, *sibling_ids})
-
-        from app.services.voting_ranking import aggregate_rankings
-
-        ranking_rows = aggregate_rankings(
+        scores = progression_ranking.score_candidates(
             db,
-            season_ids=points_season_ids,
-            contestant_ids=contestant_ids,
-            contest_id=contest.id,
-            bucket_key=bucket_key,
-            require_votes=True,
+            contest=contest,
+            round_obj=season.round,
+            level=season.level,
+            contestants=members,
         )
-        members_by_id = {candidate.id: candidate for candidate in members}
-        sorted_ranked = [
-            members_by_id[row.contestant_id]
-            for row in ranking_rows
-            if row.contestant_id in members_by_id
-        ]
-
-        seen_user_ids: set[int] = set()
-        deduped: List[Contestant] = []
-        for candidate in sorted_ranked:
-            uid = getattr(candidate, "user_id", None)
-            if uid is None:
-                deduped.append(candidate)
-                continue
-            if uid in seen_user_ids:
-                continue
-            seen_user_ids.add(uid)
-            deduped.append(candidate)
-        return [c.id for c in deduped if c.id is not None]
+        return [c.id for c in progression_ranking.rank_group(members, scores)]
 
     @staticmethod
     def _freeze_top_high5_results(
@@ -1275,6 +1300,7 @@ class SeasonMigrationService:
         from_season: ContestSeason,
         to_season: Optional[ContestSeason],
         ranked_contestants: List[Contestant],
+        scores: Optional[Dict[int, object]] = None,
     ) -> int:
         """
         Persist an already-ranked (<=5) group as this level's official,
@@ -1288,6 +1314,11 @@ class SeasonMigrationService:
         ``ranked_contestants``; callers must pass it in the exact order that
         was actually used for promotion, so the frozen rank can never diverge
         from what was migrated.
+
+        ``scores`` are the progression scores that produced that order
+        (cumulative voting points and the engagement tie-breakers). They are
+        stored as-is so a frozen row shows the numbers its rank was decided
+        on; when omitted they are derived by the same canonical scorer.
         """
         if not ranked_contestants or not from_season.round_id:
             return 0
@@ -1314,18 +1345,17 @@ class SeasonMigrationService:
             )
             return 0
 
-        from app.services.voting_ranking import aggregate_rankings
+        if scores is None:
+            from app.services import progression_ranking
 
-        bucket_key = SeasonMigrationService._top_high5_bucket_key_for_contest(contest)
-        ranking_rows = aggregate_rankings(
-            db,
-            season_ids=[from_season.id],
-            contestant_ids=contestant_ids,
-            contest_id=contest.id,
-            bucket_key=bucket_key,
-            require_votes=False,
-        )
-        scores_by_id = {row.contestant_id: row for row in ranking_rows}
+            scores = progression_ranking.score_candidates(
+                db,
+                contest=contest,
+                round_obj=from_season.round,
+                level=level,
+                contestants=ranked_contestants,
+            )
+        scores_by_id = scores
 
         migrated_ids: set = set()
         if to_season is not None:
@@ -1554,8 +1584,10 @@ class SeasonMigrationService:
         principle already applied to the round-scoping fix in
         _contestants_for_contest_in_season.
 
-        Idempotent: reactivating an already-active target link only
-        updates `joined_at`.
+        Idempotent: an already-active target link is left exactly as it is.
+        `joined_at` records when the membership (re)started, so it is written
+        only when the row is created or reactivated -- never because a
+        scheduler retry found the membership already in place.
 
         Round guard (defense in depth): a contestant's round is fixed at
         submission and constant across every level of genuine progression,
@@ -1627,7 +1659,7 @@ class SeasonMigrationService:
                 is_active=True,
             )
             db.add(existing)
-        else:
+        elif not existing.is_active:
             existing.is_active = True
             existing.joined_at = when
         return existing
@@ -1888,16 +1920,17 @@ class SeasonMigrationService:
         require_votes: bool = True,
         include_safety_holds: bool = False,
         origin_mode: Optional[str] = None,
+        progression: Optional["ProgressionPool"] = None,
     ) -> Dict[str, List[Contestant]]:
         """
         Récupère les N meilleurs contestants groupés par localisation.
         Utilise les votes depuis ContestantVoting (par season_id) au lieu des stages.
         Retourne un dictionnaire {location_value: [contestants]}
 
-        `require_votes` (default True, unchanged for every existing caller):
+        `require_votes` (default True, stage-only ranking for reports/tools):
         when True, a resolved candidate with zero vote rows is dropped from
-        the grouped result entirely -- the long-standing behavior that
-        promotion (`promote_to_next_level`) and prior-stage ranking rely on.
+        the grouped result entirely. Promotion no longer uses this ranking:
+        it passes `progression`, under which a vote is never required.
         The live Top High5 display endpoint passes `require_votes=False`
         explicitly: its candidates are already round/season/roster-resolved
         before this function ranks them, so a zero-vote candidate is a
@@ -1912,6 +1945,14 @@ class SeasonMigrationService:
         (personal submission / nomination) matches that contest mode, so a
         cohort is never ranked together with entries of the other lifecycle.
         Applied after every fallback tier, before grouping and ranking.
+
+        `progression` (promotion, freeze and dry-run): rank with the canonical
+        progression rule instead of this function's stage-only ranking --
+        cumulative voting points, then shares, likes, comments, views and the
+        earlier submission; a zero-vote entry is ranked like any other
+        (`require_votes` is ignored). The pool, the scores and the entries
+        that have no competition group are handed back through the object, so
+        nobody is dropped without a trace.
         """
         import logging
         from app.services.participation_safety import ranking_pool_clause
@@ -1996,8 +2037,11 @@ class SeasonMigrationService:
                 ).in_(list(variants))
             )
         
-        # Filtrer par localisation non nulle
-        if location_field == 'city':
+        # Filtrer par localisation non nulle. In progression mode an entry
+        # without a group stays in the pool and is reported as unplaced.
+        if progression is not None:
+            pass
+        elif location_field == 'city':
             contestants_query = contestants_query.filter(Contestant.city.isnot(None))
         elif location_field == 'country':
             contestants_query = contestants_query.filter(
@@ -2119,7 +2163,9 @@ class SeasonMigrationService:
                 contestants_query = contestants_query.filter(
                     func.lower(func.trim(func.coalesce(Contestant.country, Contestant.nominator_country))).in_(list(variants))
                 )
-            if location_field == 'city':
+            if progression is not None:
+                pass
+            elif location_field == 'city':
                 contestants_query = contestants_query.filter(Contestant.city.isnot(None))
             elif location_field == 'country':
                 contestants_query = contestants_query.filter(
@@ -2164,7 +2210,9 @@ class SeasonMigrationService:
                         for c in fallback_candidates
                         if (c.country or c.nominator_country or "").strip().lower() in variants
                     ]
-                if location_field == 'city':
+                if progression is not None:
+                    pass
+                elif location_field == 'city':
                     fallback_candidates = [c for c in fallback_candidates if c.city]
                 elif location_field == 'country':
                     fallback_candidates = [c for c in fallback_candidates if (c.country or c.nominator_country)]
@@ -2310,15 +2358,43 @@ class SeasonMigrationService:
                 )
             elif location_field == 'continent':
                 location_value = contestant.continent
-            
+                if progression is not None:
+                    location_value = SeasonMigrationService.continent_label_for(contestant)
+
             if not location_value:
+                if progression is not None:
+                    progression.ungrouped.append(contestant)
                 continue
-            
+
             if location_value not in grouped:
                 grouped[location_value] = []
-            
+
             grouped[location_value].append(contestant)
-        
+            if progression is not None:
+                progression.group_of[contestant.id] = location_value
+
+        if progression is not None:
+            from app.services import progression_ranking
+
+            pool_season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+            pool_contest = db.query(Contest).filter(Contest.id == contest_id).first()
+            scores = progression_ranking.score_candidates(
+                db,
+                contest=pool_contest,
+                round_obj=pool_season.round,
+                level=pool_season.level,
+                contestants=contestants,
+                bucket_key=ranking_bucket_key,
+            )
+            progression.pool = list(contestants)
+            progression.scores = scores
+            result = {}
+            for location_value, location_contestants in grouped.items():
+                ranked = progression_ranking.rank_group(location_contestants, scores)
+                progression.ranked_groups[location_value] = ranked
+                result[location_value] = ranked if limit is None else ranked[:limit]
+            return result
+
         contestant_ids = [c.id for c in contestants]
         from app.services.voting_ranking import aggregate_rankings
 
@@ -2400,6 +2476,125 @@ class SeasonMigrationService:
         
         return result
     
+    _PROGRESSION_GROUP_FIELD = {
+        SeasonLevel.COUNTRY: "city",
+        SeasonLevel.REGIONAL: "country",
+        SeasonLevel.CONTINENT: "region",
+        SeasonLevel.GLOBAL: "continent",
+    }
+
+    @staticmethod
+    def select_progression_winners(
+        db: Session,
+        *,
+        contest: Contest,
+        from_season: ContestSeason,
+        from_level: SeasonLevel,
+        to_level: SeasonLevel,
+        limit: int = 5,
+        source_qualified_only: bool = True,
+        after_cohort_sync: bool = False,
+    ) -> Optional[ProgressionSelection]:
+        """
+        Rank one source season and decide who advances. READ-ONLY: this is the
+        single selection used by promotion, by the Top High5 freeze and by the
+        recovery dry-run, so all three always agree.
+
+        One rule for every hop (City->Country, Country->Regional,
+        Regional->Continental, Continental->Global): inside each competition
+        group of the source level, order by cumulative voting points, then
+        shares, likes, comments, views and the earlier submission; the top
+        `limit` advance. No vote is required: with fewer than `limit` entries
+        all of them advance, a sole entry advances on its own.
+
+        An entry that cannot be placed -- its country has no configured
+        regional bloc, or it carries no value for the grouping field -- is
+        reported in `unplaced` with a reason and listed in `protected_ids`;
+        the caller must leave it untouched so it stays recoverable.
+        """
+        location_field = SeasonMigrationService._PROGRESSION_GROUP_FIELD.get(to_level)
+        if not location_field:
+            return None
+        contest_mode = (getattr(contest, "contest_mode", "") or "").strip().lower()
+        nomination = contest_mode == "nomination"
+
+        pool_qualified = source_qualified_only
+        strict_scope = nomination
+        cohort_round_id: Optional[int] = None
+        country_to_regional = from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL
+        if country_to_regional:
+            # Pool top-N per country for this contest only (ignore flaky is_qualified
+            # churn from shared-country seasons).
+            pool_qualified = False
+        if to_level == SeasonLevel.GLOBAL and from_season.round_id is not None:
+            # Global entry has always been limited to the cohort's own submission month.
+            cohort_round_id = int(from_season.round_id)
+        if after_cohort_sync and from_season.round_id is not None:
+            pool_qualified = False
+            strict_scope = True
+            cohort_round_id = int(from_season.round_id)
+
+        pool = ProgressionPool()
+        SeasonMigrationService.get_top_contestants_by_location(
+            db,
+            from_season.id,
+            location_field,
+            contest_id=contest.id,
+            limit=None,
+            stage_id=None,
+            diagnostics=False,
+            qualified_only=pool_qualified,
+            strict_season_scope=strict_scope,
+            uncapped=nomination,
+            cohort_round_id=cohort_round_id,
+            include_safety_holds=True,
+            origin_mode=contest_mode,
+            progression=pool,
+        )
+
+        selection = ProgressionSelection(location_field, limit)
+        selection.pool = pool.pool
+        selection.scores = pool.scores
+        selection.ranked_groups = pool.ranked_groups
+        selection.group_of = pool.group_of
+
+        for contestant in pool.ungrouped:
+            selection.protected_ids.add(contestant.id)
+            selection.unplaced.append({
+                "contestant_id": contestant.id,
+                "group": None,
+                "reason": f"NO_{location_field.upper()}_FOR_GROUPING",
+            })
+
+        for jurisdiction, ranked in pool.ranked_groups.items():
+            top = ranked[:limit]
+            if not top:
+                continue
+            # Top High5 is always the group's first five, whatever `limit`
+            # advances. Keyed by the FROM-level's own jurisdiction: exactly what is
+            # frozen as that level's Top High5, whatever happens next.
+            selection.freeze_groups.append((jurisdiction, ranked[:5]))
+            if country_to_regional:
+                # Country winners enter the regional bloc their country
+                # belongs to. Without a configured bloc there is nowhere to
+                # place them: the whole country group is left untouched.
+                pool_label = SeasonMigrationService.regional_pool_label_for_raw_country(jurisdiction)
+                if not pool_label:
+                    selection.protected_ids.update(
+                        cid for cid, group in pool.group_of.items() if group == jurisdiction
+                    )
+                    for contestant in top:
+                        selection.unplaced.append({
+                            "contestant_id": contestant.id,
+                            "group": jurisdiction,
+                            "reason": "NO_REGIONAL_POOL_CONFIGURED",
+                        })
+                    continue
+                for contestant in top:
+                    selection.destination_label[contestant.id] = pool_label
+            selection.winners.extend(top)
+        return selection
+
     @staticmethod
     def migrate_to_city_season(db: Session, contest_id: int, round_id: int) -> dict:
         """
@@ -2808,8 +3003,10 @@ class SeasonMigrationService:
     ) -> dict:
         """
         Promouvoit les meilleurs contestants d'un niveau vers le niveau supérieur.
-        Pour CITY/COUNTRY/REGIONAL/CONTINENTAL : 5 premiers par localisation
-        Pour GLOBAL : 3 premiers au total
+        Every hop uses the same rule (see select_progression_winners): the top
+        `limit` of each competition group of the source level, ranked by
+        cumulative voting points and the engagement tie-breakers. Votes are
+        never copied to the destination season.
         """
         # Récupérer la saison source via le lien contest-season.
         # If from_season_id is provided, force that season to avoid ambiguity when
@@ -2915,185 +3112,25 @@ class SeasonMigrationService:
                 f"(contest {contest_id}, season {from_season.id})"
             )
         
-        # Sélectionner les contestants selon le niveau (sans dépendre des stages)
-        selected_contestants = []
-
-        # Top High5 freeze groups for `from_level` (jurisdiction -> ranked
-        # contestants), captured here and written to top_high5_results once
-        # to_season/promotion membership are known, further down. Kept
-        # separate from `selected_contestants` because the CONTINENT level
-        # needs its own per-continent grouping distinct from the worldwide
-        # Continental->Global promotion pool (see below).
-        freeze_groups: List[tuple] = []
-
-        if to_level == SeasonLevel.GLOBAL:
-            # GLOBAL must preserve the canonical Past/Top High5 winner order from
-            # the continental season. Reuse the same ranking helper so promotion
-            # and display stay aligned.
-            from app.services.participation_safety import ranking_pool_clause
-
-            global_filters = [
-                ContestantSeason.season_id == from_season.id,
-                ContestantSeason.is_active == True,
-                ranking_pool_clause(),  # Phase 8: held competitors keep their slot (never promoted)
-                SeasonMigrationService.origin_matches_mode_clause(contest_mode),
-                Contestant.is_deleted == False,
-                Contestant.season_id == contest_id,
-                Contestant.round_id == from_season.round_id,
-                or_(Contestant.is_qualified == True, Contestant.is_qualified.is_(None)),
-            ]
-            if from_season.round is not None:
-                from app.core.nomination_calendar import nomination_cohort_created_at_filters
-
-                global_filters.extend(
-                    nomination_cohort_created_at_filters(from_season.round)
-                )
-            season_contestants = db.query(Contestant).join(
-                ContestantSeason
-            ).filter(and_(*global_filters)).all()
-
-            contestant_ids = [c.id for c in season_contestants]
-            if contestant_ids:
-                ranked_ids = SeasonMigrationService.rank_contestant_ids_like_top_high5(
-                    db,
-                    contest,
-                    from_season,
-                    season_contestants,
-                )
-                contestants_by_id = {c.id: c for c in season_contestants if c.id is not None}
-                selected_contestants = [
-                    contestants_by_id[cid]
-                    for cid in ranked_ids[:limit]
-                    if cid in contestants_by_id
-                ]
-            else:
-                selected_contestants = []
-
-            logger.info(f"  - {len(selected_contestants)} contestants selected for GLOBAL")
-
-            # Freeze CONTINENT's own Top High5 (per continent) separately from
-            # the worldwide promotion pool above: Continental->Global pools
-            # every continent together, so a continent's own top 5 may not
-            # all be part of `selected_contestants`.
-            continent_groups = SeasonMigrationService.get_top_contestants_by_location(
-                db,
-                from_season.id,
-                'continent',
-                contest_id=contest_id,
-                limit=5,
-                stage_id=None,
-                diagnostics=False,
-                qualified_only=False,
-                strict_season_scope=True,
-                require_votes=False,
-                include_safety_holds=True,
-                origin_mode=contest_mode,
-            )
-            for jurisdiction, location_contestants in continent_groups.items():
-                if location_contestants:
-                    freeze_groups.append((jurisdiction, location_contestants))
-        else:
-            # Pour les autres niveaux : prendre les 5 premiers par localisation
-            location_field_map = {
-                SeasonLevel.COUNTRY: 'city',
-                SeasonLevel.REGIONAL: 'country',
-                SeasonLevel.CONTINENT: 'region',
-                SeasonLevel.GLOBAL: 'continent'
-            }
-            
-            location_field = location_field_map.get(to_level)
-            if not location_field:
-                return {"error": f"Invalid target level: {to_level.value}"}
-
-            pool_qualified = source_qualified_only
-            strict_scope = contest_mode == "nomination"
-            if (
-                from_level == SeasonLevel.COUNTRY
-                and to_level == SeasonLevel.REGIONAL
-            ):
-                # Pool top‑N per country for this contest only (ignore flaky is_qualified
-                # churn from shared-country seasons).
-                pool_qualified = False
-
-            logger.info(
-                f"  - Selecting top contestants by {location_field} (limit: {limit}, "
-                f"qualified_only={pool_qualified}, strict_scope={strict_scope})"
-            )
-            grouped_contestants = SeasonMigrationService.get_top_contestants_by_location(
-                db,
-                from_season.id,
-                location_field,
-                contest_id=contest_id,
-                limit=limit,
-                stage_id=None,
-                diagnostics=False,
-                qualified_only=pool_qualified,
-                strict_season_scope=strict_scope,
-                uncapped=contest_mode == "nomination",
-                include_safety_holds=True,
-                origin_mode=contest_mode,
-            )
-            
-            logger.info(f"  - Groups found: {len(grouped_contestants)} locations")
-            for location, contestants in grouped_contestants.items():
-                logger.info(f"    - {location}: {len(contestants)} contestants")
-
-            # Freeze from a *separate* require_votes=False call, not
-            # `grouped_contestants` above (which stays require_votes=True,
-            # unchanged, since it drives actual promotion). This mirrors the
-            # already-shipped Top High5 zero-vote-inclusion product decision
-            # (require_votes=False, display-only, never a promotion signal):
-            # a zero-vote roster member is frozen (rank shown, migrated will
-            # correctly read False since it never gets promoted) rather than
-            # the whole jurisdiction silently having no Top High5 record.
-            freeze_grouped = SeasonMigrationService.get_top_contestants_by_location(
-                db,
-                from_season.id,
-                location_field,
-                contest_id=contest_id,
-                limit=limit,
-                stage_id=None,
-                diagnostics=False,
-                qualified_only=pool_qualified,
-                strict_season_scope=strict_scope,
-                uncapped=contest_mode == "nomination",
-                require_votes=False,
-                include_safety_holds=True,
-                origin_mode=contest_mode,
-            )
-            # Keyed by the FROM-level's own jurisdiction field (e.g. city for
-            # CITY->COUNTRY, country for COUNTRY->REGIONAL) -- exactly what
-            # should be frozen as that level's Top High5, captured before any
-            # destination-pool relabeling below.
-            for jurisdiction, location_contestants in freeze_grouped.items():
-                if location_contestants:
-                    freeze_groups.append((jurisdiction, location_contestants))
-
-            # Flatten la liste. COUNTRY -> REGIONAL nomination is grouped by
-            # country; stamp the canonical regional bloc from country so stale
-            # profile regions cannot mix East/West/Southern Africa rosters.
-            if from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL:
-                for country, location_contestants in grouped_contestants.items():
-                    pool_label = SeasonMigrationService.regional_pool_label_for_raw_country(country)
-                    if not pool_label:
-                        logger.warning(
-                            f"    - Skipping {country}: no configured regional voting pool"
-                        )
-                        continue
-                    for contestant in location_contestants:
-                        contestant.region = pool_label
-                        selected_contestants.append(contestant)
-            else:
-                for location_contestants in grouped_contestants.values():
-                    selected_contestants.extend(location_contestants)
-        
-        logger.info(f"  - Total contestants selected: {len(selected_contestants)}")
-        print(f"[Migration]   Contestants selected: {len(selected_contestants)}")
+        # Rank the source season once, read-only. The same selection drives
+        # who advances and what is frozen as `from_level`'s Top High5, so the
+        # two can never diverge.
+        selection = SeasonMigrationService.select_progression_winners(
+            db,
+            contest=contest,
+            from_season=from_season,
+            from_level=from_level,
+            to_level=to_level,
+            limit=limit,
+            source_qualified_only=source_qualified_only,
+        )
+        if selection is None:
+            return {"error": f"Invalid target level: {to_level.value}"}
 
         # Nomination: if season membership was never synced, pull cohort rows by round_id
         # and retry once so COUNTRY→REGIONAL is not skipped on the 1st with empty pools.
         if (
-            len(selected_contestants) == 0
+            not selection.pool
             and contest_mode == "nomination"
             and from_season.round_id is not None
         ):
@@ -3108,78 +3145,39 @@ class SeasonMigrationService:
                 contest_id=contest_id,
                 season_id=from_season.id,
             )
-            if to_level == SeasonLevel.GLOBAL:
-                retry = SeasonMigrationService._contestants_for_contest_in_season(
-                    db,
-                    from_season.id,
-                    contest_id,
-                    active_only=True,
-                    qualified_only=False,
-                    cohort_round_id=int(from_season.round_id),
-                )
-                retry = [
-                    c for c in retry
-                    if SeasonMigrationService.origin_matches_mode(c, contest_mode)
-                ]
-                selected_contestants = retry[:limit]
-            else:
-                location_field_map = {
-                    SeasonLevel.COUNTRY: "city",
-                    SeasonLevel.REGIONAL: "country",
-                    SeasonLevel.CONTINENT: "region",
-                    SeasonLevel.GLOBAL: "continent",
-                }
-                location_field = location_field_map.get(to_level)
-                if location_field:
-                    grouped_retry = SeasonMigrationService.get_top_contestants_by_location(
-                        db,
-                        from_season.id,
-                        location_field,
-                        contest_id=contest_id,
-                        limit=limit,
-                        diagnostics=False,
-                        qualified_only=False,
-                        strict_season_scope=True,
-                        uncapped=True,
-                        cohort_round_id=int(from_season.round_id),
-                        include_safety_holds=True,
-                        origin_mode=contest_mode,
-                    )
-                    # Only backfill freeze_groups from this retry if the
-                    # earlier require_votes=False freeze pass also found
-                    # nothing (e.g. membership itself needed the sync, not
-                    # just votes) -- don't clobber an already-correct freeze
-                    # capture with this require_votes=True retry, which would
-                    # silently drop zero-vote members from the frozen result.
-                    if not freeze_groups:
-                        freeze_groups = [
-                            (jurisdiction, location_contestants)
-                            for jurisdiction, location_contestants in grouped_retry.items()
-                            if location_contestants
-                        ]
-                    selected_contestants = []
-                    if from_level == SeasonLevel.COUNTRY and to_level == SeasonLevel.REGIONAL:
-                        for country, location_contestants in grouped_retry.items():
-                            pool_label = (
-                                SeasonMigrationService.regional_pool_label_for_raw_country(
-                                    country
-                                )
-                            )
-                            if not pool_label:
-                                continue
-                            for contestant in location_contestants:
-                                contestant.region = pool_label
-                                selected_contestants.append(contestant)
-                    else:
-                        for location_contestants in grouped_retry.values():
-                            selected_contestants.extend(location_contestants)
+            selection = SeasonMigrationService.select_progression_winners(
+                db,
+                contest=contest,
+                from_season=from_season,
+                from_level=from_level,
+                to_level=to_level,
+                limit=limit,
+                source_qualified_only=source_qualified_only,
+                after_cohort_sync=True,
+            )
             logger.info(
                 "  - Retry after cohort sync: %s contestants selected",
-                len(selected_contestants),
+                len(selection.winners),
             )
 
+        selected_contestants = selection.winners
+        freeze_groups = selection.freeze_groups
+        logger.info(f"  - Groups found: {len(selection.ranked_groups)} ({selection.location_field})")
+        for location, contestants in selection.ranked_groups.items():
+            logger.info(f"    - {location}: {len(contestants)} contestants")
+        for item in selection.unplaced:
+            # Structured, greppable: nothing about these entries is changed.
+            logger.warning(
+                "PROGRESSION_UNPLACED contest=%s round=%s from_season=%s from_level=%s to_level=%s "
+                "contestant=%s group=%s reason=%s",
+                contest_id, from_season.round_id, from_season.id, from_level.value, to_level.value,
+                item["contestant_id"], item["group"], item["reason"],
+            )
+        logger.info(f"  - Total contestants selected: {len(selected_contestants)}")
+        print(f"[Migration]   Contestants selected: {len(selected_contestants)}")
+
         if len(selected_contestants) == 0:
-            # Not a failure: calendar may say "promote" while nobody qualified in this season yet.
+            # Not a failure: calendar may say "promote" while nobody can advance from this season yet.
             # Return a success-shaped payload so schedulers log a skip, not ERROR.
             msg = f"No contestants to promote from {from_level.value} (season_id: {from_season.id})"
             logger.warning(msg)
@@ -3199,6 +3197,7 @@ class SeasonMigrationService:
                     from_season=from_season,
                     to_season=None,
                     ranked_contestants=location_contestants,
+                    scores=selection.scores,
                 )
             if frozen_rows:
                 try:
@@ -3214,32 +3213,15 @@ class SeasonMigrationService:
                 "from_season_id": from_season.id,
                 "promoted_count": 0,
                 "promoted_contestant_ids": [],
+                "unplaced": selection.unplaced,
             }
-        
-        # Mark non-selected contestants from this contest only. A ContestSeason is
-        # shared by all contests for a round/level, so season-only cleanup would
-        # incorrectly disqualify contestants from other contests in the same round.
-        all_contestants = SeasonMigrationService._contestants_for_contest_in_season(
-            db,
-            from_season.id,
-            contest_id,
-            active_only=True,
-            qualified_only=False,
-        )
-        
-        selected_ids = {c.id for c in selected_contestants}
-        for contestant in all_contestants:
-            if contestant.id not in selected_ids:
-                contestant.is_qualified = False
-        
-        # Récupérer ou créer la saison destination
-        if not contest:
-            contest = db.query(Contest).filter(Contest.id == contest_id).first()
-        
-        # S'assurer de garder le round_id de la saison source
+
+        # Resolve the destination season BEFORE any promotion state is
+        # written: creating it commits, and nothing half-done may ride along
+        # with that commit. Everything below is one transaction.
         round_id = from_season.round_id
         round_name = from_season.round.name if from_season.round else ""
-        
+
         logger.info(f"  - Création/récupération de la saison {to_level.value}")
         to_season = SeasonMigrationService.get_or_create_season(
             db,
@@ -3250,6 +3232,32 @@ class SeasonMigrationService:
         )
         logger.info(f"  - Destination season: {to_season.id} (level {to_level.value})")
         print(f"[Migration]   Destination season: {to_season.id}")
+
+        # COUNTRY -> REGIONAL is grouped by country; stamp the canonical
+        # regional bloc from country so stale profile regions cannot mix
+        # East/West/Southern Africa rosters.
+        for contestant in selected_contestants:
+            pool_label = selection.destination_label.get(contestant.id)
+            if pool_label:
+                contestant.region = pool_label
+
+        # Mark non-selected contestants from this contest only. A ContestSeason is
+        # shared by all contests for a round/level, so season-only cleanup would
+        # incorrectly disqualify contestants from other contests in the same round.
+        # Entries that could not be placed are not losers: they keep their
+        # qualification and their source membership, and stay recoverable.
+        all_contestants = SeasonMigrationService._contestants_for_contest_in_season(
+            db,
+            from_season.id,
+            contest_id,
+            active_only=True,
+            qualified_only=False,
+        )
+
+        selected_ids = {c.id for c in selected_contestants}
+        for contestant in all_contestants:
+            if contestant.id not in selected_ids and contestant.id not in selection.protected_ids:
+                contestant.is_qualified = False
 
         # Re-running a promotion must converge on the current winner set. Shared
         # pooled seasons can retain stale active rows from older migrations, so
@@ -3390,6 +3398,7 @@ class SeasonMigrationService:
                 from_season=from_season,
                 to_season=to_season,
                 ranked_contestants=location_contestants,
+                scores=selection.scores,
             )
         if frozen_rows:
             logger.info(f"  - Froze {frozen_rows} Top High5 result row(s) for {from_level.value}")
@@ -3417,6 +3426,7 @@ class SeasonMigrationService:
             "promoted_count": len(selected_contestants),
             "promoted_contestant_ids": promoted_contestant_ids,
             "held_contestant_ids": held_contestant_ids,
+            "unplaced": selection.unplaced,
         }
     
 

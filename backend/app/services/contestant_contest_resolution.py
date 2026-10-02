@@ -47,27 +47,65 @@ season-linked contestants and classified the available signals:
   neither of which exists today. Do not extend this clause to cover them
   without that decision.
 
+  LEGACY COLLISION (Case E, added 2026-10-02 after the progression audit):
+    101 historical rows (DJ, Comedy, Handsome in rounds 21-28) carry no
+    contest_id and a legacy season_id that is BOTH their Contest.id and,
+    numerically, the id of an unrelated old ContestSeason (contest ids 1..8
+    collide with season ids 1..8). Case B's guard therefore rejected them and
+    no other case applied, so valid entries -- including a voted July Comedy
+    nominee -- could never be ranked or promoted. Case E resolves such a row to
+    `contest_id` only when existing evidence proves the legacy reading:
+      1. contest_id IS NULL and season_id == contest_id (the legacy convention);
+      2. the colliding ContestSeason is not a season of the entry's own
+         round: it belongs to a different round, or to no round at all. An
+         entry's round is fixed at submission and constant through every
+         level, and membership of a season of another or of an unknown round
+         is refused everywhere (contestant_season_round_conflict), so that
+         season cannot be a genuine season reference for this entry;
+      3. the contest genuinely runs in the entry's own round (round_contests),
+         or the entry already holds a membership in a season of its own round
+         that is linked to this contest;
+      4. no vote for the entry names a different contest;
+      5. the colliding season is not uniquely linked to a different contest
+         (Case C would then name that other contest: two readings, so the row
+         stays unresolved rather than guessed).
+    Anything short of that stays rejected, exactly as before. `season_id ==
+    contest_id` alone is never enough.
+
 Nothing in this module writes to the database. contestants.season_id is never
 modified. contestants.contest_id is never backfilled here -- Cases C and D are
 purely query-time reads; the underlying rows remain exactly as they are today.
 """
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, func, select
+from dataclasses import dataclass
+
+from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.models.contests import ContestSeason, ContestSeasonLink, Contestant
+from app.models.contests import ContestSeason, ContestSeasonLink, Contestant, ContestantSeason
+from app.models.round import round_contests
 from app.models.voting import ContestantVoting
+
+# Reason codes returned by explain_contest_resolution (audit / dry-run output).
+EXPLICIT_CONTEST_ID = "EXPLICIT_CONTEST_ID"
+LEGACY_SEASON_ID_AS_CONTEST = "LEGACY_SEASON_ID_AS_CONTEST"
+UNIQUE_SEASON_LINK = "UNIQUE_SEASON_LINK"
+VALIDATED_VOTE_HISTORY = "VALIDATED_VOTE_HISTORY"
+LEGACY_COLLISION_ROUND_VERIFIED = "LEGACY_COLLISION_ROUND_VERIFIED"
+LEGACY_COLLISION_SEASON_WITHOUT_ROUND = "LEGACY_COLLISION_SEASON_WITHOUT_ROUND"
+LEGACY_COLLISION_CODES = frozenset({LEGACY_COLLISION_ROUND_VERIFIED, LEGACY_COLLISION_SEASON_WITHOUT_ROUND})
 
 
 def contestant_belongs_to_contest_clause(contest_id: int) -> ColumnElement:
     """
     SQLAlchemy boolean expression, usable directly inside `.filter(...)` on any
     query that already has `Contestant` in scope. True when a contestant row
-    is known, without ambiguity, to belong to `contest_id`, via one of the four
-    authoritative cases documented above (A-D). Set-based -- no per-row Python
+    is known, without ambiguity, to belong to `contest_id`, via one of the
+    authoritative cases documented above (A-E). Set-based -- no per-row Python
     loop, no additional query round-trip. Returns False (excluded, not
-    mis-included) for the 65 contestants no authoritative signal resolves.
+    mis-included) for contestants no authoritative signal resolves.
     """
     # Case A: the dedicated field, authoritative when present.
     new_field_match = Contestant.contest_id == contest_id
@@ -135,4 +173,166 @@ def contestant_belongs_to_contest_clause(contest_id: int) -> ColumnElement:
         ),
     )
 
-    return new_field_match | legacy_match | unique_link_match | validated_vote_match
+    # Case E: legacy row whose season_id numerically collides with an
+    # unrelated ContestSeason id. Resolved only on the evidence listed in the
+    # module docstring; `season_id == contest_id` alone is never enough.
+    # Every table is aliased and correlated to Contestant only, so the clause
+    # means the same thing whatever the enclosing query already joins.
+    collided_season = aliased(ContestSeason)
+    collided_season_round = (
+        select(collided_season.round_id)
+        .where(collided_season.id == Contestant.season_id)
+        .correlate(Contestant)
+        .scalar_subquery()
+    )
+    round_link = round_contests.alias()
+    contest_runs_in_own_round = exists(
+        select(round_link.c.id)
+        .where(
+            round_link.c.round_id == Contestant.round_id,
+            round_link.c.contest_id == contest_id,
+        )
+        .correlate(Contestant)
+    )
+    own_membership = aliased(ContestantSeason)
+    own_round_season = aliased(ContestSeason)
+    own_round_link = aliased(ContestSeasonLink)
+    membership_in_own_round_contest_season = exists(
+        select(own_membership.id)
+        .join(own_round_season, own_round_season.id == own_membership.season_id)
+        .join(own_round_link, own_round_link.season_id == own_round_season.id)
+        .where(
+            own_membership.contestant_id == Contestant.id,
+            own_round_season.round_id == Contestant.round_id,
+            own_round_link.contest_id == contest_id,
+        )
+        .correlate(Contestant)
+    )
+    other_vote = aliased(ContestantVoting)
+    vote_names_other_contest = exists(
+        select(other_vote.id)
+        .where(
+            other_vote.contestant_id == Contestant.id,
+            other_vote.contest_id.isnot(None),
+            other_vote.contest_id != contest_id,
+        )
+        .correlate(Contestant)
+    )
+    season_uniquely_linked_elsewhere = and_(
+        active_links_for_season == 1,
+        ~exists(
+            select(ContestSeasonLink.id).where(
+                ContestSeasonLink.season_id == Contestant.season_id,
+                ContestSeasonLink.contest_id == contest_id,
+                ContestSeasonLink.is_active.is_(True),
+            )
+        ),
+    )
+    legacy_collision_match = and_(
+        Contestant.contest_id.is_(None),
+        Contestant.season_id == contest_id,
+        is_genuine_season_ref,
+        Contestant.round_id.isnot(None),
+        or_(collided_season_round.is_(None), collided_season_round != Contestant.round_id),
+        or_(contest_runs_in_own_round, membership_in_own_round_contest_season),
+        ~vote_names_other_contest,
+        ~season_uniquely_linked_elsewhere,
+    )
+
+    return (
+        new_field_match
+        | legacy_match
+        | unique_link_match
+        | validated_vote_match
+        | legacy_collision_match
+    )
+
+
+@dataclass(frozen=True)
+class ContestResolution:
+    """Why one entry does (or does not) belong to one contest. Read-only."""
+
+    belongs: bool
+    code: str
+
+
+def explain_contest_resolution(
+    db: Session, contestant: Contestant, contest_id: int
+) -> ContestResolution:
+    """Per-entry mirror of contestant_belongs_to_contest_clause, with the reason.
+
+    Used by audits and the progression dry-run so every legacy decision is
+    visible. It never decides anything the SQL clause would not: the two are
+    kept in agreement by tests.
+    """
+    contest_id = int(contest_id)
+    if contestant.contest_id is not None:
+        if int(contestant.contest_id) == contest_id:
+            return ContestResolution(True, EXPLICIT_CONTEST_ID)
+        return ContestResolution(False, "EXPLICIT_CONTEST_ID_NAMES_ANOTHER_CONTEST")
+    if contestant.season_id is None:
+        return ContestResolution(False, "NO_CONTEST_OR_SEASON_REFERENCE")
+
+    season_id = int(contestant.season_id)
+    season = db.query(ContestSeason).filter(ContestSeason.id == season_id).first()
+    if season is None:
+        if season_id == contest_id:
+            return ContestResolution(True, LEGACY_SEASON_ID_AS_CONTEST)
+        return ContestResolution(False, "LEGACY_SEASON_ID_NAMES_ANOTHER_CONTEST")
+
+    active_links = (
+        db.query(ContestSeasonLink.contest_id)
+        .filter(ContestSeasonLink.season_id == season_id, ContestSeasonLink.is_active.is_(True))
+        .all()
+    )
+    linked_here = any(int(row[0]) == contest_id for row in active_links)
+    if len(active_links) == 1 and linked_here:
+        return ContestResolution(True, UNIQUE_SEASON_LINK)
+
+    voted_contests = {
+        int(row[0])
+        for row in db.query(ContestantVoting.contest_id)
+        .filter(ContestantVoting.contestant_id == contestant.id)
+        .distinct()
+        .all()
+        if row[0] is not None
+    }
+    if voted_contests == {contest_id} and linked_here:
+        return ContestResolution(True, VALIDATED_VOTE_HISTORY)
+
+    if season_id != contest_id:
+        return ContestResolution(False, "SEASON_REFERENCE_NOT_RESOLVED_TO_THIS_CONTEST")
+    if contestant.round_id is None:
+        return ContestResolution(False, "AMBIGUOUS_COLLISION_ENTRY_ROUND_UNKNOWN")
+    if season.round_id is not None and int(season.round_id) == int(contestant.round_id):
+        return ContestResolution(False, "AMBIGUOUS_COLLISION_SAME_ROUND")
+    runs_in_round = (
+        db.query(round_contests.c.id)
+        .filter(
+            round_contests.c.round_id == contestant.round_id,
+            round_contests.c.contest_id == contest_id,
+        )
+        .first()
+        is not None
+    )
+    has_membership = (
+        db.query(ContestantSeason.id)
+        .join(ContestSeason, ContestSeason.id == ContestantSeason.season_id)
+        .join(ContestSeasonLink, ContestSeasonLink.season_id == ContestSeason.id)
+        .filter(
+            ContestantSeason.contestant_id == contestant.id,
+            ContestSeason.round_id == contestant.round_id,
+            ContestSeasonLink.contest_id == contest_id,
+        )
+        .first()
+        is not None
+    )
+    if not (runs_in_round or has_membership):
+        return ContestResolution(False, "AMBIGUOUS_COLLISION_CONTEST_NOT_IN_ENTRY_ROUND")
+    if voted_contests - {contest_id}:
+        return ContestResolution(False, "AMBIGUOUS_COLLISION_VOTES_NAME_ANOTHER_CONTEST")
+    if len(active_links) == 1 and not linked_here:
+        return ContestResolution(False, "AMBIGUOUS_COLLISION_SEASON_UNIQUELY_LINKED_ELSEWHERE")
+    if season.round_id is None:
+        return ContestResolution(True, LEGACY_COLLISION_SEASON_WITHOUT_ROUND)
+    return ContestResolution(True, LEGACY_COLLISION_ROUND_VERIFIED)

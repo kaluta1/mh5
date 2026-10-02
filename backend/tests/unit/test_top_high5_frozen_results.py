@@ -126,10 +126,9 @@ def test_freeze_is_idempotent_on_rerun(db):
         db, SeasonLevel.COUNTRY, SeasonLevel.REGIONAL, contest.id, from_season_id=season.id
     )
     db.commit()
-    # Promotion itself only advances the voted contestant `a`; the freeze is
-    # zero-vote-inclusive (matches the shipped display precedent), so `b`
-    # is still frozen too, just with migrated=False.
-    assert first.get("promoted_count") == 1
+    # A vote is not required to advance (2026-10-02 management rule): both
+    # entries are in the country's top five, so both are promoted and frozen.
+    assert first.get("promoted_count") == 2
 
     rows_after_first = (
         db.query(TopHigh5Result)
@@ -143,7 +142,7 @@ def test_freeze_is_idempotent_on_rerun(db):
     assert rows_after_first[0].migrated is True
     assert rows_after_first[1].contestant_id == b.id
     assert rows_after_first[1].rank == 2
-    assert rows_after_first[1].migrated is False
+    assert rows_after_first[1].migrated is True
     first_ids = {r.id for r in rows_after_first}
 
     # Re-running (e.g. an admin re-triggering, or a scheduler retry) must not
@@ -161,12 +160,12 @@ def test_freeze_is_idempotent_on_rerun(db):
     assert {r.id for r in rows_after_second} == first_ids
 
 
-def test_continent_freeze_differs_from_worldwide_global_pool(db):
-    """A continent's own Top High5 (per continent) is frozen even for
-    members that don't make the worldwide Continental->Global cut -- proving
-    the freeze hook uses a genuinely separate ranking from the promotion
-    pool, and that `migrated` reflects real destination membership, not
-    rank <= 5."""
+def test_continent_freeze_and_per_continent_global_promotion(db):
+    """Continental->Global follows the same rule as every other hop: the top
+    `limit` of EACH continent advance (business_model.md: "the top 5
+    contestants from each continent"), not a worldwide pool. A continent's
+    full Top High5 is still frozen, and `migrated` reflects real destination
+    membership, not rank <= 5."""
     rnd = _round(db, "cont", months_ago=4)
     contest = Contest(
         name="Contest cont", contest_type="t", contest_mode="nomination", level="continent"
@@ -188,10 +187,6 @@ def test_continent_freeze_differs_from_worldwide_global_pool(db):
             user_id=owner.id,
             round_id=rnd.id,
             contest_id=contest.id,
-            # The worldwide GLOBAL-selection filter inside promote_to_next_level
-            # uses the legacy Contestant.season_id == contest_id comparison
-            # (a pre-existing, out-of-scope-here quirk) -- match it so the
-            # real code path is exercised faithfully.
             season_id=contest.id,
             is_active=True,
             is_deleted=False,
@@ -209,9 +204,7 @@ def test_continent_freeze_differs_from_worldwide_global_pool(db):
         return c
 
     # Africa dominates the worldwide vote count; Europe's own top members
-    # have real (but much lower) votes, so Europe's continent-level Top
-    # High5 is real and non-empty, yet none of it should migrate globally
-    # under a worldwide limit of 3.
+    # have real (but much lower) votes. Each continent sends its own top 3.
     africa = [_continent_contestant(f"africa-{i}", "Africa", points) for i, points in enumerate([100, 90, 80, 70, 60])]
     europe = [_continent_contestant(f"europe-{i}", "Europe", points) for i, points in enumerate([5, 4, 3, 2, 1])]
     db.commit()
@@ -220,10 +213,9 @@ def test_continent_freeze_differs_from_worldwide_global_pool(db):
         db, SeasonLevel.CONTINENT, SeasonLevel.GLOBAL, contest.id, from_season_id=continent_season.id, limit=3
     )
     db.commit()
-    assert result.get("promoted_count") == 3
+    assert result.get("promoted_count") == 6
     globally_promoted_ids = set(result["promoted_contestant_ids"])
-    # Worldwide top 3 by points are Africa's top 3.
-    assert globally_promoted_ids == {africa[0].id, africa[1].id, africa[2].id}
+    assert globally_promoted_ids == {c.id for c in africa[:3]} | {c.id for c in europe[:3]}
 
     frozen = (
         db.query(TopHigh5Result)
@@ -241,7 +233,7 @@ def test_continent_freeze_differs_from_worldwide_global_pool(db):
     africa_migrated = {r.contestant_id for r in by_jurisdiction["Africa"] if r.migrated}
     assert africa_migrated == {africa[0].id, africa[1].id, africa[2].id}
     europe_migrated = {r.contestant_id for r in by_jurisdiction["Europe"] if r.migrated}
-    assert europe_migrated == set()  # real, displayed Top High5 -- none advanced globally
+    assert europe_migrated == {europe[0].id, europe[1].id, europe[2].id}
 
 
 def test_global_finalization_respects_due_date(db):

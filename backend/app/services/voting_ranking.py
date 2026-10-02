@@ -455,6 +455,126 @@ def _engagement(
     }
 
 
+def _scoped_vote_rows(
+    db: Session,
+    *,
+    seasons: Sequence[int],
+    candidates: Sequence[int],
+    contest_id: int | None,
+    bucket_key: str | None,
+    stage_ids: Sequence[int] | None = None,
+):
+    """Vote facts of one explicit scope from both vote generations, as rows of
+    (contestant_id, season_id, points, votes). The one place the scoping rules
+    of ``aggregate_rankings`` live, shared with ``points_by_season``."""
+    rows = []
+
+    # Historical ``votes`` exist only for old stage-based rounds. One cheap
+    # probe avoids resolving exact historical seasons for the usual case.
+    has_historical = (
+        db.query(Vote.id)
+        .filter(Vote.status == VoteStatus.ACTIVE, Vote.contestant_id.in_(candidates))
+        .first()
+        is not None
+    )
+    if has_historical:
+        historical_seasons = list(seasons)
+        if contest_id is not None:
+            from app.services.contest_context import contest_context_service
+
+            historical_seasons = list(
+                contest_context_service.exact_historical_season_ids_for_contest(
+                    db, season_ids=seasons, contest_id=int(contest_id)
+                )
+            )
+        historical = db.query(
+            Vote.contestant_id.label("contestant_id"),
+            ContestStage.season_id.label("season_id"),
+            func.coalesce(func.sum(Vote.points), 0).label("points"),
+            func.count(Vote.id).label("votes"),
+        ).join(ContestStage, ContestStage.id == Vote.stage_id).filter(
+            ContestStage.season_id.in_(historical_seasons),
+            Vote.status == VoteStatus.ACTIVE,
+            Vote.contestant_id.in_(candidates),
+        )
+        if stage_ids is not None:
+            historical = historical.filter(
+                Vote.stage_id.in_(sorted({int(value) for value in stage_ids}))
+            )
+        rows.extend(historical.group_by(Vote.contestant_id, ContestStage.season_id).all())
+
+    current = db.query(
+        ContestantVoting.contestant_id.label("contestant_id"),
+        ContestantVoting.season_id.label("season_id"),
+        func.coalesce(func.sum(ContestantVoting.points), 0).label("points"),
+        func.count(ContestantVoting.id).label("votes"),
+    ).filter(
+        ContestantVoting.season_id.in_(seasons),
+        ContestantVoting.contestant_id.in_(candidates),
+    )
+    if contest_id is not None:
+        if bucket_key:
+            current = current.filter(
+                or_(
+                    ContestantVoting.vote_bucket_key == bucket_key,
+                    and_(
+                        ContestantVoting.vote_bucket_key.is_(None),
+                        ContestantVoting.contest_id == contest_id,
+                    ),
+                )
+            )
+        else:
+            current = current.filter(ContestantVoting.contest_id == contest_id)
+    rows.extend(current.group_by(ContestantVoting.contestant_id, ContestantVoting.season_id).all())
+    return rows
+
+
+def points_by_season(
+    db: Session,
+    *,
+    season_ids: Sequence[int],
+    contestant_ids: Sequence[int],
+    contest_id: int | None = None,
+    bucket_key: str | None = None,
+) -> dict[int, dict[int, tuple[int, int]]]:
+    """{contestant_id: {season_id: (points, votes)}} for one explicit scope.
+
+    The per-stage breakdown behind cumulative scores: the same vote facts and
+    the same scoping as ``aggregate_rankings``, kept apart by the season each
+    vote was cast in. Read-only; no vote is copied or re-attributed."""
+    seasons = sorted({int(value) for value in season_ids})
+    candidates = sorted({int(value) for value in contestant_ids})
+    result: dict[int, dict[int, tuple[int, int]]] = {cid: {} for cid in candidates}
+    if not seasons or not candidates:
+        return result
+    for row in _scoped_vote_rows(
+        db, seasons=seasons, candidates=candidates, contest_id=contest_id, bucket_key=bucket_key
+    ):
+        per_season = result[int(row.contestant_id)]
+        points, votes = per_season.get(int(row.season_id), (0, 0))
+        per_season[int(row.season_id)] = (points + int(row.points or 0), votes + int(row.votes or 0))
+    return result
+
+
+def entry_engagement(
+    db: Session,
+    contestant_ids: Sequence[int],
+    *,
+    start_at: datetime,
+    end_at: datetime,
+) -> dict[int, dict[str, int]]:
+    """Shares / likes / comments / views of each entry inside one time window.
+
+    The single engagement source for ranking tie-breaks: the same tables and
+    filters every ranking in this module counts."""
+    return _engagement(
+        db,
+        sorted({int(value) for value in contestant_ids}),
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+
 def aggregate_rankings(
     db: Session,
     *,
@@ -480,58 +600,18 @@ def aggregate_rankings(
     candidates = sorted({int(value) for value in contestant_ids})
     if not seasons or not candidates:
         return []
-
-    historical_seasons = seasons
-    if contest_id is not None:
-        from app.services.contest_context import contest_context_service
-
-        historical_seasons = list(
-            contest_context_service.exact_historical_season_ids_for_contest(
-                db, season_ids=seasons, contest_id=int(contest_id)
-            )
-        )
-
-    historical = db.query(
-        Vote.contestant_id,
-        func.coalesce(func.sum(Vote.points), 0).label("points"),
-        func.count(Vote.id).label("votes"),
-    ).join(ContestStage, ContestStage.id == Vote.stage_id).filter(
-        ContestStage.season_id.in_(historical_seasons),
-        Vote.status == VoteStatus.ACTIVE,
-        Vote.contestant_id.in_(candidates),
-    )
-    if stage_ids is not None:
-        stages = sorted({int(value) for value in stage_ids})
-        if not stages:
-            return []
-        historical = historical.filter(Vote.stage_id.in_(stages))
-    historical_rows = historical.group_by(Vote.contestant_id).all()
-
-    current = db.query(
-        ContestantVoting.contestant_id,
-        func.coalesce(func.sum(ContestantVoting.points), 0).label("points"),
-        func.count(ContestantVoting.id).label("votes"),
-    ).filter(
-        ContestantVoting.season_id.in_(seasons),
-        ContestantVoting.contestant_id.in_(candidates),
-    )
-    if contest_id is not None:
-        if bucket_key:
-            current = current.filter(
-                or_(
-                    ContestantVoting.vote_bucket_key == bucket_key,
-                    and_(
-                        ContestantVoting.vote_bucket_key.is_(None),
-                        ContestantVoting.contest_id == contest_id,
-                    ),
-                )
-            )
-        else:
-            current = current.filter(ContestantVoting.contest_id == contest_id)
-    current_rows = current.group_by(ContestantVoting.contestant_id).all()
+    if stage_ids is not None and not {int(value) for value in stage_ids}:
+        return []
 
     totals = {contestant_id: [0, 0] for contestant_id in candidates}
-    for row in [*historical_rows, *current_rows]:
+    for row in _scoped_vote_rows(
+        db,
+        seasons=seasons,
+        candidates=candidates,
+        contest_id=contest_id,
+        bucket_key=bucket_key,
+        stage_ids=stage_ids,
+    ):
         totals[int(row.contestant_id)][0] += int(row.points or 0)
         totals[int(row.contestant_id)][1] += int(row.votes or 0)
 
