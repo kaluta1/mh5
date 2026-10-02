@@ -274,6 +274,23 @@ export function computeDisplayRounds(
 }
 
 /**
+ * Options of the Nominate-view round dropdown: every non-cancelled round, newest
+ * cohort month first. The round that is currently in its vote month (the previous
+ * month, e.g. September while October is open) is a past nomination month like any
+ * other and must stay selectable — it is NOT removed here.
+ */
+export function roundSelectorOptions(rounds: Round[]): Round[] {
+  return (rounds || [])
+    .filter((r) => String(r.status || "").toLowerCase() !== "cancelled")
+    .sort((a, b) => {
+      const da = cohortAnchorDate(a)?.getTime() ?? 0
+      const db = cohortAnchorDate(b)?.getTime() ?? 0
+      if (db !== da) return db - da
+      return Number(b.id) - Number(a.id)
+    })
+}
+
+/**
  * True if the round's title is **primarily** the current calendar month+ year (en-US),
  * e.g. "May 2026…" — not a range like "April – May 2026" (would wrongly contain "may 2026").
  */

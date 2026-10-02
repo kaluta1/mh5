@@ -79,3 +79,122 @@ describe('contest-round-tabs March-start calendar', () => {
     expect(tabs.map((t) => t.tabKey)).toEqual(['nominate:26', 'vote:26'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Round dropdown (Nominate view): the previous month must stay selectable while
+// it is the live vote round. Shapes below mirror the production selector payload
+// of October 2026.
+// ---------------------------------------------------------------------------
+import { roundSelectorOptions } from './contest-round-tabs'
+import { isRoundVotingLive } from './is-round-voting-live'
+
+function monthRound(id: number, month: string, start: string, extra: Partial<Round> = {}): Round {
+  const [y, m] = start.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  const voteStart = new Date(y, m, 1)
+  const voteEnd = new Date(y, m + 5, 0)
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return {
+    id,
+    name: `Round ${month} 2026`,
+    status: 'active',
+    is_submission_open: false,
+    is_voting_open: false,
+    submission_start_date: `${start}-01`,
+    submission_end_date: `${start}-${String(lastDay).padStart(2, '0')}`,
+    voting_start_date: iso(voteStart),
+    voting_end_date: iso(voteEnd),
+    participants_count: 0,
+    ...extra,
+  } as Round
+}
+
+const october2026: Round[] = [
+  monthRound(33, 'October', '2026-10', { is_submission_open: true }),
+  monthRound(29, 'September', '2026-09', { is_voting_open: true }), // live vote round
+  monthRound(28, 'August', '2026-08'),
+  monthRound(27, 'July', '2026-07'),
+  monthRound(26, 'June', '2026-06'),
+  monthRound(21, 'May', '2026-05'),
+  monthRound(4, 'April', '2026-04', { status: 'completed' }),
+  monthRound(3, 'March', '2026-03', { status: 'completed' }),
+]
+
+describe('round dropdown options', () => {
+  const names = (rs: Round[]) => rs.map((r) => r.name)
+
+  it('September is the live vote round in this fixture (the case that used to be dropped)', () => {
+    expect(isRoundVotingLive(october2026[1], october2026)).toBe(true)
+  })
+
+  it('keeps September between October and August, newest month first', () => {
+    expect(names(roundSelectorOptions(october2026))).toEqual([
+      'Round October 2026',
+      'Round September 2026',
+      'Round August 2026',
+      'Round July 2026',
+      'Round June 2026',
+      'Round May 2026',
+      'Round April 2026',
+      'Round March 2026',
+    ])
+  })
+
+  it('October stays the open round and older/completed rounds stay visible', () => {
+    const options = roundSelectorOptions(october2026)
+    expect(options[0].id).toBe(33)
+    expect(options[0].is_submission_open).toBe(true)
+    expect(options.filter((r) => r.is_submission_open).map((r) => r.id)).toEqual([33])
+    expect(options.map((r) => r.id)).toEqual(expect.arrayContaining([28, 27, 26, 21, 4, 3]))
+  })
+
+  it('orders by cohort month, not by id or input order', () => {
+    const shuffled = [october2026[4], october2026[0], october2026[7], october2026[1], october2026[2]]
+    expect(roundSelectorOptions(shuffled).map((r) => r.id)).toEqual([33, 29, 28, 26, 3])
+  })
+
+  it('does not mutate the rounds list it is given', () => {
+    const input = [october2026[2], october2026[0], october2026[1]]
+    const before = input.map((r) => r.id)
+    roundSelectorOptions(input)
+    expect(input.map((r) => r.id)).toEqual(before)
+  })
+
+  it('never lists cancelled rounds, including cancelled duplicates of a month', () => {
+    const withCancelled = [
+      ...october2026,
+      monthRound(23, 'June', '2026-06', { status: 'cancelled' }),
+      monthRound(24, 'June', '2026-06', { status: 'CANCELLED' as Round['status'] }),
+      monthRound(30, 'September', '2026-09', { status: 'cancelled' }),
+    ]
+    const ids = roundSelectorOptions(withCancelled).map((r) => r.id)
+    expect(ids).not.toContain(23)
+    expect(ids).not.toContain(24)
+    expect(ids).not.toContain(30)
+    expect(ids.filter((id) => id === 26)).toHaveLength(1)
+    expect(ids).toContain(29)
+  })
+
+  it('a missing month is simply absent (no placeholder is invented)', () => {
+    const withoutSeptember = october2026.filter((r) => r.id !== 29)
+    expect(names(roundSelectorOptions(withoutSeptember))).toEqual([
+      'Round October 2026',
+      'Round August 2026',
+      'Round July 2026',
+      'Round June 2026',
+      'Round May 2026',
+      'Round April 2026',
+      'Round March 2026',
+    ])
+  })
+
+  it('handles an empty list', () => {
+    expect(roundSelectorOptions([])).toEqual([])
+  })
+
+  it('top pills are unchanged: Submit = October, Vote = October anchor', () => {
+    const tabs = computeDisplayRounds(october2026, new Date(2026, 9, 2))
+    expect(tabs.map((t) => `${t.kind}:${t.round.id}`)).toEqual(['nominate:33', 'vote:33'])
+  })
+})

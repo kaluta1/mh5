@@ -20,10 +20,10 @@ import { rewriteLocalhostUrl } from '@/lib/config'
 import { COUNTRIES_DATA } from '@/lib/countries-data'
 import { regionalPoolForCountry } from '@/lib/regional-pool'
 import {
-  cohortAnchorDate,
   cohortRoundForVoteGeographyLevel,
   computeDisplayRounds,
   resolveVoteCalendarAnchorRound,
+  roundSelectorOptions,
   roundTabKey,
   voteLevelCohortHint,
   type RoundTabKind,
@@ -319,15 +319,9 @@ function ContestsPageContent() {
     return displayRounds[0]
   }, [displayRounds, activeTabKey, rounds])
   const activeRoundId = activeDisplayTab ? String(activeDisplayTab.round.id) : null
-  const submitRoundOptions = useMemo(() => {
-    const options = rounds.filter((r) => !isRoundVotingLive(r, rounds))
-    return options.sort((a, b) => {
-      const da = cohortAnchorDate(a)?.getTime() ?? 0
-      const db = cohortAnchorDate(b)?.getTime() ?? 0
-      if (db !== da) return db - da
-      return Number(b.id) - Number(a.id)
-    })
-  }, [rounds])
+  // Every month stays selectable, including the previous month that is currently
+  // in its vote phase (it used to be filtered out of this dropdown).
+  const submitRoundOptions = useMemo(() => roundSelectorOptions(rounds), [rounds])
   const activeSubmitRoundLabel = activeDisplayTab?.kind === 'nominate'
     ? activeDisplayTab.round.name || `Round ${activeDisplayTab.round.id}`
     : ''
@@ -1475,7 +1469,10 @@ function ContestsPageContent() {
           </div>
         )}
 
-        {categoryTab === 'nomination' && showVoteGeographyLevels && (
+        {/* Vote-stage chips belong to the Vote view. In the Nominate view the level is always
+            reset to "all" (see effect above), so they would be inert when the selected month
+            happens to be the live vote round. */}
+        {categoryTab === 'nomination' && showVoteGeographyLevels && activeDisplayTab?.kind !== 'nominate' && (
           <div className="mb-6 space-y-2">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {t('dashboard.contests.vote_level_explainer') ||
