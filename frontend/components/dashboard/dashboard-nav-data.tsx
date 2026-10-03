@@ -4,7 +4,6 @@
  */
 import type { LucideIcon } from "lucide-react"
 import {
-  Award,
   Crown,
   DollarSign,
   FileText,
@@ -64,7 +63,6 @@ export const userNavSections: DashboardNavSection[] = [
       { name: "dashboard.nav.sponsored", label: "MyHigh5 Sponsors", href: "/dashboard/sponsored", icon: Megaphone },
       { name: "dashboard.nav.affiliates", label: "Affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.commissions", label: "Commissions", href: "/dashboard/commissions", icon: DollarSign },
-      { name: "dashboard.nav.leaderboard", label: "Leaderboard", href: "/dashboard/leaderboard", icon: Award },
       { name: "dashboard.nav.leaders", label: "MyHigh5 Leaders", href: "/dashboard/leaders", icon: Crown },
     ],
   },

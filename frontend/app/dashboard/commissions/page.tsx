@@ -444,7 +444,7 @@ export default function CommissionsPage() {
             onClick={() => loadCommissionsData()}
             className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
-            {t('dashboard.leaderboard.refresh') || 'Refresh'}
+            {t('common.refresh') || 'Refresh'}
           </button>
         </div>
       )}

@@ -607,25 +607,28 @@ def accept_affiliate_agreement(
     }
 
 
+SPONSOR_LEADERBOARD_RETIRED_MESSAGE = (
+    "The sponsor leaderboard has been retired and is no longer available."
+)
+
+
+def _sponsor_leaderboard_retired() -> None:
+    """The sponsor leaderboard is not part of the current business model.
+
+    These two routes were public and returned sponsors' names, e-mail addresses
+    and locations; they now answer 410 Gone and read nothing. No data is
+    removed: the ranking was computed on request from users and deposits.
+    """
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=SPONSOR_LEADERBOARD_RETIRED_MESSAGE)
+
+
 @router.get("/leaderboard")
-def get_leaderboard(
-    db: Session = Depends(deps.get_db),
-    limit: int = 10
-):
-    """
-    Récupérer le classement des meilleurs sponsors (ceux avec le plus de référents directs qui ont un dépôt KYC validé).
-    """
-    top_sponsors = crud_user.get_top_sponsors(db=db, limit=limit)
-    return top_sponsors
+def get_leaderboard():
+    """Retired (sponsor leaderboard)."""
+    _sponsor_leaderboard_retired()
 
 
 @router.get("/leaderboard/mfm")
-def get_mfm_leaderboard(
-    db: Session = Depends(deps.get_db),
-    limit: int = 10
-):
-    """
-    Récupérer le classement des meilleurs sponsors MFM (ceux avec le plus de référents directs qui ont acheté mfm_membership).
-    """
-    top_sponsors = crud_user.get_top_mfm_sponsors(db=db, limit=limit)
-    return top_sponsors
+def get_mfm_leaderboard():
+    """Retired (Founding Membership sponsor leaderboard)."""
+    _sponsor_leaderboard_retired()

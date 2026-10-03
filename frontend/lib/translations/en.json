@@ -1070,27 +1070,6 @@
       "views": "Views",
       "open_top_entry": "Watch this entry"
     },
-    "leaderboard": {
-      "title": "Sponsor Leaderboard",
-      "subtitle": "Top 10 by verification fee commission from direct referrals",
-      "mfm_subtitle": "Top 10 by MFM commission from direct referrals",
-      "regular_tab": "General Leaderboard",
-      "mfm_tab": "MFM Leaderboard",
-      "no_data": "No sponsors found",
-      "referrals": "Referrals",
-      "benefit": "Benefit",
-      "champion": "Champion",
-      "info_title": "How does the leaderboard work?",
-      "info_description_general": "Sponsors are ranked by the number of direct referrals who paid a validated KYC verification fee. Top positions earn DSP rewards redeemable on Digital Shopping Mall's platform.",
-      "info_description_mfm": "Sponsors are ranked by the number of direct referrals with a validated MFM membership deposit. Top positions earn DSP rewards redeemable on Digital Shopping Mall's platform.",
-      "empty_hint_general": "The list stays empty until the database has sponsors whose direct referrals each have a validated deposit for product type \"kyc\" (verification fee).",
-      "empty_hint_mfm": "The list stays empty until the database has sponsors whose direct referrals each have a validated deposit for product type \"mfm_membership\".",
-      "login_required": "You need to be signed in to load the leaderboard.",
-      "load_failed": "Could not load leaderboard",
-      "unexpected_response": "The server returned an unexpected format. Expected a JSON array.",
-      "network_error": "Network error. Check NEXT_PUBLIC_API_URL and that the API is reachable.",
-      "refresh": "Refresh"
-    },
     "affiliates": {
       "kyc_none": "Kyc None",
       "kyc_pending": "KYC in progress",
