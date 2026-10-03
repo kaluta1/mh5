@@ -157,6 +157,19 @@ describe('contest page participant states', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('EMPTY for the owner of a rejected entry: rejected wording, not pending and not "be the first"', async () => {
+    mocks.auth.user = { id: 9, country: 'Tanzania' }
+    mocks.auth.isAuthenticated = true
+    mocks.getContest.mockResolvedValue(
+      contestResponse({ current_user_contesting: true, current_user_entry_status: 'REJECTED' }),
+    )
+    render(<ContestDetailPage />)
+
+    expect(await screen.findByText('Your entry was not approved')).toBeInTheDocument()
+    expect(screen.queryByText(PENDING_TITLE)).not.toBeInTheDocument()
+    expect(screen.queryByText(EMPTY_TITLE)).not.toBeInTheDocument()
+  })
+
   it('READY: returned participants are rendered, with neither the empty nor the error state', async () => {
     mocks.getContest.mockResolvedValue(
       contestResponse({

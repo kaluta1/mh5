@@ -465,15 +465,28 @@ def _batch_user_contest_participation(
     valid_contests_by_id: dict,
     contest_mode: Optional[str],
     round_id: int,
-) -> tuple[set, dict]:
+) -> tuple[set, dict, dict]:
     """
     Contests where the signed-in user already has an entry for this round.
     Nomination: one row per category per round — round_id must match (NULL allowed for legacy).
+
+    The third value tells the OWNER the state of that entry per contest
+    (PUBLIC | PENDING_REVIEW | REJECTED). It never changes what is public: a
+    held entry stays out of every count and roster.
     """
     contested_ids: set = set()
     entry_round_by_contest: dict = {}
+    entry_status_by_contest: dict = {}
+    entry_by_contest: dict = {}
     if not user_id or not valid_contest_ids:
-        return contested_ids, entry_round_by_contest
+        return contested_ids, entry_round_by_contest, entry_status_by_contest
+
+    def _remember_entry(cid, uc) -> None:
+        # Same preference as entry_round_by_contest: the entry of the latest round, then the newest row.
+        prev = entry_by_contest.get(cid)
+        key = (int(getattr(uc, "round_id", None) or 0), int(getattr(uc, "id", 0) or 0))
+        if prev is None or key >= (int(getattr(prev, "round_id", None) or 0), int(getattr(prev, "id", 0) or 0)):
+            entry_by_contest[cid] = uc
 
     try:
         from app.models.contests import Contestant, ContestSeason, ContestSeasonLink
@@ -523,7 +536,7 @@ def _batch_user_contest_participation(
         except Exception as e:
             db.rollback()
             logger.warning(f"Error loading user contestants: {e}")
-            return contested_ids, entry_round_by_contest
+            return contested_ids, entry_round_by_contest, entry_status_by_contest
 
         def _uc_entry_matches(uc) -> bool:
             raw_et = getattr(uc, "entry_type", None)
@@ -551,6 +564,7 @@ def _batch_user_contest_participation(
                 and _entry_type_for_contest(cid_direct) == expected_type
             ):
                 contested_ids.add(cid_direct)
+                _remember_entry(cid_direct, uc)
                 rid = getattr(uc, "round_id", None)
                 if rid is not None:
                     prev = entry_round_by_contest.get(cid_direct)
@@ -568,6 +582,7 @@ def _batch_user_contest_participation(
                         and _entry_type_for_contest(resolved.id) == expected_type
                     ):
                         contested_ids.add(resolved.id)
+                        _remember_entry(resolved.id, uc)
                         rid = getattr(uc, "round_id", None)
                         if rid is not None:
                             prev = entry_round_by_contest.get(resolved.id)
@@ -580,7 +595,17 @@ def _batch_user_contest_participation(
     except Exception as e:
         logger.warning(f"Error batch-checking user participation for round {round_id}: {e}")
 
-    return contested_ids, entry_round_by_contest
+    try:
+        from app.services.entry_exposure import owner_entry_status
+
+        for cid, uc in entry_by_contest.items():
+            if cid in contested_ids:
+                entry_status_by_contest[cid] = owner_entry_status(db, uc)
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Error resolving own entry status for round {round_id}: {e}")
+
+    return contested_ids, entry_round_by_contest, entry_status_by_contest
 
 
 def _lightweight_round_data(
@@ -680,7 +705,7 @@ def _lightweight_round_data(
 
         valid_contests_by_id = {c.id: c for c, _ in page_contests}
         valid_contest_ids = set(valid_contests_by_id.keys())
-        user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
+        user_contested_contest_ids, entry_round_by_contest, entry_status_by_contest = _batch_user_contest_participation(
             db,
             user_id=user_id,
             valid_contest_ids=valid_contest_ids,
@@ -748,6 +773,9 @@ def _lightweight_round_data(
                 "votes_count": 0,
                 "current_user_contesting": contest.id in user_contested_contest_ids,
                 "user_entry_round_id": entry_round_by_contest.get(contest.id),
+                "current_user_entry_status": (
+                    entry_status_by_contest.get(contest.id) if contest.id in user_contested_contest_ids else None
+                ),
             })
     except Exception as e:
         logger.warning(f"Error building lightweight contests for round {round_obj.id}: {str(e)}")
@@ -1127,7 +1155,7 @@ def _enrich_round_data(
                 )
             
             # Batch query: find all contests where current user has participated in this round
-            user_contested_contest_ids, entry_round_by_contest = _batch_user_contest_participation(
+            user_contested_contest_ids, entry_round_by_contest, entry_status_by_contest = _batch_user_contest_participation(
                 db,
                 user_id=user_id,
                 valid_contest_ids=valid_contest_ids,
@@ -1169,6 +1197,7 @@ def _enrich_round_data(
                         "contest_mode": contest_mode_value,
                         "current_user_contesting": bool(is_contesting),
                         "user_entry_round_id": entry_round_by_contest.get(contest.id) if is_contesting else None,
+                        "current_user_entry_status": entry_status_by_contest.get(contest.id) if is_contesting else None,
                     }
                     r_data.setdefault("contests", []).append(contest_data)
                 except Exception as e:

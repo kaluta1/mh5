@@ -11,7 +11,7 @@ import { useClock } from '@/contexts/clock-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { MediaImage } from '@/components/ui/media-image'
-import { isNominationOpen, nominationCtaState } from '@/lib/nomination-cta'
+import { contestCardState, isNominationOpen } from '@/lib/nomination-cta'
 
 interface TopContestant {
   id: number
@@ -63,6 +63,10 @@ interface ContestCardProps {
   isVoteMode?: boolean  // Vote pill active — hide nominate/participate actions
   contest_mode?: string | null
   currentUserContesting?: boolean  // Indique si l'utilisateur connecté a déjà participé
+  /** State of the viewer's own entry: PUBLIC | PENDING_REVIEW | REJECTED (null when unknown or no entry). */
+  currentUserEntryStatus?: string | null
+  /** False when the public participant count could not be determined (never shown as zero). */
+  participantCountKnown?: boolean
   onViewContestants: () => void
   onToggleFavorite: () => void
   onParticipate?: () => void
@@ -191,6 +195,8 @@ export const ContestCard = React.memo(function ContestCard({
   isVoteMode = false,
   contest_mode = null,
   currentUserContesting = false,
+  currentUserEntryStatus = null,
+  participantCountKnown = true,
   onViewContestants,
   onToggleFavorite,
   onParticipate,
@@ -256,10 +262,34 @@ export const ContestCard = React.memo(function ContestCard({
 
   // A zero count only invites a first nomination while nominating is actually possible.
   // A closed (historical) round or the Vote view shows a neutral, non-action state instead.
-  const nominationCta = nominationCtaState({
-    contestants,
+  // The viewer's own entry is part of the state: zero PUBLIC entries does not mean
+  // "nobody has entered" when the viewer's own entry is still on hold.
+  const cardState = contestCardState({
+    isNomination: !!isNomination,
+    contestants: participantCountKnown ? contestants : null,
     nominationOpen: isNominationOpen({ isRoundClosed, isSubmissionOpen, isVoteMode }),
+    hasOwnEntry: !!currentUserContesting,
+    ownEntryStatus: currentUserEntryStatus,
   })
+  const nominationCta = cardState.view
+  const ownEntryLabel =
+    cardState.own === 'pending'
+      ? (t('dashboard.contests.own_entry_pending_title') || 'Your entry is pending review')
+      : cardState.own === 'rejected'
+      ? (t('dashboard.contests.own_entry_rejected') || 'Your entry was not approved')
+      : cardState.own === 'live'
+      ? (t('dashboard.contests.own_entry_live') || 'Your entry is live')
+      : cardState.own === 'submitted'
+      ? (t('dashboard.contests.own_entry_submitted') || 'Your entry is submitted')
+      : null
+  // With other public entries on the card the button says "View N ..."; a held or
+  // rejected own entry is then stated on its own line.
+  const showOwnEntryNote =
+    cardState.view !== 'own' && (cardState.own === 'pending' || cardState.own === 'rejected')
+  const countShown = nominationCta !== 'count_unknown'
+  const entriesNoun = isNomination
+    ? (contestants !== 1 || !countShown ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
+    : `${t('dashboard.contests.contestant') || 'Participant'}${contestants !== 1 || !countShown ? 's' : ''}`
 
   // L'utilisateur peut participer seulement s'il est éligible au concours ET a complété son profil
   // Le KYC est requis uniquement si le concours l'exige
@@ -648,6 +678,15 @@ export const ContestCard = React.memo(function ContestCard({
           )}
         </div>
 
+        {showOwnEntryNote && ownEntryLabel && (
+          <p
+            data-testid="contest-card-own-entry-status"
+            className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300"
+          >
+            {ownEntryLabel}
+          </p>
+        )}
+
         {/* Action Buttons */}
         <div className="mt-4 flex gap-2.5">
           {canParticipate() && onParticipate && !isRoundClosed && !isVoteMode ? (
@@ -680,16 +719,16 @@ export const ContestCard = React.memo(function ContestCard({
                 <div className="absolute inset-0 bg-gradient-to-r from-myhigh5-primary/10 via-myhigh5-primary/20 to-myhigh5-primary/10 opacity-0 group-hover/view:opacity-100 transition-opacity duration-300" />
                 <Eye className="w-3.5 h-3.5 mr-1.5 group-hover/view:scale-110 group-hover/view:text-myhigh5-secondary transition-all duration-300 relative z-10 flex-shrink-0" />
                 <span className="relative z-10 font-semibold group-hover/view:text-white transition-colors duration-300">
-                  {isNomination && nominationCta === 'be_first'
+                  {nominationCta === 'own'
+                    ? ownEntryLabel
+                    : nominationCta === 'be_first'
                     ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
-                    : isNomination && nominationCta === 'none'
+                    : nominationCta === 'none'
                     ? (t('dashboard.contests.no_nominations') || 'No nominations')
                     : (
                       <>
                         {t('dashboard.contests.view') || 'View'}{' '}
-                        {isNomination
-                          ? (contestants !== 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
-                          : `${t('dashboard.contests.contestant') || 'Participant'}${contestants !== 1 ? 's' : ''}`}
+                        {entriesNoun}
                       </>
                     )}
                 </span>
@@ -697,7 +736,7 @@ export const ContestCard = React.memo(function ContestCard({
               </Button>
             </>
           ) : (
-            isNomination && nominationCta === 'none' ? (
+            nominationCta === 'none' ? (
             <div
               data-testid="contest-card-no-nominations"
               className="w-full flex items-center justify-center h-11 text-sm font-semibold rounded-xl whitespace-nowrap bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800/80 dark:text-gray-400 dark:border-gray-700"
@@ -715,14 +754,14 @@ export const ContestCard = React.memo(function ContestCard({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/view:translate-x-full transition-transform duration-500" />
               <Eye className="w-3.5 h-3.5 mr-1.5 relative z-10 group-hover/view:scale-110 transition-transform duration-300 flex-shrink-0" />
               <span className="relative z-10 font-semibold group-hover/view:drop-shadow-sm transition-all duration-300">
-                {isNomination && nominationCta === 'be_first'
+                {nominationCta === 'own'
+                  ? ownEntryLabel
+                  : nominationCta === 'be_first'
                   ? (t('dashboard.contests.be_first_nominator') || 'Be the first nominator!')
                   : (
                     <>
-                      {t('dashboard.contests.view') || 'View'} {contestants}{' '}
-                      {isNomination
-                        ? (contestants !== 1 ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))
-                        : `${t('dashboard.contests.contestant') || 'Participant'}${contestants !== 1 ? 's' : ''}`}
+                      {t('dashboard.contests.view') || 'View'}{countShown ? ` ${contestants}` : ''}{' '}
+                      {entriesNoun}
                     </>
                   )}
               </span>

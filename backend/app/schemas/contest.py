@@ -215,6 +215,10 @@ class Contest(ContestBase):
     
     # User specific data
     current_user_contesting: Optional[bool] = None
+    # The signed-in viewer's own entry in the displayed round:
+    # PUBLIC | PENDING_REVIEW | REJECTED (None = no entry). Owner-facing only;
+    # it never affects what is public.
+    current_user_entry_status: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -317,8 +321,6 @@ class ContestantEnriched(BaseModel):
 class ContestWithEnrichedContestants(Contest):
     """Contest avec ses contestants enrichis de toutes les informations"""
     contestants: List[ContestantEnriched] = []
-    # Signed-in viewer's own entry in the displayed round: PUBLIC | PENDING_REVIEW | REJECTED (None = no entry).
-    current_user_entry_status: Optional[str] = None
     display_round_id: Optional[int] = None  # Calendar round used for this list (March vs April, etc.)
 
 

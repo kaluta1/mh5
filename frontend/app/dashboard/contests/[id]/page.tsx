@@ -24,6 +24,7 @@ import { normalizeContestMode, normalizeEntryTypeQueryParam } from '@/lib/contes
 import { rosterMatchesRequestedPooledLevel } from '@/lib/nomination-pooled-level'
 import { listViewState } from '@/lib/participants-state'
 import { ownEntryPendingReview } from '@/lib/application-status'
+import { ownEntryCardState } from '@/lib/nomination-cta'
 
 interface Media {
   id: string
@@ -826,6 +827,9 @@ export default function ContestDetailPage() {
   const hasNoContestants = filteredContestants.length === 0
   // The viewer's own entry exists but is still on hold: say so instead of "be the first".
   const ownEntryPending = ownEntryPendingReview(contest.contest)
+  // Same resolution as the contest list card: one rule for the owner's own entry.
+  const ownEntryStatusValue = contest.contest?.current_user_entry_status ?? null
+  const ownEntryState = ownEntryCardState(Boolean(ownEntryStatusValue), ownEntryStatusValue)
   const requestedContestLevel = (contestLevelFromUrl || '').toLowerCase().trim()
   const isPooledNominationLevel = isNomination && ['regional', 'region', 'continent', 'continental', 'global'].includes(requestedContestLevel)
 
@@ -1019,6 +1023,10 @@ export default function ContestDetailPage() {
                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                         {ownEntryPending
                           ? (t('dashboard.contests.own_entry_pending_title') || 'Your entry is pending review')
+                          : ownEntryState === 'rejected'
+                          ? (t('dashboard.contests.own_entry_rejected') || 'Your entry was not approved')
+                          : ownEntryState === 'live'
+                          ? (t('dashboard.contests.own_entry_live') || 'Your entry is live')
                           : isNomination
                           ? (t('dashboard.contests.be_first_to_nominate') || 'Be the first to nominate!')
                           : (t('dashboard.contests.be_first_to_participate') || 'Be the first to participate!')
@@ -1027,6 +1035,10 @@ export default function ContestDetailPage() {
                       <p className="text-gray-600 dark:text-gray-300 text-lg">
                         {ownEntryPending
                           ? (t('dashboard.contests.own_entry_pending_message') || 'We received your entry. It is not public yet and will appear here once it has been approved.')
+                          : ownEntryState === 'rejected'
+                          ? (t('dashboard.contests.own_entry_rejected_message') || 'This entry was not approved and is not shown publicly.')
+                          : ownEntryState === 'live'
+                          ? (t('dashboard.contests.own_entry_live_message') || 'Your entry is published. Nothing matches the current filters.')
                           : isNomination
                           ? (t('dashboard.contests.empty_nomination_message') || 'No nominations yet. Start by nominating someone from your country!')
                           : (t('dashboard.contests.empty_participation_message') || 'No participants yet. Be the first to enter this contest!')

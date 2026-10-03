@@ -366,3 +366,70 @@ def test_rejection_alone_hides_a_legacy_entry_that_has_no_review_record(client, 
     payload = _detail(client, c, rnd)
     assert _ids(payload) == [] and payload["entries_count"] == 0
     assert _my_entry(client, owner, legacy.id)["public_status"] == "REJECTED"
+
+
+# ---------------------------------------------------------------------------
+# contest LIST card payload: the owner's own entry state travels with the card
+# ---------------------------------------------------------------------------
+
+def _card(client, c, rnd, *, viewer=None, mode="nomination"):
+    """The card payload exactly as the contests list page requests it."""
+    resp = client.get("/api/v1/rounds/", params={"roundId": rnd.id, "contestMode": mode, "filterCountry": "Tanzania",
+                                                 "contestLimit": 50},
+                      headers=auth(viewer) if viewer else {})
+    assert resp.status_code == 200, resp.text
+    round_row = next(r for r in resp.json() if r["id"] == rnd.id)
+    return next(x for x in round_row["contests"] if x["id"] == c.id)
+
+
+def _link_round(db, c, rnd):
+    """The list endpoint finds a round's contests through round_contests."""
+    from app.models.round import round_contests
+
+    db.execute(round_contests.insert().values(round_id=rnd.id, contest_id=c.id))
+    db.commit()
+
+
+def test_list_card_tells_the_owner_their_held_entry_is_pending_while_public_count_stays_zero(client, db, world):
+    c, rnd = world()
+    _link_round(db, c, rnd)
+    nominator = person(db, 30)
+    _nominate(client, db, c, nominator)
+
+    owner_card = _card(client, c, rnd, viewer=nominator)
+    assert owner_card["current_user_contesting"] is True
+    assert owner_card["current_user_entry_status"] == "PENDING_REVIEW"
+    assert (owner_card.get("participants_count") or 0) == 0          # the held entry is not counted
+
+    for viewer in (None, person(db, 30)):
+        card = _card(client, c, rnd, viewer=viewer)
+        assert not card.get("current_user_contesting")
+        assert card.get("current_user_entry_status") is None          # nothing about the owner leaks
+        assert (card.get("participants_count") or 0) == 0
+
+
+def test_list_card_reports_public_and_rejected_states_of_the_owners_entry(client, db, world):
+    c, rnd = world()
+    _link_round(db, c, rnd)
+    nominator = person(db, 30)
+    body = _nominate(client, db, c, nominator)
+    _approve(client, db, body)
+    card = _card(client, c, rnd, viewer=nominator)
+    assert card["current_user_entry_status"] == "PUBLIC" and card["participants_count"] == 1
+
+    _reject(client, db, body["id"])
+    card = _card(client, c, rnd, viewer=nominator)
+    assert card["current_user_contesting"] is True
+    assert card["current_user_entry_status"] == "REJECTED"
+    assert (card.get("participants_count") or 0) == 0                 # rejection never makes it public
+
+
+def test_list_card_reports_the_state_of_a_participation_entry_too(client, db, world):
+    c, rnd = world("participation")
+    _link_round(db, c, rnd)
+    entrant = person(db, 30)
+    resp = _post(client, entrant, c)                                  # YouTube link -> held for review
+    assert resp.status_code == 200 and resp.json()["public_status"] == "PENDING_REVIEW"
+    card = _card(client, c, rnd, viewer=entrant, mode="participation")
+    assert card["current_user_contesting"] is True
+    assert card["current_user_entry_status"] == "PENDING_REVIEW"

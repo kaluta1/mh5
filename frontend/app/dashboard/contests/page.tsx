@@ -1059,6 +1059,10 @@ function ContestsPageContent() {
         status: c.level || 'country',
         received: Number(c.votes_count) || 0,
         contestants: Number(c.participants_count ?? c.entries_count ?? 0),
+        // A missing or non-numeric count is "not known", never zero.
+        participantCountKnown:
+          (c.participants_count ?? c.entries_count) != null &&
+          Number.isFinite(Number(c.participants_count ?? c.entries_count)),
         likes: 0,
         comments: 0,
         isOpen: contestsData?.is_submission_open || contestsData?.is_voting_open || false,
@@ -1075,6 +1079,7 @@ function ContestsPageContent() {
         currentUserParticipated: Boolean(c.currentUserParticipated === true || c.current_user_participated === true),
         currentUserContesting: Boolean(c.currentUserContesting === true || c.current_user_contesting === true),
         userEntryRoundId: c.user_entry_round_id ?? c.userEntryRoundId ?? null,
+        currentUserEntryStatus: c.current_user_entry_status ?? c.currentUserEntryStatus ?? null,
         topContestants: [], // Not fetching top contestants per contest in new query yet
         contest_mode: c.contest_mode ?? null,
       }
@@ -1578,6 +1583,7 @@ function ContestsPageContent() {
                   isVoteMode={activeDisplayTab?.kind === 'vote'}
                   contest_mode={contest.contest_mode}
                   currentUserContesting={Boolean(isCurrentUserInThisCardRound)}
+                  currentUserEntryStatus={isCurrentUserInThisCardRound ? contest.currentUserEntryStatus ?? null : null}
                   onToggleFavorite={() => { }}
                   isRoundClosed={isRoundClosed}
                   onParticipate={() =>
