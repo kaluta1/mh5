@@ -12,6 +12,7 @@ import { sharesService, ShareStats } from '@/services/shares-service'
 import { MediaViewerModal } from '@/components/media/media-viewer-modal'
 import { VideoEmbed } from '@/components/ui/video-embed'
 import { detectVideoPlatform , cleanVideoUrl } from '@/lib/utils/video-platforms'
+import { descriptionToDisplayText } from '@/lib/description-text'
 
 interface ApplicationDetailsDialogProps {
   isOpen: boolean
@@ -172,7 +173,7 @@ export function ApplicationDetailsDialog({
                     </h3>
                     {contestant.description && (
                       <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                        {contestant.description}
+                        {descriptionToDisplayText(contestant.description)}
                       </p>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useLanguage } from '@/contexts/language-context'
+import { descriptionToDisplayText } from '@/lib/description-text'
 import {
   Dialog,
   DialogContent,
@@ -91,7 +92,7 @@ export function HoverInfoDialog({
           
           {type === 'description' && data && (
             <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-              {data}
+              {descriptionToDisplayText(String(data))}
             </p>
           )}
           

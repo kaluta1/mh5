@@ -1375,6 +1375,14 @@ class CRUDContest:
             entries_query = db.query(_entries_count_agg())\
                 .filter(Contestant.id == -1)  # Impossible condition = 0 results
 
+        # The participant count must equal the cards a visitor can actually open:
+        # an entry still on hold (pending review, unclaimed nominee, ...) is not
+        # listed, so it is not counted either.
+        from app.services.entry_exposure import public_entry_clause as _public_entry_clause
+
+        base_entries_query = base_entries_query.filter(_public_entry_clause())
+        entries_query = entries_query.filter(_public_entry_clause())
+
         if ea_regional_nomination_count:
             base_entries_query = base_entries_query.filter(regional_voting_pools_sql_predicate())
             entries_query = entries_query.filter(regional_voting_pools_sql_predicate())

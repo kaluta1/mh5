@@ -916,6 +916,13 @@ def read_contest(
                     participation_dict = _va.secure_entry_refs(db, _viewer_ctx, [participation_dict], id_key="id")[0]
                     enriched_contest["current_user_participation"] = participation_dict
                     enriched_contest["current_user_contesting"] = True
+                    # The owner is told whether their own entry is listed yet. A held
+                    # entry stays out of the roster; this only explains why to its owner.
+                    from app.services.entry_exposure import entry_publicly_visible
+
+                    enriched_contest["current_user_entry_status"] = (
+                        "PUBLIC" if entry_publicly_visible(db, participation.id) else "PENDING_REVIEW"
+                    )
                     if getattr(participation, "round_id", None) is not None:
                         enriched_contest["user_entry_round_id"] = participation.round_id
                 except Exception as e:

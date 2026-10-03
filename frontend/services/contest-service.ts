@@ -197,6 +197,8 @@ export interface ContestResponse {
   }>
   contestants?: Contestant[]
   current_user_contesting?: boolean
+  /** The signed-in viewer's own entry in the displayed round: PUBLIC | PENDING_REVIEW. */
+  current_user_entry_status?: string | null
   entries_count?: number
   participant_count?: number
   votes_count?: number
@@ -216,6 +218,8 @@ export interface ContestantWithAuthorAndStats {
   contestant_image_url?: string
   registration_date: string
   is_qualified: boolean
+  /** Owner-only: PUBLIC | PENDING_REVIEW (an entry on hold is not "approved"). */
+  public_status?: string | null
   entry_type?: string
   nominator_city?: string
   nominator_country?: string
@@ -829,11 +833,11 @@ class ContestService {
       // Backend returns a list directly, not an object with items
       return Array.isArray(response.data) ? response.data : []
     } catch (error: any) {
-      // Silently handle network errors
       if (error?.code !== 'ERR_NETWORK' && error?.message && !error?.message?.includes('Network Error') && !error?.message?.includes('CORS')) {
         console.warn('Error fetching my applications:', error)
       }
-      return []
+      // A failed request is not "no applications": the caller shows an error state.
+      throw error
     }
   }
 
@@ -1321,7 +1325,8 @@ class ContestService {
       if (error?.code !== 'ERR_NETWORK' && error?.message && !error?.message?.includes('Network Error') && !error?.message?.includes('CORS')) {
         console.warn(`Error fetching contestants for contest ${contestId}:`, error)
       }
-      return []
+      // A failed request is not an empty roster: callers decide how to show the error.
+      throw error
     }
   }
 }

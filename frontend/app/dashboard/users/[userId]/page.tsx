@@ -28,6 +28,7 @@ import {
 import api from '@/lib/api'
 import { followService } from '@/services/follow-service'
 import { MediaImage } from '@/components/ui/media-image'
+import { descriptionToDisplayText } from '@/lib/description-text'
 
 interface UserProfile {
   id: number
@@ -467,8 +468,8 @@ function UserProfilePage() {
                   {isExpanded && (
                     <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700/50 pt-3 space-y-3">
                       {entry.description && (
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                          {entry.description}
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line break-words">
+                          {descriptionToDisplayText(entry.description)}
                         </p>
                       )}
 

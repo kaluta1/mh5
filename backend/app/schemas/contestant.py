@@ -156,4 +156,8 @@ class ContestantWithAuthorAndStats(BaseModel):
     has_voted: bool = False
     can_vote: bool = False
 
+    # Owner-only: whether the entry is listed publicly yet (PUBLIC | PENDING_REVIEW).
+    # Never set on rows served to other viewers.
+    public_status: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)

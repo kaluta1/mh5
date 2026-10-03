@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { htmlToPlainText } from '@/lib/utils'
+import { descriptionToDisplayText } from '@/lib/description-text'
 
 interface ContestantDescriptionProps {
   description: string
@@ -24,6 +25,8 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
   }
 
   const plainText = htmlToPlainText(description)
+  // Full text for the dialog keeps paragraph breaks (still plain text, never markup).
+  const fullText = descriptionToDisplayText(description)
   const shouldTruncate = plainText.length > maxLength
 
   const dialogTitle = t('contestant_detail.description_section') || 'Description'
@@ -53,7 +56,7 @@ export function ContestantDescription({ description, maxLength = 200 }: Contesta
             <DialogTitle>{dialogTitle}</DialogTitle>
           </DialogHeader>
           <div className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
-            {plainText}
+            {fullText}
           </div>
         </DialogContent>
       </Dialog>

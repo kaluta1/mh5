@@ -11,6 +11,7 @@ import { contestService } from '@/services/contest-service'
 import { followService } from '@/services/follow-service'
 import { Button } from '@/components/ui/button'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { listViewState } from '@/lib/participants-state'
 import {
   ArrowLeft, Search, Heart, MessageCircle, UserPlus, UserCheck,
   Trophy, ThumbsUp, MapPin, ChevronDown, X, Globe, Play
@@ -51,6 +52,7 @@ export default function ContestantsListPage() {
   const [activeRoundId, setActiveRoundId] = useState<number | null>(null)
   const [selectedRound, setSelectedRound] = useState<string>('all')
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [followedUsers, setFollowedUsers] = useState<Set<number>>(new Set())
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
@@ -78,6 +80,7 @@ export default function ContestantsListPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
+      setLoadFailed(false)
       const data = await ApiService.getContest(parseInt(contestId), {
         filterCountry: 'all',
         filterContinent: 'all',
@@ -107,7 +110,12 @@ export default function ContestantsListPage() {
       const favs = new Set<number>()
       cts.forEach((c: ContestantData) => { if (c.is_in_favorites) favs.add(c.id) })
       setFavoriteIds(favs)
-    } catch (error) { console.error('Error:', error) }
+    } catch (error) {
+      // A failed request is not an empty roster: drop stale rows and show the error state.
+      console.error('Error:', error)
+      setAllContestants([])
+      setLoadFailed(true)
+    }
     finally { setLoading(false) }
   }, [contestId, roundIdParam, viewOnly])
 
@@ -339,7 +347,17 @@ export default function ContestantsListPage() {
           )}
 
           {/* Contestants grid — Facebook friend cards style */}
-          {filteredContestants.length === 0 ? (
+          {listViewState({ loading: false, error: loadFailed, count: filteredContestants.length }) === 'ERROR' ? (
+            <div className="text-center py-20" role="alert">
+              <Trophy className="w-14 h-14 text-gray-200 dark:text-gray-700 mx-auto mb-4" />
+              <p className="text-gray-700 dark:text-gray-300 font-medium">
+                {t('dashboard.contests.participants_load_failed') || 'Could not load participants. Please try again.'}
+              </p>
+              <Button type="button" variant="default" className="mt-4" onClick={() => void loadData()}>
+                {t('common.try_again') || 'Try again'}
+              </Button>
+            </div>
+          ) : filteredContestants.length === 0 ? (
             <div className="text-center py-20">
               <Trophy className="w-14 h-14 text-gray-200 dark:text-gray-700 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400 font-medium">{

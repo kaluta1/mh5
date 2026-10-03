@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { descriptionToDisplayText } from '@/lib/description-text'
 import {
   Dialog,
   DialogContent,
@@ -419,7 +420,7 @@ export default function ReportsPage() {
                     <p className="text-sm font-medium">{selectedReport.contestant.title || (t('admin.reports.no_title') || 'No title')}</p>
                     {selectedReport.contestant.description && (
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {selectedReport.contestant.description}
+                        {descriptionToDisplayText(selectedReport.contestant.description)}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">

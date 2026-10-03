@@ -12,6 +12,7 @@ import { MediaViewerModal, type MediaItem } from '@/components/media'
 import { UploadButton } from '@/components/ui/upload-button'
 import api from '@/lib/api'
 import { AdminEntryContestField, type EntryContestResolution } from '@/components/admin/admin-entry-contest-field'
+import { descriptionToDisplayText } from '@/lib/description-text'
 
 interface Comment {
   id: number
@@ -1105,7 +1106,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               </div>
 
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">{selectedContestant.description}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line break-words">{descriptionToDisplayText(selectedContestant.description)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

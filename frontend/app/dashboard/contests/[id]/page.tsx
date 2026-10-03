@@ -22,6 +22,8 @@ import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { getEffectiveApiUrl } from '@/lib/config'
 import { normalizeContestMode, normalizeEntryTypeQueryParam } from '@/lib/contest-mode'
 import { rosterMatchesRequestedPooledLevel } from '@/lib/nomination-pooled-level'
+import { listViewState } from '@/lib/participants-state'
+import { ownEntryPendingReview } from '@/lib/application-status'
 
 interface Media {
   id: string
@@ -384,7 +386,8 @@ export default function ContestDetailPage() {
           entries_count: c.entries_count,
           total_votes: c.total_votes,
           cover_image_url: c.cover_image_url,
-          current_user_contesting: c.current_user_contesting || false  // Ensure this is included
+          current_user_contesting: c.current_user_contesting || false,  // Ensure this is included
+          current_user_entry_status: c.current_user_entry_status ?? null,
         },
         contestants: mappedContestants
       }
@@ -414,7 +417,11 @@ export default function ContestDetailPage() {
         error?.message ||
         t('dashboard.contests.failed_to_load') ||
         'Could not load this contest. Please try again.'
-      setLoadError(typeof message === 'string' ? message : String(message))
+      // A background (silent) refresh that fails keeps the roster already on
+      // screen and only raises the toast; a real load failure is the ERROR state.
+      if (!silent) {
+        setLoadError(typeof message === 'string' ? message : String(message))
+      }
       setToast({ message: typeof message === 'string' ? message : 'Failed to load contest', type: 'error' })
     } finally {
       if (fetchId === fetchGenerationRef.current && !silent) {
@@ -467,9 +474,15 @@ export default function ContestDetailPage() {
           return true
         })
 
-        setUserHasEntry(hasMatch)
+        // The roster lookup only returns listed entries; an entry still pending
+        // review is reported by the contest response itself.
+        setUserHasEntry(hasMatch || Boolean(contest?.contest?.current_user_entry_status))
       } catch {
-        setUserHasEntry(false)
+        // Lookup failed: keep what the contest response said instead of assuming "no entry".
+        setUserHasEntry(
+          Boolean(contest?.contest?.current_user_contesting) ||
+            Boolean(contest?.contest?.current_user_entry_status),
+        )
       }
     }
 
@@ -481,6 +494,8 @@ export default function ContestDetailPage() {
     contest?.contest?.contest_mode,
     contest?.contest?.active_round_id,
     contest?.contest?.display_round_id,
+    contest?.contest?.current_user_contesting,
+    contest?.contest?.current_user_entry_status,
     contest?.active_round_id,
   ])
 
@@ -724,13 +739,21 @@ export default function ContestDetailPage() {
     return contest?.contestants ?? []
   }, [contest?.contestants])
 
-  if (isLoading || pageLoading) {
+  const participantsState = listViewState({
+    loading: isLoading || pageLoading,
+    error: loadError,
+    count: locationFilteredContestants.length,
+  })
+
+  if (participantsState === 'LOADING') {
     return <ContestDetailSkeleton />
   }
 
-  if (!contest) {
+  // ERROR is its own state: a failed (re)load never falls through to the
+  // "no participants yet" empty state, even when an older roster is in memory.
+  if (!contest || participantsState === 'ERROR') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4" role="alert">
         <p className="text-gray-600 dark:text-gray-300 text-center">
           {loadError || t('dashboard.contests.failed_to_load') || 'Could not load this contest. Please try again.'}
         </p>
@@ -797,6 +820,8 @@ export default function ContestDetailPage() {
   // Déterminer si c'est une nomination
   const isNomination = normalizeContestMode(contest.contest.contest_mode) === 'nomination'
   const hasNoContestants = filteredContestants.length === 0
+  // The viewer's own entry exists but is still on hold: say so instead of "be the first".
+  const ownEntryPending = ownEntryPendingReview(contest.contest)
   const requestedContestLevel = (contestLevelFromUrl || '').toLowerCase().trim()
   const isPooledNominationLevel = isNomination && ['regional', 'region', 'continent', 'continental', 'global'].includes(requestedContestLevel)
 
@@ -988,13 +1013,17 @@ export default function ContestDetailPage() {
                     {/* Title */}
                     <div className="space-y-2">
                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                        {isNomination
+                        {ownEntryPending
+                          ? (t('dashboard.contests.own_entry_pending_title') || 'Your entry is pending review')
+                          : isNomination
                           ? (t('dashboard.contests.be_first_to_nominate') || 'Be the first to nominate!')
                           : (t('dashboard.contests.be_first_to_participate') || 'Be the first to participate!')
                         }
                       </h2>
                       <p className="text-gray-600 dark:text-gray-300 text-lg">
-                        {isNomination
+                        {ownEntryPending
+                          ? (t('dashboard.contests.own_entry_pending_message') || 'We received your entry. It is not public yet and will appear here once it has been approved.')
+                          : isNomination
                           ? (t('dashboard.contests.empty_nomination_message') || 'No nominations yet. Start by nominating someone from your country!')
                           : (t('dashboard.contests.empty_participation_message') || 'No participants yet. Be the first to enter this contest!')
                         }

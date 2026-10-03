@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/card'
 import Image from 'next/image'
 import * as React from 'react'
 import Link from 'next/link'
+import { descriptionToDisplayText } from '@/lib/description-text'
 
 interface Media {
   id: string
@@ -53,8 +54,10 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
 
-  const shouldTruncate = description && description.length > maxLength
-  const truncatedDescription = shouldTruncate ? description.substring(0, maxLength) + '...' : description
+  // Stored descriptions are rich-text HTML: show their text, never the markup.
+  const fullText = descriptionToDisplayText(description)
+  const shouldTruncate = fullText.length > maxLength
+  const truncatedDescription = shouldTruncate ? fullText.substring(0, maxLength) + '...' : fullText
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) {
@@ -77,7 +80,7 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
     }
   }, [])
 
-  if (!description || description.trim() === '') {
+  if (!fullText) {
     return (
       <p className="text-sm text-gray-500 dark:text-gray-400 italic">
         {t('dashboard.contests.my_applications.no_title') || 'Aucune description disponible'}
@@ -88,7 +91,7 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
   if (!shouldTruncate) {
     return (
       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-        {description}
+        {fullText}
       </p>
     )
   }
@@ -116,7 +119,7 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
               {t('dashboard.contests.my_applications.details') || 'Description complète'}
             </h4>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-              {description}
+              {fullText}
             </p>
           </div>
         </div>

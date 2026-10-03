@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable, Column } from '@/components/ui/data-table'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { contestService } from '@/services/contest-service'
+import { applicationStatus } from '@/lib/application-status'
+import { descriptionToPlainText } from '@/lib/description-text'
+import { listViewState, loadList } from '@/lib/participants-state'
 import { AlertCircle, Eye, Edit, Trash2, Radio, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -47,6 +50,7 @@ export default function MyApplicationsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     const loadApplications = async () => {
@@ -59,15 +63,13 @@ export default function MyApplicationsPage() {
         setPageLoading(true)
         setError(null)
 
-        // Récupérer les candidatures de l'utilisateur (première page)
-        const myContestants = await contestService.getMyApplications(0, 10)
-
-        // Ensure myContestants is an array before mapping
-        if (!Array.isArray(myContestants)) {
-          console.warn('getMyApplications returned non-array:', myContestants)
-          setApplications([])
-          return
+        // Récupérer les candidatures de l'utilisateur (première page).
+        // A failed request is an ERROR state, never "no applications".
+        const loaded = await loadList(() => contestService.getMyApplications(0, 10))
+        if (loaded.ok === false) {
+          throw loaded.error
         }
+        const myContestants = loaded.rows
 
         // S'il y a exactement 10 résultats, il y en a peut-être plus
         setHasMore(myContestants.length === 10)
@@ -92,10 +94,10 @@ export default function MyApplicationsPage() {
             contestName: c.contest_title || t('common.unknown') || 'Unknown',
             contestLevel: c.contest_level,
             title: c.title || '',
-            description: c.description || '',
+            description: descriptionToPlainText(c.description),
             rank: c.rank,
             registrationDate: c.registration_date,
-            status: c.is_qualified ? 'approved' : 'pending',
+            status: applicationStatus(c),
             totalVotes: c.votes_count,
             totalComments: c.comments_count || 0,
             totalLikes: c.reactions_count || 0,
@@ -110,8 +112,13 @@ export default function MyApplicationsPage() {
         setApplications(userApplications)
       } catch (err: any) {
         console.error('Erreur lors du chargement des candidatures:', err)
-        setError(err?.message || 'Erreur lors du chargement des candidatures')
-        addToast('Erreur lors du chargement des candidatures', 'error')
+        // Technical detail stays in the console; the member gets a plain message and a retry.
+        setApplications([])
+        setHasMore(false)
+        setError(
+          t('dashboard.contests.my_applications.load_failed') ||
+            'Could not load your applications. Please try again.',
+        )
       } finally {
         setPageLoading(false)
       }
@@ -120,7 +127,7 @@ export default function MyApplicationsPage() {
     if (!isLoading) {
       loadApplications()
     }
-  }, [isLoading, isAuthenticated, user, addToast])
+  }, [isLoading, isAuthenticated, user, addToast, reloadKey])
 
   if (isLoading || pageLoading) {
     return <ApplicationsSkeleton />
@@ -226,10 +233,10 @@ export default function MyApplicationsPage() {
           contestName: c.contest_title || t('common.unknown') || 'Unknown',
           contestLevel: c.contest_level,
           title: c.title || '',
-          description: c.description || '',
+          description: descriptionToPlainText(c.description),
           rank: c.rank,
           registrationDate: c.registration_date,
-          status: c.is_qualified ? 'approved' : 'pending',
+          status: applicationStatus(c),
           totalVotes: c.votes_count,
           totalComments: c.comments_count || 0,
           totalLikes: c.reactions_count || 0,
@@ -420,12 +427,26 @@ export default function MyApplicationsPage() {
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-red-900 dark:text-red-200">{error}</p>
+              <div className="space-y-3">
+                <p className="text-red-900 dark:text-red-200">{error}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPageLoading(true)
+                    setReloadKey((k) => k + 1)
+                  }}
+                >
+                  {t('common.try_again') || 'Try again'}
+                </Button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Data Table */}
+        {/* Data Table: hidden on a failed load so an error never reads as "no applications" */}
+        {listViewState({ loading: false, error, count: applications.length }) !== 'ERROR' && (
         <DataTable
           data={applications}
           columns={columns}
@@ -443,6 +464,7 @@ export default function MyApplicationsPage() {
           onRowClick={(app) => handleViewDetails(app)}
           rowClassName="cursor-pointer"
         />
+        )}
 
         {/* Load more */}
         {hasMore && (

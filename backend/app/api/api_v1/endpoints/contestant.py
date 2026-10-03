@@ -79,6 +79,35 @@ def _secure_entries(db: Session, user, items, *, owner_ok: bool = False):
     return va.secure_entry_list(db, _viewer(db, user), plain, allow_modes=modes)
 
 
+def _with_owner_public_status(db: Session, rows):
+    """Tell the OWNER whether each of their entries is listed publicly yet.
+
+    ``is_qualified`` is a competition flag that defaults to true; it says nothing
+    about review. The publication state lives in the entry's safety record
+    (entries created before those records exist are public).
+    """
+    from app.core.child_safety import EntryExposureStatus
+    from app.models.contest_eligibility import ContestEntrySafety
+
+    ids = [r.get("id") for r in rows if isinstance(r, dict) and r.get("id") is not None]
+    if not ids:
+        return rows
+    exposure = dict(
+        db.query(ContestEntrySafety.contestant_id, ContestEntrySafety.exposure_status)
+        .filter(ContestEntrySafety.contestant_id.in_(ids))
+        .all()
+    )
+    for r in rows:
+        if isinstance(r, dict) and r.get("id") is not None:
+            status_value = exposure.get(r["id"])
+            r["public_status"] = (
+                "PUBLIC"
+                if status_value is None or status_value == EntryExposureStatus.PUBLIC.value
+                else "PENDING_REVIEW"
+            )
+    return rows
+
+
 def _public_access_or_404(db: Session, user, contestant) -> None:
     """Phase 7: votes/views only on entries this viewer may receive publicly."""
     from app.services import viewer_access as va
@@ -1101,7 +1130,7 @@ def get_my_contestants(
     contestants = crud_contestant.get_multi_by_user_with_stats(
         db, current_user.id, skip=skip, limit=limit
     )
-    return _secure_entries(db, current_user, contestants, owner_ok=True)
+    return _with_owner_public_status(db, _secure_entries(db, current_user, contestants, owner_ok=True))
 
 
 @router.get("/user/my-votes")
@@ -2604,10 +2633,14 @@ def get_contest_contestants(
         import traceback
         logger.error(f"[ContestantEndpoint] ERROR fetching contestants for contest {contest_id}: {str(e)}")
         logger.error(traceback.format_exc())
-        # Return empty array instead of raising exception to prevent network errors
-        # This allows the frontend to handle gracefully
-        return []
-    
+        # A failure is not "no participants": answering [] here made the client
+        # show the empty state for a broken request. Report it as an error (no
+        # internal detail) so the client can show ERROR and offer a retry.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not load participants. Please try again.",
+        )
+
     # Phase 7: viewer-level age-safe delivery (drop, protect media, minimize authors).
     contestants_data = _secure_entries(db, current_user, contestants_data)
 
@@ -2616,8 +2649,10 @@ def get_contest_contestants(
         result = [ContestantWithAuthorAndStats(**data) for data in contestants_data]
     except Exception as e:
         logger.error(f"[ContestantEndpoint] ERROR serializing contestants: {str(e)}")
-        # Return empty array if serialization fails
-        return []
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not load participants. Please try again.",
+        )
     
     return result
 
