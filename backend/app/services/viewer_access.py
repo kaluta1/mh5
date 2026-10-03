@@ -63,7 +63,7 @@ from app.models.contests import Contestant
 from app.models.media import Media
 from app.models.user import User
 from app.services.age_policy_engine import AgeAndContestPolicyEngine, utc_today
-from app.services.entry_exposure import public_entry_clause
+from app.services.entry_exposure import is_rejected, public_entry_clause
 
 ALWAYS = frozenset({ContentRating.GENERAL})
 MEDIA_TOKEN_TTL_SECONDS = 600
@@ -215,6 +215,9 @@ def entry_access(db: Session, viewer: Viewer, contestant: Optional[Contestant],
             return EntryAccess(True, Mode.CHILD_SAFETY_REVIEW)
         return EntryAccess(False, denial=Denial.NOT_FOUND)
     public = safety is None or safety.exposure_status == EntryExposureStatus.PUBLIC.value
+    if is_rejected(contestant):
+        # An administrator rejected the entry: owner and moderators only.
+        public = False
     rating = ContentRating(moderation.rating) if moderation is not None and moderation.rating else None
     if moderation is not None and public and (
             rating is None or (moderation.state != "APPROVED" and rating != ContentRating.PROHIBITED)):

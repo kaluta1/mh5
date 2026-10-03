@@ -88,6 +88,7 @@ def _with_owner_public_status(db: Session, rows):
     """
     from app.core.child_safety import EntryExposureStatus
     from app.models.contest_eligibility import ContestEntrySafety
+    from app.services.entry_exposure import rejected_entry_clause
 
     ids = [r.get("id") for r in rows if isinstance(r, dict) and r.get("id") is not None]
     if not ids:
@@ -97,14 +98,18 @@ def _with_owner_public_status(db: Session, rows):
         .filter(ContestEntrySafety.contestant_id.in_(ids))
         .all()
     )
+    rejected = {
+        row[0] for row in db.query(Contestant.id).filter(Contestant.id.in_(ids), rejected_entry_clause()).all()
+    }
     for r in rows:
         if isinstance(r, dict) and r.get("id") is not None:
             status_value = exposure.get(r["id"])
-            r["public_status"] = (
-                "PUBLIC"
-                if status_value is None or status_value == EntryExposureStatus.PUBLIC.value
-                else "PENDING_REVIEW"
-            )
+            if r["id"] in rejected:
+                r["public_status"] = "REJECTED"
+            elif status_value is None or status_value == EntryExposureStatus.PUBLIC.value:
+                r["public_status"] = "PUBLIC"
+            else:
+                r["public_status"] = "PENDING_REVIEW"
     return rows
 
 

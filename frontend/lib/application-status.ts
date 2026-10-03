@@ -3,14 +3,16 @@
  *
  * `is_qualified` is a competition flag that defaults to true; it is not a
  * review outcome. Whether an entry is published comes from `public_status`
- * (owner-only field): an entry still on hold is "pending", never "approved".
+ * (owner-only field): an entry still on hold is "pending" and a rejected one
+ * is "rejected" -- neither is ever "approved".
  */
-export type ApplicationStatus = 'pending' | 'approved'
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected'
 
 export function applicationStatus(row: {
   is_qualified?: boolean | null
   public_status?: string | null
 }): ApplicationStatus {
+  if (row.public_status === 'REJECTED') return 'rejected'
   if (row.public_status && row.public_status !== 'PUBLIC') return 'pending'
   return row.is_qualified ? 'approved' : 'pending'
 }

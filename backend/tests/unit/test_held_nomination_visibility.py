@@ -270,3 +270,99 @@ def test_roster_failure_is_reported_as_an_error_not_an_empty_list(client, db, wo
     assert failed.status_code == 500
     assert failed.json() != []
     assert "synthetic database failure" not in failed.text      # no internals leaked
+
+
+# ---------------------------------------------------------------------------
+# REJECTED: the administrator's "reject" decision (verification_status)
+# ---------------------------------------------------------------------------
+
+def _reject(client, db, entry_id):
+    """The real rejection path: an administrator rejects the entry."""
+    admin = person(db, 40, admin=True)
+    resp = client.post(f"/api/v1/admin/contestants/{entry_id}/reject", headers=auth(admin))
+    assert resp.status_code == 200, resp.text
+    db.expire_all()
+    assert db.query(Contestant).get(entry_id).verification_status == "rejected"
+
+
+def test_rejected_nomination_is_not_listed_not_counted_and_not_labelled_approved(client, db, world):
+    c, rnd = world()
+    kept = _nominate(client, db, c, person(db, 30))
+    _approve(client, db, kept)
+    nominator = person(db, 30)
+    rejected = _nominate(client, db, c, nominator)
+    _approve(client, db, rejected)          # it was public before being rejected
+    assert sorted(_ids(_detail(client, c, rnd))) == sorted([kept["id"], rejected["id"]])
+
+    _reject(client, db, rejected["id"])
+
+    row = db.query(Contestant).get(rejected["id"])
+    # is_qualified is still true: it must not be what makes an entry visible.
+    assert row.is_qualified is True
+
+    for viewer in (None, person(db, 30), nominator):
+        payload = _detail(client, c, rnd, viewer=viewer)
+        assert _ids(payload) == [kept["id"]]
+        assert payload["entries_count"] == len(payload["contestants"]) == 1
+
+    listed = client.get(f"/api/v1/contestants/contest/{c.id}", params={"roundId": rnd.id}).json()
+    assert [r["id"] for r in listed] == [kept["id"]]
+
+    # A stranger cannot open or vote for it; the owner still sees their own entry.
+    stranger = person(db, 30)
+    assert client.get(f"/api/v1/contestants/{rejected['id']}", headers=auth(stranger)).status_code == 404
+    assert client.post(f"/api/v1/contestants/{rejected['id']}/vote", headers=auth(stranger)).status_code != 200
+    assert db.query(ContestantVoting).filter(ContestantVoting.contestant_id == rejected["id"]).count() == 0
+    assert client.get(f"/api/v1/contestants/{rejected['id']}", headers=auth(nominator)).status_code == 200
+
+    mine = _my_entry(client, nominator, rejected["id"])
+    assert mine["is_qualified"] is True
+    assert mine["public_status"] == "REJECTED"
+    assert _detail(client, c, rnd, viewer=nominator)["current_user_entry_status"] == "REJECTED"
+
+
+def test_rejected_pending_and_prohibited_are_three_distinct_states(client, db, world):
+    c, rnd = world()
+    pending_owner, prohibited_owner, rejected_owner = person(db, 30), person(db, 30), person(db, 30)
+    pending = _nominate(client, db, c, pending_owner)
+    prohibited = _nominate(client, db, c, prohibited_owner)
+    cs.moderate(db, cs.moderation_for(db, prohibited["id"]), action="PROHIBIT", actor=moderator(db),
+                reason="POLICY_VIOLATION", today=TODAY)
+    rejected = _nominate(client, db, c, rejected_owner)
+    _approve(client, db, rejected)
+    _reject(client, db, rejected["id"])
+    db.expire_all()
+
+    def state(entry_id):
+        row = db.query(Contestant).get(entry_id)
+        safety = db.query(ContestEntrySafety).filter_by(contestant_id=entry_id).one()
+        return row.verification_status, safety.exposure_status, cs.moderation_for(db, entry_id).state
+
+    assert state(pending["id"]) == ("pending", "HELD", "REVIEW_REQUIRED")
+    assert state(prohibited["id"])[2] == "PROHIBITED" and state(prohibited["id"])[0] != "rejected"
+    assert state(rejected["id"])[0] == "rejected" and state(rejected["id"])[2] == "APPROVED"
+
+    assert _my_entry(client, pending_owner, pending["id"])["public_status"] == "PENDING_REVIEW"
+    assert _my_entry(client, prohibited_owner, prohibited["id"])["public_status"] == "PENDING_REVIEW"
+    assert _my_entry(client, rejected_owner, rejected["id"])["public_status"] == "REJECTED"
+
+    payload = _detail(client, c, rnd)
+    assert _ids(payload) == [] and payload["entries_count"] == 0
+
+
+def test_rejection_alone_hides_a_legacy_entry_that_has_no_review_record(client, db, world):
+    """Entries created before review records existed are public by default;
+    an administrator's rejection must still take them out of the roster."""
+    c, rnd = world()
+    owner = person(db, 30)
+    legacy = Contestant(user_id=owner.id, season_id=c.id, round_id=rnd.id, title="Legacy", description="d",
+                        entry_type="nomination", country=owner.country, nominator_country=owner.country,
+                        is_active=True, is_deleted=False, is_qualified=True)
+    db.add(legacy)
+    db.commit()
+    assert _ids(_detail(client, c, rnd)) == [legacy.id]
+
+    _reject(client, db, legacy.id)
+    payload = _detail(client, c, rnd)
+    assert _ids(payload) == [] and payload["entries_count"] == 0
+    assert _my_entry(client, owner, legacy.id)["public_status"] == "REJECTED"

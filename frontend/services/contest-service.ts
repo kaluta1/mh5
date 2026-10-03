@@ -197,7 +197,7 @@ export interface ContestResponse {
   }>
   contestants?: Contestant[]
   current_user_contesting?: boolean
-  /** The signed-in viewer's own entry in the displayed round: PUBLIC | PENDING_REVIEW. */
+  /** The signed-in viewer's own entry in the displayed round: PUBLIC | PENDING_REVIEW | REJECTED. */
   current_user_entry_status?: string | null
   entries_count?: number
   participant_count?: number
@@ -218,7 +218,7 @@ export interface ContestantWithAuthorAndStats {
   contestant_image_url?: string
   registration_date: string
   is_qualified: boolean
-  /** Owner-only: PUBLIC | PENDING_REVIEW (an entry on hold is not "approved"). */
+  /** Owner-only: PUBLIC | PENDING_REVIEW | REJECTED (an entry on hold or rejected is not "approved"). */
   public_status?: string | null
   entry_type?: string
   nominator_city?: string

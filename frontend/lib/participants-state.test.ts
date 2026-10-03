@@ -79,3 +79,17 @@ describe('application status shown to its owner', () => {
     expect(ownEntryPendingReview(null)).toBe(false)
   })
 })
+
+describe('rejected application', () => {
+  it('is rejected, never approved, even though is_qualified is true', () => {
+    expect(applicationStatus({ is_qualified: true, public_status: 'REJECTED' })).toBe('rejected')
+    expect(applicationStatus({ is_qualified: true, public_status: 'REJECTED' })).not.toBe('approved')
+  })
+
+  it('is distinct from a pending application', () => {
+    expect(applicationStatus({ is_qualified: true, public_status: 'REJECTED' })).not.toBe(
+      applicationStatus({ is_qualified: true, public_status: 'PENDING_REVIEW' }),
+    )
+    expect(ownEntryPendingReview({ current_user_entry_status: 'REJECTED' })).toBe(false)
+  })
+})

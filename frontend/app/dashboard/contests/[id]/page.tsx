@@ -412,9 +412,13 @@ export default function ContestDetailPage() {
 
     } catch (error: any) {
       if (fetchId !== fetchGenerationRef.current) return
+      // The member sees the server's own explanation when there is one, otherwise
+      // plain copy; a raw exception string ("Request failed with status code 500")
+      // goes to the console only.
+      console.error('Contest request failed', error)
+      const serverDetail = error?.response?.data?.detail
       const message =
-        error?.response?.data?.detail ||
-        error?.message ||
+        (typeof serverDetail === 'string' && serverDetail.trim() ? serverDetail : '') ||
         t('dashboard.contests.failed_to_load') ||
         'Could not load this contest. Please try again.'
       // A background (silent) refresh that fails keeps the roster already on
