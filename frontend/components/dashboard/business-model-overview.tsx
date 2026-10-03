@@ -75,14 +75,6 @@ export function BusinessModelOverview() {
         )}
       </Section>
 
-      <Section icon={Users} title={t('business_model.pool_title')}>
-        <p>{t('business_model.pool_body')}</p>
-        <p className="text-gray-500 dark:text-gray-400">{t('business_model.pool_legacy_note')}</p>
-        <Link href="/dashboard/referral-pool" className="inline-block text-sm font-medium text-myhigh5-primary underline underline-offset-4">
-          {t('business_model.pool_history_link')}
-        </Link>
-      </Section>
-
       <p className="text-sm text-gray-500 dark:text-gray-400">{t('business_model.history_note')}</p>
     </div>
   )

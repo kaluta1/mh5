@@ -30,15 +30,17 @@ describe('BusinessModelOverview', () => {
     expect(screen.getByText('MyHigh5 Leaders: 5% monthly')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(en.business_model.marketplace_pending)).toBeInTheDocument())
     const text = container.textContent ?? ''
-    expect(text).toMatch(/there are no level 2 to 10 commissions/i)
+    expect(text).toMatch(/Only your direct referrals count\./)
+    expect(text).not.toMatch(/level 2 to 10/i)
     expect(text).not.toMatch(/Levels 2-10|10 levels deep|Founding Members pool/i)
   })
 
-  it('presents the Referral Pool only as retired history, with no join offer, price or seats', async () => {
+  it('does not present the Referral Pool at all: no retired section, link, join offer, price or seats', async () => {
     const { container } = render(<BusinessModelOverview />)
-    expect(screen.getByText('MyHigh5 Referral Pool (retired)')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: en.business_model.pool_history_link })).toHaveAttribute('href', '/dashboard/referral-pool')
+    expect(screen.queryByText('MyHigh5 Referral Pool (retired)')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: en.business_model.pool_history_link })).not.toBeInTheDocument()
     const text = container.textContent ?? ''
+    expect(text).not.toMatch(/Referral Pool|Founding Membership/i)
     expect(text).not.toMatch(/\$100 Referral Pool entry|Join the Referral Pool|limited to 10,000|Seats taken/i)
     expect(text).not.toMatch(/assigned fairly and at random/i)
   })

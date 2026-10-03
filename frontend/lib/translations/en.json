@@ -109,14 +109,6 @@
         "title": "KYC Payments",
         "description": "Earn 20% of MyHigh5's revenue when members you referred directly complete paid verification."
       },
-      "founding_membership": {
-        "title": "Founding Membership",
-        "description": "Earn commissions when members in your network join as Founding Members ($100)."
-      },
-      "annual_membership": {
-        "title": "Annual Membership Fee",
-        "description": "Earn commissions when Founding Members pay annual membership fees ($50)."
-      },
       "club_memberships": {
         "title": "Club Memberships",
         "description": "Earn 20% of MyHigh5's 20% fee when members you referred directly subscribe to paid clubs."
@@ -2589,7 +2581,7 @@
     "program_title": "MyHigh5 Direct Affiliate Program",
     "program_subtitle": "Earn 20% on eligible payments made by the members you refer directly.",
     "direct_title": "Direct affiliate commission: 20%",
-    "direct_body": "When a member you referred directly pays for an eligible MyHigh5 product or service, you earn 20% of its full price (for example $2 on a $10 KYC verification). On marketplace purchases you earn 20% of MyHigh5's 20% website fee, never of the seller's own price. Only your direct referrals count: there are no level 2 to 10 commissions.",
+    "direct_body": "When a member you referred directly pays for an eligible MyHigh5 product or service, you earn 20% of its full price (for example $2 on a $10 KYC verification). On marketplace purchases you earn 20% of MyHigh5's 20% website fee, never of the seller's own price. Only your direct referrals count.",
     "direct_example": "Example: a member you referred pays a $50 membership. MyHigh5's revenue is $50, so you earn $10.",
     "pool_title": "MyHigh5 Referral Pool (retired)",
     "pool_body": "The Referral Pool has been retired. New enrollment is closed, and new members who sign up without a personal invitation are no longer assigned to a sponsor. Existing memberships, payments and referral history are preserved for your records.",

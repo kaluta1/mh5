@@ -74,10 +74,36 @@ describe('translations', () => {
   it('keeps the approved direct-only explanation', () => {
     const en = JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8'))
     expect(en.business_model.direct_body).toMatch(/directly/i)
-    expect(en.business_model.direct_body).toMatch(/there are no level 2 to 10 commissions/i)
+    expect(en.business_model.direct_body).toMatch(/Only your direct referrals count\.$/)
+    expect(en.business_model.direct_body).not.toMatch(/level 2|levels 2/i)
     expect(en.dashboard.affiliates.indirect_description).toBeUndefined()
     expect(en.dashboard.affiliates.max_commission).toBeUndefined()
     expect(en.hero.affiliate.description).toBeUndefined()
+  })
+
+  it('does not present the Referral Pool or Founding Membership as a current affiliate benefit', () => {
+    const en = JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8'))
+    // "Ways to earn" lists current income sources only.
+    expect(en.landing.ways_to_earn.founding_membership).toBeUndefined()
+    expect(en.landing.ways_to_earn.annual_membership).toBeUndefined()
+    expect(JSON.stringify(en.landing.ways_to_earn)).not.toMatch(/Founding|Referral Pool/i)
+    // The Affiliate Program page renders no Referral Pool / Founding section or link.
+    const overview = read('components', 'dashboard', 'business-model-overview.tsx')
+    expect(overview).not.toMatch(/business_model\.pool_|referral-pool|founding/i)
+    for (const key of ['program_title', 'program_subtitle', 'direct_title', 'direct_body', 'direct_example',
+      'leaders_title', 'leaders_body', 'leaders_formula', 'marketplace_title', 'marketplace_body']) {
+      expect(en.business_model[key], key).not.toMatch(/Referral Pool|Founding/i)
+    }
+  })
+
+  it('keeps the retired programs available as read-only history', () => {
+    const en = JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8'))
+    expect(existsSync(join(root, 'app', 'dashboard', 'referral-pool', 'page.tsx'))).toBe(true)
+    expect(read('app', 'dashboard', 'referral-pool', 'page.tsx')).toMatch(/retired/i)
+    expect(en.business_model.pool_page_title).toBe('Referral Pool history')
+    expect(en.business_model.history_note).toMatch(/previous program remain in your commission history and wallet/i)
+    expect(read('components', 'dashboard', 'business-model-overview.tsx')).toMatch(/business_model\.history_note/)
+    expect(JSON.stringify(en)).toMatch(/Only direct referrals count\.[^"]*There are no multi-level commissions\./)
   })
 })
 

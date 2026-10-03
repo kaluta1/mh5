@@ -371,7 +371,7 @@ export default function AffiliatesListPage() {
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {t('business_model.direct_body') ||
-                'Only your direct referrals count: there are no level 2 to 10 commissions.'}
+                'Only your direct referrals count.'}
             </p>
           </div>
         </div>
