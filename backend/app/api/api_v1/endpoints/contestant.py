@@ -88,7 +88,7 @@ def _with_owner_public_status(db: Session, rows):
     """
     from app.core.child_safety import EntryExposureStatus
     from app.models.contest_eligibility import ContestEntrySafety
-    from app.services.entry_exposure import rejected_entry_clause
+    from app.services.entry_exposure import is_creative_unavailable, is_rejected, removed_entry_clause
 
     ids = [r.get("id") for r in rows if isinstance(r, dict) and r.get("id") is not None]
     if not ids:
@@ -98,14 +98,17 @@ def _with_owner_public_status(db: Session, rows):
         .filter(ContestEntrySafety.contestant_id.in_(ids))
         .all()
     )
-    rejected = {
-        row[0] for row in db.query(Contestant.id).filter(Contestant.id.in_(ids), rejected_entry_clause()).all()
+    removed = {
+        row.id: row for row in db.query(Contestant).filter(Contestant.id.in_(ids), removed_entry_clause()).all()
     }
     for r in rows:
         if isinstance(r, dict) and r.get("id") is not None:
             status_value = exposure.get(r["id"])
-            if r["id"] in rejected:
+            removed_row = removed.get(r["id"])
+            if removed_row is not None and is_rejected(removed_row):
                 r["public_status"] = "REJECTED"
+            elif removed_row is not None and is_creative_unavailable(removed_row):
+                r["public_status"] = "CREATIVE_UNAVAILABLE"
             elif status_value is None or status_value == EntryExposureStatus.PUBLIC.value:
                 r["public_status"] = "PUBLIC"
             else:
@@ -3172,6 +3175,17 @@ def create_contestant(
                 )
             )
 
+        # A creative that definitively no longer exists (the provider answers
+        # "not found") is not accepted. A timeout or any ambiguous answer is not
+        # treated as dead: the entry is kept and rechecked later.
+        from app.services import creative_link_check as _creative_links
+
+        if _creative_links.submission_link_is_dead(contestant_data.video_media_ids):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_creative_links.DEAD_LINK_MESSAGE,
+            )
+
     # Modérer les images si présentes
     if contestant_data.image_media_ids:
         logger.info(f"Moderating images: {contestant_data.image_media_ids[:100]}")
@@ -3361,9 +3375,10 @@ def create_contestant(
             contest_id=getattr(eligibility_contest, "id", None),
             nominee_age_declaration=contestant_data.nominee_age_declaration, now=eligibility_now,
         )
-        if entry_kind == _EntryKind.NOMINATION and not entry_decision.public \
-                and entry_safety.exposure_status == "HELD":
+        if entry_kind == _EntryKind.NOMINATION and entry_safety.exposure_status in ("PUBLIC", "HELD"):
             # Single-use claim link for the nominee; returned once, only the hash is stored.
+            # A nomination is published without being claimed; the link stays available so
+            # the nominee can take ownership of the entry, or decline it.
             nominee_claim_token = _eligibility.issue_claim_token(
                 db, entry_safety, actor_id=current_user.id, now=eligibility_now, commit=False
             )
@@ -3799,6 +3814,17 @@ def update_contestant(
                     "This content link has already been submitted by another participant "
                     "on the same social media in this category and round."
                 )
+            )
+
+        # A creative that definitively no longer exists (the provider answers
+        # "not found") is not accepted. A timeout or any ambiguous answer is not
+        # treated as dead: the entry is kept and rechecked later.
+        from app.services import creative_link_check as _creative_links
+
+        if _creative_links.submission_link_is_dead(contestant_data.video_media_ids):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_creative_links.DEAD_LINK_MESSAGE,
             )
 
     # Modérer les images si présentes

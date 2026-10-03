@@ -47,6 +47,7 @@ from app.models.content_moderation import ContentModeration
 from app.models.contest_eligibility import ContestEntrySafety
 from app.models.contests import Contestant
 from app.models.progression_safety import ProgressionSafetyHold
+from app.services.entry_exposure import is_removed, provisionally_published
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class Reason:
     CHILD_SAFETY = "CHILD_SAFETY_BLOCK"
     CONTENT_NOT_APPROVED = "CONTENT_NOT_APPROVED"
     CONTENT_PROHIBITED = "CONTENT_PROHIBITED"
+    REMOVED = "ENTRY_REMOVED"   # rejected by an administrator, or its creative no longer exists
     VIEWER_RESTRICTED = "VIEWER_RESTRICTED"
     EVALUATION_FAILED = "EVALUATION_FAILED"
 
@@ -117,8 +119,14 @@ def decide(contestant: Optional[Contestant], safety: Optional[ContestEntrySafety
     if moderation is not None:
         if moderation.rating == ContentRating.PROHIBITED.value or moderation.state == "PROHIBITED":
             reasons.append(Reason.CONTENT_PROHIBITED)
-        elif moderation.state != "APPROVED" or not moderation.rating:
+        elif ((moderation.state != "APPROVED" or not moderation.rating)
+              and not provisionally_published(safety, moderation)):
+            # A nomination published while its content awaits its first review is
+            # the one case where "not yet approved" does not exclude the entry.
             reasons.append(Reason.CONTENT_NOT_APPROVED)
+    if is_removed(contestant):
+        # Rejected by an administrator, or its creative no longer exists.
+        reasons.append(Reason.REMOVED)
     if not reasons and not getattr(contestant, "is_active", True):
         reasons.append(Reason.INACTIVE)   # existing business deactivation
     return ParticipationDecision(not reasons, tuple(dict.fromkeys(reasons)))

@@ -254,6 +254,7 @@ class ContentGate:
     automated: bool = False
     governed: bool = True          # False only for a pre-Phase 6 entry that is already public
     coverage: tuple = ()           # ((CoverageDimension, CoverageStatus), ...)
+    human_decided: bool = False    # a moderator has acted on the stored record (any action)
 
     def coverage_map(self) -> dict:
         return dict(self.coverage)
@@ -271,6 +272,14 @@ class ContentGate:
     @property
     def publishable(self) -> bool:
         return (not self.governed) or self.approved
+
+    @property
+    def awaiting_first_review(self) -> bool:
+        """Classified but never decided by a person: no hold, update request,
+        prohibition or escalation has been made on it. Used only by the
+        nomination publication policy; it is not an approval."""
+        return (self.governed and self.state == ModerationState.REVIEW_REQUIRED and not self.human_decided
+                and not self.update_required and not self.child_safety_escalated)
 
     @classmethod
     def legacy_public(cls, findings: Iterable[SafetyConcern] = ()) -> "ContentGate":
@@ -397,7 +406,8 @@ def gate_from_row(row: ContentModeration) -> ContentGate:
         automated=row.automated_decision,
         coverage=tuple(sorted(((CoverageDimension(k), CoverageStatus(v)) for k, v in (row.coverage or {}).items()
                                if k in CoverageDimension.__members__ and v in CoverageStatus.__members__),
-                              key=lambda kv: kv[0].value)))
+                              key=lambda kv: kv[0].value)),
+        human_decided=row.decided_by_user_id is not None)
 
 
 def _snapshot(row: ContentModeration) -> dict:

@@ -246,6 +246,23 @@ describe('ContestCard owner entry state (the card on /dashboard/contests)', () =
     expect(screen.queryByText(FIRST)).not.toBeInTheDocument()
   })
 
+  it('own entry removed because its video is gone: unavailable wording, never first nominator', () => {
+    renderCard({ ...openRound, currentUserContesting: true, currentUserEntryStatus: 'CREATIVE_UNAVAILABLE' })
+    expect(screen.getByText('Your video is no longer available')).toBeInTheDocument()
+    expect(screen.queryByText(PENDING)).not.toBeInTheDocument()
+    expect(screen.queryByText(REJECTED)).not.toBeInTheDocument()
+    expect(screen.queryByText(FIRST)).not.toBeInTheDocument()
+  })
+
+  it('a just-published nomination shows the owner the normal live card, not a pending state', () => {
+    renderCard({ ...openRound, contestants: 1, currentUserContesting: true, currentUserEntryStatus: 'PUBLIC' })
+    expect(screen.getByRole('button', { name: /Edit/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /View\s+Nominator/ })).toBeInTheDocument()
+    expect(screen.queryByText(PENDING)).not.toBeInTheDocument()
+    expect(screen.queryByText(FIRST)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('contest-card-own-entry-status')).not.toBeInTheDocument()
+  })
+
   it('unknown participant count is not shown as zero or as an invitation', () => {
     renderCard({ ...openRound, participantCountKnown: false })
     expect(screen.queryByText(FIRST)).not.toBeInTheDocument()

@@ -655,9 +655,22 @@ def test_Z_AA_nomination_claim_and_actor_separation_cannot_be_bypassed(db):
     for declaration in (D.ADULT, D.MINOR):
         c, safety = phase5_entry(db, nominator, ct, rnd, kind=ContestEntryKind.NOMINATION, declaration=declaration,
                                  decision=nominate(db, nominator, ct, declaration=declaration))
-        assert safety.exposure_status == "HELD" and "NOMINEE_UNCLAIMED" in safety.reason_codes
+        # Published immediately, but publication claims nothing on the nominee's behalf:
+        # no nominee is linked, rights stay unconfirmed, the nominator is nobody's guardian.
+        assert safety.exposure_status == "PUBLIC" and "NOMINEE_UNCLAIMED" in safety.reason_codes
+        assert safety.nominee_user_id is None and safety.rights_status == "PENDING"
+        assert safety.guardian_relationship_id is None and safety.claimed_at is None
+        assert ps.can_progress(db, c).eligible and ps.can_appear_in_ranking(db, c).eligible
+        # The nominee's own decision cannot be bypassed: once they decline, the entry
+        # cannot progress, rank or collect votes - not even from its nominator.
+        token = ce.issue_claim_token(db, safety, actor_id=nominator.id)
+        ce.respond_to_claim(db, token, person(db, 30, email_verified=True), accept=False, today=TODAY)
+        db.commit()
+        db.refresh(safety)
+        db.refresh(c)
+        assert safety.exposure_status == "HELD" and "NOMINEE_DECLINED" in safety.reason_codes
         decision = ps.can_progress(db, c)
-        assert not decision.eligible and "NOMINEE_UNCLAIMED" in decision.reasons
+        assert not decision.eligible and "NOMINEE_DECLINED" in decision.reasons
         assert not ps.can_appear_in_ranking(db, c).eligible
         with pytest.raises(V):
             cast(db, person(db, 30), c)
@@ -894,7 +907,9 @@ def test_admin_D_nomination_claim_cannot_be_bypassed(client, db):
     admin, r = admin_create(client, db, person(db, 40), s)
     c, safety = created(db, r)
     assert safety.entry_kind == "NOMINATION" and c.entry_type == "nomination"
-    assert safety.exposure_status == "HELD" and "NOMINEE_UNCLAIMED" in safety.reason_codes
+    # Published like any member nomination; creating it claims nothing for the nominee.
+    assert safety.exposure_status == "PUBLIC" and "NOMINEE_UNCLAIMED" in safety.reason_codes
+    assert safety.rights_status == "PENDING" and safety.claimed_at is None
     assert safety.nominee_user_id is None and safety.claim_token_hash is None   # no link handed to the admin
     assert "nominee_claim_token" not in r.text
 

@@ -599,8 +599,10 @@ def test_guardian_is_never_the_nominator_sponsor_or_account_holder(db):
     d = submit(db, teen)
     assert d.outcome == EligibilityOutcome.HELD and d.guardian_relationship_id is None
     # The adult nominator of a declared-minor nominee gains no guardian role.
+    # The nomination is published, but consent is recorded as still missing: never fabricated.
     nd = nominate(db, adult_sponsor, None, D.MINOR)
-    assert nd.outcome == EligibilityOutcome.HELD and nd.guardian_relationship_id is None
+    assert nd.public and nd.guardian_relationship_id is None
+    assert R.GUARDIAN_CONSENT_REQUIRED in nd.reasons
     assert db.query(GuardianRelationship).count() == 0 and db.query(GuardianConsent).count() == 0
 
 
@@ -608,12 +610,15 @@ def test_guardian_is_never_the_nominator_sponsor_or_account_holder(db):
 # NOMINATION
 # ===========================================================================
 
-def test_unclaimed_nominee_is_held_even_when_declared_adult(db):
+def test_unclaimed_nominee_is_published_with_the_claim_still_recorded_as_open(db):
+    """A valid nomination is published immediately. The unclaimed nominee and the
+    unconfirmed rights stay recorded as facts: publication never marks them done."""
     d = nominate(db, person(db, 30), None, D.ADULT)
-    assert d.outcome == EligibilityOutcome.HELD and not d.public
+    assert d.public and d.outcome != EligibilityOutcome.HELD
     assert R.NOMINEE_UNCLAIMED in d.reasons and d.rights_status == RightsStatus.PENDING
+    assert R.RIGHTS_CONFIRMATION_REQUIRED in d.reasons
     assert d.workflow_step == NominationWorkflowStep.NOMINEE_CONTACT
-    assert d.client_payload()["next_step"] == "SHARE_CLAIM_LINK"
+    assert d.client_payload()["next_step"] is None  # nothing blocks the member
 
 
 def test_nomination_scope_must_be_stated_by_the_policy(db):
@@ -652,22 +657,29 @@ def test_policy_schema_accepts_explicit_nomination_scope():
         AgePolicyDefinition.model_validate(synthetic_definition(nomination_age_applies_to="GUESS"))
 
 
-def test_minor_nominee_is_held_at_the_start_of_the_workflow(db):
+def test_minor_nominee_is_published_at_the_start_of_the_workflow(db):
     d = nominate(db, person(db, 30), None, D.MINOR)
-    assert d.outcome == EligibilityOutcome.HELD
+    assert d.public and d.guardian_relationship_id is None
+    assert d.rights_status == RightsStatus.PENDING and not d.subject_determined_adult
     assert {R.NOMINEE_DECLARED_MINOR, R.GUARDIAN_CONSENT_REQUIRED, R.RIGHTS_CONFIRMATION_REQUIRED} <= set(d.reasons)
     assert d.workflow_step == NominationWorkflowStep.NOMINEE_CONTACT
 
 
 @pytest.mark.parametrize("declaration", [None, D.UNKNOWN])
-def test_unknown_age_nominee_is_held(db, declaration):
+def test_unknown_age_nominee_is_published_with_age_still_undetermined(db, declaration):
     d = nominate(db, person(db, 30), None, declaration)
-    assert d.outcome == EligibilityOutcome.HELD and R.NOMINEE_AGE_UNDETERMINED in d.reasons
+    assert d.public and R.NOMINEE_AGE_UNDETERMINED in d.reasons
+    assert not d.subject_determined_adult  # an unknown age is never treated as adult
 
 
-def test_unknown_age_nominator_is_held_until_dob_added(db):
-    d = nominate(db, person(db, None), None, D.ADULT)
-    assert d.outcome == EligibilityOutcome.HELD and R.AGE_REQUIRED in d.reasons
+def test_unknown_age_nominator_nomination_is_published_with_age_still_required(db):
+    nominator = person(db, None)
+    d = nominate(db, nominator, None, D.ADULT)
+    assert d.public and R.AGE_REQUIRED in d.reasons
+    assert nominator.date_of_birth is None  # never backfilled
+    # The same member's own PARTICIPATION entry is still held for the missing date of birth.
+    own = submit(db, nominator)
+    assert own.outcome == EligibilityOutcome.HELD and R.AGE_REQUIRED in own.reasons
 
 
 def test_declared_minor_in_adult_only_category_is_held(db):
@@ -696,10 +708,12 @@ def test_nominator_and_nominee_are_different_people(db):
     db.refresh(safety)
     assert safety.nominee_user_id == nominee.id and safety.creative_owner_user_id == nominee.id
     assert safety.account_holder_user_id == nominator.id
-    # Linked adult nominee: still held until rights are confirmed.
-    assert safety.exposure_status == "HELD" and safety.workflow_step == "RIGHTS_CONFIRMATION"
+    # Linked adult nominee: published, but rights stay unconfirmed until someone confirms them.
+    assert safety.exposure_status == "PUBLIC" and safety.workflow_step == "RIGHTS_CONFIRMATION"
+    assert safety.rights_status == "PENDING" and "RIGHTS_CONFIRMATION_REQUIRED" in safety.reason_codes
     ce.admin_review(db, safety, action="CONFIRM_RIGHTS", admin_id=admin.id, note="synthetic rights", today=TODAY)
-    assert safety.exposure_status == "PUBLIC"
+    assert safety.exposure_status == "PUBLIC" and safety.rights_status == "CONFIRMED"
+    assert "RIGHTS_CONFIRMATION_REQUIRED" not in safety.reason_codes
 
 
 def test_nominator_cannot_self_assert_guardian_authority(client, db, api_world):
@@ -709,9 +723,11 @@ def test_nominator_cannot_self_assert_guardian_authority(client, db, api_world):
         "title": "Song", "description": "A song", "video_media_ids": json.dumps(["https://youtu.be/x1"]),
         "nominee_age_declaration": "MINOR", "i_am_the_guardian": True, "guardian_consent": ["CONTEST_ENTRY"]})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["public_status"] == "PENDING_REVIEW"
+    assert resp.json()["public_status"] == "PUBLIC"
     safety = db.query(ContestEntrySafety).one()
-    assert safety.guardian_relationship_id is None and safety.exposure_status == "HELD"
+    # Published, but the self-asserted guardian fields were ignored: consent is still missing.
+    assert safety.guardian_relationship_id is None and safety.exposure_status == "PUBLIC"
+    assert "GUARDIAN_CONSENT_REQUIRED" in safety.reason_codes and safety.rights_status == "PENDING"
     assert db.query(GuardianRelationship).count() == 0 and db.query(GuardianConsent).count() == 0
 
 
@@ -724,8 +740,10 @@ def test_sponsor_nominator_never_becomes_guardian_of_linked_minor(db, accept_adm
     ce.admin_review(db, safety, action="LINK_NOMINEE_ACCOUNT", admin_id=admin.id, note="synthetic link",
                     today=TODAY, nominee_user_id=teen.id)
     db.refresh(safety)
-    assert safety.exposure_status == "HELD" and safety.workflow_step == NominationWorkflowStep.GUARDIAN_CONSENT.value
+    assert safety.exposure_status == "PUBLIC" and safety.workflow_step == NominationWorkflowStep.GUARDIAN_CONSENT.value
+    assert "GUARDIAN_CONSENT_REQUIRED" in safety.reason_codes
     assert safety.guardian_relationship_id is None and db.query(GuardianRelationship).count() == 0
+    assert db.query(GuardianConsent).count() == 0
 
 
 def test_minor_nominee_workflow_consent_then_rights_then_public(db, accept_admin_review):
@@ -739,14 +757,14 @@ def test_minor_nominee_workflow_consent_then_rights_then_public(db, accept_admin
     rel = verified_guardian(db, teen, scopes=[S.CONTEST_ENTRY, S.PUBLIC_CREATIVE_DISPLAY, S.NAME_DISPLAY,
                                               S.CITY_COUNTRY_DISPLAY])
     db.refresh(safety)
-    # Consent alone is not enough: rights must be confirmed first (s.12).
-    assert safety.exposure_status == "HELD"
+    # Published; consent does not confirm rights, which stay an open step (s.12).
+    assert safety.exposure_status == "PUBLIC" and safety.rights_status == "PENDING"
     assert safety.workflow_step == NominationWorkflowStep.RIGHTS_CONFIRMATION.value
     ce.admin_review(db, safety, action="CONFIRM_RIGHTS", admin_id=admin.id, note="synthetic rights ok", today=TODAY)
     db.refresh(safety)
     db.refresh(row)
     assert safety.exposure_status == "PUBLIC" and row.is_active and safety.guardian_relationship_id == rel.id
-    # Withdrawal prevents future eligibility; the nomination itself is kept.
+    # A guardian actively WITHDRAWING consent still hides the entry; the nomination itself is kept.
     consent = db.query(GuardianConsent).filter(GuardianConsent.consent_scope == S.PUBLIC_CREATIVE_DISPLAY.value).one()
     gc.withdraw_consent(db, consent, actor_id=None, reason="synthetic withdrawal")
     db.refresh(safety)
@@ -1043,22 +1061,25 @@ def test_api_missing_dob_creates_a_held_entry_and_keeps_the_account(client, db, 
     assert db.query(Contestant).one().is_active is True
 
 
-def test_api_nominations_are_held_with_a_one_time_claim_token(client, db, api_world):
+def test_api_nominations_are_published_with_a_one_time_claim_token(client, db, api_world):
     c = api_world(mode="nomination")
     nominator = person(db, 30)
     resp = _post(client, nominator, c, nominee_age_declaration="ADULT")
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["public_status"] == "PENDING_REVIEW" and body["next_step"] == "SHARE_CLAIM_LINK"
+    assert body["public_status"] == "PUBLIC" and body["next_step"] is None
     token = body["nominee_claim_token"]
     assert token and len(token) >= 40
     row = db.query(ContestEntrySafety).one()
+    assert row.nominee_user_id is None and row.rights_status == "PENDING" and row.claimed_at is None
     assert row.claim_token_hash and token not in json.dumps(ce._state(row)) and row.claim_token_hash != token
     audit = json.dumps([a.new_values for a in db.query(AuditTrail)], default=str)
     assert token not in audit
     c2 = api_world(mode="nomination")
     minor = _post(client, nominator, c2, nominee_age_declaration="MINOR")
-    assert minor.json()["public_status"] == "PENDING_REVIEW"
+    assert minor.json()["public_status"] == "PUBLIC"
+    minor_row = db.query(ContestEntrySafety).order_by(ContestEntrySafety.id.desc()).first()
+    assert minor_row.guardian_relationship_id is None and "GUARDIAN_CONSENT_REQUIRED" in minor_row.reason_codes
     bad = _post(client, nominator, c2, nominee_age_declaration="I_AM_THE_PARENT")
     assert bad.status_code == 422
 
@@ -1179,10 +1200,10 @@ def test_frontend_participate_route_carries_the_nominee_declaration(client, db, 
     nominator = person(db, 30)
     c = api_world(mode="nomination")
     base = {"title": "Song", "description": "A song", "video_media_ids": ["https://youtu.be/p5route1"]}
-    held = client.post(f"/api/v1/contests/{c.id}/participate", headers=auth(nominator),
-                       json={**base, "nominee_age_declaration": "ADULT"})
-    assert held.status_code == 201, held.text
-    assert held.json()["public_status"] == "PENDING_REVIEW" and held.json()["nominee_claim_token"]
+    nominated = client.post(f"/api/v1/contests/{c.id}/participate", headers=auth(nominator),
+                            json={**base, "nominee_age_declaration": "ADULT"})
+    assert nominated.status_code == 201, nominated.text
+    assert nominated.json()["public_status"] == "PUBLIC" and nominated.json()["nominee_claim_token"]
     assert db.query(ContestEntrySafety).one().nominee_age_declaration == "ADULT"
     c2 = api_world()
     missing_dob = client.post(f"/api/v1/contests/{c2.id}/participate", headers=auth(person(db, None)),
@@ -1269,31 +1290,35 @@ def test_reissued_link_invalidates_the_previous_one(client, db):
                        headers=auth(other)).status_code == 404
 
 
-def test_minor_claim_stays_held_for_guardian_consent_and_rights(client, db):
+def test_minor_claim_stays_published_with_guardian_consent_and_rights_still_open(client, db):
     _, _, safety, token = _held_nomination(db, declaration=D.MINOR)
     teen = person(db, 15, email_verified=True)
     resp = _claim(client, teen, token)
-    assert resp.json()["next_step"] == "GUARDIAN_CONSENT"
+    assert resp.status_code == 200 and resp.json()["public_status"] == "PUBLIC"
     db.expire_all()
     safety = db.query(ContestEntrySafety).one()
-    assert safety.nominee_user_id == teen.id and safety.exposure_status == "HELD"
+    assert safety.nominee_user_id == teen.id and safety.exposure_status == "PUBLIC"
+    # A minor's own claim confirms neither rights nor guardian consent.
     assert safety.rights_status == "PENDING" and safety.workflow_step == "GUARDIAN_CONSENT"
+    assert "GUARDIAN_CONSENT_REQUIRED" in safety.reason_codes and db.query(GuardianConsent).count() == 0
     assert safety.guardian_relationship_id is None and db.query(GuardianRelationship).count() == 0
 
 
-def test_claimant_without_dob_stays_held_until_dob_added(client, db):
+def test_claimant_without_dob_keeps_age_undetermined_until_dob_added(client, db):
     _, _, _, token = _held_nomination(db)
     nominee = person(db, None, email_verified=True)
-    assert _claim(client, nominee, token).json()["next_step"] == "ADD_DATE_OF_BIRTH"
+    assert _claim(client, nominee, token).json()["public_status"] == "PUBLIC"
     db.expire_all()
     safety = db.query(ContestEntrySafety).one()
-    assert safety.exposure_status == "HELD" and "NOMINEE_AGE_UNDETERMINED" in safety.reason_codes
+    assert safety.exposure_status == "PUBLIC" and "NOMINEE_AGE_UNDETERMINED" in safety.reason_codes
+    # An unknown age never confirms rights and is never recorded as a date of birth.
+    assert safety.rights_status == "PENDING" and db.query(User).get(nominee.id).date_of_birth is None
     dob_service.submit_self_service_dob(db, db.query(User).get(nominee.id), born(30).date(), today=TODAY)
     db.expire_all()
     safety = db.query(ContestEntrySafety).one()
-    # The claim itself did not confirm rights (age unknown at claim time): still held for rights.
-    assert "NOMINEE_AGE_UNDETERMINED" not in safety.reason_codes and safety.exposure_status == "HELD"
-    assert safety.workflow_step == "RIGHTS_CONFIRMATION"
+    # The claim itself did not confirm rights (age unknown at claim time): rights stay open.
+    assert "NOMINEE_AGE_UNDETERMINED" not in safety.reason_codes and safety.exposure_status == "PUBLIC"
+    assert safety.rights_status == "PENDING" and safety.workflow_step == "RIGHTS_CONFIRMATION"
 
 
 def test_declined_claim_keeps_the_record_and_holds(client, db):
@@ -1319,7 +1344,12 @@ def test_unknown_is_never_adult_even_with_kyc_or_transition_registration(db):
     user = person(db, None, is_verified=True, identity_verified=True, address_verified=True)
     db.add(UserAgeProfile(user_id=user.id, registration_decision="POLICY_NOT_ENFORCED"))
     db.commit()
-    for d in (submit(db, user), nominate(db, user, None, D.ADULT)):
-        assert d.outcome == EligibilityOutcome.HELD and R.AGE_REQUIRED in d.reasons
+    own, nomination = submit(db, user), nominate(db, user, None, D.ADULT)
+    # Own PARTICIPATION entry: still held for the missing date of birth.
+    assert own.outcome == EligibilityOutcome.HELD
+    # NOMINATION: published, but the missing age stays recorded and is never read as adult.
+    assert nomination.public
+    for d in (own, nomination):
+        assert R.AGE_REQUIRED in d.reasons
         assert d.subject_age_tier != AgeTier.ADULT_18_PLUS or d.reasons[0] == R.AGE_REQUIRED
     assert user.date_of_birth is None  # never backfilled

@@ -572,6 +572,16 @@ def validate_contest_video_link(
                 detail="Unsupported or malformed video URL",
             )
 
+    # Tell the member early when the creative definitively no longer exists.
+    # Anything transient or ambiguous is not treated as dead.
+    from app.services import creative_link_check as _creative_links
+
+    if _creative_links.submission_link_is_dead(list(request.video_media_ids or [])):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_creative_links.DEAD_LINK_MESSAGE,
+        )
+
     season = None
     if not contest_obj:
         season = db.query(ContestSeason).filter(

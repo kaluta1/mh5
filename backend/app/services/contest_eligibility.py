@@ -304,6 +304,65 @@ _CONTENT_REASONS = frozenset({
 _PIPELINE_FINDINGS = frozenset({SafetyConcern.THIRD_PARTY_RIGHTS, SafetyConcern.UNCLASSIFIED_MEDIA,
                                 SafetyConcern.METADATA_UNVERIFIED})
 
+# ---------------------------------------------------------------------------
+# Nomination publication policy (management decision, 2026-10-04)
+# ---------------------------------------------------------------------------
+# A valid NOMINATION is published as soon as it is submitted. The requirements
+# below stay FACTS on the record (they are still listed in reason_codes, and the
+# rights, claim, guardian and moderation records are never rewritten), but for a
+# nomination they no longer hold publication:
+#   - the nominee has not claimed it yet;
+#   - rights are still PENDING;
+#   - the nominee is, or may be, a minor (guardian consent stays a fact);
+#   - the nominator's or nominee's age / date of birth is unknown;
+#   - the content is waiting for its FIRST human review (e.g. an external video).
+# Everything else still holds a nomination: a nominee who DECLINED (rights
+# disputed), prohibited content, a real content finding, a moderator's hold or
+# update request, an administrator's block or rejection, child-safety
+# escalation, an age-review flag on the account, a contest's own explicit rules
+# (adult-only, age limits, required parental consent), guardian consent that a
+# guardian actively WITHDREW, and unresolved location metadata on a possible
+# minor's image.
+# Personal participation entries are not affected by this policy.
+_NOMINATION_ADVISORY_UNMET = frozenset({
+    R.NOMINEE_UNCLAIMED,
+    R.NOMINEE_AGE_UNDETERMINED,
+    R.NOMINEE_DECLARED_MINOR,
+    R.GUARDIAN_CONSENT_REQUIRED,
+    R.AGE_REQUIRED,
+})
+
+
+def _nomination_publication_policy(unmet, holds, *, rights: RightsStatus, gate,
+                                   contest_requires_consent: bool):
+    """Split a nomination's requirements into (unmet, holds, advisory). Advisory
+    reasons are recorded on the entry but do not hold its publication.
+
+    contest_requires_consent is True when guardian consent must keep holding:
+    the contest's own rule requires it, or a guardian actively withdrew it."""
+    advisory: List[R] = []
+    kept_unmet: List[R] = []
+    for reason in unmet:
+        if reason == R.GUARDIAN_CONSENT_REQUIRED and contest_requires_consent:
+            kept_unmet.append(reason)       # the contest's own explicit rule still applies
+        elif reason in _NOMINATION_ADVISORY_UNMET:
+            advisory.append(reason)
+        else:
+            kept_unmet.append(reason)
+    first_review_only = bool(gate is not None and gate.awaiting_first_review
+                             and R.SAFETY_REVIEW_REQUIRED not in holds)
+    kept_holds: List[R] = []
+    for reason in holds:
+        if reason == R.GUARDIAN_CONSENT_REQUIRED and not contest_requires_consent:
+            advisory.append(reason)
+        elif reason == R.RIGHTS_CONFIRMATION_REQUIRED and rights == RightsStatus.PENDING:
+            advisory.append(reason)         # pending, not disputed
+        elif reason == R.CONTENT_REVIEW_REQUIRED and first_review_only:
+            advisory.append(reason)         # nobody has reviewed it yet, and nothing was flagged
+        else:
+            kept_holds.append(reason)
+    return tuple(kept_unmet), tuple(kept_holds), _uniq(advisory)
+
 
 def _refs(raw: Optional[str]) -> List[str]:
     if not raw:
@@ -386,6 +445,9 @@ class _Assessment:
     policy_id: Optional[int] = None
     policy_version: Optional[int] = None
     guardian_relationship_id: Optional[int] = None
+    # A guardian actively WITHDREW a consent that had been given (as opposed to
+    # consent simply not having been given yet).
+    consent_withdrawn: bool = False
 
 
 @dataclass(frozen=True)
@@ -522,6 +584,8 @@ def _consent(db: Session, a: _Assessment, user: User, ctx: AgeContext, scopes: S
         if waived and not rules.parental_consent_required:
             continue
         a.missing_scopes.append(scope)
+        if getattr(check, "reason", None) == "WITHDRAWN":
+            a.consent_withdrawn = True
     if a.missing_scopes:
         a.holds.append(R.GUARDIAN_CONSENT_REQUIRED)
 
@@ -685,7 +749,8 @@ def _workflow_step(kind: ContestEntryKind, reasons: Set[R], exposure: EntryExpos
 
 def _compose(kind: ContestEntryKind, parts: Sequence[_Assessment], subject: _Assessment, hooks, *,
              nominee_linked: bool, owner: CreativeOwnerType,
-             rating_ceiling: Optional[ContentRating] = None) -> ContestEntryDecision:
+             rating_ceiling: Optional[ContentRating] = None,
+             contest_requires_consent: bool = False) -> ContestEntryDecision:
     concerns, safety, rights, metadata, hook_holds, escalate, gate = hooks
     unmet = _uniq(r for p in parts for r in p.unmet)
     hook_holds = list(hook_holds)
@@ -696,6 +761,13 @@ def _compose(kind: ContestEntryKind, parts: Sequence[_Assessment], subject: _Ass
                 cs.rating_exceeds(gate.rating, rating_ceiling):
             hook_holds.append(R.CONTENT_RATING_NOT_PERMITTED)
     holds = _uniq([r for p in parts for r in p.holds] + hook_holds)
+    advisory: Tuple[R, ...] = ()
+    if kind == ContestEntryKind.NOMINATION:
+        # Consent that was never given does not hold a nomination; consent a guardian
+        # actively withdrew still does (an explicit refusal, like a nominee's decline).
+        unmet, holds, advisory = _nomination_publication_policy(
+            unmet, holds, rights=rights, gate=gate,
+            contest_requires_consent=contest_requires_consent or any(p.consent_withdrawn for p in parts))
     info = _uniq(r for p in parts for r in p.info)
     scopes = _uniq(s for p in parts for s in p.missing_scopes)
     if escalate:
@@ -715,14 +787,14 @@ def _compose(kind: ContestEntryKind, parts: Sequence[_Assessment], subject: _Ass
         basis = DecisionBasis.JURISDICTION_POLICY
     else:
         basis = DecisionBasis.TRANSITION_NOT_ENFORCED
-    reasons = unmet + holds + tuple(r for r in info if r in INFORMATIONAL_ELIGIBILITY_REASONS)
+    reasons = unmet + holds + advisory + tuple(r for r in info if r in INFORMATIONAL_ELIGIBILITY_REASONS)
     return ContestEntryDecision(
         outcome=outcome, reasons=_uniq(reasons), exposure=exposure, missing_consent_scopes=scopes, basis=basis,
         enforced=enforced, subject_age_tier=subject.tier, jurisdiction=subject.jurisdiction or parts[0].jurisdiction,
         policy_id=subject.policy_id or parts[0].policy_id, policy_version=subject.policy_version or parts[0].policy_version,
         rights_status=rights, safety_status=safety, safety_concerns=tuple(sorted(concerns, key=lambda c: c.value)),
         metadata_status=metadata,
-        workflow_step=_workflow_step(kind, set(unmet + holds), exposure, nominee_linked),
+        workflow_step=_workflow_step(kind, set(unmet + holds + advisory), exposure, nominee_linked),
         age_window_ok=all(p.age_window_ok for p in parts),
         guardian_relationship_id=subject.guardian_relationship_id, creative_owner_type=owner,
         subject_possibly_minor=subject.possibly_minor, subject_determined_adult=subject.determined_adult,
@@ -780,7 +852,9 @@ def evaluate_nomination(db: Session, nominator: User, contest: Optional[Contest]
                    stored_rights=RightsStatus(stored.rights_status) if stored else None, content=content)
     return _compose(ContestEntryKind.NOMINATION, [nominator_a, nominee_a], nominee_a, hooks,
                     nominee_linked=nominee_user is not None, owner=CreativeOwnerType.NOMINEE,
-                    rating_ceiling=nominee_rules.content_age_rating)
+                    rating_ceiling=nominee_rules.content_age_rating,
+                    contest_requires_consent=bool(getattr(rules, "parental_consent_required", False)
+                                                  or getattr(nominee_rules, "parental_consent_required", False)))
 
 
 def precheck(db: Session, user: User, contest: Optional[Contest], kind: ContestEntryKind, *, today: date,

@@ -32,7 +32,7 @@ export function nominationCtaState(opts: { contestants: number; nominationOpen: 
  * still on hold has a public count of 0, yet must never be told "Be the first
  * nominator!" next to an Edit button for the entry they already submitted.
  */
-export type OwnEntryCardState = 'pending' | 'rejected' | 'live' | 'submitted'
+export type OwnEntryCardState = 'pending' | 'rejected' | 'unavailable' | 'live' | 'submitted'
 
 export type ContestCardView =
   /** Zero public entries, nominating is open, viewer has no entry: invite the first nomination. */
@@ -55,6 +55,8 @@ export interface ContestCardState {
 export function ownEntryCardState(hasOwnEntry: boolean, status?: string | null): OwnEntryCardState | null {
   if (!hasOwnEntry) return null
   if (status === 'REJECTED') return 'rejected'
+  // The entry's external video no longer exists, so it was removed from the contest.
+  if (status === 'CREATIVE_UNAVAILABLE') return 'unavailable'
   if (status === 'PENDING_REVIEW') return 'pending'
   if (status === 'PUBLIC') return 'live'
   // The server did not say (older response, or the entry was created a moment ago).

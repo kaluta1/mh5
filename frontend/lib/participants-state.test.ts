@@ -93,3 +93,17 @@ describe('rejected application', () => {
     expect(ownEntryPendingReview({ current_user_entry_status: 'REJECTED' })).toBe(false)
   })
 })
+
+describe('entry removed because its video no longer exists', () => {
+  it('is "unavailable": not approved, not pending, not rejected', () => {
+    expect(applicationStatus({ is_qualified: true, public_status: 'CREATIVE_UNAVAILABLE' })).toBe('unavailable')
+    expect(ownEntryPendingReview({ current_user_entry_status: 'CREATIVE_UNAVAILABLE' })).toBe(false)
+  })
+})
+
+describe('a nomination is published immediately', () => {
+  it('is shown to its owner as approved/live, never as pending review', () => {
+    expect(applicationStatus({ is_qualified: true, public_status: 'PUBLIC' })).toBe('approved')
+    expect(ownEntryPendingReview({ current_user_entry_status: 'PUBLIC' })).toBe(false)
+  })
+})

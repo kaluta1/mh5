@@ -107,6 +107,17 @@ class Settings(BaseModel):
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "MyHigh5 <infos@myhigh5.com>")
     EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "MyHigh5")
     
+    # External creative links (YouTube / TikTok / Vimeo): availability checking.
+    # A link confirmed dead removes the entry from its contest (reversible).
+    CREATIVE_LINK_CHECK_ENABLED: bool = os.getenv("CREATIVE_LINK_CHECK_ENABLED", "true").lower() in ("true", "1", "yes")
+    CREATIVE_LINK_CHECK_INTERVAL_SECONDS: int = int(os.getenv("CREATIVE_LINK_CHECK_INTERVAL_SECONDS", "3600"))
+    CREATIVE_LINK_CHECK_BATCH_SIZE: int = int(os.getenv("CREATIVE_LINK_CHECK_BATCH_SIZE", "40"))
+    # Every entry is looked at once per cycle; a removal needs two definitive
+    # "not found" results at least this many hours apart.
+    CREATIVE_LINK_CHECK_CYCLE_HOURS: int = int(os.getenv("CREATIVE_LINK_CHECK_CYCLE_HOURS", "24"))
+    CREATIVE_LINK_CONFIRM_AFTER_HOURS: int = int(os.getenv("CREATIVE_LINK_CONFIRM_AFTER_HOURS", "12"))
+    CREATIVE_LINK_HTTP_TIMEOUT_SECONDS: float = float(os.getenv("CREATIVE_LINK_HTTP_TIMEOUT_SECONDS", "6"))
+
     # SMTP (fallback - deprecated)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))

@@ -477,7 +477,7 @@ def test_provider_unavailable_is_held_not_rejected(client, db, api_world, monkey
 # NOMINATIONS
 # ===========================================================================
 
-def test_claimed_nomination_still_waits_for_content_safety(client, db):
+def test_claimed_nomination_is_published_but_content_safety_stays_authoritative(client, db):
     nominator = person(db, 35)
     d = nominate(db, nominator, None, D.ADULT, content=None, description="A great song")
     row, safety = entry(db, nominator, d, ContestEntryKind.NOMINATION, declaration=D.ADULT)
@@ -488,12 +488,23 @@ def test_claimed_nomination_still_waits_for_content_safety(client, db):
     assert r.status_code == 200
     db.expire_all()
     safety = db.query(ContestEntrySafety).one()
-    assert safety.rights_status == "CONFIRMED" and safety.exposure_status == "HELD"
+    # Content only awaiting its FIRST human review does not hold a nomination, and the
+    # pending review is recorded as pending: nothing is marked approved by publication.
+    assert safety.rights_status == "CONFIRMED" and safety.exposure_status == "PUBLIC"
     assert "CONTENT_REVIEW_REQUIRED" in safety.reason_codes
+    moderation = cs.moderation_for(db, row.id)
+    assert moderation.state == "REVIEW_REQUIRED" and moderation.decided_by_user_id is None
+    # Content safety still decides: a moderator's hold takes the entry down ...
+    cs.moderate(db, moderation, action="HOLD", actor=moderator(db), reason="NEEDS_A_LOOK", today=TODAY)
+    db.expire_all()
+    assert db.query(ContestEntrySafety).one().exposure_status == "HELD"
+    assert db.query(Contestant).get(row.id).is_active is False
+    # ... and only a moderator's approval brings it back.
     cs.moderate(db, cs.moderation_for(db, row.id), action="APPROVE", actor=moderator(db), reason="REVIEWED_OK",
                 rating=ContentRating.GENERAL, today=TODAY)
     db.expire_all()
     assert db.query(ContestEntrySafety).one().exposure_status == "PUBLIC"
+    assert cs.moderation_for(db, row.id).state == "APPROVED"
     assert db.query(GuardianRelationship).count() == 0
 
 

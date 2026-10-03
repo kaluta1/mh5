@@ -277,6 +277,8 @@ export const ContestCard = React.memo(function ContestCard({
       ? (t('dashboard.contests.own_entry_pending_title') || 'Your entry is pending review')
       : cardState.own === 'rejected'
       ? (t('dashboard.contests.own_entry_rejected') || 'Your entry was not approved')
+      : cardState.own === 'unavailable'
+      ? (t('dashboard.contests.own_entry_unavailable') || 'Your video is no longer available')
       : cardState.own === 'live'
       ? (t('dashboard.contests.own_entry_live') || 'Your entry is live')
       : cardState.own === 'submitted'
@@ -285,7 +287,8 @@ export const ContestCard = React.memo(function ContestCard({
   // With other public entries on the card the button says "View N ..."; a held or
   // rejected own entry is then stated on its own line.
   const showOwnEntryNote =
-    cardState.view !== 'own' && (cardState.own === 'pending' || cardState.own === 'rejected')
+    cardState.view !== 'own' &&
+    (cardState.own === 'pending' || cardState.own === 'rejected' || cardState.own === 'unavailable')
   const countShown = nominationCta !== 'count_unknown'
   const entriesNoun = isNomination
     ? (contestants !== 1 || !countShown ? t('dashboard.contests.nominators') : t('dashboard.contests.nominator'))

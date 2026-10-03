@@ -28,6 +28,9 @@ os.environ["ANNUALADS_ENABLED"] = "true"
 os.environ.setdefault("ANNUALADS_WEBHOOK_SECRET", "annualads_test_webhook_secret")
 os.environ.setdefault("ANNUALADS_SSO_SECRET", "annualads_test_sso_secret")
 os.environ.setdefault("ANNUALADS_TENANT_ID", "test_tenant")
+# No test may contact a real video provider: external creative link checking is
+# off by default; the dead-link tests enable it with a fake HTTP layer.
+os.environ["CREATIVE_LINK_CHECK_ENABLED"] = "false"
 
 # SQLite compat for PostgreSQL JSONB/ARRAY — MUST run before model import.
 from sqlalchemy import JSON, create_engine

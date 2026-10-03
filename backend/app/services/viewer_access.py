@@ -63,7 +63,13 @@ from app.models.contests import Contestant
 from app.models.media import Media
 from app.models.user import User
 from app.services.age_policy_engine import AgeAndContestPolicyEngine, utc_today
-from app.services.entry_exposure import is_rejected, public_entry_clause
+from app.services.entry_exposure import (
+    is_removed,
+    provisional_nomination_moderation_clause,
+    provisional_rating,
+    provisionally_published,
+    public_entry_clause,
+)
 
 ALWAYS = frozenset({ContentRating.GENERAL})
 MEDIA_TOKEN_TTL_SECONDS = 600
@@ -129,11 +135,16 @@ def listing_clause(viewer: Viewer):
     """Entries a viewer may receive in a public listing: publicly exposed
     (Phase 5/6) AND, for governed entries, a rating the viewer may receive.
     Historical entries (no moderation record) are unaffected."""
+    allowed = [r.value for r in viewer.allowed_ratings]
+    approved = and_(ContentModeration.state == "APPROVED",
+                    ContentModeration.rating.isnot(None),
+                    ContentModeration.rating.in_(allowed))
+    # A NOMINATION is published while its content awaits its first review (see
+    # entry_exposure); the classifier's proposed rating decides who may receive it.
+    provisional = provisional_nomination_moderation_clause(allowed)
     restricted = exists().where(and_(
         ContentModeration.contestant_id == Contestant.id,
-        or_(ContentModeration.rating.is_(None),
-            ContentModeration.state != "APPROVED",
-            ~ContentModeration.rating.in_([r.value for r in viewer.allowed_ratings]))))
+        ~or_(approved, provisional)))
     return and_(public_entry_clause(), ~restricted)
 
 
@@ -215,15 +226,21 @@ def entry_access(db: Session, viewer: Viewer, contestant: Optional[Contestant],
             return EntryAccess(True, Mode.CHILD_SAFETY_REVIEW)
         return EntryAccess(False, denial=Denial.NOT_FOUND)
     public = safety is None or safety.exposure_status == EntryExposureStatus.PUBLIC.value
-    if is_rejected(contestant):
-        # An administrator rejected the entry: owner and moderators only.
+    if is_removed(contestant):
+        # Rejected by an administrator, or its creative no longer exists: owner
+        # and moderators only.
         public = False
     rating = ContentRating(moderation.rating) if moderation is not None and moderation.rating else None
     if moderation is not None and public and (
             rating is None or (moderation.state != "APPROVED" and rating != ContentRating.PROHIBITED)):
-        # A governed entry is public only when APPROVED with a final rating (fail
-        # closed). PROHIBITED falls through to the never-delivered branch below.
-        public = False
+        if provisionally_published(safety, moderation):
+            # Nomination published while its content awaits its first review: the
+            # classifier's proposed rating decides who may receive it.
+            rating = ContentRating(provisional_rating(moderation))
+        else:
+            # A governed entry is public only when APPROVED with a final rating (fail
+            # closed). PROHIBITED falls through to the never-delivered branch below.
+            public = False
     if not public:
         if owner:
             return EntryAccess(True, Mode.OWNER, rating=rating)

@@ -1025,6 +1025,8 @@ export default function ContestDetailPage() {
                           ? (t('dashboard.contests.own_entry_pending_title') || 'Your entry is pending review')
                           : ownEntryState === 'rejected'
                           ? (t('dashboard.contests.own_entry_rejected') || 'Your entry was not approved')
+                          : ownEntryState === 'unavailable'
+                          ? (t('dashboard.contests.own_entry_unavailable') || 'Your video is no longer available')
                           : ownEntryState === 'live'
                           ? (t('dashboard.contests.own_entry_live') || 'Your entry is live')
                           : isNomination
@@ -1037,6 +1039,8 @@ export default function ContestDetailPage() {
                           ? (t('dashboard.contests.own_entry_pending_message') || 'We received your entry. It is not public yet and will appear here once it has been approved.')
                           : ownEntryState === 'rejected'
                           ? (t('dashboard.contests.own_entry_rejected_message') || 'This entry was not approved and is not shown publicly.')
+                          : ownEntryState === 'unavailable'
+                          ? (t('dashboard.contests.own_entry_unavailable_message') || 'The video link of your entry no longer works, so the entry was removed from this contest.')
                           : ownEntryState === 'live'
                           ? (t('dashboard.contests.own_entry_live_message') || 'Your entry is published. Nothing matches the current filters.')
                           : isNomination
