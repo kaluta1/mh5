@@ -3,16 +3,17 @@ from typing import Any, Union, Optional
 
 from jose import jwt
 import bcrypt
-import hashlib
-import hmac
 import uuid
 
 from app.core.config import settings
 
 
 def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: timedelta = None, security_version: int = 0
 ) -> str:
+    """`security_version` is the account's users.security_version at issue
+    time. The token stops being accepted when the account's value moves on
+    (password change / reset). See app.services.auth_security."""
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -23,9 +24,19 @@ def create_access_token(
     to_encode = {
         "exp": expire, "iat": now, "sub": str(subject), "type": "access",
         "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE, "jti": uuid.uuid4().hex,
+        "sv": int(security_version or 0),
     }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def access_token_security_version(payload: Optional[dict]) -> int:
+    """`sv` of a decoded access token. A token issued before the claim existed
+    has none and counts as 0 (the column default)."""
+    try:
+        return int((payload or {}).get("sv") or 0)
+    except (TypeError, ValueError):
+        return -1
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Vérifier le mot de passe avec bcrypt directement"""
@@ -45,10 +56,6 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
 
-def _password_version(hashed_password: str) -> str:
-    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()
-
-
 def _decode_token(token: str) -> dict:
     return jwt.decode(
         token,
@@ -58,72 +65,6 @@ def _decode_token(token: str) -> dict:
         audience=settings.JWT_AUDIENCE,
     )
 
-
-def create_password_reset_token(email: str, hashed_password: str) -> str:
-    """Créer un token de réinitialisation de mot de passe"""
-    delta = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
-    now = datetime.utcnow()
-    expires = now + delta
-    encoded_jwt = jwt.encode(
-        {
-            "exp": expires, "iat": now, "sub": email, "type": "password_reset",
-            "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE,
-            "jti": uuid.uuid4().hex, "pwdv": _password_version(hashed_password),
-        },
-        settings.SECRET_KEY, 
-        algorithm=settings.ALGORITHM
-    )
-    return encoded_jwt
-
-def create_email_verification_token(email: str) -> str:
-    """Créer un token de vérification d'email"""
-    delta = timedelta(hours=24)  # 24 heures pour vérifier l'email
-    now = datetime.utcnow()
-    expires = now + delta
-    encoded_jwt = jwt.encode(
-        {
-            "exp": expires, "iat": now, "sub": email, "type": "email_verification",
-            "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE, "jti": uuid.uuid4().hex,
-        },
-        settings.SECRET_KEY, 
-        algorithm=settings.ALGORITHM
-    )
-    return encoded_jwt
-
-def verify_password_reset_token(token: str, hashed_password: str) -> str:
-    """Vérifier et décoder un token de réinitialisation"""
-    try:
-        decoded_token = _decode_token(token)
-        if decoded_token.get("type") != "password_reset":
-            return None
-        if not hmac.compare_digest(
-            str(decoded_token.get("pwdv") or ""), _password_version(hashed_password)
-        ):
-            return None
-        return decoded_token.get("sub")
-    except jwt.JWTError:
-        return None
-
-
-def get_password_reset_subject(token: str) -> Optional[str]:
-    """Validate reset-token signature/claims and return its account locator."""
-    try:
-        payload = _decode_token(token)
-        if payload.get("type") != "password_reset" or not payload.get("pwdv"):
-            return None
-        return payload.get("sub")
-    except jwt.JWTError:
-        return None
-
-def verify_email_verification_token(token: str) -> str:
-    """Vérifier et décoder un token de vérification d'email"""
-    try:
-        decoded_token = _decode_token(token)
-        if decoded_token.get("type") != "email_verification":
-            return None
-        return decoded_token.get("sub")
-    except jwt.JWTError:
-        return None
 
 def decode_access_token(token: str) -> dict:
     """Décode un token d'accès JWT"""
@@ -192,20 +133,3 @@ def verify_kyc_document_view_token(token: str, document_id: int, side: str) -> O
         return int(payload.get("sub"))
     except (TypeError, ValueError):
         return None
-
-
-def get_user_id_from_token(token: str) -> Optional[int]:
-    """
-    Extrait l'ID utilisateur depuis un token JWT valide.
-    Utilisé par les microservices pour obtenir l'ID utilisateur sans accès à la base de données.
-    
-    Returns:
-        int: L'ID utilisateur si le token est valide, None sinon
-    """
-    payload = validate_access_token(token)
-    if payload and "sub" in payload:
-        try:
-            return int(payload["sub"])
-        except (ValueError, TypeError):
-            return None
-    return None

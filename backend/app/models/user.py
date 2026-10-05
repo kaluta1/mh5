@@ -88,6 +88,10 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Session generation (EMAIL-2). Every access token carries the value it was
+    # issued under; a password change or reset increments it, which invalidates
+    # all access tokens issued before.
+    security_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     
     # Code de parrainage personnel
     personal_referral_code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)

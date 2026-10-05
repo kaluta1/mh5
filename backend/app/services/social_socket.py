@@ -515,12 +515,13 @@ class SocialSocketService:
         
         # Valider le token JWT
         try:
-            from app.core.security import decode_access_token
-            payload = decode_access_token(token)
-            if payload:
-                user_id = payload.get("sub")
-                if user_id:
-                    return int(user_id)
+            from app.services.auth_security import access_token_user_id
+
+            # Same rule as the API: a token issued before the account's last
+            # password change / reset is not an identity.
+            user_id = access_token_user_id(token)
+            if user_id:
+                return user_id
         except Exception as e:
             print(f"Erreur d'authentification Socket.IO: {e}")
         

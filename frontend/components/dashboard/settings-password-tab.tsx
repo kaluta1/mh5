@@ -129,6 +129,14 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
       })
 
       if (response.ok) {
+        // A password change ends every earlier session, this one included. The
+        // response carries the new session for this device: keep the member signed in.
+        try {
+          const data = await response.json()
+          if (data?.access_token) localStorage.setItem('access_token', data.access_token)
+        } catch {
+          // No usable body: the next request will ask the member to sign in again.
+        }
         addToast(t('settings.password.success') || 'Mot de passe modifié avec succès', 'success')
         // Reset form
         setCurrentPassword('')

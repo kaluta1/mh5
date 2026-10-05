@@ -9,27 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request: Request) -> Optional[str]:
-    """
-    Récupère l'adresse IP réelle du client depuis la requête.
-    Prend en compte les proxies et load balancers.
-    """
-    # Vérifier d'abord les headers de proxy courants
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # X-Forwarded-For peut contenir plusieurs IPs, prendre la première
-        ip = forwarded_for.split(",")[0].strip()
-        if ip:
-            return ip
-    
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
-    
-    # Fallback sur l'IP directe du client
-    if request.client:
-        return request.client.host
-    
-    return None
+    """Client address behind the trusted proxy. A client-supplied
+    X-Forwarded-For / X-Real-IP value is never taken at face value."""
+    from app.core.client_ip import UNKNOWN, client_ip
+
+    ip = client_ip(request)
+    return None if ip == UNKNOWN else ip
 
 
 def get_user_agent(request: Request) -> Optional[str]:

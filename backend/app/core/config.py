@@ -34,6 +34,8 @@ class Settings(BaseModel):
     JWT_AUDIENCE: str = os.getenv("JWT_AUDIENCE", "myhigh5-clients")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 7)))  # Default: 7 jours
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
+    # One-time email verification link (EMAIL-2). A new one can always be requested.
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES", "60"))
     
     # CORS - Read from env, fallback to defaults
     _cors_origins_env: str = os.getenv("BACKEND_CORS_ORIGINS", "")

@@ -145,7 +145,7 @@ _DEFINITIONS: List[EmailEventDefinition] = [
        warning="New members will not receive their email verification link. They cannot verify their "
                "address, and features that require a verified email (such as confirming a nomination claim) "
                "stay unavailable to them."),
-    _d(E.AUTH_WELCOME, "Welcome", _T, "User"),
+    _d(E.AUTH_WELCOME, "Welcome", _T, "User", live=True),
     _d(E.AUTH_PASSWORD_RESET, "Password reset", _S, "User", live=True, critical=True,
        warning="Members who forget their password will not receive a reset link and cannot recover "
                "their account on their own."),

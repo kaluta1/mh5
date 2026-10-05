@@ -1,9 +1,10 @@
 """Event -> (subject, html, text) rendering for the outbox worker (EMAIL-1).
 
 Rendering happens when a delivery is SENT, not when it is queued, from the
-small encrypted context stored with the delivery. Stateless links (email
-verification, password reset) are created here, at send time, so those tokens
-are never stored anywhere. Templates are source controlled; every dynamic
+small encrypted context stored with the delivery. One-time links (email
+verification, password reset) are created here, at send time: the credential
+goes into the email and only its digest is stored (app.services.auth_tokens),
+so it never sits in the outbox. Templates are source controlled; every dynamic
 value is escaped by the template helpers.
 """
 from __future__ import annotations
@@ -50,19 +51,54 @@ def _user(db: Session, user_id: Optional[int]):
     return user
 
 
-def _verification(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
-    from app.core.security import create_email_verification_token
+def _one_time_link(db: Session, user, purpose: str, path: str) -> str:
+    """Issue the one-time credential NOW (send time) and build its link.
 
-    verify_url = f"{public_site_base()}/verify-email?token={create_email_verification_token(to)}"
-    return tpl.get_welcome_email(lang, verify_url)
+    Only the credential's digest is stored (auth_tokens); the credential lives
+    in this one email. It rides in the URL FRAGMENT: a browser never sends a
+    fragment to a server, so it is absent from nginx/application access logs,
+    from proxies and from the Referer header. The page reads it, removes it
+    from the address bar and exchanges it over POST (see the frontend pages
+    /verify-email and /reset-password)."""
+    from app.services import auth_tokens
+
+    return f"{public_site_base()}{path}#token={auth_tokens.issue(db, user, purpose)}"
+
+
+def _recipient_account(db: Session, to: str, user_id: Optional[int]):
+    """The active account this email was queued for, provided the address is
+    still that account's address."""
+    user = _user(db, user_id)
+    if (user.email or "").strip().lower() != (to or "").strip().lower():
+        raise RenderError("recipient_changed")
+    return user
+
+
+def _verification(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
+    from app.models.auth_security import PURPOSE_EMAIL_VERIFICATION
+    from app.services import auth_tokens
+
+    user = _recipient_account(db, to, user_id)
+    if user.email_verified:
+        raise RenderError("already_verified")       # nothing left to verify: no email, no credential
+    link = _one_time_link(db, user, PURPOSE_EMAIL_VERIFICATION, "/verify-email")
+    minutes = int(auth_tokens.lifetime(PURPOSE_EMAIL_VERIFICATION).total_seconds() // 60)
+    return tpl.get_verify_email(lang, link, minutes, new_account=bool(ctx.get("new_account")))
+
+
+def _welcome(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
+    _recipient_account(db, to, user_id)
+    return tpl.get_welcome_email(lang, f"{public_site_base()}/dashboard")
 
 
 def _password_reset(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
-    from app.core.security import create_password_reset_token
+    from app.models.auth_security import PURPOSE_PASSWORD_RESET
+    from app.services import auth_tokens
 
-    user = _user(db, user_id)
-    reset_url = f"{public_site_base()}/reset-password?token={create_password_reset_token(user.email, user.hashed_password)}"
-    return tpl.get_password_reset_email(lang, reset_url)
+    user = _recipient_account(db, to, user_id)
+    link = _one_time_link(db, user, PURPOSE_PASSWORD_RESET, "/reset-password")
+    minutes = int(auth_tokens.lifetime(PURPOSE_PASSWORD_RESET).total_seconds() // 60)
+    return tpl.get_password_reset_email(lang, link, minutes)
 
 
 def _password_changed(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
@@ -158,6 +194,7 @@ def _test_email(db, to, user_id, ctx, lang) -> Rendered:
 
 RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.AUTH_EMAIL_VERIFICATION.value: _verification,
+    EmailEvent.AUTH_WELCOME.value: _welcome,
     EmailEvent.AUTH_PASSWORD_RESET.value: _password_reset,
     EmailEvent.AUTH_PASSWORD_CHANGED.value: _password_changed,
     EmailEvent.GUARDIAN_CONSENT_REQUEST.value: _guardian_request,

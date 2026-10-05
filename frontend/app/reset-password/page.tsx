@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,11 +9,11 @@ import { Lock, Eye, EyeOff, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context' 
 import { useToast } from '@/components/ui/toast'
 import { authService } from '@/lib/api'
+import { takeLinkToken } from '@/lib/one-time-link'
 
 function ResetPasswordPageContent() {
   const { t } = useLanguage()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { addToast } = useToast()
   
   const [token, setToken] = useState('')
@@ -27,18 +27,15 @@ function ResetPasswordPageContent() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [errors, setErrors] = useState<{ new_password?: string; confirm_password?: string }>({})
 
+  // The one-time credential arrives in the URL fragment (never sent to a
+  // server) and is removed from the address bar at once. It is read a single
+  // time: after the scrub there is nothing left in the URL to read again.
+  const tokenTaken = useRef(false)
   useEffect(() => {
-    const tokenParam = searchParams.get('token')
-    if (!tokenParam) {
-      addToast(t('auth.reset_password.no_token') || 'Token de réinitialisation manquant', 'error')
-      // Use setTimeout to avoid navigation during render
-      setTimeout(() => {
-        router.push('/forgot-password')
-      }, 2000)
-      return
-    }
-    setToken(tokenParam)
-  }, [searchParams, router, t, addToast])
+    if (tokenTaken.current) return
+    tokenTaken.current = true
+    setToken(takeLinkToken())
+  }, [])
 
   const validateForm = () => {
     const newErrors: { new_password?: string; confirm_password?: string } = {}

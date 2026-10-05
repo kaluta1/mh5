@@ -319,11 +319,10 @@ export const authService = {
     throwIfApiError(response, 'Password reset failed')
   },
 
-  // Vérifier l'email avec un token
-  async verifyEmail(token: string): Promise<{ message: string; email: string }> {
-    const response = await api.post(
-      `/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`,
-    )
+  // Confirm an email address. The one-time credential goes in the request
+  // BODY: it is never placed in a URL the server (or a proxy) would log.
+  async verifyEmail(token: string): Promise<{ message: string; code?: string }> {
+    const response = await api.post('/api/v1/auth/verify-email', { token })
     if (response.status >= 400) {
       const detail =
         (response.data as { detail?: string })?.detail ||
@@ -335,6 +334,14 @@ export const authService = {
       error.response = response
       throw error
     }
+    return response.data
+  },
+
+  // Ask for a new email verification link. The answer is the same whether or
+  // not the address has an account.
+  async resendVerification(email: string): Promise<{ message: string }> {
+    const response = await api.post('/api/v1/auth/resend-verification', { email })
+    throwIfApiError(response, 'The request could not be sent')
     return response.data
   },
 

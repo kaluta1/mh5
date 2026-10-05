@@ -264,19 +264,17 @@ async def preview_contestant_json(contestant_id: int, db: Session = Depends(deps
 
 
 @router.get("/u/verify-email")
-def share_short_verify_email(
-    token: str = Query(..., description="Email verification JWT from welcome mail"),
-    db: Session = Depends(deps.get_db),
-):
+def share_short_verify_email():
     """
-    Short-link collision fix: some deployments rewrite `/s/u/verify-email?token=...`
+    Short-link collision fix: some deployments rewrite `/s/u/verify-email?...`
     to `/api/v1/share/u/verify-email`, which would otherwise match `/u/{username}`.
 
-    Performs the same verification as GET /api/v1/auth/verify-email and redirects to the app.
+    Retired like GET /api/v1/auth/verify-email: nothing is verified by a GET and
+    the query string is never read. Redirects to the page that offers a new link.
     """
-    from app.services.email_verification import build_email_verify_redirect
+    from app.services.email_verification import legacy_verify_redirect
 
-    return build_email_verify_redirect(db, token)
+    return legacy_verify_redirect()
 
 
 def _get_latest_user_contestant(db: Session, user_id: int) -> Optional[Contestant]:

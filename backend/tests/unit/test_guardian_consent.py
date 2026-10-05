@@ -117,7 +117,7 @@ def full_flow(client, register, outbox, db, scopes=(S.ACCOUNT_PARTICIPATION,), *
     ctoken = token_from(outbox[-1])
     r = complete(client, ctoken)
     assert r.status_code == 201, r.text
-    return db.query(User).filter(User.id == r.json()["id"]).one(), body
+    return db.query(User).filter(User.email == r.json()["email"]).one(), body
 
 
 def financial_counts(db):

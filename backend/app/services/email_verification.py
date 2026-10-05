@@ -1,50 +1,20 @@
-"""Shared email verification logic (registration welcome link, GET redirects)."""
-from typing import Optional, Tuple
+"""Email verification: retired GET entry points.
 
+Verification itself is POST /api/v1/auth/verify-email with a one-time
+credential (app.services.auth_tokens). GET links from emails sent before
+EMAIL-2 carried a reusable token in the query string; they are no longer
+honoured. They are answered with a redirect to the sign-in page, which tells
+the member the link is no longer valid and where to get a new one.
+"""
 from fastapi import status
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
 
 from app.core.public_urls import public_site_base
-from app.core.security import verify_email_verification_token
-from app.crud import user as crud_user
 
 
-def verify_user_email_from_token(db: Session, token: str) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    Validate token and set user.email_verified.
-
-    Returns:
-        (success, error_code, email) where error_code is one of:
-        invalid_token, user_not_found, or None on success.
-    """
-    email = verify_email_verification_token(token)
-    if not email:
-        return False, "invalid_token", None
-
-    user = crud_user.get_by_email(db, email=email)
-    if not user:
-        return False, "user_not_found", None
-
-    if not getattr(user, "email_verified", False):
-        user.email_verified = True
-        db.commit()
-        db.refresh(user)
-
-    return True, None, email
-
-
-def build_email_verify_redirect(db: Session, token: str) -> RedirectResponse:
-    """GET-friendly verification: redirect to frontend login with outcome in query string."""
-    base = public_site_base()
-    ok, err, _email = verify_user_email_from_token(db, token)
-    if ok:
-        return RedirectResponse(
-            url=f"{base}/login?email_verified=1",
-            status_code=status.HTTP_302_FOUND,
-        )
-    code = err or "invalid_token"
+def legacy_verify_redirect() -> RedirectResponse:
+    """Never verifies anything and never reads the query string."""
     return RedirectResponse(
-        url=f"{base}/login?email_verify_error={code}",
+        url=f"{public_site_base()}/verify-email",
         status_code=status.HTTP_302_FOUND,
     )

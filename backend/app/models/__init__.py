@@ -47,6 +47,8 @@ from .email import EmailSettings, EmailEventSetting, EmailDelivery, EmailWebhook
 # Registered here so that anything building the schema from app.models sees it
 # (it used to be imported only by its endpoint module).
 from .verification import UserVerification
+# Account security (EMAIL-2): one-time email credentials + durable auth rate limits
+from .auth_security import AuthToken, AuthRateLimit
 from .progression_safety import ProgressionSafetyHold
 from .interaction_safety import UserBlock
 
@@ -54,6 +56,7 @@ __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",
     "Guardian", "GuardianRelationship", "GuardianConsent", "PendingRegistration", "UserPrivacyPreference",
     "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety", "ContentModeration", "UserVerification", "EmailSettings", "EmailEventSetting", "EmailDelivery", "EmailWebhookEvent", "ProgressionSafetyHold", "UserBlock",
+    "AuthToken", "AuthRateLimit",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",

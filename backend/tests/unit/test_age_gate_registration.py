@@ -82,7 +82,7 @@ def blocked(resp, decision: RegistrationDecision, status_code=403):
 
 def created(db, resp) -> User:
     assert resp.status_code == 201, resp.text
-    return db.query(User).filter(User.id == resp.json()["id"]).one()
+    return db.query(User).filter(User.email == resp.json()["email"]).one()
 
 
 def profile_of(db, user) -> UserAgeProfile:
@@ -362,8 +362,10 @@ def test_28b_failure_inside_registration_transaction_rolls_back_everything(world
 def test_29_duplicate_email_and_username_unchanged(db, register):
     resp, body = register()
     created(db, resp)
+    # EMAIL-2: a duplicate email still creates nothing, but the answer no longer
+    # says so (no account enumeration): same 201 body as the first registration.
     dup_email, _ = register(email=body["email"], ip="198.51.100.40")
-    assert dup_email.status_code == 400
+    assert dup_email.status_code == 201 and dup_email.json() == resp.json()
     dup_user, _ = register(username=body["username"], ip="198.51.100.41")
     assert dup_user.status_code == 400
     assert db.query(User).count() == 1

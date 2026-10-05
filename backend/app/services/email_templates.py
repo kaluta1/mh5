@@ -87,14 +87,17 @@ EMAIL_TRANSLATIONS = {
         "verify_subject": "Vérifiez votre adresse email - MyHigh5",
         "verify_title": "Vérification de votre email",
         "verify_message": "Cliquez sur le bouton ci-dessous pour vérifier votre adresse email.",
-        "verify_expiry": "Ce lien expire dans 24 heures.",
+        "verify_expiry": "Ce lien expire dans {minutes} minutes et ne peut être utilisé qu'une seule fois.",
+        "verify_account_created": "Votre compte MyHigh5 a été créé. Il reste une étape : confirmer que cette adresse email est bien la vôtre.",
+        "welcome_verified": "Votre adresse email est confirmée et votre compte est prêt.",
+        "welcome_button": "Accéder à MyHigh5",
         
         # Password Reset
         "reset_subject": "Réinitialisation de votre mot de passe - MyHigh5",
         "reset_title": "Réinitialisation du mot de passe",
         "reset_message": "Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe.",
         "reset_button": "Réinitialiser mon mot de passe",
-        "reset_expiry": "Ce lien expire dans 1 heure.",
+        "reset_expiry": "Ce lien expire dans {minutes} minutes et ne peut être utilisé qu'une seule fois.",
         "reset_ignore": "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.",
         
         # Password Change Security
@@ -208,14 +211,17 @@ EMAIL_TRANSLATIONS = {
         "verify_subject": "Verify your email address - MyHigh5",
         "verify_title": "Email Verification",
         "verify_message": "Click the button below to verify your email address.",
-        "verify_expiry": "This link expires in 24 hours.",
+        "verify_expiry": "This link expires in {minutes} minutes and can be used only once.",
+        "verify_account_created": "Your MyHigh5 account has been created. One step is left: confirming that this email address is yours.",
+        "welcome_verified": "Your email address is confirmed and your account is ready.",
+        "welcome_button": "Go to MyHigh5",
         
         # Password Reset
         "reset_subject": "Password Reset - MyHigh5",
         "reset_title": "Password Reset",
         "reset_message": "You requested to reset your password. Click the button below to create a new password.",
         "reset_button": "Reset my password",
-        "reset_expiry": "This link expires in 1 hour.",
+        "reset_expiry": "This link expires in {minutes} minutes and can be used only once.",
         "reset_ignore": "If you did not request this reset, please ignore this email. Your password will not be changed.",
         
         # Password Change Security
@@ -329,14 +335,17 @@ EMAIL_TRANSLATIONS = {
         "verify_subject": "Verifica tu correo electrónico - MyHigh5",
         "verify_title": "Verificación de email",
         "verify_message": "Haz clic en el botón de abajo para verificar tu dirección de correo electrónico.",
-        "verify_expiry": "Este enlace expira en 24 horas.",
+        "verify_expiry": "Este enlace expira en {minutes} minutos y solo se puede usar una vez.",
+        "verify_account_created": "Tu cuenta de MyHigh5 ha sido creada. Solo falta un paso: confirmar que esta dirección de correo es tuya.",
+        "welcome_verified": "Tu dirección de correo está confirmada y tu cuenta está lista.",
+        "welcome_button": "Ir a MyHigh5",
         
         # Password Reset
         "reset_subject": "Restablecimiento de contraseña - MyHigh5",
         "reset_title": "Restablecimiento de contraseña",
         "reset_message": "Solicitaste restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva contraseña.",
         "reset_button": "Restablecer mi contraseña",
-        "reset_expiry": "Este enlace expira en 1 hora.",
+        "reset_expiry": "Este enlace expira en {minutes} minutos y solo se puede usar una vez.",
         "reset_ignore": "Si no solicitaste este restablecimiento, ignora este correo. Tu contraseña no será modificada.",
         
         # Password Change Security
@@ -450,14 +459,17 @@ EMAIL_TRANSLATIONS = {
         "verify_subject": "Bestätigen Sie Ihre E-Mail-Adresse - MyHigh5",
         "verify_title": "E-Mail-Bestätigung",
         "verify_message": "Klicken Sie auf die Schaltfläche unten, um Ihre E-Mail-Adresse zu bestätigen.",
-        "verify_expiry": "Dieser Link läuft in 24 Stunden ab.",
+        "verify_expiry": "Dieser Link läuft in {minutes} Minuten ab und kann nur einmal verwendet werden.",
+        "verify_account_created": "Ihr MyHigh5-Konto wurde erstellt. Ein Schritt fehlt noch: Bestätigen Sie, dass diese E-Mail-Adresse Ihnen gehört.",
+        "welcome_verified": "Ihre E-Mail-Adresse ist bestätigt und Ihr Konto ist bereit.",
+        "welcome_button": "Zu MyHigh5",
         
         # Password Reset
         "reset_subject": "Passwort zurücksetzen - MyHigh5",
         "reset_title": "Passwort zurücksetzen",
         "reset_message": "Sie haben angefordert, Ihr Passwort zurückzusetzen. Klicken Sie auf die Schaltfläche unten, um ein neues Passwort zu erstellen.",
         "reset_button": "Passwort zurücksetzen",
-        "reset_expiry": "Dieser Link läuft in 1 Stunde ab.",
+        "reset_expiry": "Dieser Link läuft in {minutes} Minuten ab und kann nur einmal verwendet werden.",
         "reset_ignore": "Wenn Sie dieses Zurücksetzen nicht angefordert haben, ignorieren Sie bitte diese E-Mail. Ihr Passwort wird nicht geändert.",
         
         # Password Change Security
@@ -641,18 +653,16 @@ def get_base_email_template(lang: str, title: str, content: str, button_text: Op
 """
 
 
-def get_welcome_email(lang: str, verify_url: str) -> tuple[str, str, str]:
-    """Generate welcome email content"""
+def get_welcome_email(lang: str, home_url: str) -> tuple[str, str, str]:
+    """Welcome email (AUTH.WELCOME): sent once, after the member's FIRST
+    successful email verification. It carries no credential."""
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
-    
+
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('welcome_message')}
+            {t('welcome_verified')}
         </p>
-        <p style="margin: 0 0 24px 0;">
-            {t('welcome_verify')}
-        </p>
-        
+
         <div style="margin-top: 32px;">
             <h3 style="margin: 0 0 16px 0; color: #18181b; font-size: 18px;">{t('welcome_features_title')}</h3>
             <ul style="margin: 0; padding-left: 20px; color: #52525b;">
@@ -663,23 +673,19 @@ def get_welcome_email(lang: str, verify_url: str) -> tuple[str, str, str]:
             </ul>
         </div>
     """
-    
+
     html = get_base_email_template(
         lang=lang,
         title=t('welcome_title'),
         content=content,
-        button_text=t('verify_email_button'),
-        button_url=verify_url
+        button_text=t('welcome_button'),
+        button_url=home_url
     )
-    
+
     text = f"""
 {t('welcome_title')}
 
-{t('welcome_message')}
-
-{t('welcome_verify')}
-
-{verify_url}
+{t('welcome_verified')}
 
 {t('welcome_features_title')}
 - {t('welcome_feature_1')}
@@ -687,25 +693,33 @@ def get_welcome_email(lang: str, verify_url: str) -> tuple[str, str, str]:
 - {t('welcome_feature_3')}
 - {t('welcome_feature_4')}
 
+{home_url}
+
 © {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
-    
+
     return t('welcome_subject'), html, text
 
 
-def get_verify_email(lang: str, verify_url: str) -> tuple[str, str, str]:
-    """Generate email verification content"""
+def get_verify_email(lang: str, verify_url: str, minutes: int, *, new_account: bool = False) -> tuple[str, str, str]:
+    """Email verification (AUTH.EMAIL_VERIFICATION). `verify_url` carries the
+    one-time credential: it appears in the body only, never in the subject."""
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
-    
+    intro = t('verify_account_created') if new_account else ""
+    expiry = t('verify_expiry', minutes=int(minutes))
+    intro_html = f'<p style="margin: 0 0 24px 0;">{esc(intro)}</p>' if intro else ""
+    intro_text = f"{intro}\n\n" if intro else ""
+
     content = f"""
+        {intro_html}
         <p style="margin: 0 0 24px 0;">
             {t('verify_message')}
         </p>
         <p style="margin: 0; color: #a1a1aa; font-size: 14px;">
-            {t('verify_expiry')}
+            {esc(expiry)}
         </p>
     """
-    
+
     html = get_base_email_template(
         lang=lang,
         title=t('verify_title'),
@@ -713,38 +727,40 @@ def get_verify_email(lang: str, verify_url: str) -> tuple[str, str, str]:
         button_text=t('verify_email_button'),
         button_url=verify_url
     )
-    
+
     text = f"""
 {t('verify_title')}
 
-{t('verify_message')}
+{intro_text}{t('verify_message')}
 
 {verify_url}
 
-{t('verify_expiry')}
+{expiry}
 
 © {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
-    
+
     return t('verify_subject'), html, text
 
 
-def get_password_reset_email(lang: str, reset_url: str) -> tuple[str, str, str]:
-    """Generate password reset email content"""
+def get_password_reset_email(lang: str, reset_url: str, minutes: int) -> tuple[str, str, str]:
+    """Password reset (AUTH.PASSWORD_RESET). `reset_url` carries the one-time
+    credential: it appears in the body only, never in the subject."""
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
-    
+    expiry = t('reset_expiry', minutes=int(minutes))
+
     content = f"""
         <p style="margin: 0 0 24px 0;">
             {t('reset_message')}
         </p>
         <p style="margin: 0 0 16px 0; color: #a1a1aa; font-size: 14px;">
-            {t('reset_expiry')}
+            {esc(expiry)}
         </p>
         <p style="margin: 0; color: #a1a1aa; font-size: 14px;">
             {t('reset_ignore')}
         </p>
     """
-    
+
     html = get_base_email_template(
         lang=lang,
         title=t('reset_title'),
@@ -752,7 +768,7 @@ def get_password_reset_email(lang: str, reset_url: str) -> tuple[str, str, str]:
         button_text=t('reset_button'),
         button_url=reset_url
     )
-    
+
     text = f"""
 {t('reset_title')}
 
@@ -760,13 +776,13 @@ def get_password_reset_email(lang: str, reset_url: str) -> tuple[str, str, str]:
 
 {reset_url}
 
-{t('reset_expiry')}
+{expiry}
 
 {t('reset_ignore')}
 
 © {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
-    
+
     return t('reset_subject'), html, text
 
 

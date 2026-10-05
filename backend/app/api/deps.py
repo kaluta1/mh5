@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.token import TokenPayload
 from app.core.security import decode_access_token
+from app.services.auth_security import access_token_is_current
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -39,6 +40,13 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Utilisateur non trouvé"
+        )
+    # Issued before the last password change / reset: no longer a session.
+    if not access_token_is_current(payload, user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     return user
 
@@ -91,7 +99,7 @@ def get_current_active_user_optional(
     
     try:
         user = db.query(User).filter(User.id == token_data.sub).first()
-        if not user or not user.is_active:
+        if not user or not user.is_active or not access_token_is_current(payload, user):
             return None
         return user
     except Exception:

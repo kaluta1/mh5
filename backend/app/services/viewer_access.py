@@ -376,13 +376,11 @@ def requester_user_id(request) -> Optional[int]:
     A viewer id written in a URL is never trusted on its own."""
     auth = request.headers.get("authorization") or ""
     if auth.lower().startswith("bearer "):
-        from app.core.security import decode_access_token
+        from app.services.auth_security import access_token_user_id
 
-        sub = (decode_access_token(auth[7:].strip()) or {}).get("sub")
-        try:
-            return int(sub)
-        except (TypeError, ValueError):
-            return None  # an invalid bearer never falls back to the cookie
+        # An invalid bearer (bad, expired, or issued before the account's last
+        # password change) never falls back to the cookie.
+        return access_token_user_id(auth[7:].strip())
     return verify_media_session(request.cookies.get(MEDIA_SESSION_COOKIE))
 
 

@@ -14,6 +14,16 @@ from app.schemas.user import UserCreate, UserUpdate
 
 logger = logging.getLogger(__name__)
 
+_DUMMY_PASSWORD_HASH: Optional[str] = None
+
+
+def _dummy_password_hash() -> str:
+    """A real bcrypt hash of a random value nobody knows (computed once)."""
+    global _DUMMY_PASSWORD_HASH
+    if _DUMMY_PASSWORD_HASH is None:
+        _DUMMY_PASSWORD_HASH = get_password_hash(secrets.token_urlsafe(32))
+    return _DUMMY_PASSWORD_HASH
+
 
 def generate_referral_code(length: int = 8) -> str:
     """Génère un code de parrainage unique alphanumerique."""
@@ -459,15 +469,18 @@ class CRUDUser:
                 user = self.get_by_username(db=db, username=email_or_username)
             
             if not user:
-                logger.debug(f"Authentication failed: User not found for '{email_or_username}'")
+                # Spend the same time as a real password check, so the response
+                # time does not tell an unknown identifier from a wrong password.
+                verify_password(password, _dummy_password_hash())
+                logger.debug("Authentication failed: unknown identifier")
                 return None
             
             # Verify password
             if not verify_password(password, user.hashed_password):
-                logger.debug(f"Authentication failed: Invalid password for user '{email_or_username}'")
+                logger.debug("Authentication failed: invalid password (user %s)", user.id)
                 return None
             
-            logger.debug(f"Authentication successful for user '{email_or_username}' (ID: {user.id})")
+            logger.debug("Authentication successful (user %s)", user.id)
             return user
             
         except OperationalError as e:
@@ -494,10 +507,13 @@ class CRUDUser:
         return user.is_admin
 
     def reset_password(self, db: Session, user: User, new_password: str) -> User:
-        """Réinitialiser le mot de passe d'un utilisateur"""
-        hashed_password = get_password_hash(new_password)
-        user.hashed_password = hashed_password
-        db.add(user)
+        """Réinitialiser le mot de passe d'un utilisateur.
+
+        Goes through the one place that changes a password, so every earlier
+        access token and reset link stops working with it."""
+        from app.services import auth_security
+
+        auth_security.set_password(db, user, new_password, action=auth_security.AUDIT_PASSWORD_CHANGED)
         db.commit()
         db.refresh(user)
         return user

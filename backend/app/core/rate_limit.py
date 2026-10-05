@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import logging
 import time
-import os
-import ipaddress
 from collections import defaultdict
 from typing import Callable, Optional, Tuple
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.core.client_ip import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,11 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/admin/content-moderation": (120, 60),
     "/api/v1/auth/password-reset-request": (5, 3600),
     "/api/v1/auth/password-reset-confirm": (10, 3600),
+    # EMAIL-2. First, cheap line of defence; the durable limits (per IP, per
+    # account, global) live in app.services.auth_throttle.
+    "/api/v1/auth/resend-verification": (5, 3600),
+    "/api/v1/auth/verify-email": (20, 3600),
+    "/api/v1/auth/change-password": (10, 3600),
     "/api/v1/share-links": (60, 60),
     "/api/v1/kyc/initiate": (10, 3600),
     "/api/v1/kyc/webhook": (300, 60),
@@ -59,19 +64,8 @@ _MAX_BUCKET_KEYS = 50_000
 
 
 def _client_ip(request: Request) -> str:
-    peer = request.client.host if request.client else "unknown"
-    trusted = {item.strip() for item in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",") if item.strip()}
-    if peer in trusted:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            candidate = forwarded.split(",")[0].strip()
-            try:
-                return str(ipaddress.ip_address(candidate))
-            except ValueError:
-                pass
-    if peer:
-        return peer
-    return "unknown"
+    """Trusted-proxy aware client address (see app.core.client_ip)."""
+    return client_ip(request)
 
 
 def _is_rate_limited(key: str, limit: int, window: int) -> bool:

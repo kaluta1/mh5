@@ -5,13 +5,11 @@ from jose import jwt
 
 from app.core.config import settings
 from app.core.security import (
+    access_token_security_version,
     create_access_token,
-    create_email_verification_token,
-    create_password_reset_token,
+    decode_access_token,
     get_password_hash,
-    verify_email_verification_token,
     verify_password,
-    verify_password_reset_token,
 )
 
 
@@ -36,18 +34,29 @@ def test_access_token_encodes_subject():
     assert "exp" in payload
 
 
-def test_password_reset_token_roundtrip():
-    password_hash = get_password_hash("OldPassword123!")
-    token = create_password_reset_token("user@example.com", password_hash)
-    assert verify_password_reset_token(token, password_hash) == "user@example.com"
-    assert verify_password_reset_token(token, get_password_hash("NewPassword123!")) is None
+def test_access_token_carries_the_security_version():
+    assert access_token_security_version(decode_access_token(create_access_token("42"))) == 0
+    assert access_token_security_version(decode_access_token(create_access_token("42", security_version=7))) == 7
+    # a token issued before the claim existed counts as version 0
+    assert access_token_security_version({"sub": "42", "type": "access"}) == 0
+    assert access_token_security_version({"sub": "42", "sv": "garbage"}) == -1
 
 
-def test_email_verification_token_roundtrip():
-    token = create_email_verification_token("user@example.com")
-    assert verify_email_verification_token(token) == "user@example.com"
+@pytest.mark.parametrize("token_type", ["password_reset", "email_verification", "kyc_document_view", "", None])
+def test_a_signed_jwt_of_another_type_is_not_an_access_token(token_type):
+    """Email links are no longer JWTs at all (app.services.auth_tokens), and a
+    correctly signed token of any other type never authenticates a request."""
+    claims = {"sub": "42", "iss": settings.JWT_ISSUER, "aud": settings.JWT_AUDIENCE}
+    if token_type is not None:
+        claims["type"] = token_type
+    forged = jwt.encode(claims, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    assert decode_access_token(forged) == {}
 
 
-def test_password_reset_token_rejects_wrong_type():
-    token = create_access_token("user@example.com")
-    assert verify_password_reset_token(token, get_password_hash("Anything123!")) is None
+def test_link_tokens_are_not_minted_as_jwts_any_more():
+    """The reusable JWT link tokens are gone: nothing can mint one."""
+    import app.core.security as security
+
+    for name in ("create_password_reset_token", "create_email_verification_token",
+                 "verify_password_reset_token", "verify_email_verification_token"):
+        assert not hasattr(security, name)

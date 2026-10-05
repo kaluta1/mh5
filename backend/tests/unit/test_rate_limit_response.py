@@ -122,6 +122,10 @@ def test_rate_limit_policy_is_unchanged():
         "/api/v1/contact": (5, 3600),
         "/api/v1/newsletter/subscribe": (5, 3600),
         "/api/v1/admin/email-settings/test": (10, 3600),
+        # EMAIL-2: new auth endpoints (added; nothing above changed)
+        "/api/v1/auth/resend-verification": (5, 3600),
+        "/api/v1/auth/verify-email": (20, 3600),
+        "/api/v1/auth/change-password": (10, 3600),
     }
     assert rl.GLOBAL_LIMIT == (200, 60)
 
@@ -209,9 +213,8 @@ def test_spoofed_forwarded_for_cannot_bypass_limit_behind_uvicorn_proxy_headers(
     rl._buckets.clear()
 
 
-@pytest.mark.xfail(strict=True, reason="FINDING (not fixed in 4.2): without uvicorn's proxy-header rewrite, "
-                                       "_client_ip trusts the LEFT-most X-Forwarded-For entry, which a client "
-                                       "can supply; the right-most (proxy-appended) entry is the trustworthy one.")
+# The Phase 4.2 finding (left-most entry trusted without uvicorn's rewrite) is
+# fixed in EMAIL-2 (app.core.client_ip): this used to be a strict xfail.
 def test_app_level_forwarded_parsing_uses_proxy_appended_entry():
     req = _request(client=("127.0.0.1", 1), headers=[("x-forwarded-for", "1.1.1.1, 203.0.113.77")])
     assert rl._client_ip(req) == "203.0.113.77"

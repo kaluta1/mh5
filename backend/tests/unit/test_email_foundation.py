@@ -19,7 +19,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
-from app.core.security import get_password_hash, verify_email_verification_token, verify_password_reset_token
+from app.core.security import get_password_hash
+from app.models.auth_security import AuthToken
+from app.services import auth_tokens
 from app.models.accounting import AuditTrail
 from app.models.email import EmailDelivery, EmailEventSetting, EmailSettings
 from app.models.user import Permission, Role, User
@@ -122,7 +124,7 @@ def test_registry_defaults_and_critical_events():
         "ADMIN.KYC_REVIEW_REQUIRED"}
     # exactly the events the application emits today have a template
     live = {d.key for d in all_events() if d.trigger_implemented}
-    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 13
+    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 14      # 13 + AUTH.WELCOME (EMAIL-2)
 
 
 def test_nomination_and_participation_events_stay_separate():
@@ -664,8 +666,10 @@ def test_delivery_log_is_masked_and_carries_no_content(client, db, email_outbox)
     email_outbox.provider.script = [ProviderResult(True, provider_message_id="msg_1"),
                                     ProviderResult(False, retryable=False, error_category=FAIL_REJECTED)]
     assert len(email_outbox) == 1
-    reset_link = re.search(r"reset-password\?token=([\w\-.]+)", email_outbox[0]["html"]).group(1)
-    assert verify_password_reset_token(reset_link, user.hashed_password) == user.email   # created at send time
+    reset_link = re.search(r"reset-password#token=([\w\-]+)", email_outbox[0]["html"]).group(1)
+    issued = db.query(AuthToken).one()                                       # created at send time, digest only
+    assert (issued.user_id, issued.purpose, issued.token_hash) == (user.id, "password_reset",
+                                                                   auth_tokens.hash_token(reset_link))
 
     h = auth(make_user(db, admin=True))
     data = client.get(f"{BASE}/deliveries", headers=h).json()
@@ -745,20 +749,24 @@ def _events(db):
     return [r.event_key for r in db.query(EmailDelivery).order_by(EmailDelivery.id).all()]
 
 
-def test_registration_sends_the_welcome_verification_email(client, db, email_outbox, test_user_data):
+def test_registration_sends_the_verification_email_then_the_welcome(client, db, email_outbox, test_user_data):
     assert client.post("/api/v1/auth/register?lang=fr", json=test_user_data).status_code == 201
     assert _events(db) == ["AUTH.EMAIL_VERIFICATION"]
     row = db.query(EmailDelivery).one()
     user = db.query(User).filter(User.email == test_user_data["email"]).one()
     assert (row.user_id, row.lang, row.idempotency_key) == (user.id, "fr", f"auth.email_verification:user:{user.id}")
     mail = email_outbox[0]
-    assert mail["to"] == test_user_data["email"] and "Bienvenue" in mail["subject"]
-    token = re.search(r"/verify-email\?token=([\w\-.]+)", mail["html"]).group(1)
-    assert verify_email_verification_token(token) == test_user_data["email"]
-    assert token not in stored_text(db)                                     # the token is never stored
-    assert client.post(f"/api/v1/auth/verify-email?token={token}").status_code == 200
+    assert mail["to"] == test_user_data["email"] and "Vérifiez" in mail["subject"]
+    assert "Bienvenue" not in mail["subject"]                               # the welcome is a separate, later email
+    token = re.search(r"/verify-email#token=([\w\-]+)", mail["html"]).group(1)
+    assert token not in mail["subject"]
+    assert token not in stored_text(db)                                     # only its digest is stored
+    assert db.query(AuthToken).one().token_hash == auth_tokens.hash_token(token)
+    assert client.post("/api/v1/auth/verify-email", json={"token": token}).status_code == 200
     db.refresh(user)
     assert user.email_verified is True
+    assert _events(db) == ["AUTH.EMAIL_VERIFICATION", "AUTH.WELCOME"]
+    assert "Bienvenue" in email_outbox[-1]["subject"]
 
 
 def test_password_reset_and_password_changed(client, db, email_outbox, test_user_data):
@@ -771,12 +779,12 @@ def test_password_reset_and_password_changed(client, db, email_outbox, test_user
     assert r.status_code == 200
     assert _events(db) == ["AUTH.EMAIL_VERIFICATION", "AUTH.PASSWORD_RESET"]
     mail = email_outbox[-1]
-    token = re.search(r"/reset-password\?token=([\w\-.]+)", mail["html"]).group(1)
+    token = re.search(r"/reset-password#token=([\w\-]+)", mail["html"]).group(1)
     r = client.post("/api/v1/auth/password-reset-confirm", json={"token": token, "new_password": "N3w*Passw0rd!x"})
     assert r.status_code == 200, r.text
     assert _events(db)[-1] == "AUTH.PASSWORD_CHANGED"
     assert "MyHigh5" in email_outbox[-1]["subject"] and email_outbox[-1]["to"] == email
-    # the used link is dead (bound to the old password)
+    # the used link is dead (one-time)
     assert client.post("/api/v1/auth/password-reset-confirm",
                        json={"token": token, "new_password": "An0ther*Passw0rd!"}).status_code == 400
     # change-password also notifies, once per new password
