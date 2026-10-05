@@ -21,7 +21,7 @@ const BASE = '/api/v1/admin/email-settings'
 type Warning = { code: string; level: 'critical' | 'warning'; message: string }
 
 type Overview = {
-  status: 'active' | 'critical_only' | 'unavailable' | 'stopped'
+  status: 'active' | 'critical_only' | 'unavailable' | 'stopped' | 'configuration_required'
   email_enabled: boolean
   emergency_stop: boolean
   provider: { resend_enabled: boolean; configured: boolean; key_source: string }
@@ -95,6 +95,7 @@ const STATUS_LABEL: Record<Overview['status'], string> = {
   critical_only: 'Security email only',
   unavailable: 'Not sending (provider)',
   stopped: 'Emergency stop',
+  configuration_required: 'Configuration required',
 }
 
 const KEY_SOURCE_LABEL: Record<string, string> = {

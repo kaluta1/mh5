@@ -4,7 +4,7 @@ import logging
 
 from app.celery_app import celery_app
 from app.core.config import settings
-from app.services.email_outbox import run_outbox_once
+from app.services.email_outbox import outbox_executor, run_outbox_once
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 def drain_email_outbox():
     if not settings.EMAIL_OUTBOX_ENABLED:
         return {"enabled": False}
+    if outbox_executor() != "celery":
+        # Without USE_CELERY=true the web process drains the outbox itself.
+        return {"skipped": "in-process scheduler is the executor"}
     try:
         return run_outbox_once()
     except Exception as exc:  # noqa: BLE001

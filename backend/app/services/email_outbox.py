@@ -9,6 +9,18 @@ One pass:
   3. each claimed row is re-checked against the send policy, rendered, sent
      through the provider abstraction and updated on its own.
 
+Crash recovery: a worker that dies after claiming a row leaves it PROCESSING.
+After STALE_PROCESSING_AFTER the row is taken back: re-queued while attempts
+remain, FAILED ("stale_claim") once EMAIL_MAX_ATTEMPTS is reached, so a row can
+never stay PROCESSING forever nor loop forever. Delivery is at-least-once: a
+crash between the provider accepting a message and the row being saved can send
+that one message again on recovery (provider-side idempotency is EMAIL-5).
+
+Executor: exactly one mechanism drains the outbox per deployment mode. With
+USE_CELERY unset/false the in-process scheduler does; with USE_CELERY=true the
+in-process schedulers are not started (main.lifespan) and the Celery task does.
+Each one refuses to run in the other mode (outbox_executor()).
+
 Retry: only transient failures (timeout, network, HTTP 429, provider 5xx),
 with exponential backoff, up to EMAIL_MAX_ATTEMPTS. Anything else, or the last
 attempt, ends in FAILED. Final failures are visible in Admin > Email Settings;
@@ -22,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -64,10 +77,23 @@ def _finish(row: EmailDelivery, status: str, now: datetime, *, category: Optiona
         row.failed_at = now
 
 
+def outbox_executor() -> str:
+    """Which mechanism is responsible for draining the outbox in this process
+    environment: "celery" (USE_CELERY=true) or "scheduler" (in-process)."""
+    return "celery" if os.getenv("USE_CELERY", "false").strip().lower() in ("true", "1", "yes") else "scheduler"
+
+
 def _requeue_stale(db: Session, now: datetime) -> int:
-    stale = db.query(EmailDelivery).filter(EmailDelivery.status == "PROCESSING",
-                                           EmailDelivery.locked_at < now - STALE_PROCESSING_AFTER).all()
+    """Bounded recovery of rows whose worker died after claiming them."""
+    stale = (db.query(EmailDelivery)
+             .filter(EmailDelivery.status == "PROCESSING",
+                     EmailDelivery.locked_at < now - STALE_PROCESSING_AFTER)
+             .with_for_update(skip_locked=True).all())
+    max_attempts = max(int(settings.EMAIL_MAX_ATTEMPTS), 1)
     for row in stale:
+        if int(row.attempt_count or 0) >= max_attempts:
+            _finish(row, "FAILED", now, category="stale_claim")
+            continue
         row.status = "QUEUED"
         row.locked_at = None
         row.next_attempt_at = now
@@ -114,6 +140,10 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
         subject, html, text = render(db, event_key=row.event_key, to=to, user_id=row.user_id,
                                      context=payload.get("context"), lang=row.lang,
                                      support_email=policy.support_address(settings_row))
+    except email_crypto.EmailCryptoError:
+        # The dedicated key is missing or was changed after the email was queued.
+        _finish(row, "FAILED", now, category="encryption_unavailable")
+        return row.status
     except RenderError as exc:
         _finish(row, "FAILED", now, category="render_error", code=exc.code[:40])
         return row.status
@@ -247,7 +277,12 @@ def health(db: Session, *, now: Optional[datetime] = None) -> Dict[str, int]:
     open_counts = dict(db.query(EmailDelivery.status, func.count(EmailDelivery.id))
                        .filter(EmailDelivery.status.in_(("QUEUED", "PROCESSING")))
                        .group_by(EmailDelivery.status).all())
+    oldest_due = db.query(func.min(EmailDelivery.next_attempt_at)).filter(
+        EmailDelivery.status == "QUEUED", EmailDelivery.next_attempt_at <= now).scalar()
     return {
+        # How long the oldest due email has been waiting. Large = nothing is
+        # draining the outbox (no scheduler / no Celery worker running).
+        "oldest_due_seconds": int((now - oldest_due).total_seconds()) if oldest_due else 0,
         "queued": int(open_counts.get("QUEUED", 0)),
         "processing": int(open_counts.get("PROCESSING", 0)),
         "sent_24h": int(by_status.get("SENT", 0)) + int(by_status.get("DELIVERED", 0)),
@@ -310,4 +345,6 @@ class EmailOutboxScheduler:
     async def _drain_outbox(self):
         if not settings.EMAIL_OUTBOX_ENABLED:
             return
+        if outbox_executor() != "scheduler":
+            return      # USE_CELERY=true: the Celery task is the one executor
         await asyncio.to_thread(run_outbox_once)

@@ -76,6 +76,19 @@ describe('AdminEmailSettings', () => {
     expect(screen.getByText(/2 email\(s\) failed/)).toBeInTheDocument()
   })
 
+  it('shows "Configuration required" when the server has no email encryption key', async () => {
+    setup(overview({
+      status: 'configuration_required', critical_email_active: false,
+      warnings: [{ code: 'ENCRYPTION_KEY_MISSING', level: 'critical',
+        message: 'Configuration required: EMAIL_SETTINGS_ENCRYPTION_KEY is not set on the server.' }],
+    }), provider({ encryption_key_configured: false, override_configured: false, key_source: 'environment' }))
+    render(<AdminEmailSettings />)
+    expect(await screen.findByText('Configuration required')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('EMAIL_SETTINGS_ENCRYPTION_KEY is not set')
+    await openTab('Provider')
+    expect(await screen.findByLabelText('Set API key override')).toBeDisabled()
+  })
+
   it('switches the normal email system through the API', async () => {
     setup()
     render(<AdminEmailSettings />)

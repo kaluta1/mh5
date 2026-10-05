@@ -507,6 +507,7 @@ def test_scheduler_is_registered_and_never_raises(monkeypatch):
     from app.services.scheduler_manager import scheduler_manager
 
     assert "email-outbox" in scheduler_manager.list_tasks()
+    monkeypatch.setenv("USE_CELERY", "false")          # the in-process scheduler is the executor in this mode
     calls = []
     monkeypatch.setattr(outbox_module, "run_outbox_once", lambda: calls.append(1) or {})
     asyncio.run(scheduler_manager.run_task("email-outbox"))

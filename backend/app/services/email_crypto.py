@@ -1,18 +1,19 @@
 """Authenticated encryption for the email system (AES-256-GCM).
 
-Two separate keys, each derived with HKDF-SHA256 and bound to its purpose:
+Everything here is keyed by ONE secret, the dedicated
+EMAIL_SETTINGS_ENCRYPTION_KEY environment variable. Per-purpose keys are
+derived from it with HKDF-SHA256:
 
-* SETTINGS key: protects Admin-managed secrets stored in email_settings (the
-  Resend API-key override, a future webhook secret). It is derived ONLY from
-  the dedicated EMAIL_SETTINGS_ENCRYPTION_KEY environment secret. Without that
-  variable no secret can be stored or read back; nothing falls back to another
-  application key.
+* Admin-managed secrets stored in email_settings (the Resend API-key override,
+  a future webhook secret);
+* the short-lived delivery payload (recipient + template values) of a queued
+  email, deleted when the delivery reaches a terminal state;
+* the keyed recipient hash used to count deliveries per address.
 
-* OUTBOX key: protects the short-lived delivery payload (recipient + template
-  values) of a queued email until it reaches a terminal state, at which point
-  the payload is deleted. Derived from EMAIL_SETTINGS_ENCRYPTION_KEY when set,
-  otherwise from SECRET_KEY, so that queueing email keeps working on a
-  deployment that has not configured the dedicated secret yet.
+There is NO fallback to SECRET_KEY or to any other application secret. Without
+the dedicated key nothing can be encrypted or decrypted: the email subsystem
+reports "configuration required", no email is queued and no sensitive
+plaintext is stored. The rest of the application is unaffected.
 
 Ciphertext format: "v1:" + base64url(nonce(12) || ciphertext+tag). The purpose
 string is also the GCM associated data, so a value encrypted for one purpose
@@ -67,13 +68,6 @@ def _settings_key(purpose: str) -> bytes:
     return _derive(secret, purpose)
 
 
-def _outbox_secret() -> str:
-    secret = _settings_secret()
-    if len(secret) >= MIN_KEY_LENGTH:
-        return secret
-    return settings.SECRET_KEY or ""
-
-
 def _encrypt(key: bytes, plaintext: str, purpose: str) -> str:
     nonce = os.urandom(12)
     sealed = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), purpose.encode("utf-8"))
@@ -100,24 +94,19 @@ def decrypt_secret(token: str, purpose: str = PURPOSE_API_KEY) -> str:
 
 
 def encrypt_payload(payload: Any) -> str:
-    secret = _outbox_secret()
-    if not secret:
-        raise EmailCryptoError("no key available for the delivery payload")
-    return _encrypt(_derive(secret, PURPOSE_OUTBOX), json.dumps(payload, separators=(",", ":")), PURPOSE_OUTBOX)
+    return _encrypt(_settings_key(PURPOSE_OUTBOX), json.dumps(payload, separators=(",", ":")), PURPOSE_OUTBOX)
 
 
 def decrypt_payload(token: str) -> Any:
-    secret = _outbox_secret()
-    if not secret:
-        raise EmailCryptoError("no key available for the delivery payload")
-    return json.loads(_decrypt(_derive(secret, PURPOSE_OUTBOX), token, PURPOSE_OUTBOX))
+    return json.loads(_decrypt(_settings_key(PURPOSE_OUTBOX), token, PURPOSE_OUTBOX))
 
 
 def recipient_hash(address: Optional[str]) -> Optional[str]:
     """Keyed hash of a normalized address: lets the system count and look up
-    deliveries per recipient without keeping the address."""
+    deliveries per recipient without keeping the address. None when the
+    dedicated key is not configured (nothing is queued then anyway)."""
     normalized = (address or "").strip().lower()
-    if not normalized:
+    if not normalized or not settings_key_configured():
         return None
-    key = _derive(settings.SECRET_KEY or "email", _PURPOSE_RECIPIENT_HASH)
+    key = _settings_key(_PURPOSE_RECIPIENT_HASH)
     return hmac.new(key, normalized.encode("utf-8"), hashlib.sha256).hexdigest()

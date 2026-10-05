@@ -27,6 +27,7 @@ from app.services.email_events import EMAIL_EVENTS, TEST_EMAIL_KEY, UnknownEmail
 router = APIRouter()
 
 EMERGENCY_STOP_PHRASE = "STOP ALL EMAIL"
+OUTBOX_STALLED_AFTER_SECONDS = 300
 
 
 def require_email_manager(current_user: User = Depends(get_current_active_user)) -> User:
@@ -129,9 +130,15 @@ def _warnings(row, provider: dict, stats: dict, overrides: dict) -> List[dict]:
                     "message": "The stored API key override cannot be decrypted "
                                "(EMAIL_SETTINGS_ENCRYPTION_KEY is missing or was changed). Save the key again."})
     if not provider["encryption_key_configured"]:
-        out.append({"code": "ENCRYPTION_KEY_MISSING", "level": "warning",
-                    "message": "EMAIL_SETTINGS_ENCRYPTION_KEY is not set on the server: an API key override "
-                               "cannot be stored."})
+        out.append({"code": "ENCRYPTION_KEY_MISSING", "level": "critical",
+                    "message": "Configuration required: EMAIL_SETTINGS_ENCRYPTION_KEY is not set on the server. "
+                               "No email can be queued and an API key override cannot be stored until it is "
+                               "configured."})
+    if stats["oldest_due_seconds"] > OUTBOX_STALLED_AFTER_SECONDS:
+        out.append({"code": "OUTBOX_STALLED", "level": "critical",
+                    "message": "Queued email is not being sent: nothing is draining the outbox. Check that the "
+                               + ("Celery worker and beat are running." if email_outbox.outbox_executor() == "celery"
+                                  else "backend scheduler is running.")})
     if not row.email_enabled:
         out.append({"code": "MASTER_DISABLED", "level": "warning",
                     "message": "The email system is switched off: only security-critical email is sent."})
@@ -153,10 +160,14 @@ def overview(db: Session = Depends(get_db), current_user: User = Depends(get_cur
     stats = email_outbox.health(db)
     critical = [{"key": d.key, "label": d.label, "enabled": overrides.get(d.key, d.default_enabled)}
                 for d in all_events() if d.critical]
-    sending = provider["resend_enabled"] and provider["configured"] and not row.emergency_stop
+    configured = provider["encryption_key_configured"]
+    sending = provider["resend_enabled"] and provider["configured"] and not row.emergency_stop and configured
     return {
-        "status": ("stopped" if row.emergency_stop else "unavailable" if not sending
+        "status": ("stopped" if row.emergency_stop else "configuration_required" if not configured
+                   else "unavailable" if not sending
                    else "critical_only" if not row.email_enabled else "active"),
+        "encryption_key_configured": configured,
+        "outbox_executor": email_outbox.outbox_executor(),
         "email_enabled": bool(row.email_enabled),
         "emergency_stop": bool(row.emergency_stop),
         "provider": {k: provider[k] for k in ("resend_enabled", "configured", "key_source")},

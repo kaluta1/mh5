@@ -31,6 +31,9 @@ os.environ.setdefault("ANNUALADS_TENANT_ID", "test_tenant")
 # No test may contact a real video provider: external creative link checking is
 # off by default; the dead-link tests enable it with a fake HTTP layer.
 os.environ["CREATIVE_LINK_CHECK_ENABLED"] = "false"
+# Dedicated email encryption key (synthetic). Tests of the missing-key behaviour
+# remove it explicitly.
+os.environ["EMAIL_SETTINGS_ENCRYPTION_KEY"] = "synthetic-test-email-settings-encryption-key"
 
 # SQLite compat for PostgreSQL JSONB/ARRAY — MUST run before model import.
 from sqlalchemy import JSON, create_engine

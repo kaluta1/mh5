@@ -18,6 +18,12 @@ Contract with callers:
   programming error) raises.
 * A switched-off email is recorded as SUPPRESSED and never queued: turning a
   switch back on does not release a backlog.
+* Idempotency: one logical email = one delivery row, whatever the number of
+  retries of the business operation. Transient send failures are retried by
+  the worker ON THAT ROW. A row that failed before any attempt purely because
+  of configuration (no provider key, no encryption key) is re-armed, in
+  place, if the same logical email is triggered again once the configuration
+  is fixed. A second row is never created.
 """
 from __future__ import annotations
 
@@ -51,6 +57,14 @@ RECIPIENT_LIMITS: Dict[str, Tuple[int, int]] = {
 ADMIN_RECIPIENT_LIMIT: Tuple[int, int] = (60, 3600)
 # Referral invitations a single member may send per 24 hours.
 INVITATIONS_PER_DAY = 50
+# Platform-wide ceilings (count, window seconds) for email that an ANONYMOUS
+# visitor can cause to be sent to an address of their choosing. They bound the
+# damage of a distributed abuse that stays under the per-IP and per-recipient
+# limits, so the verified sending domain cannot be used as a relay.
+GLOBAL_EVENT_LIMITS: Dict[str, Tuple[int, int]] = {
+    EmailEvent.SUPPORT_CONTACT_CONFIRMATION.value: (100, 3600),
+    EmailEvent.SUPPORT_NEWSLETTER_CONFIRMATION.value: (200, 3600),
+}
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 200
 
@@ -93,7 +107,9 @@ class NotificationEmailService:
         if not key or len(key) > MAX_IDEMPOTENCY_KEY_LENGTH:
             raise ValueError("idempotency_key is required (max 200 characters)")
         existing = db.query(EmailDelivery).filter(EmailDelivery.idempotency_key == key).first()
-        if existing is not None:
+        rearm = (existing is not None and existing.status == "FAILED" and int(existing.attempt_count or 0) == 0
+                 and existing.failure_category in policy.CONFIGURATION_FAILURES)
+        if existing is not None and not rearm:
             return existing
 
         address = str(recipient or "").strip()
@@ -101,16 +117,30 @@ class NotificationEmailService:
         status, reason = ("QUEUED", None) if decision.allowed else (decision.status, decision.reason)
         if status == "QUEUED" and not policy.valid_email(address):
             status, reason = "SUPPRESSED", policy.REASON_INVALID_RECIPIENT
+        if status == "QUEUED" and not email_crypto.settings_key_configured():
+            # Configuration required: without the dedicated key the payload
+            # cannot be encrypted, and it is never stored in plaintext.
+            status, reason = "FAILED", policy.REASON_ENCRYPTION_UNCONFIGURED
         rhash = email_crypto.recipient_hash(address)
         if status == "QUEUED" and self._over_limit(db, definition, rhash, now):
             status, reason = "SUPPRESSED", policy.REASON_RATE_LIMITED
+        if status == "QUEUED" and self._over_global_limit(db, definition, now):
+            status, reason = "SUPPRESSED", policy.REASON_RATE_LIMITED_GLOBAL
 
-        row = EmailDelivery(
-            event_key=definition.key, category=definition.category.value, user_id=user_id,
-            recipient_masked=mask_email(address), recipient_hash=rhash, lang=normalize_lang(lang),
-            status=status, attempt_count=0, idempotency_key=key, failure_category=reason,
-            created_at=now, updated_at=now,
-        )
+        if rearm:
+            if status != "QUEUED":
+                return existing                       # still not sendable: the row stays as it is
+            row = existing
+            row.user_id, row.recipient_masked, row.recipient_hash = user_id, mask_email(address), rhash
+            row.lang, row.status, row.failure_category, row.failed_at = normalize_lang(lang), "QUEUED", None, None
+            row.updated_at = now
+        else:
+            row = EmailDelivery(
+                event_key=definition.key, category=definition.category.value, user_id=user_id,
+                recipient_masked=mask_email(address), recipient_hash=rhash, lang=normalize_lang(lang),
+                status=status, attempt_count=0, idempotency_key=key, failure_category=reason,
+                created_at=now, updated_at=now,
+            )
         if status == "QUEUED":
             row.payload_ciphertext = email_crypto.encrypt_payload({"to": address, "context": context})
             row.queued_at = now
@@ -141,6 +171,18 @@ class NotificationEmailService:
             EmailDelivery.user_id == user_id,
             EmailDelivery.created_at >= now - timedelta(seconds=seconds),
         ).scalar() or 0)
+
+    @staticmethod
+    def _over_global_limit(db: Session, definition, now: datetime) -> bool:
+        limit = GLOBAL_EVENT_LIMITS.get(definition.key)
+        if not limit:
+            return False
+        count = db.query(func.count(EmailDelivery.id)).filter(
+            EmailDelivery.event_key == definition.key,
+            EmailDelivery.created_at >= now - timedelta(seconds=limit[1]),
+            EmailDelivery.status != "SUPPRESSED",
+        ).scalar() or 0
+        return count >= limit[0]
 
     @staticmethod
     def _over_limit(db: Session, definition, rhash: Optional[str], now: datetime) -> bool:

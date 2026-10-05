@@ -52,6 +52,14 @@ REASON_MASTER_DISABLED = "master_disabled"
 REASON_EVENT_DISABLED = "event_disabled"
 REASON_INVALID_RECIPIENT = "invalid_recipient"
 REASON_RATE_LIMITED = "rate_limited"
+REASON_RATE_LIMITED_GLOBAL = "rate_limited_global"
+# The dedicated EMAIL_SETTINGS_ENCRYPTION_KEY is missing: a delivery payload
+# cannot be encrypted, so the email is not queued (and nothing is stored).
+REASON_ENCRYPTION_UNCONFIGURED = "encryption_unconfigured"
+
+# FAILED-before-any-attempt reasons that are pure configuration. A later
+# trigger of the SAME logical email may re-arm such a row (see email.enqueue).
+CONFIGURATION_FAILURES = (REASON_PROVIDER_DISABLED, REASON_PROVIDER_UNCONFIGURED, REASON_ENCRYPTION_UNCONFIGURED)
 
 _EMAIL_RE = re.compile(r"^[^@\s<>\"',;]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
                        r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$")

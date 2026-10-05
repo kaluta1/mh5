@@ -19,7 +19,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base_class import Base
 from app.models.email import EmailDelivery
-from app.services.email_outbox import claim_batch
+from app.core.config import settings
+from app.services.email_outbox import STALE_PROCESSING_AFTER, _requeue_stale, claim_batch
 
 pytestmark = [
     pytest.mark.postgres,
@@ -123,3 +124,33 @@ def test_idempotency_key_is_unique_in_postgres(pg):
             db.add(EmailDelivery(event_key="KYC.APPROVED", category="KYC", recipient_masked="x", status="NOPE",
                                  idempotency_key="pg:other", created_at=now, updated_at=now))
             db.commit()
+
+
+def test_stale_claims_are_recovered_once_and_bounded(pg, monkeypatch):
+    """A worker that died after claiming leaves rows PROCESSING: they are taken
+    back after the stale window, by one recovery pass only, and end FAILED when
+    the attempts are used up."""
+    monkeypatch.setattr(settings, "EMAIL_MAX_ATTEMPTS", 2)
+    _seed(pg, 4)
+    t0 = datetime.utcnow()
+    with pg() as db:
+        assert len(claim_batch(db, now=t0, batch_size=10)) == 4
+        assert _requeue_stale(db, t0 + STALE_PROCESSING_AFTER / 2) == 0          # not stale yet
+    later = t0 + STALE_PROCESSING_AFTER * 2
+    a, b = pg(), pg()
+    try:
+        # recovery pass A holds the rows; a concurrent pass B skips them instead of double-recovering
+        held = (a.query(EmailDelivery).filter(EmailDelivery.status == "PROCESSING")
+                .with_for_update(skip_locked=True).all())
+        assert len(held) == 4 and _requeue_stale(b, later) == 0
+        a.rollback()
+        assert _requeue_stale(b, later) == 4
+    finally:
+        a.close()
+        b.close()
+    with pg() as db:
+        assert {r.status for r in db.query(EmailDelivery).all()} == {"QUEUED"}
+        assert len(claim_batch(db, now=later, batch_size=10)) == 4               # second attempt, worker dies again
+        assert _requeue_stale(db, later + STALE_PROCESSING_AFTER * 2) == 4
+        rows = db.query(EmailDelivery).all()
+        assert all((r.status, r.failure_category, r.attempt_count) == ("FAILED", "stale_claim", 2) for r in rows)
