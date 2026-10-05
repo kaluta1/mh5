@@ -4,8 +4,8 @@ EmailSettings        one configuration row (id = 1).
 EmailEventSetting    Admin OVERRIDES of an event's enabled state; the default
                      lives in the source-controlled registry (email_events).
 EmailDelivery        the persistent outbox AND the delivery history.
-EmailWebhookEvent    forward-compatible store for provider webhook events
-                     (EMAIL-5 implements the processing).
+EmailWebhookEvent    provider webhook events (EMAIL-5): one row per provider
+                     event id; the ordered history of what the provider said.
 
 Privacy: a delivery row never stores an email body. The recipient address and
 the template values travel only inside `payload_ciphertext` (AES-256-GCM) and
@@ -110,3 +110,11 @@ class EmailWebhookEvent(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     # Safe metadata only (never the raw webhook body).
     meta: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)
+    # EMAIL-5. The provider's message id, kept on the event itself so an event
+    # that arrives before its delivery is known can be matched later.
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    # When the provider says it happened (events can arrive out of order).
+    occurred_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # When it was applied to a delivery (NULL while unmatched), and how.
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    outcome: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)

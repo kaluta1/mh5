@@ -12,9 +12,11 @@ One pass:
 Crash recovery: a worker that dies after claiming a row leaves it PROCESSING.
 After STALE_PROCESSING_AFTER the row is taken back: re-queued while attempts
 remain, FAILED ("stale_claim") once EMAIL_MAX_ATTEMPTS is reached, so a row can
-never stay PROCESSING forever nor loop forever. Delivery is at-least-once: a
-crash between the provider accepting a message and the row being saved can send
-that one message again on recovery (provider-side idempotency is EMAIL-5).
+never stay PROCESSING forever nor loop forever. A crash between the provider
+accepting a message and the row being saved does NOT send it twice (EMAIL-5):
+every attempt for a delivery carries the same provider idempotency key and the
+same content (a one-time link is the delivery's own, not redrawn per attempt),
+so on recovery the provider answers with the first message's id.
 
 Executor: exactly one mechanism drains the outbox per deployment mode. With
 USE_CELERY unset/false the in-process scheduler does; with USE_CELERY=true the
@@ -33,6 +35,8 @@ recipient, the keyed recipient hash, the status and the timestamps remain.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import logging
 import os
 import uuid
@@ -45,9 +49,10 @@ from app.core.config import settings
 from app.core.redaction import mask_email
 from app.models.email import EmailDelivery
 from app.services import email_crypto, email_settings_service as policy
+from app.services import email_webhooks
 from app.services.email_events import EMAIL_EVENTS, TEST_EMAIL_KEY
 from app.services.email_providers import EmailMessage, EmailProvider, ProviderResult, get_provider
-from app.services.email_render import RenderError, render
+from app.services.email_render import DELIVERY_REF, RenderError, render
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +80,24 @@ def _finish(row: EmailDelivery, status: str, now: datetime, *, category: Optiona
         row.sent_at = now
     elif status == "FAILED":
         row.failed_at = now
+
+
+def delivery_ref(row: EmailDelivery) -> str:
+    """The immutable identity of a delivery: its id and its logical key."""
+    return f"{row.id}:{row.idempotency_key}"
+
+
+def provider_idempotency_key(row: EmailDelivery) -> str:
+    """The key the provider receives for this delivery (EMAIL-5).
+
+    Same delivery, any attempt -> same key; another delivery -> another key.
+    It is a keyed hash of the delivery's identity: no recipient, no content, no
+    token, nothing random per attempt, and unique to this installation (two
+    installations sharing a provider account cannot collide). 68 characters;
+    the provider allows 256."""
+    digest = hmac.new(settings.SECRET_KEY.encode("utf-8"), f"email-delivery:{delivery_ref(row)}".encode("utf-8"),
+                      hashlib.sha256).hexdigest()
+    return f"mh5-{digest}"
 
 
 def outbox_executor() -> str:
@@ -137,8 +160,10 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
     try:
         payload = email_crypto.decrypt_payload(row.payload_ciphertext)
         to = payload["to"]
+        context = dict(payload.get("context") or {})
+        context[DELIVERY_REF] = delivery_ref(row)
         subject, html, text = render(db, event_key=row.event_key, to=to, user_id=row.user_id,
-                                     context=payload.get("context"), lang=row.lang,
+                                     context=context, lang=row.lang,
                                      support_email=policy.support_address(settings_row))
     except email_crypto.EmailCryptoError:
         # The dedicated key is missing or was changed after the email was queued.
@@ -154,8 +179,12 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
 
     message = EmailMessage(to=to, subject=subject, html=html, text=text,
                            from_header=policy.from_header(settings_row), reply_to=settings_row.reply_to or None)
+    # What rendering wrote (the digest of a one-time link) is made durable BEFORE
+    # the provider is contacted: a link that has been mailed must exist in the
+    # database even if this process dies before recording the send.
+    db.commit()
     try:
-        result = provider.send(message, api_key=decision.api_key)
+        result = provider.send(message, api_key=decision.api_key, idempotency_key=provider_idempotency_key(row))
     except Exception as exc:  # noqa: BLE001 - a provider must not raise; treat as transient
         result = ProviderResult(False, retryable=True, error_category="provider_exception",
                                 error_code=type(exc).__name__[:40])
@@ -163,6 +192,8 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
     if result.success:
         row.provider_message_id = result.provider_message_id
         _finish(row, "SENT", now)
+        # Provider events that arrived before this id was recorded.
+        email_webhooks.apply_pending(db, row, now=now)
         logger.info("Email %s sent to %s (delivery %s)", row.event_key, row.recipient_masked, row.id)
     elif result.retryable and int(row.attempt_count or 0) < max(int(settings.EMAIL_MAX_ATTEMPTS), 1):
         row.status = "QUEUED"
@@ -250,7 +281,8 @@ def send_test_email(db: Session, *, recipient: str, actor_id: Optional[int],
     try:
         result = provider.send(EmailMessage(to=address, subject=subject, html=html, text=text,
                                             from_header=policy.from_header(settings_row),
-                                            reply_to=settings_row.reply_to or None), api_key=decision.api_key)
+                                            reply_to=settings_row.reply_to or None), api_key=decision.api_key,
+                               idempotency_key=provider_idempotency_key(row))
     except Exception as exc:  # noqa: BLE001
         result = ProviderResult(False, error_category="provider_exception", error_code=type(exc).__name__[:40])
     row.provider = provider.name

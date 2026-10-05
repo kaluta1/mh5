@@ -474,7 +474,7 @@ def test_a_provider_that_raises_does_not_stop_the_batch(db, email_outbox):
         def __init__(self):
             self.calls = 0
 
-        def send(self, message, *, api_key):
+        def send(self, message, *, api_key, idempotency_key=None):
             self.calls += 1
             if self.calls == 1:
                 raise RuntimeError("boom with secret " + api_key)

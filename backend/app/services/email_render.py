@@ -19,6 +19,10 @@ from app.services.email_events import TEST_EMAIL_KEY, EmailEvent
 
 Rendered = Tuple[str, str, Optional[str]]
 
+# Reserved context key: the identity of the delivery being rendered, set by the
+# outbox worker (never stored, never chosen by a caller of email_service).
+DELIVERY_REF = "_delivery"
+
 
 class RenderError(Exception):
     """The delivery can no longer be rendered (e.g. the account is gone)."""
@@ -51,7 +55,7 @@ def _user(db: Session, user_id: Optional[int]):
     return user
 
 
-def _one_time_link(db: Session, user, purpose: str, path: str) -> str:
+def _one_time_link(db: Session, user, purpose: str, path: str, delivery_ref: Optional[str] = None) -> str:
     """Issue the one-time credential NOW (send time) and build its link.
 
     Only the credential's digest is stored (auth_tokens); the credential lives
@@ -62,7 +66,14 @@ def _one_time_link(db: Session, user, purpose: str, path: str) -> str:
     /verify-email and /reset-password)."""
     from app.services import auth_tokens
 
-    return f"{public_site_base()}{path}#token={auth_tokens.issue(db, user, purpose)}"
+    try:
+        # `delivery_ref` (set by the outbox) makes the link the delivery's own:
+        # sending the same delivery again produces the same link and body.
+        token = auth_tokens.issue(db, user, purpose, delivery_ref=delivery_ref)
+    except auth_tokens.AuthTokenError as exc:
+        # The link of this delivery was already used, or replaced by a newer one.
+        raise RenderError(f"link_{exc.reason}") from None
+    return f"{public_site_base()}{path}#token={token}"
 
 
 def _recipient_account(db: Session, to: str, user_id: Optional[int]):
@@ -81,7 +92,7 @@ def _verification(db: Session, to: str, user_id: Optional[int], ctx: dict, lang:
     user = _recipient_account(db, to, user_id)
     if user.email_verified:
         raise RenderError("already_verified")       # nothing left to verify: no email, no credential
-    link = _one_time_link(db, user, PURPOSE_EMAIL_VERIFICATION, "/verify-email")
+    link = _one_time_link(db, user, PURPOSE_EMAIL_VERIFICATION, "/verify-email", ctx.get(DELIVERY_REF))
     minutes = int(auth_tokens.lifetime(PURPOSE_EMAIL_VERIFICATION).total_seconds() // 60)
     return tpl.get_verify_email(lang, link, minutes, new_account=bool(ctx.get("new_account")))
 
@@ -96,7 +107,7 @@ def _password_reset(db: Session, to: str, user_id: Optional[int], ctx: dict, lan
     from app.services import auth_tokens
 
     user = _recipient_account(db, to, user_id)
-    link = _one_time_link(db, user, PURPOSE_PASSWORD_RESET, "/reset-password")
+    link = _one_time_link(db, user, PURPOSE_PASSWORD_RESET, "/reset-password", ctx.get(DELIVERY_REF))
     minutes = int(auth_tokens.lifetime(PURPOSE_PASSWORD_RESET).total_seconds() // 60)
     return tpl.get_password_reset_email(lang, link, minutes)
 

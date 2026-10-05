@@ -185,7 +185,7 @@ def test_real_email_path_masks_recipient_and_never_logs_tokens(consent_world, cl
     sent = []
     monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
     monkeypatch.setattr(resend.Emails, "send",
-                        staticmethod(lambda params: sent.append(params) or {"id": "synthetic-id"}))
+                        staticmethod(lambda params, options=None: sent.append(params) or {"id": "synthetic-id"}))
     caplog.set_level(logging.DEBUG)
     resp, body = register(date_of_birth="2012-06-01", guardian_email="parent.log@example.com")
     assert resp.status_code == 202
@@ -220,7 +220,7 @@ def test_email_failure_log_is_masked(db, monkeypatch, caplog):
 
     monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
 
-    def boom(params):
+    def boom(params, options=None):
         raise RuntimeError(f"provider rejected {params['to'][0]}")
 
     monkeypatch.setattr(resend.Emails, "send", staticmethod(boom))

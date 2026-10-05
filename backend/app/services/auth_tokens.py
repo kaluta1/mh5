@@ -28,6 +28,7 @@ Every refusal is reported to the caller as the same error.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import secrets
@@ -74,25 +75,70 @@ def email_fingerprint(email: Optional[str]) -> str:
                     hashlib.sha256).hexdigest()
 
 
-def revoke(db: Session, user_id: int, purpose: str, *, now: Optional[datetime] = None) -> int:
-    """Revoke the account's unused credentials of one purpose. No commit."""
+def revoke(db: Session, user_id: int, purpose: str, *, now: Optional[datetime] = None,
+           keep_id: Optional[int] = None) -> int:
+    """Revoke the account's unused credentials of one purpose (all but
+    `keep_id`). No commit."""
     now = now or datetime.utcnow()
-    return int(db.query(AuthToken).filter(
+    query = db.query(AuthToken).filter(
         AuthToken.user_id == user_id, AuthToken.purpose == purpose,
-        AuthToken.consumed_at.is_(None), AuthToken.revoked_at.is_(None),
-    ).update({AuthToken.revoked_at: now, AuthToken.updated_at: now}, synchronize_session=False) or 0)
+        AuthToken.consumed_at.is_(None), AuthToken.revoked_at.is_(None))
+    if keep_id is not None:
+        query = query.filter(AuthToken.id != keep_id)
+    return int(query.update({AuthToken.revoked_at: now, AuthToken.updated_at: now}, synchronize_session=False) or 0)
 
 
-def issue(db: Session, user: User, purpose: str, *, now: Optional[datetime] = None) -> str:
+def delivery_credential(purpose: str, user_id: int, delivery_ref: str) -> str:
+    """The credential of ONE email delivery, reproducible for that delivery.
+
+    A delivery that has to be sent again (a provider timeout, or a crash after
+    the provider accepted the message) must carry the SAME link as before:
+    otherwise the retry would either mail a second, different link, or - with
+    the provider refusing the duplicate - leave the member holding a link that
+    was replaced. So the value is derived, not drawn: HMAC-SHA256 under the
+    server secret over the delivery's own identity. It is 256 bits, cannot be
+    computed without the server secret, is different for every delivery, and
+    is still never stored: the database holds its digest only."""
+    key = hmac.new(settings.SECRET_KEY.encode("utf-8"), b"auth-link-credential", hashlib.sha256).digest()
+    digest = hmac.new(key, f"{purpose}:{int(user_id)}:{delivery_ref}".encode("utf-8"), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def issue(db: Session, user: User, purpose: str, *, now: Optional[datetime] = None,
+          delivery_ref: Optional[str] = None) -> str:
     """Create a credential for `user` and return it (the only time it exists
     outside the email). Earlier unused credentials of the purpose are revoked.
-    The caller commits."""
+    The caller commits.
+
+    With `delivery_ref` (the outbox passes the delivery's identity) the
+    credential is the delivery's own (see delivery_credential): issuing it
+    again for the same delivery returns the same value and keeps the same
+    row, with a fresh lifetime. If that link was already used, or replaced by
+    a newer one, AuthTokenError says so and nothing is issued."""
     if purpose not in TOKEN_PURPOSES:
         raise ValueError(f"unknown token purpose: {purpose}")
     now = now or datetime.utcnow()
+    if delivery_ref:
+        raw = delivery_credential(purpose, user.id, delivery_ref)
+        existing = db.query(AuthToken).filter(AuthToken.token_hash == hash_token(raw)).first()
+        if existing is not None:
+            if existing.user_id != user.id or existing.purpose != purpose:
+                raise AuthTokenError("unknown")
+            if existing.consumed_at is not None:
+                raise AuthTokenError("used")
+            if existing.revoked_at is not None:
+                raise AuthTokenError("revoked")
+            revoke(db, user.id, purpose, now=now, keep_id=existing.id)
+            existing.expires_at = now + lifetime(purpose)
+            existing.email_hash = email_fingerprint(user.email)
+            existing.security_version = int(user.security_version or 0)
+            existing.updated_at = now
+            db.flush()
+            return raw
+    else:
+        raw = secrets.token_urlsafe(32)
     revoke(db, user.id, purpose, now=now)
     db.query(AuthToken).filter(AuthToken.expires_at < now - RETENTION).delete(synchronize_session=False)
-    raw = secrets.token_urlsafe(32)
     db.add(AuthToken(user_id=user.id, purpose=purpose, token_hash=hash_token(raw),
                      email_hash=email_fingerprint(user.email), security_version=int(user.security_version or 0),
                      expires_at=now + lifetime(purpose), created_at=now, updated_at=now))

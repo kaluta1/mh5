@@ -54,6 +54,9 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/contact": (5, 3600),
     "/api/v1/newsletter/subscribe": (5, 3600),
     "/api/v1/admin/email-settings/test": (10, 3600),
+    # EMAIL-5: provider delivery webhooks arrive in bursts from the provider's
+    # addresses. Unauthenticated callers are refused by the signature check.
+    "/api/v1/webhooks/resend": (600, 60),
 }
 
 # Global fallback: 200 requests per minute per IP

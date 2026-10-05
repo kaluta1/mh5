@@ -54,6 +54,10 @@ api_router.include_router(affiliate.router, prefix="/affiliates", tags=["Affilia
 api_router.include_router(fmr.router, prefix="/fmr", tags=["Founding membership"])
 api_router.include_router(sponsor_annualads.webhook_router, prefix="/webhooks", tags=["Webhooks — Annual Ads"])
 api_router.include_router(payment_webhooks.router, prefix="/webhooks", tags=["Webhooks — Payments"])
+# EMAIL-5: provider delivery webhooks (authenticated by the provider's signature, not by a session).
+from app.api.api_v1.endpoints import email_webhooks as email_webhook_endpoints  # noqa: E402
+
+api_router.include_router(email_webhook_endpoints.router, prefix="/webhooks", tags=["Webhooks — Email"])
 api_router.include_router(sponsor_annualads.sso_router, prefix="/sponsor-embed", tags=["Sponsor embed — Annual Ads"])
 api_router.include_router(wallet.router, prefix="/wallet", tags=["Portefeuille"])
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])

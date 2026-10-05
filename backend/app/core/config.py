@@ -106,6 +106,10 @@ class Settings(BaseModel):
     
     # EMAIL - Resend API
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    # Signing secret of the Resend webhook (starts with "whsec_"), shown once in the Resend
+    # dashboard when the webhook is created. It is NOT the API key. Empty = the webhook
+    # endpoint accepts nothing (503).
+    RESEND_WEBHOOK_SECRET: str = os.getenv("RESEND_WEBHOOK_SECRET", "")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "MyHigh5 <infos@myhigh5.com>")
     EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "MyHigh5")
     # Dedicated secret protecting Admin-managed email secrets stored in the

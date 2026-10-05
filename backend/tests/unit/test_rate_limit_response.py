@@ -126,6 +126,8 @@ def test_rate_limit_policy_is_unchanged():
         "/api/v1/auth/resend-verification": (5, 3600),
         "/api/v1/auth/verify-email": (20, 3600),
         "/api/v1/auth/change-password": (10, 3600),
+        # EMAIL-5: provider delivery webhooks (added; nothing above changed)
+        "/api/v1/webhooks/resend": (600, 60),
     }
     assert rl.GLOBAL_LIMIT == (200, 60)
 

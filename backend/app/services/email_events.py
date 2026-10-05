@@ -35,8 +35,17 @@ EMAIL-3  status emails that follow a COMMITTED state transition:
          Intentionally unwired: AUTH.ACCOUNT_SUSPENDED, AUTH.ACCOUNT_RESTORED.
 EMAIL-4  (blocked, pending payment decisions) billing, affiliate commission
          and payout events. Nothing in EMAIL-3 touches them.
-EMAIL-5  provider webhooks (delivered / bounced / complained) and
-         provider-side idempotency. Not started.
+EMAIL-5  provider delivery layer (app.services.email_webhooks,
+         email_providers, email_outbox): signed Resend webhooks update a
+         delivery's state (delivered / delayed / bounced / complained /
+         failed) and every send carries a provider idempotency key. Provider
+         webhook events are NOT business email events and are not in this
+         registry. A bounce or complaint is recorded only: no suppression and
+         no account change exists (a product decision not yet made).
+         Operations: set RESEND_WEBHOOK_SECRET, then create the webhook in the
+         Resend dashboard for POST /api/v1/webhooks/resend with the events
+         email.sent, email.delivered, email.delivery_delayed, email.bounced,
+         email.complained, email.failed.
 Open backlog outside these phases: email branding / deliverability (logo in
 received mail, spam placement).
 """
