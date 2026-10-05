@@ -7,6 +7,7 @@ import dynamic from "next/dynamic"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { AdminSidebar } from "@/components/dashboard/admin-sidebar"
 import { DashboardNavbar } from "@/components/dashboard/dashboard-navbar"
+import { EmailVerificationBanner } from "@/components/dashboard/email-verification-banner"
 import { useAuth } from "@/hooks/use-auth"
 import { useReferralShare } from "@/hooks/use-referral-share"
 import { toPublicSharePath } from "@/lib/public-share-urls"
@@ -131,6 +132,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Page content with padding for fixed header */}
         <main className="pt-16 py-6 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
+            <EmailVerificationBanner />
             {children}
           </div>
         </main>

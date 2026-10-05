@@ -137,8 +137,8 @@ def test_new_registration_creates_an_unverified_account_and_queues_only_the_veri
                         "code": "REGISTRATION_ACCEPTED", "email": data["email"]}
     user = db.query(User).filter(User.email == data["email"]).one()
     assert (user.email_verified, user.security_version, user.is_active) == (False, 0, True)
+    assert user.email_verification_required is True                         # recorded on the account, at creation
     assert events(db) == ["AUTH.EMAIL_VERIFICATION"]                        # no welcome yet
-    assert login(client, data["email"]).status_code == 200                  # sign-in itself is unchanged
 
 
 def test_registration_answer_is_the_same_for_new_verified_and_unverified_addresses(client, db, email_outbox, ip,
@@ -201,6 +201,9 @@ def test_a_registration_cannot_take_over_an_unverified_account(client, db, email
     assert client.post(f"{A}/register", json=data).status_code == 201
     again = client.post(f"{A}/register", json=body(email=data["email"], password=PW2))
     assert again.status_code == 201
+    assert login(client, data["email"], PW2).status_code == 401             # the second password was never stored
+    db.query(User).filter(User.email == data["email"]).update({User.email_verified: True})
+    db.commit()
     assert login(client, data["email"], PW).status_code == 200
     assert login(client, data["email"], PW2).status_code == 401
     assert db.query(User).filter(User.email == data["email"]).count() == 1
@@ -1068,6 +1071,9 @@ def test_registration_survives_an_email_service_crash(client, db, ip, monkeypatc
     data = body()
     assert client.post(f"{A}/register", json=data).status_code == 201
     user = db.query(User).filter(User.email == data["email"]).one()
+    assert user.email_verified is False and user.email_verification_required is True   # a legitimate unverified account
+    user.email_verified = True
+    db.commit()
     session = login(client, user).json()["access_token"]
     r = client.post(f"{A}/change-password", headers=bearer(session),
                     json={"current_password": PW, "new_password": PW2})

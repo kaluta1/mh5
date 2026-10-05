@@ -134,6 +134,10 @@ class User(UserBase):
     is_active: bool = True
     is_verified: bool = False
     is_admin: bool = False
+    # Email address ownership (EMAIL-2). Lets the account pages show "Verify
+    # your email" to a member who signed in without having verified.
+    email_verified: bool = False
+    email_verification_required: bool = False
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     gender: Optional[str] = None

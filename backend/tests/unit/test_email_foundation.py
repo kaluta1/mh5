@@ -770,6 +770,8 @@ def test_registration_sends_the_verification_email_then_the_welcome(client, db, 
 
 
 def test_password_reset_and_password_changed(client, db, email_outbox, test_user_data):
+    from tests.conftest import confirm_email
+
     client.post("/api/v1/auth/register", json=test_user_data)
     email = test_user_data["email"]
     for _ in range(2):                                                      # double submit in the same minute
@@ -788,6 +790,7 @@ def test_password_reset_and_password_changed(client, db, email_outbox, test_user
     assert client.post("/api/v1/auth/password-reset-confirm",
                        json={"token": token, "new_password": "An0ther*Passw0rd!"}).status_code == 400
     # change-password also notifies, once per new password
+    confirm_email(db, email)                                                # a new account signs in only once verified
     login = client.post("/api/v1/auth/login", data={"username": email, "password": "N3w*Passw0rd!x"})
     h = {"Authorization": f"Bearer {login.json()['access_token']}"}
     r = client.post("/api/v1/auth/change-password", headers=h,

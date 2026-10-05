@@ -12,7 +12,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/components/ui/toast'
 import { logger } from '@/lib/logger'
-import { resolveAuthLoginErrorMessage } from '@/lib/auth-login-error-message'
+import { isEmailNotVerifiedError, resolveAuthLoginErrorMessage } from '@/lib/auth-login-error-message'
 
 function LoginPageContent() {
   const { t } = useLanguage()
@@ -28,6 +28,8 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  // Correct credentials, but the email address is not confirmed yet.
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
 
   // Vérifier si un code de parrainage est présent dans l'URL
@@ -106,6 +108,7 @@ function LoginPageContent() {
     }
     
     setIsLoading(true)
+    setNeedsEmailVerification(false)
 
     const loadingTimeoutId = window.setTimeout(() => {
       setIsLoading(false)
@@ -122,7 +125,8 @@ function LoginPageContent() {
     } catch (err: any) {
       clearTimeout(loadingTimeoutId)
       logger.error('Login error', { message: err.message, status: err.response?.status, url: err.config?.baseURL + err.config?.url, detail: err.response?.data })
-      addToast(resolveAuthLoginErrorMessage(err, t), 'error', 6000)
+      if (isEmailNotVerifiedError(err)) setNeedsEmailVerification(true)
+      addToast(resolveAuthLoginErrorMessage(err, t), 'error', isEmailNotVerifiedError(err) ? 10000 : 6000)
     } finally {
       clearTimeout(loadingTimeoutId)
       setIsLoading(false)
@@ -225,6 +229,17 @@ function LoginPageContent() {
                   }
                 }}
               >
+              {needsEmailVerification && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-100"
+                >
+                  <p>{t('auth.login.errors.email_not_verified')}</p>
+                  <Link href="/verify-email" className="mt-2 inline-block font-semibold underline">
+                    {t('auth.login.errors.email_not_verified_action')}
+                  </Link>
+                </div>
+              )}
               {/* Email/Username */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">

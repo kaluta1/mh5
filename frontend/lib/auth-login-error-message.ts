@@ -11,6 +11,16 @@ function looksLikeGatewayHtml(body: string): boolean {
   )
 }
 
+/** Sent by the API when the password is right but the email address is not confirmed yet. */
+export const EMAIL_NOT_VERIFIED_CODE = 'EMAIL_NOT_VERIFIED'
+
+/** Is this login failure "confirm your email first"? (Only ever returned for correct credentials.) */
+export function isEmailNotVerifiedError(err: unknown): boolean {
+  const response = (err as AxiosError)?.response
+  const data = response?.data as { code?: unknown } | undefined
+  return response?.status === 403 && !!data && typeof data === 'object' && data.code === EMAIL_NOT_VERIFIED_CODE
+}
+
 /**
  * Map login failures to a short user-facing string. Never surface raw HTML from nginx/502 bodies.
  */
@@ -27,6 +37,13 @@ export function resolveAuthLoginErrorMessage(
 
   const axiosError = err as AxiosError
   const status = axiosError.response?.status
+
+  if (isEmailNotVerifiedError(err)) {
+    return (
+      t('auth.login.errors.email_not_verified') ||
+      'Please confirm your email address before signing in. Check your inbox for the confirmation link.'
+    )
+  }
 
   if (status === 503 || status === 502 || status === 504 || status === 500) {
     return fallbackUnavailable()

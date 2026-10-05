@@ -59,12 +59,61 @@
       "errors": {
         "invalid_credentials": "Email/nom d'utilisateur ou mot de passe invalide",
         "timeout": "Délai d'attente dépassé. Le serveur met trop de temps à répondre. Veuillez réessayer.",
-        "network_error": "Erreur réseau. Veuillez vérifier votre connexion et réessayer."
+        "network_error": "Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
+        "email_not_verified": "Veuillez confirmer votre adresse email avant de vous connecter. Le lien de confirmation se trouve dans votre boîte de réception.",
+        "email_not_verified_action": "Demander un nouveau lien de confirmation"
       }
     },
     "register": {
       "title": "Rejoindre MyFav",
-      "subtitle": "Créez votre compte et commencez à concourir"
+      "subtitle": "Créez votre compte et commencez à concourir",
+      "success_title": "Vérifiez votre email",
+      "success_message": "Votre inscription a bien été reçue. Nous avons envoyé un lien de confirmation à votre adresse email. Confirmez-la, puis connectez-vous.",
+      "password_requirement_length": "Au moins 12 caractères",
+      "password_requirement_special": "Un caractère spécial (par exemple ! @ # * _ - =)",
+      "errors": {
+        "password_min_length": "Le mot de passe doit contenir au moins 12 caractères",
+        "password_requirements": "Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial"
+      }
+    },
+    "verify_email": {
+      "verifying_title": "Vérification de votre email",
+      "verifying_message": "Veuillez patienter…",
+      "success_title": "Email vérifié",
+      "success_message": "Votre adresse email a été confirmée. Vous pouvez maintenant vous connecter.",
+      "continue_to_sign_in": "Continuer vers la connexion",
+      "error_title": "Ce lien ne peut pas être utilisé",
+      "error_invalid_link": "Ce lien est invalide, a expiré ou a déjà été utilisé. Si vous avez déjà confirmé votre email, vous pouvez simplement vous connecter. Sinon, demandez un nouveau lien ci-dessous.",
+      "error_old_link": "Ce lien provient d'un ancien email et n'est plus valide. Demandez un nouveau lien ci-dessous.",
+      "request_title": "Confirmez votre adresse email",
+      "request_message": "Saisissez votre adresse email et nous vous enverrons un nouveau lien de confirmation.",
+      "resend_label": "Votre adresse email",
+      "resend_placeholder": "vous@exemple.com",
+      "resend_button": "Envoyer un nouveau lien de confirmation",
+      "resend_sending": "Envoi…",
+      "resend_sent": "Si cette adresse correspond à un compte qui doit encore être confirmé, un nouveau lien de confirmation a été envoyé. Vérifiez votre boîte de réception.",
+      "resend_failed": "La demande n'a pas pu être envoyée. Veuillez réessayer plus tard.",
+      "resend_rate_limited": "Trop de demandes. Veuillez réessayer plus tard.",
+      "back_to_sign_in": "Retour à la connexion",
+      "banner_title": "Vérifiez votre email",
+      "banner_message": "Votre adresse email n'est pas encore confirmée. Confirmez-la pour protéger votre compte.",
+      "banner_button": "Renvoyer l'email de vérification",
+      "banner_sent": "Nous avons envoyé un lien de confirmation à votre adresse email. Vérifiez votre boîte de réception.",
+      "banner_failed": "L'email n'a pas pu être envoyé. Veuillez réessayer plus tard."
+    },
+    "reset_password": {
+      "no_token": "Ce lien de réinitialisation n'est pas valide.",
+      "password_min_length": "Le mot de passe doit contenir au moins 12 caractères",
+      "invalid_token": "Ce lien de réinitialisation est invalide, a expiré ou a déjà été utilisé. Veuillez en demander un nouveau.",
+      "no_token_title": "Ce lien de réinitialisation n'est plus valide",
+      "no_token_message": "Le lien est manquant, a expiré ou provient d'un ancien email. Demandez un nouveau lien de réinitialisation pour continuer.",
+      "old_link_message": "Ce lien provient d'un ancien email et n'est plus valide. Demandez un nouveau lien de réinitialisation pour continuer.",
+      "request_new_link": "Demander un nouveau lien",
+      "checking": "Vérification de votre lien…",
+      "success": "Votre mot de passe a été réinitialisé.",
+      "error": "Le mot de passe n'a pas pu être réinitialisé. Veuillez réessayer.",
+      "success_title": "Mot de passe réinitialisé",
+      "success_message": "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe."
     }
   },
   "features": {

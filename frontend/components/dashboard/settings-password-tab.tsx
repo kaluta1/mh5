@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Lock, Shield, CheckCircle2 } from 'lucide-react'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { PASSWORD_MIN_LENGTH, checkPassword, isPasswordAcceptable } from '@/lib/password-policy'
 
 interface SettingsPasswordTabProps {
   user: any
@@ -37,24 +38,14 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
 
   // Validation du mot de passe en temps réel
   const validatePassword = (value: string) => {
-    const errors = {
-      hasMinLength: value.length >= 8,
-      hasUpperCase: /[A-Z]/.test(value),
-      hasLowerCase: /[a-z]/.test(value),
-      hasNumber: /[0-9]/.test(value),
-      hasSpecialChar: /[*_/@=]/.test(value)
-    }
+    const errors = checkPassword(value)
     setPasswordErrors(errors)
   }
 
   // Vérifier si toutes les exigences du mot de passe sont remplies
   const isPasswordValid = () => {
     if (!newPassword) return false
-    return newPassword.length >= 8 &&
-      passwordErrors.hasUpperCase &&
-      passwordErrors.hasLowerCase &&
-      passwordErrors.hasNumber &&
-      passwordErrors.hasSpecialChar
+    return isPasswordAcceptable(newPassword)
   }
 
   const validateForm = () => {
@@ -67,7 +58,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
     if (!newPassword.trim()) {
       newErrors.newPassword = t('settings.password.new_required') || 'Le nouveau mot de passe est requis'
     } else if (!isPasswordValid()) {
-      newErrors.newPassword = t('auth.register.errors.password_requirements') || 'Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)'
+      newErrors.newPassword = t('auth.register.errors.password_requirements') || 'Password must include an uppercase letter, a lowercase letter, a number and a special character'
     }
 
     if (!confirmPassword.trim()) {
@@ -252,7 +243,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
               <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasMinLength ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 <span>{passwordErrors.hasMinLength ? '✓' : '○'}</span>
                 <span>
-                  {t('auth.register.password_requirement_min_length') || 'Au moins 8 caractères'}
+                  {t('auth.register.password_requirement_length') || `At least ${PASSWORD_MIN_LENGTH} characters`}
                 </span>
               </div>
               <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasUpperCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -276,7 +267,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
               <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasSpecialChar ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 <span>{passwordErrors.hasSpecialChar ? '✓' : '○'}</span>
                 <span>
-                  {t('auth.register.password_requirement_special') || 'Un caractère spécial (*_/@=)'}
+                  {t('auth.register.password_requirement_special') || 'One special character'}
                 </span>
               </div>
             </div>

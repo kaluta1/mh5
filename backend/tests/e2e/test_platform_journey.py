@@ -7,12 +7,22 @@ VALID_BEP20 = "0x" + "d" * 40
 pytestmark = pytest.mark.e2e
 
 
-def test_full_member_onboarding_journey(client, test_user_data):
+def test_full_member_onboarding_journey(client, db, test_user_data):
     """
     Register → login → profile → KYC diagnostics isolation → wallet → balance.
     """
     reg = client.post("/api/v1/auth/register", json=test_user_data)
     assert reg.status_code == 201
+
+    # A new account cannot sign in before its email address is confirmed.
+    early = client.post(
+        "/api/v1/auth/login",
+        data={"username": test_user_data["email"], "password": test_user_data["password"]},
+    )
+    assert early.status_code == 403 and early.json()["code"] == "EMAIL_NOT_VERIFIED"
+    from tests.conftest import confirm_email
+
+    confirm_email(db, test_user_data["email"])
 
     login = client.post(
         "/api/v1/auth/login",

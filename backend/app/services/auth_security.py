@@ -31,6 +31,10 @@ from app.services import auth_tokens
 
 logger = logging.getLogger(__name__)
 
+EMAIL_NOT_VERIFIED_CODE = "EMAIL_NOT_VERIFIED"
+EMAIL_NOT_VERIFIED_MESSAGE = ("Please confirm your email address before signing in. Check your inbox for the "
+                              "confirmation link, or request a new one.")
+
 AUDIT_EMAIL_VERIFIED = "AUTH_EMAIL_VERIFIED"
 AUDIT_PASSWORD_RESET = "AUTH_PASSWORD_RESET"
 AUDIT_PASSWORD_CHANGED = "AUTH_PASSWORD_CHANGED"
@@ -121,3 +125,12 @@ def access_token_user_id(token: Optional[str], db: Optional[Session] = None) -> 
     if current is None or access_token_security_version(payload) != int(current[0] or 0):
         return None
     return user_id
+
+
+def must_verify_email(user: Optional[User]) -> bool:
+    """Is this account barred from signing in until its address is verified?
+
+    True only for an account created under the verify-before-login rule
+    (`email_verification_required`) whose address is still unverified. An
+    account that predates the rule is never barred, verified or not."""
+    return bool(user is not None and user.email_verification_required and not user.email_verified)

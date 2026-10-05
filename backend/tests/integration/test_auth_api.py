@@ -5,15 +5,20 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-def test_register_and_login(client, test_user_data):
+def test_register_and_login(client, db, test_user_data):
+    from tests.conftest import confirm_email
+
     reg = client.post("/api/v1/auth/register", json=test_user_data)
     assert reg.status_code == 201
     assert reg.json()["email"] == test_user_data["email"]
 
-    login = client.post(
-        "/api/v1/auth/login",
-        data={"username": test_user_data["email"], "password": test_user_data["password"]},
-    )
+    credentials = {"username": test_user_data["email"], "password": test_user_data["password"]}
+    # Verify-before-login: correct credentials, unconfirmed address, no token.
+    early = client.post("/api/v1/auth/login", data=credentials)
+    assert early.status_code == 403 and "access_token" not in early.text
+    confirm_email(db, test_user_data["email"])
+
+    login = client.post("/api/v1/auth/login", data=credentials)
     assert login.status_code == 200
     body = login.json()
     assert "access_token" in body

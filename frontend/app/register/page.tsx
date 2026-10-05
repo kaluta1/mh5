@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageSelector } from '@/components/ui/language-selector'
 import { LocationSelectorSimple } from '@/components/auth/location-selector-simple'
 import { authService } from '@/lib/api'
+import { PASSWORD_MIN_LENGTH, PASSWORD_SPECIAL_CHARACTER } from '@/lib/password-policy'
 import { useLanguage } from '@/contexts/language-context'
 import { REGISTER_COPY } from '@/lib/register-copy'
 import { useToast } from '@/components/ui/toast'
@@ -160,7 +161,7 @@ function RegisterPageContent() {
       hasUpperCase: /[A-Z]/.test(value),
       hasLowerCase: /[a-z]/.test(value),
       hasNumber: /[0-9]/.test(value),
-      hasSpecialChar: /[*_/@=]/.test(value)
+      hasSpecialChar: PASSWORD_SPECIAL_CHARACTER.test(value)
     }
     setPasswordErrors(errors)
   }
@@ -168,7 +169,7 @@ function RegisterPageContent() {
   // Vérifier si toutes les exigences du mot de passe sont remplies
   const isPasswordValid = () => {
     if (!formData.password) return false
-    return formData.password.length >= 8 &&
+    return formData.password.length >= PASSWORD_MIN_LENGTH &&
            passwordErrors.hasUpperCase &&
            passwordErrors.hasLowerCase &&
            passwordErrors.hasNumber &&
@@ -237,25 +238,25 @@ function RegisterPageContent() {
       errorMessage = t('auth.register.errors.password_mismatch')
     }
 
-    if (formData.password && formData.password.length < 12) {
+    if (formData.password && formData.password.length < PASSWORD_MIN_LENGTH) {
       errors.password = true
       errorMessage = t('auth.register.errors.password_min_length')
     }
     
     // Vérifier les exigences du mot de passe
     if (formData.password) {
-      if (formData.password.length < 12) {
+      if (formData.password.length < PASSWORD_MIN_LENGTH) {
         errors.password = true
         errorMessage = t('auth.register.errors.password_min_length')
       } else {
         const hasUpperCase = /[A-Z]/.test(formData.password)
         const hasLowerCase = /[a-z]/.test(formData.password)
         const hasNumber = /[0-9]/.test(formData.password)
-        const hasSpecialChar = /[*_/@=]/.test(formData.password)
+        const hasSpecialChar = PASSWORD_SPECIAL_CHARACTER.test(formData.password)
         
         if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
           errors.password = true
-          errorMessage = t('auth.register.errors.password_requirements') || 'Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial (*_/@=)'
+          errorMessage = t('auth.register.errors.password_requirements') || 'Password must include an uppercase letter, a lowercase letter, a number and a special character'
         }
       }
     }
@@ -509,10 +510,10 @@ function RegisterPageContent() {
                   </div>
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  {t('auth.register.success_title') || 'Inscription réussie !'}
+                  {t('auth.register.success_title') || 'Check your email'}
                 </h2>
                 <p className="text-center text-gray-700 dark:text-gray-200 mb-6">
-                  {t('auth.register.success_message') || 'Bienvenue ! Votre compte a été créé avec succès.'}
+                  {t('auth.register.success_message') || 'We sent a confirmation link to your email address. Confirm it, then sign in.'}
                 </p>
                 <Button
                   onClick={() => {
@@ -660,9 +661,9 @@ function RegisterPageContent() {
                         {t('auth.register.password_requirements_title') || 'Le mot de passe doit contenir :'}
                       </p>
                       <div className="space-y-0.5">
-                        <div className={`text-xs flex items-center gap-2 ${formData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          <span>{formData.password.length >= 8 ? '✓' : '○'}</span>
-                          {t('auth.register.password_requirement_length') || 'Au moins 8 caractères'}
+                        <div className={`text-xs flex items-center gap-2 ${formData.password.length >= PASSWORD_MIN_LENGTH ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <span>{formData.password.length >= PASSWORD_MIN_LENGTH ? '✓' : '○'}</span>
+                          {t('auth.register.password_requirement_length') || `At least ${PASSWORD_MIN_LENGTH} characters`}
                         </div>
                         <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasUpperCase ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           <span>{passwordErrors.hasUpperCase ? '✓' : '○'}</span>
@@ -678,7 +679,7 @@ function RegisterPageContent() {
                         </div>
                         <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasSpecialChar ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           <span>{passwordErrors.hasSpecialChar ? '✓' : '○'}</span>
-                          {t('auth.register.password_requirement_special') || 'Un caractère spécial (*_/@=)'}
+                          {t('auth.register.password_requirement_special') || 'One special character'}
                         </div>
                       </div>
                     </div>

@@ -9,7 +9,8 @@ import { Lock, Eye, EyeOff, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context' 
 import { useToast } from '@/components/ui/toast'
 import { authService } from '@/lib/api'
-import { takeLinkToken } from '@/lib/one-time-link'
+import { takeLink } from '@/lib/one-time-link'
+import { PASSWORD_MIN_LENGTH, isPasswordAcceptable } from '@/lib/password-policy'
 
 function ResetPasswordPageContent() {
   const { t } = useLanguage()
@@ -17,6 +18,9 @@ function ResetPasswordPageContent() {
   const { addToast } = useToast()
   
   const [token, setToken] = useState('')
+  // 'checking' until the link has been read (no flash of the error screen);
+  // 'legacy' = a ?token= link from an email sent before one-time links.
+  const [linkState, setLinkState] = useState<'checking' | 'ready' | 'missing' | 'legacy'>('checking')
   const [formData, setFormData] = useState({
     new_password: '',
     confirm_password: ''
@@ -34,7 +38,9 @@ function ResetPasswordPageContent() {
   useEffect(() => {
     if (tokenTaken.current) return
     tokenTaken.current = true
-    setToken(takeLinkToken())
+    const link = takeLink()
+    setToken(link.token)
+    setLinkState(link.token ? 'ready' : link.kind === 'legacy' ? 'legacy' : 'missing')
   }, [])
 
   const validateForm = () => {
@@ -42,8 +48,10 @@ function ResetPasswordPageContent() {
     
     if (!formData.new_password) {
       newErrors.new_password = t('auth.reset_password.password_required') || 'Le mot de passe est requis'
-    } else if (formData.new_password.length < 6) {
-      newErrors.new_password = t('auth.reset_password.password_min_length') || 'Le mot de passe doit contenir au moins 6 caractères'
+    } else if (formData.new_password.length < PASSWORD_MIN_LENGTH) {
+      newErrors.new_password = t('auth.reset_password.password_min_length') || `Password must be at least ${PASSWORD_MIN_LENGTH} characters`
+    } else if (!isPasswordAcceptable(formData.new_password)) {
+      newErrors.new_password = t('auth.register.errors.password_requirements') || 'Password must include an uppercase letter, a lowercase letter, a number and a special character'
     }
     
     if (!formData.confirm_password) {
@@ -82,7 +90,8 @@ function ResetPasswordPageContent() {
         router.push('/login')
       }, 3000)
     } catch (error: any) {
-      let errorMessage = error.response?.data?.detail || error.message || t('auth.reset_password.error') || 'Erreur lors de la réinitialisation du mot de passe'
+      const detail = error.response?.data?.detail
+      let errorMessage = (typeof detail === 'string' ? detail : '') || error.message || t('auth.reset_password.error') || 'Erreur lors de la réinitialisation du mot de passe'
       
       // Traduire le message d'erreur si c'est un token invalide
       if (errorMessage.includes('Token invalide ou expiré') || errorMessage.includes('Invalid or expired token')) {
@@ -95,6 +104,15 @@ function ResetPasswordPageContent() {
     }
   }
 
+  if (linkState === 'checking') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900" role="status">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" aria-hidden />
+        <span className="sr-only">{t('auth.reset_password.checking') || 'Checking your link…'}</span>
+      </div>
+    )
+  }
+
   if (!token) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
@@ -102,14 +120,16 @@ function ResetPasswordPageContent() {
           <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8 text-center">
             <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              {t('auth.reset_password.no_token_title') || 'Token manquant'}
+              {t('auth.reset_password.no_token_title') || 'This reset link is no longer valid'}
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {t('auth.reset_password.no_token_message') || 'Le lien de réinitialisation est invalide ou a expiré.'}
+              {linkState === 'legacy'
+                ? t('auth.reset_password.old_link_message') || 'This link comes from an older email and is no longer valid. Request a new password reset link to continue.'
+                : t('auth.reset_password.no_token_message') || 'This reset link is no longer valid. Request a new one to continue.'}
             </p>
             <Link href="/forgot-password">
               <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                {t('auth.forgot_password.title') || 'Demander un nouveau lien'}
+                {t('auth.reset_password.request_new_link') || 'Request a new reset link'}
               </Button>
             </Link>
           </div>

@@ -28,6 +28,10 @@ export interface User {
   // Verification & Status
   is_active: boolean
   is_verified: boolean
+  /** Email address confirmed (false = show "Verify your email"). */
+  email_verified?: boolean
+  /** Account created under the verify-before-login rule. */
+  email_verification_required?: boolean
   is_admin: boolean
   identity_verified?: boolean
   address_verified?: boolean

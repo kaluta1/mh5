@@ -5,7 +5,15 @@ Revision ID: d1e2f3a4b5c6
 Revises: c0d1e2f3a4b5
 Create Date: 2026-10-05
 
-Additive only. Three things, all new:
+Additive only. Four things, all new:
+
+  users.email_verification_required   BOOLEAN NOT NULL DEFAULT false
+      Login policy marker. TRUE = the account was created by public
+      registration under the verify-before-login rule and cannot sign in
+      until its address is verified. EVERY EXISTING ROW GETS FALSE: accounts
+      that predate the rule are grandfathered and keep signing in, verified
+      or not. Nothing is marked verified, no verification date is invented;
+      users.email_verified is not touched.
 
   users.security_version   INTEGER NOT NULL DEFAULT 0
       Session generation. Access tokens carry the value they were issued
@@ -29,7 +37,11 @@ constant default does not rewrite the table.
 
 Downgrade drops exactly what this revision added. The two tables hold only
 short-lived security state (outstanding links, rate counters); dropping them
-loses no business data.
+loses no business data. Dropping email_verification_required forgets which
+accounts were created under the verify-before-login rule: after a downgrade
+and a later re-upgrade they would all count as grandfathered. Do not downgrade
+a database that has taken registrations under the rule; roll the code back
+and leave the schema in place instead.
 """
 from alembic import op
 
@@ -42,6 +54,8 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS security_version INTEGER NOT NULL DEFAULT 0")
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_required BOOLEAN NOT NULL "
+               "DEFAULT false")
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS auth_tokens (
@@ -79,4 +93,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS auth_rate_limits")
     op.execute("DROP TABLE IF EXISTS auth_tokens")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS email_verification_required")
     op.execute("ALTER TABLE users DROP COLUMN IF EXISTS security_version")

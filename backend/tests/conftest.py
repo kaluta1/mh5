@@ -161,10 +161,22 @@ def test_user_data():
     }
 
 
+def confirm_email(db: Session, email: str) -> None:
+    """The member has confirmed the address (test shortcut for the emailed
+    link). An account created by public registration cannot sign in before
+    that. The link flow itself is covered in tests/unit/test_email2_*.py."""
+    from app.models.user import User
+
+    user = db.query(User).filter(User.email == email).one()
+    user.email_verified = True
+    db.commit()
+
+
 @pytest.fixture
-def auth_headers(client: TestClient, test_user_data: dict) -> dict:
+def auth_headers(client: TestClient, db: Session, test_user_data: dict) -> dict:
     reg = client.post("/api/v1/auth/register", json=test_user_data)
     assert reg.status_code == 201, reg.text
+    confirm_email(db, test_user_data["email"])
     login = client.post(
         "/api/v1/auth/login",
         data={"username": test_user_data["email"], "password": test_user_data["password"]},

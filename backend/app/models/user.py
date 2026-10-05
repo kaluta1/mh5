@@ -88,6 +88,15 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Login policy marker (EMAIL-2). TRUE = this account was created by public
+    # registration under the verify-before-login rule: it cannot sign in until
+    # `email_verified` is true. FALSE = every account that existed before the
+    # rule (grandfathered: may keep signing in while unverified) and accounts
+    # created by a flow that proves the mailbox another way. It is a stored
+    # fact about the account, set once at creation: no date comparison, no
+    # deployment timestamp, nothing inferred at runtime.
+    email_verification_required: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False)
     # Session generation (EMAIL-2). Every access token carries the value it was
     # issued under; a password change or reset increments it, which invalidates
     # all access tokens issued before.

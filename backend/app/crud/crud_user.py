@@ -88,7 +88,7 @@ class CRUDUser:
         return db.query(User).filter(User.personal_referral_code == referral_code).first()
 
     def create_with_sponsor(self, db: Session, obj_in: UserCreate, sponsor_code: Optional[str] = None,
-                            before_commit=None) -> User:
+                            before_commit=None, require_email_verification: bool = False) -> User:
         """Crée un utilisateur avec un parrain optionnel et le rôle 'user' par défaut.
 
         ``before_commit(db, user)`` runs inside the same transaction, after sponsor
@@ -126,7 +126,10 @@ class CRUDUser:
             country=obj_in.country,
             city=obj_in.city,
             personal_referral_code=referral_code,
-            role_id=role_id
+            role_id=role_id,
+            # Public registration passes True: the account cannot sign in
+            # until its address is verified (see User.email_verification_required).
+            email_verification_required=bool(require_email_verification),
         )
         dob = getattr(obj_in, "date_of_birth", None)
         if dob is not None:

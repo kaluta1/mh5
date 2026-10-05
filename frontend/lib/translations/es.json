@@ -55,12 +55,61 @@
       "errors": {
         "invalid_credentials": "Email/nombre de usuario o contraseña inválidos",
         "timeout": "Tiempo de espera agotado. El servidor está tardando demasiado en responder. Por favor, inténtalo de nuevo.",
-        "network_error": "Error de red. Por favor, verifica tu conexión e inténtalo de nuevo."
+        "network_error": "Error de red. Por favor, verifica tu conexión e inténtalo de nuevo.",
+        "email_not_verified": "Confirma tu dirección de correo antes de iniciar sesión. El enlace de confirmación está en tu bandeja de entrada.",
+        "email_not_verified_action": "Solicitar un nuevo enlace de confirmación"
       }
     },
     "register": {
       "title": "Únete a MyFav",
-      "subtitle": "Crea tu cuenta y empieza a competir"
+      "subtitle": "Crea tu cuenta y empieza a competir",
+      "success_title": "Revisa tu correo",
+      "success_message": "Hemos recibido tu registro. Te enviamos un enlace de confirmación a tu dirección de correo. Confírmala y luego inicia sesión.",
+      "password_requirement_length": "Al menos 12 caracteres",
+      "password_requirement_special": "Un carácter especial (por ejemplo ! @ # * _ - =)",
+      "errors": {
+        "password_min_length": "La contraseña debe tener al menos 12 caracteres",
+        "password_requirements": "La contraseña debe incluir una mayúscula, una minúscula, un número y un carácter especial"
+      }
+    },
+    "verify_email": {
+      "verifying_title": "Verificando tu correo",
+      "verifying_message": "Espera un momento…",
+      "success_title": "Correo verificado",
+      "success_message": "Tu dirección de correo ha sido confirmada. Ya puedes iniciar sesión.",
+      "continue_to_sign_in": "Continuar para iniciar sesión",
+      "error_title": "Este enlace no se puede usar",
+      "error_invalid_link": "Este enlace no es válido, ha caducado o ya se ha utilizado. Si ya confirmaste tu correo, simplemente inicia sesión. Si no, solicita un nuevo enlace a continuación.",
+      "error_old_link": "Este enlace procede de un correo antiguo y ya no es válido. Solicita un nuevo enlace a continuación.",
+      "request_title": "Confirma tu dirección de correo",
+      "request_message": "Introduce tu dirección de correo y te enviaremos un nuevo enlace de confirmación.",
+      "resend_label": "Tu dirección de correo",
+      "resend_placeholder": "tu@ejemplo.com",
+      "resend_button": "Enviar un nuevo enlace de confirmación",
+      "resend_sending": "Enviando…",
+      "resend_sent": "Si esta dirección pertenece a una cuenta que aún debe confirmarse, se ha enviado un nuevo enlace de confirmación. Revisa tu bandeja de entrada.",
+      "resend_failed": "No se pudo enviar la solicitud. Inténtalo de nuevo más tarde.",
+      "resend_rate_limited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
+      "back_to_sign_in": "Volver a iniciar sesión",
+      "banner_title": "Verifica tu correo",
+      "banner_message": "Tu dirección de correo aún no está confirmada. Confírmala para proteger tu cuenta.",
+      "banner_button": "Reenviar correo de verificación",
+      "banner_sent": "Hemos enviado un enlace de confirmación a tu dirección de correo. Revisa tu bandeja de entrada.",
+      "banner_failed": "No se pudo enviar el correo. Inténtalo de nuevo más tarde."
+    },
+    "reset_password": {
+      "no_token": "Este enlace de restablecimiento no es válido.",
+      "password_min_length": "La contraseña debe tener al menos 12 caracteres",
+      "invalid_token": "Este enlace de restablecimiento no es válido, ha caducado o ya se ha utilizado. Solicita uno nuevo.",
+      "no_token_title": "Este enlace de restablecimiento ya no es válido",
+      "no_token_message": "El enlace falta, ha caducado o procede de un correo antiguo. Solicita un nuevo enlace de restablecimiento para continuar.",
+      "old_link_message": "Este enlace procede de un correo antiguo y ya no es válido. Solicita un nuevo enlace de restablecimiento para continuar.",
+      "request_new_link": "Solicitar un nuevo enlace",
+      "checking": "Comprobando tu enlace…",
+      "success": "Tu contraseña ha sido restablecida.",
+      "error": "No se pudo restablecer la contraseña. Inténtalo de nuevo.",
+      "success_title": "Contraseña restablecida",
+      "success_message": "Tu contraseña ha sido restablecida. Ya puedes iniciar sesión con tu nueva contraseña."
     }
   },
   "features": {

@@ -5,9 +5,12 @@ import pytest
 pytestmark = pytest.mark.functional
 
 
-def test_user_can_register_login_and_fetch_profile(client, test_user_data):
+def test_user_can_register_login_and_fetch_profile(client, db, test_user_data):
+    from tests.conftest import confirm_email
+
     reg = client.post("/api/v1/auth/register", json=test_user_data)
     assert reg.status_code == 201
+    confirm_email(db, test_user_data["email"])       # the member follows the emailed link
 
     login = client.post(
         "/api/v1/auth/login",
@@ -22,6 +25,7 @@ def test_user_can_register_login_and_fetch_profile(client, test_user_data):
     profile = me.json()
     assert profile["email"] == test_user_data["email"]
     assert profile["username"] == test_user_data["username"]
+    assert profile["email_verified"] is True and profile["email_verification_required"] is True
 
 
 def test_user_can_update_profile(client, auth_headers, test_user_data):

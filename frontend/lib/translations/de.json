@@ -55,12 +55,61 @@
       "errors": {
         "invalid_credentials": "Ungültige E-Mail/Benutzername oder Passwort",
         "timeout": "Verbindungszeitüberschreitung. Der Server antwortet zu langsam. Bitte versuchen Sie es erneut.",
-        "network_error": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        "network_error": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "email_not_verified": "Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie sich anmelden. Den Bestätigungslink finden Sie in Ihrem Posteingang.",
+        "email_not_verified_action": "Neuen Bestätigungslink anfordern"
       }
     },
     "register": {
       "title": "Bei MyFav Beitreten",
-      "subtitle": "Erstelle dein Konto und beginne zu konkurrieren"
+      "subtitle": "Erstelle dein Konto und beginne zu konkurrieren",
+      "success_title": "Prüfen Sie Ihre E-Mails",
+      "success_message": "Ihre Registrierung ist eingegangen. Wir haben einen Bestätigungslink an Ihre E-Mail-Adresse gesendet. Bestätigen Sie sie und melden Sie sich dann an.",
+      "password_requirement_length": "Mindestens 12 Zeichen",
+      "password_requirement_special": "Ein Sonderzeichen (zum Beispiel ! @ # * _ - =)",
+      "errors": {
+        "password_min_length": "Das Passwort muss mindestens 12 Zeichen lang sein",
+        "password_requirements": "Das Passwort muss einen Großbuchstaben, einen Kleinbuchstaben, eine Zahl und ein Sonderzeichen enthalten"
+      }
+    },
+    "verify_email": {
+      "verifying_title": "Ihre E-Mail wird bestätigt",
+      "verifying_message": "Bitte warten…",
+      "success_title": "E-Mail bestätigt",
+      "success_message": "Ihre E-Mail-Adresse wurde bestätigt. Sie können sich jetzt anmelden.",
+      "continue_to_sign_in": "Weiter zur Anmeldung",
+      "error_title": "Dieser Link kann nicht verwendet werden",
+      "error_invalid_link": "Dieser Link ist ungültig, abgelaufen oder wurde bereits verwendet. Wenn Sie Ihre E-Mail bereits bestätigt haben, können Sie sich einfach anmelden. Andernfalls fordern Sie unten einen neuen Link an.",
+      "error_old_link": "Dieser Link stammt aus einer älteren E-Mail und ist nicht mehr gültig. Fordern Sie unten einen neuen Link an.",
+      "request_title": "Bestätigen Sie Ihre E-Mail-Adresse",
+      "request_message": "Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen neuen Bestätigungslink.",
+      "resend_label": "Ihre E-Mail-Adresse",
+      "resend_placeholder": "sie@beispiel.de",
+      "resend_button": "Neuen Bestätigungslink senden",
+      "resend_sending": "Wird gesendet…",
+      "resend_sent": "Wenn diese Adresse zu einem Konto gehört, das noch bestätigt werden muss, wurde ein neuer Bestätigungslink gesendet. Bitte prüfen Sie Ihren Posteingang.",
+      "resend_failed": "Die Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.",
+      "resend_rate_limited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+      "back_to_sign_in": "Zurück zur Anmeldung",
+      "banner_title": "Bestätigen Sie Ihre E-Mail",
+      "banner_message": "Ihre E-Mail-Adresse ist noch nicht bestätigt. Bestätigen Sie sie, um Ihr Konto zu schützen.",
+      "banner_button": "Bestätigungs-E-Mail erneut senden",
+      "banner_sent": "Wir haben einen Bestätigungslink an Ihre E-Mail-Adresse gesendet. Bitte prüfen Sie Ihren Posteingang.",
+      "banner_failed": "Die E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es später erneut."
+    },
+    "reset_password": {
+      "no_token": "Dieser Link zum Zurücksetzen ist nicht gültig.",
+      "password_min_length": "Das Passwort muss mindestens 12 Zeichen lang sein",
+      "invalid_token": "Dieser Link zum Zurücksetzen ist ungültig, abgelaufen oder wurde bereits verwendet. Bitte fordern Sie einen neuen an.",
+      "no_token_title": "Dieser Link zum Zurücksetzen ist nicht mehr gültig",
+      "no_token_message": "Der Link fehlt, ist abgelaufen oder stammt aus einer älteren E-Mail. Fordern Sie einen neuen Link zum Zurücksetzen an, um fortzufahren.",
+      "old_link_message": "Dieser Link stammt aus einer älteren E-Mail und ist nicht mehr gültig. Fordern Sie einen neuen Link zum Zurücksetzen an, um fortzufahren.",
+      "request_new_link": "Neuen Link anfordern",
+      "checking": "Ihr Link wird geprüft…",
+      "success": "Ihr Passwort wurde zurückgesetzt.",
+      "error": "Das Passwort konnte nicht zurückgesetzt werden. Bitte versuchen Sie es erneut.",
+      "success_title": "Passwort zurückgesetzt",
+      "success_message": "Ihr Passwort wurde zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
     }
   },
   "features": {

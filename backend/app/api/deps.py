@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.token import TokenPayload
 from app.core.security import decode_access_token
-from app.services.auth_security import access_token_is_current
+from app.services.auth_security import EMAIL_NOT_VERIFIED_MESSAGE, access_token_is_current, must_verify_email
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -61,6 +61,13 @@ def get_current_active_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Utilisateur inactif"
         )
+    # Defence in depth: login already refuses such an account, so it should
+    # never hold a token. If one exists anyway, it opens nothing.
+    if must_verify_email(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=EMAIL_NOT_VERIFIED_MESSAGE
+        )
     return current_user
 
 
@@ -99,7 +106,8 @@ def get_current_active_user_optional(
     
     try:
         user = db.query(User).filter(User.id == token_data.sub).first()
-        if not user or not user.is_active or not access_token_is_current(payload, user):
+        if (not user or not user.is_active or not access_token_is_current(payload, user)
+                or must_verify_email(user)):
             return None
         return user
     except Exception:

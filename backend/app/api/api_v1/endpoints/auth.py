@@ -208,6 +208,8 @@ def register_user(
             obj_in=user_in,
             sponsor_code=effective_sponsor_code,
             before_commit=lambda session, new_user: age_gate.apply_registration_state(session, new_user, gate, attempt),
+            # Verify-before-login: recorded on the account itself, at creation.
+            require_email_verification=True,
         )
     except IntegrityError as e:
         db.rollback()
@@ -429,6 +431,34 @@ def login_access_token(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been deactivated. Please contact support.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Verify-before-login (accounts created under EMAIL-2 only; accounts that
+    # predate the rule are not affected). This is reached ONLY with a correct
+    # password: a wrong password, or an unknown identifier, got the ordinary
+    # 401 above, so the answer says nothing to someone who merely knows an
+    # email address. No token is issued.
+    if auth_security.must_verify_email(user):
+        if request and background_tasks:
+            try:
+                background_tasks.add_task(
+                    log_login_attempt,
+                    db=db,
+                    user_id=user.id,
+                    request=request,
+                    is_successful=False,
+                    failure_reason="Email not verified"
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log login attempt: {log_error}")
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "detail": auth_security.EMAIL_NOT_VERIFIED_MESSAGE,
+                "code": auth_security.EMAIL_NOT_VERIFIED_CODE,
+                "message": auth_security.EMAIL_NOT_VERIFIED_MESSAGE,
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
     

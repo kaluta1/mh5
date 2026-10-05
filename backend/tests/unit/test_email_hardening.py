@@ -81,6 +81,9 @@ def test_missing_key_stores_no_plaintext_and_reports_configuration_required(clie
                                                                             no_encryption_key, test_user_data):
     # an unrelated flow that triggers an email still works
     assert client.post("/api/v1/auth/register", json=test_user_data).status_code == 201
+    from tests.conftest import confirm_email
+
+    confirm_email(db, test_user_data["email"])       # (the verification email could not be queued: no key)
     assert client.post("/api/v1/auth/login", data={"username": test_user_data["email"],
                                                    "password": test_user_data["password"]}).status_code == 200
     assert client.post("/api/v1/auth/password-reset-request",
