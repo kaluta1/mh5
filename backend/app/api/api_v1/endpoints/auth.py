@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
@@ -15,19 +15,18 @@ from app.core.security import (
     create_access_token, 
     get_password_hash, 
     verify_password,
-    create_password_reset_token,
     verify_password_reset_token,
     get_password_reset_subject,
-    create_email_verification_token,
     validate_access_token,
-    get_user_id_from_token
+    get_user_id_from_token,
+    _password_version,
 )
-from app.core.public_urls import public_site_base
 from app.core.config import settings
 from app.db.session import get_db
 from app.crud import user as crud_user
 from app.api.deps import get_current_active_user, oauth2_scheme
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 from app.services.email_verification import verify_user_email_from_token, build_email_verify_redirect
 from app.services import referral_shortener
 from app.crud.crud_login_log import crud_login_log
@@ -110,8 +109,8 @@ def register_user(
             policy_id=gate.context.policy.policy_id, policy_version=gate.context.policy.policy_version,
         )
         if creation.created:
-            background_tasks.add_task(guardian_notifications.send_guardian_request_email,
-                                      user_in.guardian_email, creation.guardian_token, user_in.username)
+            guardian_notifications.send_guardian_request_email(
+                db, user_in.guardian_email, creation.guardian_token, user_in.username)
         message = ("We've asked your parent or guardian to review your request. "
                    "Your account will be created only after they approve.")
         return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={
@@ -166,14 +165,15 @@ def register_user(
         user.preferred_language = lang
         db.commit()
     
-    # Envoyer l'email de bienvenue avec token de vérification
-    site_base = public_site_base()
-    verify_url = f"{site_base}/verify-email?token={create_email_verification_token(user.email)}"
-    background_tasks.add_task(
-        email_service.send_welcome_email,
-        to_email=user.email,
-        verify_url=verify_url,
-        lang=lang or "en"
+    # Welcome email carrying the verification link. The link (and its token) is
+    # created when the email is sent, so no token is stored with the delivery.
+    email_service.enqueue(
+        db,
+        event=EmailEvent.AUTH_EMAIL_VERIFICATION,
+        recipient=user.email,
+        user_id=user.id,
+        lang=lang,
+        idempotency_key=f"auth.email_verification:user:{user.id}",
     )
 
     referral_shortener.record_signup_conversion_from_request(request, db, user.id)
@@ -361,22 +361,19 @@ def request_password_reset(
     # Pour des raisons de sécurité, on retourne toujours le même message
     # même si l'utilisateur n'existe pas
     if user and user.is_active:
-        # Générer le token de réinitialisation
-        reset_token = create_password_reset_token(user.email, user.hashed_password)
-        
-        # Construire l'URL de réinitialisation
-        site_base = public_site_base()
-        reset_url = f"{site_base}/reset-password?token={reset_token}"
-        
-        # Récupérer la langue préférée de l'utilisateur
-        user_lang = getattr(user, 'preferred_language', 'en') or 'en'
-        
-        # Envoyer l'email de réinitialisation
-        background_tasks.add_task(
-            email_service.send_password_reset_email,
-            to_email=user.email,
-            reset_url=reset_url,
-            lang=user_lang
+        # The reset link is created when the email is sent (the token is never
+        # stored). One email per account, password version and minute: a
+        # double submit or a client retry does not send twice.
+        email_service.enqueue(
+            db,
+            event=EmailEvent.AUTH_PASSWORD_RESET,
+            recipient=user.email,
+            user_id=user.id,
+            lang=getattr(user, 'preferred_language', None),
+            idempotency_key=(
+                f"auth.password_reset:user:{user.id}:{_password_version(user.hashed_password)[:16]}"
+                f":{int(datetime.utcnow().timestamp() // 60)}"
+            ),
         )
         
     return PasswordResetResponse(
@@ -439,17 +436,15 @@ def confirm_password_reset(
     # Réinitialiser le mot de passe
     crud_user.reset_password(db, user=user, new_password=password_reset.new_password)
     
-    # Envoyer l'email de notification de sécurité
-    user_lang = getattr(user, 'preferred_language', 'en') or 'en'
-    site_base = public_site_base()
-    support_url = f"{site_base}/contact"
-    background_tasks.add_task(
-        email_service.send_password_change_security_email,
-        to_email=user.email,
-        support_url=support_url,
-        lang=user_lang,
-        ip_address=client_ip,
-        location=location
+    # Security notice. One per new password (the hash is unique per change).
+    email_service.enqueue(
+        db,
+        event=EmailEvent.AUTH_PASSWORD_CHANGED,
+        recipient=user.email,
+        user_id=user.id,
+        lang=getattr(user, 'preferred_language', None),
+        context={"ip_address": client_ip},
+        idempotency_key=f"auth.password_changed:user:{user.id}:{_password_version(user.hashed_password)[:16]}",
     )
     
     return PasswordResetResponse(
@@ -550,17 +545,15 @@ def change_password(
     # Mettre à jour le mot de passe
     crud_user.reset_password(db, user=current_user, new_password=password_data.new_password)
     
-    # Envoyer l'email de sécurité
-    user_lang = getattr(current_user, 'preferred_language', 'en') or 'en'
-    site_base = public_site_base()
-    support_url = f"{site_base}/contact"
-    background_tasks.add_task(
-        email_service.send_password_change_security_email,
-        to_email=current_user.email,
-        support_url=support_url,
-        lang=user_lang,
-        ip_address=client_ip,
-        location=location
+    # Security notice. One per new password (the hash is unique per change).
+    email_service.enqueue(
+        db,
+        event=EmailEvent.AUTH_PASSWORD_CHANGED,
+        recipient=current_user.email,
+        user_id=current_user.id,
+        lang=getattr(current_user, 'preferred_language', None),
+        context={"ip_address": client_ip},
+        idempotency_key=f"auth.password_changed:user:{current_user.id}:{_password_version(current_user.hashed_password)[:16]}",
     )
     
     return PasswordResetResponse(message="Mot de passe modifié avec succès")

@@ -25,7 +25,8 @@ from app.schemas.invitation import (
     InvitationStats,
     InvitationSendResult
 )
-from app.services.email import email_service
+from app.services.email import email_service, INVITATIONS_PER_DAY
+from app.services.email_events import EmailEvent
 
 router = APIRouter()
 
@@ -382,6 +383,14 @@ def send_invitation(
             detail="Vous n'avez pas de code de parrainage"
         )
     
+    # Durable daily cap per member: invitations go to addresses the member
+    # chooses, so the platform must not become a mail relay.
+    if email_service.count_recent(db, EmailEvent.AFFILIATE_INVITATION, user_id=current_user.id) >= INVITATIONS_PER_DAY:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily invitation limit reached. Please try again tomorrow."
+        )
+
     # Créer l'invitation
     invitation_obj = crud_invitation.create_invitation(
         db,
@@ -390,20 +399,19 @@ def send_invitation(
         referral_code=referral_code,
         message=invitation_in.message
     )
-    
-    # Envoyer l'email en arrière-plan
+
     inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
-    inviter_lang = getattr(current_user, 'preferred_language', 'fr') or 'fr'
-    
-    background_tasks.add_task(
-        email_service.send_invitation_email,
-        to_email=invitation_in.email,
-        inviter_name=inviter_name,
-        referral_code=referral_code,
-        message=invitation_in.message,
-        lang=inviter_lang
+
+    email_service.enqueue(
+        db,
+        event=EmailEvent.AFFILIATE_INVITATION,
+        recipient=invitation_in.email,
+        user_id=current_user.id,
+        lang=getattr(current_user, 'preferred_language', None),
+        context={"inviter_name": inviter_name, "referral_code": referral_code, "message": invitation_in.message},
+        idempotency_key=f"affiliate.invitation:{invitation_obj.id}",
     )
-    
+
     return InvitationSendResult(
         success=True,
         email=invitation_in.email,
@@ -432,8 +440,19 @@ def send_bulk_invitations(
     
     inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
     
+    remaining = INVITATIONS_PER_DAY - email_service.count_recent(
+        db, EmailEvent.AFFILIATE_INVITATION, user_id=current_user.id)
+
     results = []
     for email in invitations_in.emails:
+        if remaining <= 0:
+            results.append(InvitationSendResult(
+                success=False,
+                email=email,
+                message="Daily invitation limit reached"
+            ))
+            continue
+
         # Vérifier si l'email n'est pas déjà enregistré
         existing_user = crud_user.get_by_email(db, email=email)
         if existing_user:
@@ -465,17 +484,18 @@ def send_bulk_invitations(
             message=invitations_in.message
         )
         
-        # Envoyer l'email en arrière-plan
-        inviter_lang = getattr(current_user, 'preferred_language', 'fr') or 'fr'
-        background_tasks.add_task(
-            email_service.send_invitation_email,
-            to_email=email,
-            inviter_name=inviter_name,
-            referral_code=referral_code,
-            message=invitations_in.message,
-            lang=inviter_lang
+        email_service.enqueue(
+            db,
+            event=EmailEvent.AFFILIATE_INVITATION,
+            recipient=email,
+            user_id=current_user.id,
+            lang=getattr(current_user, 'preferred_language', None),
+            context={"inviter_name": inviter_name, "referral_code": referral_code,
+                     "message": invitations_in.message},
+            idempotency_key=f"affiliate.invitation:{invitation_obj.id}",
         )
-        
+        remaining -= 1
+
         results.append(InvitationSendResult(
             success=True,
             email=email,

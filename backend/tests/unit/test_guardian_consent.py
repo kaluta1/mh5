@@ -56,15 +56,10 @@ TOKEN_RE = re.compile(r"#token=([A-Za-z0-9_\-]+)")
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def outbox(monkeypatch):
-    sent = []
-
-    def fake_send(to_email, subject, html_content, text_content=None):
-        sent.append({"to": to_email, "subject": subject, "html": html_content})
-        return True
-
-    monkeypatch.setattr(guardian_notifications.email_service, "send_email", fake_send)
-    return sent
+def outbox(email_outbox):
+    """Emails queued by the application, sent through the real outbox worker to
+    a fake provider (see conftest.email_outbox)."""
+    return email_outbox
 
 
 @pytest.fixture

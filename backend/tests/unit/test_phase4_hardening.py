@@ -175,36 +175,65 @@ def test_wrong_scope_withdrawn_and_expired_fail(consent_world, client, register,
 
 def test_real_email_path_masks_recipient_and_never_logs_tokens(consent_world, client, register, monkeypatch,
                                                                accept_admin_review, caplog):
-    """Exercise the REAL EmailService.send_email (provider call stubbed) end to end."""
+    """Exercise the REAL path end to end: central service -> outbox worker ->
+    ResendEmailProvider, with only the SDK's network call stubbed."""
+    import resend
+
+    from app.services.email_outbox import process_outbox
+
     db = consent_world
     sent = []
-    monkeypatch.setattr(email_module.email_service, "api_key", "test-key-not-real")
-    monkeypatch.setattr(email_module.resend.Emails, "send",
+    monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
+    monkeypatch.setattr(resend.Emails, "send",
                         staticmethod(lambda params: sent.append(params) or {"id": "synthetic-id"}))
     caplog.set_level(logging.DEBUG)
     resp, body = register(date_of_birth="2012-06-01", guardian_email="parent.log@example.com")
     assert resp.status_code == 202
+    process_outbox(db)
     gtoken = TOKEN_RE.search(sent[-1]["html"]).group(1)
     approve(client, gtoken)
     admin_verify(client, db)
+    process_outbox(db)
     ctoken = TOKEN_RE.search(sent[-1]["html"]).group(1)
     assert complete(client, ctoken).status_code == 201
     logs = caplog.text
-    for secret in (gtoken, ctoken, "parent.log@example.com", body["email"], PASSWORD, "2012-06-01"):
+    for secret in (gtoken, ctoken, "parent.log@example.com", body["email"], PASSWORD, "2012-06-01",
+                   "re_synthetic_test_key_not_real"):
         assert secret not in logs
     assert mask_email("parent.log@example.com") in logs                 # the event is still logged (masked)
+    # Nothing sensitive is kept once the emails are sent: no payload, no token, no address.
+    from app.models.email import EmailDelivery
+
+    rows = db.query(EmailDelivery).all()
+    assert len(rows) == 2 and all(r.status == "SENT" and r.payload_ciphertext is None for r in rows)
+    stored = " ".join(str(getattr(r, c.name)) for r in rows for c in EmailDelivery.__table__.columns)
+    for secret in (gtoken, ctoken, "parent.log@example.com", body["email"]):
+        assert secret not in stored
 
 
-def test_email_failure_log_is_masked(monkeypatch, caplog):
-    monkeypatch.setattr(email_module.email_service, "api_key", "test-key-not-real")
+def test_email_failure_log_is_masked(db, monkeypatch, caplog):
+    import resend
+
+    from app.models.email import EmailDelivery
+    from app.services.email_events import EmailEvent
+    from app.services.email_outbox import process_outbox
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
 
     def boom(params):
         raise RuntimeError(f"provider rejected {params['to'][0]}")
 
-    monkeypatch.setattr(email_module.resend.Emails, "send", staticmethod(boom))
+    monkeypatch.setattr(resend.Emails, "send", staticmethod(boom))
     caplog.set_level(logging.DEBUG)
-    assert email_module.email_service.send_email("secret.person@example.com", "s", "<p>x</p>") is False
+    row = email_module.email_service.enqueue(db, event=EmailEvent.KYC_APPROVED,
+                                             recipient="secret.person@example.com",
+                                             idempotency_key="test:failure-log")
+    assert row.status == "QUEUED"
+    process_outbox(db)
+    row = db.query(EmailDelivery).one()
+    assert row.status == "QUEUED" and row.attempt_count == 1 and row.failure_code == "RuntimeError"   # retried later
     assert "secret.person@example.com" not in caplog.text and "RuntimeError" in caplog.text
+    assert "re_synthetic_test_key_not_real" not in caplog.text
 
 
 def test_fragment_tokens_are_never_sent_to_the_server():

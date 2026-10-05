@@ -1,38 +1,43 @@
-"""Guardian-consent emails, sent through the existing email service.
+"""Guardian-consent emails, recorded through the central email service.
 
 Links carry the single-use token in the URL fragment (#token=...), which
 browsers never send to servers, so it cannot appear in web-server or proxy
 logs. The emails never include a password, DOB, age or other minor PII beyond
 the chosen username.
+
+The raw token travels only inside the delivery's encrypted payload, which is
+deleted once the email is sent (or finally fails). The idempotency key is
+derived from the token's hash, never from the token itself.
 """
 from __future__ import annotations
 
-import html
+import hashlib
 from typing import Optional
 
-from app.core.public_urls import public_site_base
+from sqlalchemy.orm import Session
+
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 
 
-def send_guardian_request_email(guardian_email: str, raw_token: str, minor_username: Optional[str]) -> bool:
-    link = f"{public_site_base()}/guardian/consent#token={raw_token}"
-    who = html.escape(minor_username or "a young person")
-    body = (
-        f"<p>Someone using the username <strong>{who}</strong> asked to create a MyHigh5 account "
-        "and named you as their parent or legal guardian.</p>"
-        "<p>If this is correct, you can review the request and choose exactly what you consent to. "
-        "If you do not recognise this request, you can decline it or simply ignore this email.</p>"
-        f'<p><a href="{link}">Review the request</a></p>'
-        "<p>This link can be used once and expires automatically.</p>"
+def _token_ref(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()[:32]
+
+
+def send_guardian_request_email(db: Session, guardian_email: str, raw_token: str,
+                                minor_username: Optional[str]) -> bool:
+    row = email_service.enqueue(
+        db, event=EmailEvent.GUARDIAN_CONSENT_REQUEST, recipient=guardian_email,
+        context={"token": raw_token, "username": minor_username},
+        idempotency_key=f"guardian.consent_request:{_token_ref(raw_token)}",
     )
-    return email_service.send_email(guardian_email, "MyHigh5: parent or guardian approval requested", body)
+    return row is not None and row.status == "QUEUED"
 
 
-def send_completion_email(minor_email: str, raw_token: str) -> bool:
-    link = f"{public_site_base()}/register/complete#token={raw_token}"
-    body = (
-        "<p>Your parent or guardian approval for your MyHigh5 account request has been recorded and verified.</p>"
-        f'<p><a href="{link}">Finish creating your account</a></p>'
-        "<p>This link can be used once and expires automatically.</p>"
+def send_completion_email(db: Session, minor_email: str, raw_token: str) -> bool:
+    row = email_service.enqueue(
+        db, event=EmailEvent.GUARDIAN_REGISTRATION_COMPLETION, recipient=minor_email,
+        context={"token": raw_token},
+        idempotency_key=f"guardian.registration_completion:{_token_ref(raw_token)}",
     )
-    return email_service.send_email(minor_email, "MyHigh5: finish creating your account", body)
+    return row is not None and row.status == "QUEUED"

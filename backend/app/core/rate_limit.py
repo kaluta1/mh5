@@ -44,6 +44,11 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/interactions/reports": (20, 3600),
     "/api/v1/media/upload": (20, 60),
     "/api/v1/search": (60, 60),
+    # Endpoints that make the platform send email to an address chosen by the
+    # caller. The durable per-recipient limits live in app.services.email.
+    "/api/v1/contact": (5, 3600),
+    "/api/v1/newsletter/subscribe": (5, 3600),
+    "/api/v1/admin/email-settings/test": (10, 3600),
 }
 
 # Global fallback: 200 requests per minute per IP

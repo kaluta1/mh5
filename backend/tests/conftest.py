@@ -171,6 +171,54 @@ def auth_headers(client: TestClient, test_user_data: dict) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+class EmailTestOutbox:
+    """Emails the application queued, as a fake provider received them.
+
+    Reading it (indexing, len, truthiness, iteration) first drains the email
+    outbox through the real worker, so a test sees exactly what would have
+    been sent. Items are dicts: to, subject, html, text."""
+
+    def __init__(self, db, provider):
+        self.db = db
+        self.provider = provider
+
+    def drain(self, **kwargs):
+        from app.services.email_outbox import process_outbox
+
+        return process_outbox(self.db, provider=self.provider, **kwargs)
+
+    @property
+    def messages(self):
+        self.drain()
+        return [{"to": m.to, "subject": m.subject, "html": m.html, "text": m.text} for m in self.provider.sent]
+
+    def __getitem__(self, index):
+        return self.messages[index]
+
+    def __len__(self):
+        return len(self.messages)
+
+    def __bool__(self):
+        return bool(self.messages)
+
+    def __iter__(self):
+        return iter(self.messages)
+
+
+@pytest.fixture
+def email_outbox(db: Session, monkeypatch):
+    """A usable (fake) email provider: a synthetic API key, no network."""
+    from app.services import email_providers
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
+    provider = email_providers.FakeEmailProvider()
+    email_providers.set_provider_factory(lambda: provider)
+    try:
+        yield EmailTestOutbox(db, provider)
+    finally:
+        email_providers.set_provider_factory(None)
+
+
 def pytest_collection_modifyitems(config, items):  # noqa: ARG001
     """Auto-mark tests by directory and legacy filenames."""
     legacy_unit = (

@@ -118,6 +118,10 @@ def test_rate_limit_policy_is_unchanged():
         "/api/v1/interactions/reports": (20, 3600),  # Phase 9 reports
         "/api/v1/media/upload": (20, 60),
         "/api/v1/search": (60, 60),
+        # EMAIL-1: endpoints that send email to a caller-chosen address (added; nothing above changed)
+        "/api/v1/contact": (5, 3600),
+        "/api/v1/newsletter/subscribe": (5, 3600),
+        "/api/v1/admin/email-settings/test": (10, 3600),
     }
     assert rl.GLOBAL_LIMIT == (200, 60)
 

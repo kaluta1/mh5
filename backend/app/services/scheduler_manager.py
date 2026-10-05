@@ -13,6 +13,7 @@ from app.services.contest_status import ContestStatusScheduler
 from app.services.season_migration_scheduler import SeasonMigrationScheduler
 from app.services.monthly_round_scheduler import MonthlyRoundScheduler
 from app.services.creative_link_check import CreativeLinkScheduler
+from app.services.email_outbox import EmailOutboxScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     "season-migration": (SeasonMigrationScheduler(), "_process_migrations"),
     "monthly-ops": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
     "creative-links": (CreativeLinkScheduler(), "_check_creative_links"),
+    "email-outbox": (EmailOutboxScheduler(), "_drain_outbox"),
 }
 
 _TASK_ALIASES = {"monthly-round": "monthly-ops"}

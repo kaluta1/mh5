@@ -5529,38 +5529,37 @@ def report_contestant(
         contestant_author = crud_user.get(db, contestant.user_id)
         author_name = contestant_author.full_name if contestant_author else "Unknown"
         
-        # Envoyer une notification email à l'admin en arrière-plan
-        # Récupérer tous les admins
-        admin_users = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
-        
-        if admin_users:
-            from app.services.email_templates import get_contestant_report_email
-            from app.core.config import settings
-            
-            for admin in admin_users:
-                admin_lang = getattr(admin, 'preferred_language', 'en') or 'en'
-                
-                # Générer l'email
-                subject, html_content, text_content = get_contestant_report_email(
-                    lang=admin_lang,
-                    contestant_title=contestant.title or "Untitled",
-                    contestant_author_name=author_name,
-                    contest_name=contest.name,
-                    reporter_name=current_user.full_name or current_user.username,
-                    reason=report_data.reason,
-                    description=report_data.description,
-                    report_id=new_report.id,
-                    admin_url=f"{settings.FRONTEND_URL}/admin/reports/{new_report.id}"
-                )
-                
-                background_tasks.add_task(
-                    email_service.send_email,
-                    to_email=admin.email,
-                    subject=subject,
-                    html_content=html_content,
-                    text_content=text_content
-                )
-        
+        # Notify the configured admin alert recipients (Admin > Email Settings),
+        # or every active admin when none is configured. One email per report
+        # and recipient.
+        from app.services import email_settings_service
+        from app.services.email_events import EmailEvent
+
+        recipients = [(address, "en") for address in
+                      (email_settings_service.get_settings(db).admin_alert_recipients or [])]
+        if not recipients:
+            admin_users = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
+            recipients = [(admin.email, getattr(admin, 'preferred_language', None)) for admin in admin_users]
+
+        report_context = {
+            "contestant_title": contestant.title or "Untitled",
+            "author_name": author_name,
+            "contest_name": contest.name,
+            "reporter_name": current_user.full_name or current_user.username,
+            "reason": str(getattr(report_data.reason, "value", report_data.reason)),
+            "description": report_data.description,
+            "report_id": new_report.id,
+        }
+        for index, (address, admin_lang) in enumerate(recipients):
+            email_service.enqueue(
+                db,
+                event=EmailEvent.ADMIN_CONTENT_REPORT,
+                recipient=address,
+                lang=admin_lang,
+                context=report_context,
+                idempotency_key=f"admin.content_report:{new_report.id}:{index}",
+            )
+
         # Construire la réponse
         return ReportResponse(
             id=new_report.id,

@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionType, CommissionStatus
 from app.models.payment import Deposit, ProductType
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 from app.services.affiliate_hierarchy import ACTIVE_AFFILIATE_LEVELS
 from app.services.financial_integrity import money
 logger = logging.getLogger(__name__)
@@ -344,16 +345,23 @@ def process_payment_validation(
             db.commit()
             if user:
                 try:
-                    user_lang = getattr(user, 'preferred_language', 'fr') or 'fr'
-                    email_service.send_payment_confirmation_email(
-                        to_email=user.email,
-                        amount=f"${float(deposit.amount):.2f}",
-                        product=product_type.name,
-                        reference=str(deposit.external_payment_id or deposit.id),
-                        date=datetime.utcnow().strftime('%d/%m/%Y'),
-                        lang=user_lang
+                    # Recorded in the email outbox after the payment has been
+                    # committed; one confirmation per deposit. Nothing here can
+                    # roll the payment back.
+                    email_service.enqueue(
+                        db,
+                        event=EmailEvent.BILLING_PAYMENT_CONFIRMED,
+                        recipient=user.email,
+                        user_id=user.id,
+                        lang=getattr(user, 'preferred_language', None),
+                        context={
+                            "amount": f"${float(deposit.amount):.2f}",
+                            "product": product_type.name,
+                            "reference": str(deposit.external_payment_id or deposit.id),
+                            "date": datetime.utcnow().strftime('%d/%m/%Y'),
+                        },
+                        idempotency_key=f"billing.payment_confirmed:deposit:{deposit.id}",
                     )
-                    logger.info("Payment confirmation email sent for user %s", user.id)
                 except Exception as e:
                     logger.error("Failed to send payment confirmation email: %s", e)
 

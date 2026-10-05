@@ -106,6 +106,17 @@ class Settings(BaseModel):
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "MyHigh5 <infos@myhigh5.com>")
     EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "MyHigh5")
+    # Dedicated secret protecting Admin-managed email secrets stored in the
+    # database (Resend API-key override). Never stored in the database itself.
+    EMAIL_SETTINGS_ENCRYPTION_KEY: str = os.getenv("EMAIL_SETTINGS_ENCRYPTION_KEY", "")
+    # Sender domains an Admin may use as the from-address (comma separated).
+    # Empty = the domain of EMAIL_FROM. Add a domain here once it is verified.
+    EMAIL_ALLOWED_FROM_DOMAINS: str = os.getenv("EMAIL_ALLOWED_FROM_DOMAINS", "")
+    # Outbox worker (in-process scheduler): poll interval, batch size, attempts.
+    EMAIL_OUTBOX_ENABLED: bool = os.getenv("EMAIL_OUTBOX_ENABLED", "true").lower() in ("true", "1", "yes")
+    EMAIL_OUTBOX_INTERVAL_SECONDS: int = int(os.getenv("EMAIL_OUTBOX_INTERVAL_SECONDS", "10"))
+    EMAIL_OUTBOX_BATCH_SIZE: int = int(os.getenv("EMAIL_OUTBOX_BATCH_SIZE", "20"))
+    EMAIL_MAX_ATTEMPTS: int = int(os.getenv("EMAIL_MAX_ATTEMPTS", "5"))
     
     # External creative links (YouTube / TikTok / Vimeo): availability checking.
     # A link confirmed dead removes the entry from its contest (reversible).

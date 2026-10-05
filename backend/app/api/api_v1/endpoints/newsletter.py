@@ -8,27 +8,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.newsletter import NewsletterSubscriptionCreate, NewsletterSubscriptionResponse
 from app.crud.crud_newsletter import crud_newsletter
+from datetime import datetime
+
+from app.core.redaction import mask_email
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def send_newsletter_subscription_email(
-    email: str,
-    lang: str = "en"
-):
-    """Envoyer un email de confirmation de souscription à la newsletter"""
-    try:
-        email_service.send_newsletter_subscription_email(
-            to_email=email,
-            lang=lang
-        )
-        logger.info(f"Email de confirmation newsletter envoyé à {email}")
-    except Exception as e:
-        logger.error(f"Erreur lors de l'envoi de l'email de confirmation newsletter à {email}: {e}")
 
 
 @router.post("/subscribe", response_model=NewsletterSubscriptionResponse, status_code=status.HTTP_201_CREATED)
@@ -52,7 +41,7 @@ def subscribe_to_newsletter(
             obj_in=subscription_in.dict()
         )
         
-        logger.info(f"Abonnement newsletter créé: {subscription.email}")
+        logger.info("Abonnement newsletter créé: %s", mask_email(subscription.email))
         
         # Déterminer la langue depuis les headers Accept-Language
         subscriber_lang = "en"  # Par défaut
@@ -65,11 +54,14 @@ def subscribe_to_newsletter(
         
         logger.info(f"Langue détectée pour l'email de confirmation: {subscriber_lang}")
         
-        # Envoyer l'email de confirmation en arrière-plan
-        background_tasks.add_task(
-            send_newsletter_subscription_email,
-            email=subscription.email,
-            lang=subscriber_lang
+        # One confirmation per subscription and day: subscribing the same
+        # address again and again cannot be used to flood a mailbox.
+        email_service.enqueue(
+            db,
+            event=EmailEvent.SUPPORT_NEWSLETTER_CONFIRMATION,
+            recipient=subscription.email,
+            lang=subscriber_lang,
+            idempotency_key=f"support.newsletter_confirmation:{subscription.id}:{datetime.utcnow():%Y%m%d}",
         )
         
         return subscription

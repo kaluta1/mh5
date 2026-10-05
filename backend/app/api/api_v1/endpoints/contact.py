@@ -8,142 +8,15 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.contact_message import ContactMessageCreate, ContactMessageResponse
 from app.crud.crud_contact_message import crud_contact_message
+
+from app.services import email_settings_service
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def send_contact_email_notification(
-    name: str,
-    email: str,
-    subject: str,
-    category: str,
-    message: str
-):
-    """Envoyer un email de notification pour un nouveau message de contact (toujours en anglais)"""
-    try:
-        # Email destinataire
-        recipient_email = "infos@myhigh5.com"
-        
-        # Traduire la catégorie en anglais
-        category_translations = {
-            "general": "General help",
-            "billing": "Billing",
-            "account": "Account",
-            "technical": "Technical support",
-            "partnership": "Partnership",
-            "other": "Other"
-        }
-        category_display = category_translations.get(category, category)
-        
-        # Construire le contenu HTML de l'email (toujours en anglais)
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #4F46E5; color: white; padding: 20px; border-radius: 5px 5px 0 0; }}
-                .content {{ background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }}
-                .field {{ margin-bottom: 15px; }}
-                .label {{ font-weight: bold; color: #555; }}
-                .value {{ margin-top: 5px; padding: 10px; background-color: white; border-radius: 3px; }}
-                .footer {{ margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #777; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h2>New Contact Message - MyHigh5</h2>
-                </div>
-                <div class="content">
-                    <div class="field">
-                        <div class="label">Name:</div>
-                        <div class="value">{name}</div>
-                    </div>
-                    <div class="field">
-                        <div class="label">Email:</div>
-                        <div class="value">{email}</div>
-                    </div>
-                    <div class="field">
-                        <div class="label">Category:</div>
-                        <div class="value">{category_display}</div>
-                    </div>
-                    <div class="field">
-                        <div class="label">Subject:</div>
-                        <div class="value">{subject}</div>
-                    </div>
-                    <div class="field">
-                        <div class="label">Message:</div>
-                        <div class="value">{message.replace(chr(10), '<br>')}</div>
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>This message was sent from the MyHigh5 contact form.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # Contenu texte brut (toujours en anglais)
-        text_content = f"""
-New Contact Message - MyHigh5
-
-Name: {name}
-Email: {email}
-Category: {category_display}
-Subject: {subject}
-
-Message:
-{message}
-
----
-This message was sent from the MyHigh5 contact form.
-        """
-        
-        # Envoyer l'email
-        email_service.send_email(
-            to_email=recipient_email,
-            subject=f"[MyHigh5 Contact] {subject}",
-            html_content=html_content,
-            text_content=text_content
-        )
-        
-        logger.info(f"Email de notification de contact envoyé à {recipient_email} pour le message de {email}")
-        
-    except Exception as e:
-        logger.error(f"Erreur lors de l'envoi de l'email de notification de contact: {e}")
-
-
-def send_contact_confirmation_to_sender(
-    name: str,
-    email: str,
-    subject: str,
-    category: str,
-    message: str,
-    lang: str = "en"
-):
-    """Envoyer un email de confirmation à l'expéditeur du message de contact"""
-    try:
-        email_service.send_contact_confirmation_email(
-            to_email=email,
-            name=name,
-            subject=subject,
-            category=category,
-            message=message,
-            lang=lang
-        )
-        
-        logger.info(f"Email de confirmation de contact envoyé à {email}")
-        
-    except Exception as e:
-        logger.error(f"Erreur lors de l'envoi de l'email de confirmation de contact: {e}")
 
 
 @router.post("/contact", response_model=ContactMessageResponse, status_code=status.HTTP_201_CREATED)
@@ -188,27 +61,32 @@ def create_contact_message(
         
         logger.info(f"Langue détectée pour l'email de confirmation: {sender_lang}")
         
-        # Envoyer l'email de notification à infos@myhigh5.com en arrière-plan
-        background_tasks.add_task(
-            send_contact_email_notification,
-            name=message_in.name,
-            email=message_in.email,
-            subject=message_in.subject,
-            category=message_in.category,
-            message=message_in.message
+        details = {
+            "name": message_in.name,
+            "email": str(message_in.email),
+            "subject": message_in.subject,
+            "category": message_in.category,
+            "message": message_in.message,
+        }
+        # Notification to the support address (Admin > Email Settings; the
+        # platform address by default). Always in English.
+        email_service.enqueue(
+            db,
+            event=EmailEvent.ADMIN_CONTACT_MESSAGE,
+            recipient=email_settings_service.support_address(email_settings_service.get_settings(db)),
+            context=details,
+            idempotency_key=f"admin.contact_message:{message.id}",
         )
-        
-        # Envoyer l'email de confirmation à l'expéditeur en arrière-plan
-        background_tasks.add_task(
-            send_contact_confirmation_to_sender,
-            name=message_in.name,
-            email=message_in.email,
-            subject=message_in.subject,
-            category=message_in.category,
-            message=message_in.message,
-            lang=sender_lang
+        # Confirmation to the sender.
+        email_service.enqueue(
+            db,
+            event=EmailEvent.SUPPORT_CONTACT_CONFIRMATION,
+            recipient=str(message_in.email),
+            lang=sender_lang,
+            context=details,
+            idempotency_key=f"support.contact_confirmation:{message.id}",
         )
-        
+
         return message
         
     except Exception as e:

@@ -1,263 +1,160 @@
-"""
-Service d'envoi d'emails pour MyHigh5 via Resend API
-"""
-import resend
-from typing import Optional, List
-import logging
+"""Central application email service (EMAIL-1).
 
-from app.core.config import settings
+Business code calls ONE thing:
+
+    email_service.enqueue(db, event=EmailEvent.X, recipient=..., context={...},
+                          idempotency_key="...")
+
+It knows nothing about Resend. `enqueue` validates the event against the
+registry, applies the send policy, enforces idempotency and a durable
+per-recipient limit, and records the email in the outbox (email_deliveries).
+The outbox worker (app.services.email_outbox) renders and sends it.
+
+Contract with callers:
+* Call it AFTER the business transaction has committed. The outbox row is
+  written in its own savepoint and committed here; a failure to record an email
+  is logged and swallowed, so it can never roll back or undo business state.
+* It never raises for an operational problem. Only an unknown event key (a
+  programming error) raises.
+* A switched-off email is recorded as SUPPRESSED and never queued: turning a
+  switch back on does not release a backlog.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Tuple
+
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from app.core.redaction import mask_email
-from app.services.email_templates import (
-    get_welcome_email,
-    get_verify_email,
-    get_password_reset_email,
-    get_password_change_security_email,
-    get_invitation_email,
-    get_payment_confirmation_email,
-    get_kyc_approved_email,
-    get_kyc_rejected_email,
-    get_commission_email,
-    get_contact_confirmation_email,
-    get_newsletter_subscription_email
-)
+from app.models.email import EmailDelivery
+from app.services import email_crypto, email_settings_service as policy
+from app.services.email_events import EmailCategory, EmailEvent, get_event
+from app.services.email_render import has_renderer
 
 logger = logging.getLogger(__name__)
 
+# Durable per-recipient limits (count, window seconds), enforced against the
+# delivery log itself, so they survive restarts and hold across processes.
+DEFAULT_RECIPIENT_LIMIT: Tuple[int, int] = (10, 3600)
+RECIPIENT_LIMITS: Dict[str, Tuple[int, int]] = {
+    EmailEvent.AUTH_EMAIL_VERIFICATION.value: (5, 3600),
+    EmailEvent.AUTH_PASSWORD_RESET.value: (5, 3600),
+    EmailEvent.GUARDIAN_CONSENT_REQUEST.value: (5, 3600),
+    EmailEvent.AFFILIATE_INVITATION.value: (3, 86400),
+    EmailEvent.SUPPORT_CONTACT_CONFIRMATION.value: (3, 3600),
+    EmailEvent.SUPPORT_NEWSLETTER_CONFIRMATION.value: (2, 86400),
+}
+ADMIN_RECIPIENT_LIMIT: Tuple[int, int] = (60, 3600)
+# Referral invitations a single member may send per 24 hours.
+INVITATIONS_PER_DAY = 50
 
-class EmailService:
-    """Service pour l'envoi d'emails via Resend API"""
-    
-    def __init__(self):
-        self.api_key = settings.RESEND_API_KEY
-        self.from_email = settings.EMAIL_FROM
-        self.from_name = settings.EMAIL_FROM_NAME
-        self.frontend_url = settings.FRONTEND_URL
-        
-        # Configurer Resend
-        if self.api_key:
-            resend.api_key = self.api_key
-    
-    def send_email(
-        self,
-        to_email: str,
-        subject: str,
-        html_content: str,
-        text_content: Optional[str] = None
-    ) -> bool:
-        """
-        Envoyer un email via Resend API
-        
-        Args:
-            to_email: Adresse email du destinataire
-            subject: Sujet de l'email
-            html_content: Contenu HTML
-            text_content: Contenu texte brut (optionnel)
-        
-        Returns:
-            bool: True si envoyé avec succès
-        """
-        if not self.api_key:
-            logger.warning("RESEND_API_KEY non configurée - email non envoyé")
-            return False
-            
+MAX_IDEMPOTENCY_KEY_LENGTH = 200
+
+
+def recipient_limit(event_key: str, category: str) -> Tuple[int, int]:
+    if event_key in RECIPIENT_LIMITS:
+        return RECIPIENT_LIMITS[event_key]
+    if category == EmailCategory.ADMIN.value:
+        return ADMIN_RECIPIENT_LIMIT
+    return DEFAULT_RECIPIENT_LIMIT
+
+
+class NotificationEmailService:
+    """The application-level email entry point."""
+
+    def enqueue(self, db: Session, *, event: EmailEvent, recipient: str, idempotency_key: str,
+                context: Optional[dict] = None, user_id: Optional[int] = None, lang: Optional[str] = None,
+                now: Optional[datetime] = None) -> Optional[EmailDelivery]:
+        definition = get_event(event)          # unknown event: programming error, raises
         try:
-            params = {
-                "from": self.from_email,
-                "to": [to_email],
-                "subject": subject,
-                "html": html_content,
-            }
-            
-            # Ajouter le texte brut si fourni
-            if text_content:
-                params["text"] = text_content
-            
-            # Envoyer via Resend
-            response = resend.Emails.send(params)
-            
-            # Privacy: the recipient address is masked in logs (minor/guardian safety).
-            logger.info("Email sent to %s - ID: %s", mask_email(to_email), response.get("id", "N/A"))
-            return True
-            
-        except Exception as e:
-            # The exception text may echo the recipient, so only its type is logged.
-            logger.error("Email send failed to %s: %s", mask_email(to_email), type(e).__name__)
-            return False
-    
-    def send_batch_emails(
-        self,
-        emails: List[dict]
-    ) -> bool:
-        """
-        Envoyer plusieurs emails en batch via Resend API
-        
-        Args:
-            emails: Liste de dictionnaires avec to, subject, html, text (optionnel)
-        
-        Returns:
-            bool: True si tous envoyés avec succès
-        """
-        if not self.api_key:
-            logger.warning("RESEND_API_KEY non configurée - emails non envoyés")
-            return False
-            
+            return self._enqueue(db, definition, recipient, idempotency_key, context or {}, user_id, lang,
+                                 now or datetime.utcnow())
+        except Exception as exc:  # noqa: BLE001 - email must never break the caller
+            logger.error("Email %s could not be recorded: %s", definition.key, type(exc).__name__)
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            return None
+
+    # ------------------------------------------------------------------
+    def _enqueue(self, db: Session, definition, recipient: str, idempotency_key: str, context: dict,
+                 user_id: Optional[int], lang: Optional[str], now: datetime) -> Optional[EmailDelivery]:
+        from app.services.email_templates import normalize_lang
+
+        if not has_renderer(definition.key):
+            logger.error("Email %s has no template yet; nothing recorded", definition.key)
+            return None
+        key = str(idempotency_key or "").strip()
+        if not key or len(key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+            raise ValueError("idempotency_key is required (max 200 characters)")
+        existing = db.query(EmailDelivery).filter(EmailDelivery.idempotency_key == key).first()
+        if existing is not None:
+            return existing
+
+        address = str(recipient or "").strip()
+        decision = policy.evaluate(db, definition)
+        status, reason = ("QUEUED", None) if decision.allowed else (decision.status, decision.reason)
+        if status == "QUEUED" and not policy.valid_email(address):
+            status, reason = "SUPPRESSED", policy.REASON_INVALID_RECIPIENT
+        rhash = email_crypto.recipient_hash(address)
+        if status == "QUEUED" and self._over_limit(db, definition, rhash, now):
+            status, reason = "SUPPRESSED", policy.REASON_RATE_LIMITED
+
+        row = EmailDelivery(
+            event_key=definition.key, category=definition.category.value, user_id=user_id,
+            recipient_masked=mask_email(address), recipient_hash=rhash, lang=normalize_lang(lang),
+            status=status, attempt_count=0, idempotency_key=key, failure_category=reason,
+            created_at=now, updated_at=now,
+        )
+        if status == "QUEUED":
+            row.payload_ciphertext = email_crypto.encrypt_payload({"to": address, "context": context})
+            row.queued_at = now
+            row.next_attempt_at = now
+        elif status == "FAILED":
+            row.failed_at = now
         try:
-            batch_params = []
-            for email in emails:
-                param = {
-                    "from": self.from_email,
-                    "to": [email["to"]],
-                    "subject": email["subject"],
-                    "html": email["html"],
-                }
-                if email.get("text"):
-                    param["text"] = email["text"]
-                batch_params.append(param)
-            
-            # Envoyer en batch
-            response = resend.Batch.send(batch_params)
-            
-            logger.info(f"Batch de {len(emails)} emails envoyé")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erreur envoi batch emails: {e}")
+            with db.begin_nested():
+                db.add(row)
+                db.flush()
+        except IntegrityError:
+            # A concurrent request recorded the same event first: the unique
+            # idempotency key is the authority.
+            return db.query(EmailDelivery).filter(EmailDelivery.idempotency_key == key).first()
+        db.commit()
+        if status != "QUEUED":
+            logger.info("Email %s not queued (%s) for %s", definition.key, reason, row.recipient_masked)
+        return row
+
+    @staticmethod
+    def count_recent(db: Session, event: EmailEvent, *, user_id: int, seconds: int = 86400,
+                     now: Optional[datetime] = None) -> int:
+        """Emails of one event recorded for one member in the window (durable:
+        counted from the delivery log)."""
+        now = now or datetime.utcnow()
+        return int(db.query(func.count(EmailDelivery.id)).filter(
+            EmailDelivery.event_key == get_event(event).key,
+            EmailDelivery.user_id == user_id,
+            EmailDelivery.created_at >= now - timedelta(seconds=seconds),
+        ).scalar() or 0)
+
+    @staticmethod
+    def _over_limit(db: Session, definition, rhash: Optional[str], now: datetime) -> bool:
+        if not rhash:
             return False
-    
-    def send_welcome_email(
-        self,
-        to_email: str,
-        verify_url: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send welcome email with verification link"""
-        subject, html_content, text_content = get_welcome_email(lang, verify_url)
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_verification_email(
-        self,
-        to_email: str,
-        verify_url: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send email verification link"""
-        subject, html_content, text_content = get_verify_email(lang, verify_url)
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_password_reset_email(
-        self,
-        to_email: str,
-        reset_url: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send password reset email"""
-        subject, html_content, text_content = get_password_reset_email(lang, reset_url)
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_invitation_email(
-        self,
-        to_email: str,
-        inviter_name: str,
-        referral_code: str,
-        message: Optional[str] = None,
-        lang: str = "en"
-    ) -> bool:
-        """Send referral invitation email"""
-        referral_link = f"{self.frontend_url}/r/{referral_code}"
-        subject, html_content, text_content = get_invitation_email(
-            lang, inviter_name, referral_code, referral_link, message
-        )
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_payment_confirmation_email(
-        self,
-        to_email: str,
-        amount: str,
-        product: str,
-        reference: str,
-        date: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send payment confirmation email"""
-        subject, html_content, text_content = get_payment_confirmation_email(
-            lang, amount, product, reference, date
-        )
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_kyc_approved_email(
-        self,
-        to_email: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send KYC approved notification email"""
-        subject, html_content, text_content = get_kyc_approved_email(lang)
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_kyc_rejected_email(
-        self,
-        to_email: str,
-        reason: Optional[str] = None,
-        lang: str = "en"
-    ) -> bool:
-        """Send KYC rejected notification email"""
-        subject, html_content, text_content = get_kyc_rejected_email(lang, reason)
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_commission_email(
-        self,
-        to_email: str,
-        amount: str,
-        commission_type: str,
-        source_name: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send commission notification email"""
-        subject, html_content, text_content = get_commission_email(
-            lang, amount, commission_type, source_name
-        )
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_password_change_security_email(
-        self,
-        to_email: str,
-        support_url: Optional[str] = None,
-        lang: str = "en",
-        ip_address: Optional[str] = None,
-        location: Optional[str] = None
-    ) -> bool:
-        """Send password change security notification email"""
-        subject, html_content, text_content = get_password_change_security_email(
-            lang, support_url, ip_address, location
-        )
-        return self.send_email(to_email, subject, html_content, text_content)
-    
-    def send_contact_confirmation_email(
-        self,
-        to_email: str,
-        name: str,
-        subject: str,
-        category: str,
-        message: str,
-        lang: str = "en"
-    ) -> bool:
-        """Send contact confirmation email to the sender"""
-        subject_email, html_content, text_content = get_contact_confirmation_email(
-            lang, name, subject, category, message
-        )
-        return self.send_email(to_email, subject_email, html_content, text_content)
-    
-    def send_newsletter_subscription_email(
-        self,
-        to_email: str,
-        lang: str = "en",
-        unsubscribe_url: Optional[str] = None
-    ) -> bool:
-        """Send newsletter subscription confirmation email"""
-        subject, html_content, text_content = get_newsletter_subscription_email(
-            lang, unsubscribe_url
-        )
-        return self.send_email(to_email, subject, html_content, text_content)
+        limit, window = recipient_limit(definition.key, definition.category.value)
+        count = db.query(func.count(EmailDelivery.id)).filter(
+            EmailDelivery.recipient_hash == rhash,
+            EmailDelivery.event_key == definition.key,
+            EmailDelivery.created_at >= now - timedelta(seconds=window),
+            EmailDelivery.status.notin_(("SUPPRESSED",)),
+        ).scalar() or 0
+        return count >= limit
 
 
-# Instance singleton
-email_service = EmailService()
+# Singleton used by the application.
+email_service = NotificationEmailService()

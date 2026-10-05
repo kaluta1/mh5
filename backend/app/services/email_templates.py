@@ -1,7 +1,66 @@
 """
 Email Templates with Multi-language Support for MyHigh5
 """
+import html as _html
+import re as _re
+from contextvars import ContextVar
+from datetime import datetime
 from typing import Optional
+
+# Branding resolved by the central email service for the message being rendered
+# (Admin-managed support address). Templates themselves stay source controlled.
+_branding: ContextVar[dict] = ContextVar("email_branding", default={})
+
+_TAG_RE = _re.compile(r"<[^>]+>")
+_SAFE_URL_RE = _re.compile(r"^(https?://|mailto:)[^\s<>\"']+$", _re.IGNORECASE)
+
+
+def set_branding(**values) -> object:
+    """Set per-render branding (support_email, logo_url). Returns a reset token."""
+    return _branding.set({k: v for k, v in values.items() if v})
+
+
+def reset_branding(token) -> None:
+    _branding.reset(token)
+
+
+def esc(value) -> str:
+    """Escape a dynamic value for HTML text or a quoted attribute. Every value
+    that is not source-controlled markup goes through this."""
+    return _html.escape("" if value is None else str(value), quote=True)
+
+
+def esc_multiline(value) -> str:
+    """Escaped text with line breaks kept."""
+    return esc(value).replace("\r\n", "\n").replace("\n", "<br>")
+
+
+def safe_url(url) -> Optional[str]:
+    """An http(s)/mailto URL, escaped for an href, or None. Anything else
+    (javascript:, data:, markup) is refused rather than rendered."""
+    text = ("" if url is None else str(url)).strip()
+    if not _SAFE_URL_RE.match(text):
+        return None
+    return esc(text)
+
+
+def plain(text) -> str:
+    """Plain-text form of a (trusted) translated string that carries markup."""
+    return _html.unescape(_TAG_RE.sub("", "" if text is None else str(text)))
+
+
+def current_year() -> int:
+    return datetime.utcnow().year
+
+
+def support_email(lang: str = "en") -> str:
+    return _branding.get().get("support_email") or get_translation(lang, "support_email")
+
+
+def normalize_lang(lang) -> str:
+    """Supported email language, English otherwise (also for a missing value)."""
+    code = str(lang or "").strip().lower().replace("_", "-").split("-")[0]
+    return code if code in EMAIL_TRANSLATIONS else "en"
 
 # Email translations
 EMAIL_TRANSLATIONS = {
@@ -493,11 +552,22 @@ EMAIL_TRANSLATIONS = {
 
 
 def get_translation(lang: str, key: str, **kwargs) -> str:
-    """Get a translated string with optional formatting"""
-    translations = EMAIL_TRANSLATIONS.get(lang, EMAIL_TRANSLATIONS["en"])
+    """Translated string for PLAIN TEXT (subjects, text bodies): with values,
+    the translation's markup is stripped and the values are inserted as they are."""
+    translations = EMAIL_TRANSLATIONS.get(normalize_lang(lang), EMAIL_TRANSLATIONS["en"])
     text = translations.get(key, EMAIL_TRANSLATIONS["en"].get(key, key))
     if kwargs:
-        text = text.format(**kwargs)
+        text = plain(text).format(**kwargs)
+    return text
+
+
+def get_translation_html(lang: str, key: str, **kwargs) -> str:
+    """Translated string for HTML: the translation's own markup is trusted,
+    every inserted value is escaped."""
+    translations = EMAIL_TRANSLATIONS.get(normalize_lang(lang), EMAIL_TRANSLATIONS["en"])
+    text = translations.get(key, EMAIL_TRANSLATIONS["en"].get(key, key))
+    if kwargs:
+        text = text.format(**{k: esc(v) for k, v in kwargs.items()})
     return text
 
 
@@ -506,16 +576,25 @@ def get_base_email_template(lang: str, title: str, content: str, button_text: Op
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
     
     button_html = ""
-    if button_text and button_url:
+    href = safe_url(button_url)
+    if button_text and href:
         button_html = f"""
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{button_url}" 
+                <a href="{href}"
                    style="display: inline-block; background: linear-gradient(135deg, #8B5CF6, #7C3AED); color: white; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);">
-                    {button_text}
+                    {esc(button_text)}
                 </a>
             </div>
+            <p style="margin: 0; color: #a1a1aa; font-size: 13px; text-align: center; word-break: break-all;">
+                {href}
+            </p>
         """
-    
+    logo_url = safe_url(_branding.get().get("logo_url"))
+    brand = esc(t('company_name'))
+    header_html = (f'<img src="{logo_url}" alt="{brand}" height="40" style="height: 40px; border: 0;">'
+                   if logo_url else
+                   f'<span style="font-size: 28px; font-weight: 700; color: #7C3AED;">{brand}</span>')
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -526,12 +605,15 @@ def get_base_email_template(lang: str, title: str, content: str, button_text: Op
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5;">
     <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
         <!-- Header -->
-      
+        <div style="text-align: center; margin-bottom: 24px;">
+            {header_html}
+        </div>
+
         
         <!-- Content Card -->
         <div style="background-color: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
             <h2 style="margin: 0 0 16px 0; color: #18181b; font-size: 24px; font-weight: 600;">
-                {title}
+                {esc(title)}
             </h2>
             
             <div style="color: #52525b; font-size: 16px; line-height: 1.6;">
@@ -547,10 +629,10 @@ def get_base_email_template(lang: str, title: str, content: str, button_text: Op
                 {t('ignore_email')}
             </p>
             <p style="margin: 0 0 8px 0;">
-                {t('support_email')}
+                {esc(support_email(lang))}
             </p>
             <p style="margin: 0;">
-                © 2024 {t('company_name')}. {t('all_rights_reserved')}.
+                © {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
             </p>
         </div>
     </div>
@@ -605,7 +687,7 @@ def get_welcome_email(lang: str, verify_url: str) -> tuple[str, str, str]:
 - {t('welcome_feature_3')}
 - {t('welcome_feature_4')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('welcome_subject'), html, text
@@ -641,7 +723,7 @@ def get_verify_email(lang: str, verify_url: str) -> tuple[str, str, str]:
 
 {t('verify_expiry')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('verify_subject'), html, text
@@ -682,7 +764,7 @@ def get_password_reset_email(lang: str, reset_url: str) -> tuple[str, str, str]:
 
 {t('reset_ignore')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('reset_subject'), html, text
@@ -696,21 +778,21 @@ def get_invitation_email(lang: str, inviter_name: str, referral_code: str, refer
     if message:
         message_html = f"""
             <div style="background-color: #faf5ff; border-left: 4px solid #8B5CF6; padding: 16px; border-radius: 0 8px 8px 0; margin: 24px 0;">
-                <p style="margin: 0; color: #6b21a8; font-style: italic;">"{message}"</p>
+                <p style="margin: 0; color: #6b21a8; font-style: italic;">"{esc_multiline(message)}"</p>
             </div>
         """
     
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('invitation_message', inviter_name=inviter_name)}
+            {get_translation_html(lang, 'invitation_message', inviter_name=inviter_name)}
         </p>
-        
+
         {message_html}
         
         <div style="background-color: #f4f4f5; border-radius: 12px; padding: 20px; text-align: center; margin-top: 24px;">
             <p style="margin: 0 0 8px 0; color: #71717a; font-size: 14px;">{t('referral_code_label')}</p>
             <p style="margin: 0; font-family: monospace; font-size: 24px; font-weight: 700; color: #8B5CF6; letter-spacing: 2px;">
-                {referral_code}
+                {esc(referral_code)}
             </p>
         </div>
         
@@ -736,7 +818,7 @@ def get_invitation_email(lang: str, inviter_name: str, referral_code: str, refer
     text = f"""
 {t('invitation_subject', inviter_name=inviter_name)}
 
-{inviter_name} {t('invitation_message', inviter_name=inviter_name)}
+{t('invitation_message', inviter_name=inviter_name)}
 
 {f'Message: {message}' if message else ''}
 
@@ -750,7 +832,7 @@ def get_invitation_email(lang: str, inviter_name: str, referral_code: str, refer
 - {t('welcome_feature_3')}
 - {t('welcome_feature_4')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('invitation_subject', inviter_name=inviter_name), html, text
@@ -762,15 +844,15 @@ def get_payment_confirmation_email(lang: str, amount: str, product: str, referen
     
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('payment_message', amount=amount, product=product)}
+            {get_translation_html(lang, 'payment_message', amount=amount, product=product)}
         </p>
-        
+
         <div style="background-color: #f4f4f5; border-radius: 12px; padding: 20px; margin: 24px 0;">
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('payment_reference')}</strong> {reference}
+                <strong>{t('payment_reference')}</strong> {esc(reference)}
             </p>
             <p style="margin: 0; color: #52525b;">
-                <strong>{t('payment_date')}</strong> {date}
+                <strong>{t('payment_date')}</strong> {esc(date)}
             </p>
         </div>
         
@@ -795,7 +877,7 @@ def get_payment_confirmation_email(lang: str, amount: str, product: str, referen
 
 {t('payment_thank_you')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('payment_subject'), html, text
@@ -826,7 +908,7 @@ def get_kyc_approved_email(lang: str) -> tuple[str, str, str]:
 
 {t('kyc_approved_message')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('kyc_approved_subject'), html, text
@@ -841,7 +923,7 @@ def get_kyc_rejected_email(lang: str, reason: Optional[str] = None) -> tuple[str
         reason_html = f"""
             <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 0 8px 8px 0; margin: 24px 0;">
                 <p style="margin: 0; color: #991b1b;">
-                    <strong>{t('kyc_rejected_reason')}</strong> {reason}
+                    <strong>{t('kyc_rejected_reason')}</strong> {esc(reason)}
                 </p>
             </div>
         """
@@ -867,7 +949,7 @@ def get_kyc_rejected_email(lang: str, reason: Optional[str] = None) -> tuple[str
 
 {f"{t('kyc_rejected_reason')} {reason}" if reason else ""}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('kyc_rejected_subject'), html, text
@@ -879,21 +961,21 @@ def get_commission_email(lang: str, amount: str, commission_type: str, source_na
     
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('commission_message', amount=amount)}
+            {get_translation_html(lang, 'commission_message', amount=amount)}
         </p>
-        
+
         <div style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; margin: 24px 0; text-align: center;">
             <p style="margin: 0; font-size: 36px; font-weight: 700; color: #16a34a;">
-                +{amount}
+                +{esc(amount)}
             </p>
         </div>
         
         <div style="background-color: #f4f4f5; border-radius: 12px; padding: 20px;">
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('commission_type')}</strong> {commission_type}
+                <strong>{t('commission_type')}</strong> {esc(commission_type)}
             </p>
             <p style="margin: 0; color: #52525b;">
-                <strong>{t('commission_from')}</strong> {source_name}
+                <strong>{t('commission_from')}</strong> {esc(source_name)}
             </p>
         </div>
     """
@@ -912,7 +994,7 @@ def get_commission_email(lang: str, amount: str, commission_type: str, source_na
 {t('commission_type')} {commission_type}
 {t('commission_from')} {source_name}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('commission_subject'), html, text
@@ -922,7 +1004,7 @@ def get_password_change_security_email(lang: str, support_url: Optional[str] = N
     """Generate password change security notification email content"""
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
     
-    support_link = support_url or f"mailto:{t('support_email')}"
+    support_link = support_url or f"mailto:{support_email(lang)}"
     
     # Construire les détails de sécurité
     security_details = ""
@@ -933,9 +1015,9 @@ def get_password_change_security_email(lang: str, support_url: Optional[str] = N
             <p style="margin: 0 0 12px 0; color: #52525b; font-weight: 600; font-size: 14px;">
                 {t('password_change_security_details')}
             </p>
-            {f'<p style="margin: 0 0 8px 0; color: #71717a; font-size: 14px;"><strong>{t("password_change_security_ip")}:</strong> {ip_address}</p>' if ip_address else ''}
+            {f'<p style="margin: 0 0 8px 0; color: #71717a; font-size: 14px;"><strong>{t("password_change_security_ip")}:</strong> {esc(ip_address)}</p>' if ip_address else ''}
             <p style="margin: 0; color: #71717a; font-size: 14px;">
-                <strong>{t('password_change_security_location')}:</strong> {location_display}
+                <strong>{t('password_change_security_location')}:</strong> {esc(location_display)}
             </p>
         </div>
         """
@@ -993,7 +1075,7 @@ def get_password_change_security_email(lang: str, support_url: Optional[str] = N
 
 {t('ignore_email')}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('password_change_security_subject'), html, text
@@ -1026,28 +1108,28 @@ def get_contestant_report_email(
         
         <div style="background-color: #f4f4f5; border-radius: 8px; padding: 16px; margin: 24px 0;">
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contestant_report_contestant')}</strong> {contestant_title}
+                <strong>{t('contestant_report_contestant')}</strong> {esc(contestant_title)}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contestant_report_author')}</strong> {contestant_author_name}
+                <strong>{t('contestant_report_author')}</strong> {esc(contestant_author_name)}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contestant_report_contest')}</strong> {contest_name}
+                <strong>{t('contestant_report_contest')}</strong> {esc(contest_name)}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contestant_report_reporter')}</strong> {reporter_name}
+                <strong>{t('contestant_report_reporter')}</strong> {esc(reporter_name)}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contestant_report_reason')}</strong> {reason}
+                <strong>{t('contestant_report_reason')}</strong> {esc(reason)}
             </p>
             <p style="margin: 0; color: #52525b;">
                 <strong>{t('contestant_report_description')}</strong><br/>
-                {description}
+                {esc_multiline(description)}
             </p>
         </div>
         
         <p style="margin: 0; color: #a1a1aa; font-size: 14px;">
-            Report ID: #{report_id}
+            Report ID: #{esc(report_id)}
         </p>
     """
     
@@ -1075,7 +1157,7 @@ Report ID: #{report_id}
 
 {admin_url if admin_url else ''}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('contestant_report_subject'), html, text
@@ -1131,9 +1213,9 @@ def get_contact_confirmation_email(
     
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('contact_confirmation_greeting', name=name)}
+            {get_translation_html(lang, 'contact_confirmation_greeting', name=name)}
         </p>
-        
+
         <p style="margin: 0 0 24px 0;">
             {t('contact_confirmation_message')}
         </p>
@@ -1147,14 +1229,14 @@ def get_contact_confirmation_email(
                 {t('contact_confirmation_details')}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contact_confirmation_subject_label')}</strong> {subject}
+                <strong>{t('contact_confirmation_subject_label')}</strong> {esc(subject)}
             </p>
             <p style="margin: 0 0 8px 0; color: #52525b;">
-                <strong>{t('contact_confirmation_category_label')}</strong> {category_display}
+                <strong>{t('contact_confirmation_category_label')}</strong> {esc(category_display)}
             </p>
             <p style="margin: 0; color: #52525b;">
                 <strong>{t('contact_confirmation_message_label')}</strong><br/>
-                <span style="white-space: pre-wrap;">{message.replace(chr(10), '<br>')}</span>
+                <span style="white-space: pre-wrap;">{esc_multiline(message)}</span>
             </p>
         </div>
         
@@ -1163,7 +1245,7 @@ def get_contact_confirmation_email(
         </p>
         
         <p style="margin: 16px 0 0 0; color: #a1a1aa; font-size: 14px;">
-            {t('support_email')}
+            {esc(support_email(lang))}
         </p>
     """
     
@@ -1191,9 +1273,9 @@ def get_contact_confirmation_email(
 
 {t('contact_confirmation_thank_you')}
 
-{t('support_email')}
+{support_email(lang)}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('contact_confirmation_subject'), html, text
@@ -1207,8 +1289,7 @@ def get_newsletter_subscription_email(
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
     
     # Construire l'URL de désinscription si fournie
-    unsubscribe_link = unsubscribe_url or f"{get_translation(lang, 'support_email')}"
-    
+
     content = f"""
         <p style="margin: 0 0 24px 0;">
             {t('newsletter_subscription_message')}
@@ -1255,7 +1336,7 @@ def get_newsletter_subscription_email(
 
 {unsubscribe_url if unsubscribe_url else ''}
 
-© 2024 {t('company_name')}. {t('all_rights_reserved')}.
+© {current_year()} {t('company_name')}. {t('all_rights_reserved')}.
 """
     
     return t('newsletter_subscription_subject'), html, text

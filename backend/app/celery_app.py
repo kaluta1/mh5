@@ -24,6 +24,7 @@ celery_app = Celery(
         "app.tasks.season_migration",
         "app.tasks.contest_status",
         "app.tasks.monthly_round",
+        "app.tasks.email_outbox",
     ]
 )
 
@@ -50,6 +51,10 @@ celery_app.conf.beat_schedule = {
     "process-season-migrations": {
         "task": "app.tasks.season_migration.process_season_migrations",
         "schedule": 3600.0,  # Exécuter toutes les heures (3600 secondes)
+    },
+    "drain-email-outbox": {
+        "task": "app.tasks.email_outbox.drain_email_outbox",
+        "schedule": 15.0,  # the in-process scheduler is skipped when USE_CELERY is set
     },
     "update-contest-statuses": {
         "task": "app.tasks.contest_status.update_contest_statuses",

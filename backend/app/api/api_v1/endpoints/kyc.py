@@ -42,6 +42,7 @@ from app.schemas.kyc import (
     ShuftiProWebhookData, KYCWebhookResponse, KYCInitiateRequest,
 )
 from app.services.email import email_service
+from app.services.email_events import EmailEvent
 from app.services.payment_accounting import payment_accounting
 from app.services.proof_of_address_match import (
     normalized_address_key,
@@ -982,11 +983,13 @@ def approve_kyc_verification(
     # Envoyer l'email de confirmation KYC approuvé
     verified_user = db.query(User).filter(User.id == verification.user_id).first()
     if verified_user:
-        user_lang = getattr(verified_user, 'preferred_language', 'fr') or 'fr'
-        background_tasks.add_task(
-            email_service.send_kyc_approved_email,
-            to_email=verified_user.email,
-            lang=user_lang
+        email_service.enqueue(
+            db,
+            event=EmailEvent.KYC_APPROVED,
+            recipient=verified_user.email,
+            user_id=verified_user.id,
+            lang=getattr(verified_user, 'preferred_language', None),
+            idempotency_key=f"kyc.approved:{verification.id}:{int(verification.attempts_count or 0)}",
         )
     
     return result
@@ -1031,12 +1034,14 @@ def reject_kyc_verification(
     # Envoyer l'email de notification KYC rejeté
     rejected_user = db.query(User).filter(User.id == verification.user_id).first()
     if rejected_user:
-        user_lang = getattr(rejected_user, 'preferred_language', 'fr') or 'fr'
-        background_tasks.add_task(
-            email_service.send_kyc_rejected_email,
-            to_email=rejected_user.email,
-            reason=reason,
-            lang=user_lang
+        email_service.enqueue(
+            db,
+            event=EmailEvent.KYC_REJECTED,
+            recipient=rejected_user.email,
+            user_id=rejected_user.id,
+            lang=getattr(rejected_user, 'preferred_language', None),
+            context={"reason": reason},
+            idempotency_key=f"kyc.rejected:{verification.id}:{int(verification.attempts_count or 0)}",
         )
     
     return result

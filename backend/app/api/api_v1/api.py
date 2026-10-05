@@ -120,6 +120,17 @@ api_router.include_router(
     tags=["Administration - content moderation"],
 )
 
+from app.api.api_v1.endpoints import email_settings as email_settings_endpoints  # noqa: E402
+
+# EMAIL-1: reads need an administrator; every change additionally needs the
+# explicit manage_email_settings permission (checked per route).
+api_router.include_router(
+    email_settings_endpoints.router,
+    prefix="/admin/email-settings",
+    tags=["Administration - email settings"],
+    dependencies=[Depends(admin.require_admin)],
+)
+
 from app.api.api_v1.endpoints import interactions as interaction_endpoints  # noqa: E402
 
 # Phase 9: member interaction controls (blocks, reports, contact check) and ad eligibility.

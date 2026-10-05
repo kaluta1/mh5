@@ -196,8 +196,7 @@ def verify_guardian_relationship(relationship_id: int, body: GuardianVerifyBody,
     except guardian_consent.GuardianFlowError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result.completion_token and result.minor_email:
-        background_tasks.add_task(guardian_notifications.send_completion_email, result.minor_email,
-                                  result.completion_token)
+        guardian_notifications.send_completion_email(db, result.minor_email, result.completion_token)
     return {"id": relationship_id, "status": result.status}
 
 
