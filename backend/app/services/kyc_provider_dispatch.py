@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from app.services import kyc_notifications
 from app.models.kyc import KYCStatus, VerificationProvider
 from app.models.user import User
 from app.schemas.kyc import KYCVerificationUpdate
@@ -107,6 +108,7 @@ def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, fla
         from app.services.payment_accounting import payment_accounting
 
         payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
+        kyc_notifications.notify_status(db, verification.id)          # committed: APPROVED
         return
 
     crud_kyc.kyc_verification.apply_shufti_identity_accepted(
@@ -117,6 +119,7 @@ def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, fla
         provider_response=provider_response,
         webhook_data=webhook_data,
     )
+    kyc_notifications.notify_status(db, verification.id)              # committed: proof of address expected
 
 
 def apply_provider_rejected(db: Session, *, crud_kyc, verification, flags: Dict[str, bool], reason: str, external_id: str, provider_response=None, webhook_data=None):
@@ -131,6 +134,8 @@ def apply_provider_rejected(db: Session, *, crud_kyc, verification, flags: Dict[
         face_verified=flags.get("face_verified", False),
     )
     crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+    # Committed: REJECTED. The provider's reason stays in the record; the email carries none.
+    kyc_notifications.notify_status(db, verification.id)
 
 
 async def sync_verification_from_provider(db: Session, *, crud_kyc, verification) -> Optional[Dict[str, Any]]:

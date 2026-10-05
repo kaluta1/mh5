@@ -1978,6 +1978,10 @@ async def reject_contestant(
         contestant.verification_status = "rejected"
         db.commit()
         db.refresh(contestant)
+        # EMAIL-3: the rejection is committed; one email per entry.
+        from app.services import contest_notifications as _contest_notifications
+
+        _contest_notifications.entry_removed(db, contestant.id)
         
         return {
             'id': contestant.id,
@@ -2022,6 +2026,11 @@ async def update_contestant_status(
         contestant.verification_status = status
         db.commit()
         db.refresh(contestant)
+        if status == "rejected":
+            # EMAIL-3: the rejection is committed; one email per entry.
+            from app.services import contest_notifications as _contest_notifications
+
+            _contest_notifications.entry_removed(db, contestant.id)
         
         return {
             'id': contestant.id,
@@ -2285,6 +2294,10 @@ async def create_contestant(
         
         db.commit()
         db.refresh(new_contestant)
+        # EMAIL-3: committed. The entrant (never the administrator) is told the entry's real state.
+        from app.services import contest_notifications as _contest_notifications
+
+        _contest_notifications.entry_created(db, new_contestant.id)
         
         return {
             "id": new_contestant.id,

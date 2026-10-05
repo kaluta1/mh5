@@ -602,7 +602,13 @@ def moderate(db: Session, row: ContentModeration, *, action: str, actor, reason:
     row.updated_at = now
     db.flush()
     _audit(db, row, f"MODERATION_{action}", actor.id, old, reason)
-    return _sync_entry(db, row, actor_id=actor.id, trigger=f"MODERATION_{action}", now=now, today=today)
+    result = _sync_entry(db, row, actor_id=actor.id, trigger=f"MODERATION_{action}", now=now, today=today)
+    if action == "REQUEST_UPDATE":
+        # Committed by _sync_entry. The moderator's internal reason is not emailed.
+        from app.services import contest_notifications
+
+        contest_notifications.entry_update_requested(db, row.contestant_id)
+    return result
 
 
 def resolve_child_safety(db: Session, row: ContentModeration, *, resolution: ChildSafetyResolution, actor,

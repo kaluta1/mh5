@@ -563,6 +563,13 @@ EMAIL_TRANSLATIONS = {
 }
 
 
+# KYC and contest status emails (EMAIL-3): texts live in their own module.
+from app.services.email_event_texts import EVENT_TEXTS as _EVENT_TEXTS  # noqa: E402
+
+for _lang, _texts in _EVENT_TEXTS.items():
+    EMAIL_TRANSLATIONS[_lang].update(_texts)
+
+
 def get_translation(lang: str, key: str, **kwargs) -> str:
     """Translated string for PLAIN TEXT (subjects, text bodies): with values,
     the translation's markup is stripped and the values are inserted as they are."""
@@ -969,6 +976,49 @@ def get_kyc_rejected_email(lang: str, reason: Optional[str] = None) -> tuple[str
 """
     
     return t('kyc_rejected_subject'), html, text
+
+
+def get_status_email(lang: str, prefix: str, *, button_key: str, button_url: Optional[str],
+                     entry: Optional[str] = None, contest: Optional[str] = None,
+                     note_key: Optional[str] = None) -> tuple[str, str, str]:
+    """A status notice in the shared layout (EMAIL-3: KYC and contest events).
+
+    `prefix` selects `<prefix>_subject / _title / _message` (and an optional
+    note). `entry` and `contest` are member-controlled text: they are escaped
+    for the HTML part and never reach the subject."""
+    t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
+    values = {"entry": entry or "", "contest": contest or ""}
+    message_html = get_translation_html(lang, f"{prefix}_message", **values)
+    message_text = t(f"{prefix}_message", **values)
+    note = t(note_key) if note_key else ""
+
+    content = f"""
+        <p style="margin: 0 0 24px 0;">
+            {message_html}
+        </p>
+    """
+    if note:
+        content += f"""
+        <p style="margin: 0; color: #71717a; font-size: 14px;">
+            {esc(note)}
+        </p>
+    """
+
+    html = get_base_email_template(
+        lang=lang,
+        title=t(f"{prefix}_title"),
+        content=content,
+        button_text=t(button_key) if button_url else None,
+        button_url=button_url,
+    )
+
+    lines = [t(f"{prefix}_title"), "", message_text]
+    if note:
+        lines += ["", note]
+    if button_url:
+        lines += ["", str(button_url)]
+    lines += ["", f"© {current_year()} {t('company_name')}. {t('all_rights_reserved')}."]
+    return t(f"{prefix}_subject"), html, "\n" + "\n".join(lines) + "\n"
 
 
 def get_commission_email(lang: str, amount: str, commission_type: str, source_name: str) -> tuple[str, str, str]:

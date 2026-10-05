@@ -322,6 +322,7 @@ def run_link_recheck(db: Session, *, now: Optional[datetime] = None) -> Dict[str
                        summary["dead"], definitive)
         return summary
 
+    removed_ids: List[int] = []
     latest = _latest_link_events(db, [e.id for e, _ in results])
     confirm_before = now - timedelta(hours=max(0, int(settings.CREATIVE_LINK_CONFIRM_AFTER_HOURS)))
     for entry, result in results:
@@ -335,6 +336,7 @@ def run_link_recheck(db: Session, *, now: Optional[datetime] = None) -> Dict[str
                        old={"verification_status": previous},
                        new={"verification_status": CREATIVE_UNAVAILABLE_STATUS})
                 summary["removed"] += 1
+                removed_ids.append(entry.id)
             elif not suspected:
                 _audit(db, entry.id, ACTION_SUSPECT, now, result)
                 summary["suspected"] += 1
@@ -343,6 +345,11 @@ def run_link_recheck(db: Session, *, now: Optional[datetime] = None) -> Dict[str
             _audit(db, entry.id, ACTION_OK, now, result)
             summary["cleared"] += 1
     db.commit()
+    if removed_ids:
+        # Committed removals only; one email per entry however often the pass reruns.
+        from app.services import contest_notifications
+
+        contest_notifications.creative_unavailable(db, removed_ids)
     if summary["suspected"] or summary["removed"] or summary["cleared"]:
         logger.info("Creative link recheck: %s", {k: v for k, v in summary.items() if k != "enabled"})
     return summary

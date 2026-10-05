@@ -88,7 +88,8 @@ def test_registry_matches_the_audited_inventory():
     by_phase = {}
     for d in all_events():
         by_phase[d.phase.value] = by_phase.get(d.phase.value, 0) + 1
-    assert by_phase == {"IMPLEMENT_NOW": 25, "LATER": 15, "REQUIRES_BUSINESS_APPROVAL": 13}
+    # EMAIL-3 implemented KYC.ACTION_REQUIRED (planned "LATER" in the original audit): 26 / 14 / 13.
+    assert by_phase == {"IMPLEMENT_NOW": 26, "LATER": 14, "REQUIRES_BUSINESS_APPROVAL": 13}
     for d in all_events():
         assert d.key == d.key.upper() and d.key.split(".")[0] == d.category.value and d.label
 
@@ -118,13 +119,13 @@ def test_registry_defaults_and_critical_events():
             assert not d.trigger_implemented                              # future events are never emitted
     # defaults exactly as audited: 25 on, 28 off
     assert sum(1 for d in all_events() if d.default_enabled) == 25
-    assert {d.key for d in all_events() if d.default_enabled and d.phase.value != "IMPLEMENT_NOW"} == {
-        "KYC.ACTION_REQUIRED"}
+    assert {d.key for d in all_events() if d.default_enabled and d.phase.value != "IMPLEMENT_NOW"} == set()
     assert {d.key for d in all_events() if not d.default_enabled and d.phase.value == "IMPLEMENT_NOW"} == {
         "ADMIN.KYC_REVIEW_REQUIRED"}
     # exactly the events the application emits today have a template
     live = {d.key for d in all_events() if d.trigger_implemented}
-    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 14      # 13 + AUTH.WELCOME (EMAIL-2)
+    # 13 (EMAIL-1) + AUTH.WELCOME (EMAIL-2) + KYC.ACTION_REQUIRED and 8 contest entry events (EMAIL-3)
+    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 23
 
 
 def test_nomination_and_participation_events_stay_separate():
@@ -132,12 +133,19 @@ def test_nomination_and_participation_events_stay_separate():
     participation = {k for k in EMAIL_EVENTS if k.startswith("CONTEST.PARTICIPATION_")}
     assert participation == {"CONTEST.PARTICIPATION_PENDING_REVIEW", "CONTEST.PARTICIPATION_PUBLISHED",
                              "CONTEST.PARTICIPATION_ACTION_REQUIRED", "CONTEST.PARTICIPATION_REJECTED"}
-    # Registered, not wired: EMAIL-1 emits no contest email and touches no contest logic.
-    assert not any(get_event(k).trigger_implemented for k in EMAIL_EVENTS if k.startswith("CONTEST."))
+    # EMAIL-3 wires the entry-status events and nothing else; progression, results, voting and
+    # claim events stay registered and unwired.
+    wired = {k for k in EMAIL_EVENTS if k.startswith("CONTEST.") and get_event(k).trigger_implemented}
+    assert wired == {"CONTEST.NOMINATION_PUBLISHED", "CONTEST.NOMINATION_ACTION_REQUIRED",
+                     "CONTEST.NOMINATION_REMOVED", "CONTEST.PARTICIPATION_PENDING_REVIEW",
+                     "CONTEST.PARTICIPATION_PUBLISHED", "CONTEST.PARTICIPATION_ACTION_REQUIRED",
+                     "CONTEST.PARTICIPATION_REJECTED", "CONTEST.CREATIVE_UNAVAILABLE"}
+    # Contest emails are emitted from ONE module (after-commit notifier) and rendered in one place:
+    # no contest endpoint, scheduler or ranking code refers to an email event.
     app_dir = Path(__file__).resolve().parents[2] / "app"
-    users = [p.name for p in app_dir.rglob("*.py")
-             if "EmailEvent.CONTEST_" in p.read_text(encoding="utf-8") and p.name != "email_events.py"]
-    assert users == []
+    users = sorted(p.name for p in app_dir.rglob("*.py")
+                   if "EmailEvent.CONTEST_" in p.read_text(encoding="utf-8") and p.name != "email_events.py")
+    assert users == ["contest_notifications.py", "email_render.py"]
 
 
 def test_no_application_code_calls_resend_directly():
@@ -362,7 +370,8 @@ def test_manager_changes_are_applied_and_audited_without_secrets(client, db, enc
                       json={"enabled": True}).status_code == 404
     listed = {e["key"]: e for e in client.get(f"{BASE}/events", headers=h).json()["events"]}
     assert len(listed) == 53 and listed["AUTH.PASSWORD_RESET"]["enabled"] is False
-    assert listed["CONTEST.NOMINATION_PUBLISHED"]["trigger_implemented"] is False
+    assert listed["CONTEST.NOMINATION_PUBLISHED"]["trigger_implemented"] is True      # wired in EMAIL-3
+    assert listed["CONTEST.WINNER"]["trigger_implemented"] is False
     assert "CRITICAL_EVENT_DISABLED" in {w["code"] for w in client.get(f"{BASE}/overview", headers=h).json()["warnings"]}
 
     # every change is audited: who / what / when, never a secret

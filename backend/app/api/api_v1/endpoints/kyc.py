@@ -42,6 +42,7 @@ from app.schemas.kyc import (
     ShuftiProWebhookData, KYCWebhookResponse, KYCInitiateRequest,
 )
 from app.services.email import email_service
+from app.services import kyc_notifications
 from app.services.email_events import EmailEvent
 from app.services.payment_accounting import payment_accounting
 from app.services.proof_of_address_match import (
@@ -1205,6 +1206,8 @@ async def submit_proof_of_address(
 
     crud_kyc.kyc_verification.finalize_proof_of_address_auto(db, verification_id=verification.id)
     payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
+    # The approval is committed: tell the member (the main approval path; it used to send nothing).
+    kyc_notifications.notify_status(db, verification.id)
 
     return {
         "success": True,
@@ -1261,6 +1264,7 @@ async def shufti_pro_webhook(
             provider_response=str(webhook_data.verification_result),
             webhook_data=str(wh_raw),
         )
+        kyc_notifications.notify_status(db, verification.id)          # committed: proof of address expected
 
     elif webhook_data.event == "verification.declined":
         if verification.status == KYCStatus.REJECTED:
@@ -1286,6 +1290,8 @@ async def shufti_pro_webhook(
             face_verified=flags["face_verified"],
         )
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+        # Committed: REJECTED. The provider's reason is never emailed.
+        kyc_notifications.notify_status(db, verification.id)
 
     return KYCWebhookResponse(
         success=True,

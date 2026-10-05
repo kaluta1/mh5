@@ -136,6 +136,80 @@ def _kyc_rejected(db, to, user_id, ctx, lang) -> Rendered:
     return tpl.get_kyc_rejected_email(lang, ctx.get("reason"))
 
 
+def _kyc_action_required(db, to, user_id, ctx, lang) -> Rendered:
+    """Identity accepted, proof of address still expected. Not sent if the
+    verification has moved on since the email was queued."""
+    from app.models.kyc import KYCStatus, KYCVerification
+
+    user = _recipient_account(db, to, user_id)
+    latest = (db.query(KYCVerification).filter(KYCVerification.user_id == user.id)
+              .order_by(KYCVerification.id.desc()).first())
+    if latest is None or latest.status != KYCStatus.PENDING_PROOF_OF_ADDRESS:
+        raise RenderError("state_changed")
+    return tpl.get_status_email(lang, "kyc_action", button_key="kyc_action_button",
+                                button_url=f"{public_site_base()}/dashboard/kyc")
+
+
+# ---- contest entry status (EMAIL-3) -----------------------------------------
+# The email is rendered when it is SENT, from the entry's state at that moment.
+# If the state it was queued for is no longer true, it is not sent at all.
+
+def _entry(db: Session, to: str, user_id: Optional[int], ctx: dict):
+    from app.models.contest import Contest
+    from app.models.contest_eligibility import ContestEntrySafety
+    from app.models.contests import Contestant
+
+    _recipient_account(db, to, user_id)
+    try:
+        contestant_id = int(ctx.get("contestant_id"))
+    except (TypeError, ValueError):
+        raise RenderError("entry_missing")
+    contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
+    if contestant is None or getattr(contestant, "is_deleted", False):
+        raise RenderError("entry_gone")
+    row = db.query(ContestEntrySafety).filter(ContestEntrySafety.contestant_id == contestant_id).first()
+    owner_id = (row.submitted_by_user_id if row is not None else None) or contestant.user_id
+    if owner_id != user_id:
+        raise RenderError("recipient_changed")
+    contest_id = (row.contest_id if row is not None else None) or contestant.contest_id
+    contest = db.query(Contest).filter(Contest.id == contest_id).first() if contest_id else None
+    title = (contestant.title or "").strip() or f"#{contestant.id}"
+    return contestant, row, title, (getattr(contest, "name", None) or "MyHigh5")
+
+
+def _entry_email(prefix: str, expected):
+    """Renderer for one entry status. `expected(contestant, row)` says whether
+    the entry is still in the state the email announces."""
+    def renderer(db, to, user_id, ctx, lang) -> Rendered:
+        contestant, row, title, contest_name = _entry(db, to, user_id, ctx)
+        if not expected(contestant, row):
+            raise RenderError("state_changed")
+        return tpl.get_status_email(lang, prefix, entry=title, contest=contest_name, note_key=f"{prefix}_note",
+                                    button_key="entries_button",
+                                    button_url=f"{public_site_base()}/dashboard/my-applications")
+    return renderer
+
+
+def _is_public(contestant, row) -> bool:
+    return row is not None and row.exposure_status == "PUBLIC"
+
+
+def _is_held(contestant, row) -> bool:
+    return row is not None and row.exposure_status == "HELD"
+
+
+def _is_removed(contestant, row) -> bool:
+    return (row is not None and row.exposure_status == "BLOCKED") or (contestant.verification_status or "") == "rejected"
+
+
+def _update_wanted(contestant, row) -> bool:
+    return row is None or row.exposure_status in ("PUBLIC", "HELD")
+
+
+def _link_dead(contestant, row) -> bool:
+    return (contestant.verification_status or "") == "creative_unavailable"
+
+
 def _payment_confirmed(db, to, user_id, ctx, lang) -> Rendered:
     return tpl.get_payment_confirmation_email(lang, ctx.get("amount", ""), ctx.get("product", ""),
                                               ctx.get("reference", ""), ctx.get("date", ""))
@@ -201,6 +275,15 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.GUARDIAN_REGISTRATION_COMPLETION.value: _guardian_completion,
     EmailEvent.KYC_APPROVED.value: _kyc_approved,
     EmailEvent.KYC_REJECTED.value: _kyc_rejected,
+    EmailEvent.KYC_ACTION_REQUIRED.value: _kyc_action_required,
+    EmailEvent.CONTEST_NOMINATION_PUBLISHED.value: _entry_email("nomination_published", _is_public),
+    EmailEvent.CONTEST_NOMINATION_ACTION_REQUIRED.value: _entry_email("nomination_action", _update_wanted),
+    EmailEvent.CONTEST_NOMINATION_REMOVED.value: _entry_email("nomination_removed", _is_removed),
+    EmailEvent.CONTEST_PARTICIPATION_PENDING_REVIEW.value: _entry_email("participation_pending", _is_held),
+    EmailEvent.CONTEST_PARTICIPATION_PUBLISHED.value: _entry_email("participation_published", _is_public),
+    EmailEvent.CONTEST_PARTICIPATION_ACTION_REQUIRED.value: _entry_email("participation_action", _update_wanted),
+    EmailEvent.CONTEST_PARTICIPATION_REJECTED.value: _entry_email("participation_rejected", _is_removed),
+    EmailEvent.CONTEST_CREATIVE_UNAVAILABLE.value: _entry_email("creative_unavailable", _link_dead),
     EmailEvent.BILLING_PAYMENT_CONFIRMED.value: _payment_confirmed,
     EmailEvent.AFFILIATE_INVITATION.value: _invitation,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,

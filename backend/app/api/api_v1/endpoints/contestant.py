@@ -3384,6 +3384,13 @@ def create_contestant(
             )
         db.commit()
         db.refresh(contestant)
+        # EMAIL-3: the entry and its safety record are committed. The notifier
+        # reads that committed state: a public entry is announced as published
+        # (a nomination is public at once; nothing says "waiting for approval"),
+        # a held participation as received and being checked. It never raises.
+        from app.services import contest_notifications as _contest_notifications
+
+        _contest_notifications.entry_created(db, contestant.id)
 
         # Vérifier si le lien existe déjà
         existing_link = db.query(ContestantSeason).filter(

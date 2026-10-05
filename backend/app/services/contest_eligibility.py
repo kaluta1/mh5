@@ -1029,6 +1029,7 @@ def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional
         db.refresh(row)
         if action == "ENTRY_ACTIVATED":
             _release_progression_holds(db, [row.contestant_id], actor_id)
+            contest_notifications.entries_published(db, [row.contestant_id])     # committed: now public
     return row
 
 
@@ -1056,8 +1057,10 @@ def reevaluate_for_user(db: Session, user_id: int, *, trigger: str, today: date,
         reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, now=now, commit=False)
     if rows:
         db.commit()
-        _release_progression_holds(db, [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
-                                        and r.exposure_status == EntryExposureStatus.PUBLIC.value], actor_id)
+        activated = [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
+                     and r.exposure_status == EntryExposureStatus.PUBLIC.value]
+        _release_progression_holds(db, activated, actor_id)
+        contest_notifications.entries_published(db, activated)                   # committed: now public
     return len(rows)
 
 
@@ -1074,8 +1077,10 @@ def reevaluate_open_entries(db: Session, *, trigger: str, today: date, actor_id:
         reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, commit=False)
     db.commit()
     changed = sum(1 for r in rows if before[r.id] != r.exposure_status)
-    _release_progression_holds(db, [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
-                                    and r.exposure_status == EntryExposureStatus.PUBLIC.value], actor_id)
+    activated = [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
+                 and r.exposure_status == EntryExposureStatus.PUBLIC.value]
+    _release_progression_holds(db, activated, actor_id)
+    contest_notifications.entries_published(db, activated)                       # committed: now public
     return {"evaluated": len(rows), "changed": changed}
 
 
@@ -1418,6 +1423,10 @@ def admin_review(db: Session, row: ContestEntrySafety, *, action: str, admin_id:
         return reevaluate_entry(db, row, actor_id=admin_id, trigger=f"ADMIN_{action}", today=today, now=now)
     db.commit()
     db.refresh(row)
+    if action == "BLOCK":
+        # Committed. An entry that was (and stays) child-safety escalated is not
+        # BLOCKED and sends nothing: the notifier reads the committed state.
+        contest_notifications.entry_removed(db, row.contestant_id)
     return row
 
 
@@ -1425,6 +1434,7 @@ def admin_review(db: Session, row: ContestEntrySafety, *, action: str, admin_id:
 # Public-exposure gate for read paths (implemented in entry_exposure, re-exported)
 # ---------------------------------------------------------------------------
 
+from app.services import contest_notifications  # noqa: E402  (EMAIL-3: after-commit status emails)
 from app.services.entry_exposure import (  # noqa: E402,F401
     entry_publicly_visible,
     not_publicly_exposable_clause,

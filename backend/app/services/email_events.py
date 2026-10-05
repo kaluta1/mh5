@@ -6,8 +6,39 @@ the DEFAULT enabled state; the database (email_event_settings) stores only
 Admin overrides, so a new event gets a sane default without any seed data.
 
 `trigger_implemented` says whether the application emits the event today.
-Registering an event does not make the application send it: EMAIL-2/3/4/5 wire
-the remaining business events.
+Registering an event does not make the application send it.
+
+Status by phase (53 events; no key has been added or renamed since EMAIL-1)
+---------------------------------------------------------------------------
+EMAIL-1  foundation + the events that already existed (auth, guardian, admin
+         KYC approve/reject, payment confirmed, invitation, admin, support).
+EMAIL-2  AUTH.EMAIL_VERIFICATION, AUTH.WELCOME, AUTH.PASSWORD_RESET,
+         AUTH.PASSWORD_CHANGED on one-time links. A controlled new-account
+         test on production is still to be done at final QA.
+EMAIL-3  status emails that follow a COMMITTED state transition:
+           KYC.ACTION_REQUIRED   identity accepted, proof of address expected
+           KYC.APPROVED          now also the automatic approval path
+           KYC.REJECTED          now also provider rejections (no reason sent)
+           CONTEST.NOMINATION_PUBLISHED / _ACTION_REQUIRED / _REMOVED
+           CONTEST.PARTICIPATION_PENDING_REVIEW / _PUBLISHED /
+                                 _ACTION_REQUIRED / _REJECTED
+           CONTEST.CREATIVE_UNAVAILABLE
+         Emitted only by app.services.kyc_notifications and
+         app.services.contest_notifications, after the commit.
+         Deferred (registered, unwired): KYC.SUBMITTED, KYC.EXPIRED,
+         CONTEST.NOMINATION_RESTORED, CONTEST.NOMINEE_CLAIMED,
+         CONTEST.VOTING_OPEN, CONTEST.VOTING_CLOSING, CONTEST.ADVANCED,
+         CONTEST.RESULT_PUBLISHED, ADMIN.KYC_REVIEW_REQUIRED,
+         ADMIN.MODERATION_REVIEW_REQUIRED.
+         Need a business decision first: CONTEST.NOMINEE_CLAIM_INVITATION,
+         CONTEST.NOT_ADVANCED, CONTEST.WINNER.
+         Intentionally unwired: AUTH.ACCOUNT_SUSPENDED, AUTH.ACCOUNT_RESTORED.
+EMAIL-4  (blocked, pending payment decisions) billing, affiliate commission
+         and payout events. Nothing in EMAIL-3 touches them.
+EMAIL-5  provider webhooks (delivered / bounced / complained) and
+         provider-side idempotency. Not started.
+Open backlog outside these phases: email branding / deliverability (logo in
+received mail, spam placement).
 """
 from __future__ import annotations
 
@@ -164,25 +195,25 @@ _DEFINITIONS: List[EmailEventDefinition] = [
                "account, so the registration cannot be completed."),
     # ---- KYC -----------------------------------------------------------------
     _d(E.KYC_SUBMITTED, "KYC received, under review", _T, "User"),
-    _d(E.KYC_ACTION_REQUIRED, "KYC action required", _T, "User", phase=_LATER),
+    _d(E.KYC_ACTION_REQUIRED, "KYC action required", _T, "User", live=True),
     _d(E.KYC_APPROVED, "KYC approved", _T, "User", live=True),
     _d(E.KYC_REJECTED, "KYC rejected", _T, "User", live=True),
     _d(E.KYC_EXPIRED, "KYC expired", _T, "User", on=False, phase=_LATER),
     # ---- CONTEST -------------------------------------------------------------
     # A valid nomination is public as soon as it is submitted: there is no
     # "pending review" or "submitted" email for a nomination.
-    _d(E.CONTEST_NOMINATION_PUBLISHED, "Nomination published", _T, "Nominator"),
-    _d(E.CONTEST_NOMINATION_ACTION_REQUIRED, "Nomination update requested", _T, "Nominator"),
-    _d(E.CONTEST_NOMINATION_REMOVED, "Nomination removed", _T, "Nominator"),
+    _d(E.CONTEST_NOMINATION_PUBLISHED, "Nomination published", _T, "Nominator", live=True),
+    _d(E.CONTEST_NOMINATION_ACTION_REQUIRED, "Nomination update requested", _T, "Nominator", live=True),
+    _d(E.CONTEST_NOMINATION_REMOVED, "Nomination removed", _T, "Nominator", live=True),
     _d(E.CONTEST_NOMINATION_RESTORED, "Nomination restored", _T, "Nominator", on=False, phase=_LATER),
     _d(E.CONTEST_NOMINEE_CLAIM_INVITATION, "Nominee claim invitation", _T, "Nominee (non-member)", on=False,
        phase=_APPROVAL),
     _d(E.CONTEST_NOMINEE_CLAIMED, "Nominee claimed", _T, "Nominator", on=False, phase=_LATER),
-    _d(E.CONTEST_PARTICIPATION_PENDING_REVIEW, "Participation under review", _T, "Entrant"),
-    _d(E.CONTEST_PARTICIPATION_PUBLISHED, "Participation published", _T, "Entrant"),
-    _d(E.CONTEST_PARTICIPATION_ACTION_REQUIRED, "Participation update required", _T, "Entrant"),
-    _d(E.CONTEST_PARTICIPATION_REJECTED, "Participation rejected", _T, "Entrant"),
-    _d(E.CONTEST_CREATIVE_UNAVAILABLE, "Video link no longer available", _T, "Entry owner"),
+    _d(E.CONTEST_PARTICIPATION_PENDING_REVIEW, "Participation under review", _T, "Entrant", live=True),
+    _d(E.CONTEST_PARTICIPATION_PUBLISHED, "Participation published", _T, "Entrant", live=True),
+    _d(E.CONTEST_PARTICIPATION_ACTION_REQUIRED, "Participation update required", _T, "Entrant", live=True),
+    _d(E.CONTEST_PARTICIPATION_REJECTED, "Participation rejected", _T, "Entrant", live=True),
+    _d(E.CONTEST_CREATIVE_UNAVAILABLE, "Video link no longer available", _T, "Entry owner", live=True),
     _d(E.CONTEST_VOTING_OPEN, "Voting open", _T, "Entrants", on=False, phase=_LATER),
     _d(E.CONTEST_VOTING_CLOSING, "Voting closing soon", _T, "Entrants", on=False, phase=_LATER),
     _d(E.CONTEST_ADVANCED, "Advanced to next stage", _T, "Entrant", on=False, phase=_LATER),
