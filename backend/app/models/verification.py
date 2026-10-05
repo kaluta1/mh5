@@ -1,5 +1,5 @@
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Integer, ForeignKey, DateTime, Text, Enum as SQLEnum
+from sqlalchemy import String, Integer, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 import enum
@@ -41,18 +41,15 @@ class UserVerification(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Type de vérification
-    verification_type: Mapped[str] = mapped_column(
-        SQLEnum(VerificationType, name="user_verification_type", create_constraint=False),
-        nullable=False,
-        index=True
-    )
+    # Plain strings holding the lowercase API values ("selfie", "voice", ...),
+    # exactly as the migrations create the columns (VARCHAR). A database enum
+    # type here would persist the member NAMES ("SELFIE") and never match what
+    # the API, the frontend and the eligibility checks compare against.
+    verification_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     
     # Média
     media_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    media_type: Mapped[str] = mapped_column(
-        SQLEnum(MediaType, name="verification_media_type", create_constraint=False),
-        nullable=False
-    )
+    media_type: Mapped[str] = mapped_column(String(20), nullable=False)
     media_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Clé Uploadthing
     
     # Métadonnées du fichier
@@ -61,9 +58,10 @@ class UserVerification(Base):
     
     # Statut
     status: Mapped[str] = mapped_column(
-        SQLEnum(VerificationStatus, name="user_verification_status", create_constraint=False),
+        String(20),
         nullable=False,
-        default=VerificationStatus.PENDING,
+        default=VerificationStatus.PENDING.value,
+        server_default=VerificationStatus.PENDING.value,
         index=True
     )
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

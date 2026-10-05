@@ -90,6 +90,16 @@ class CRUDVerification:
                     result["has_video"] = True
                     result["video_status"] = v.status
                     result["video_url"] = v.media_url
+            elif v.verification_type == VerificationType.BRAND.value:
+                if not result["has_brand"] or v.status == VerificationStatus.APPROVED.value:
+                    result["has_brand"] = True
+                    result["brand_status"] = v.status
+                    result["brand_url"] = v.media_url
+            elif v.verification_type == VerificationType.CONTENT.value:
+                if not result["has_content"] or v.status == VerificationStatus.APPROVED.value:
+                    result["has_content"] = True
+                    result["content_status"] = v.status
+                    result["content_url"] = v.media_url
         
         return result
     

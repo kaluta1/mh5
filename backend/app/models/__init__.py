@@ -44,13 +44,16 @@ from .guardian import Guardian, GuardianRelationship, GuardianConsent, PendingRe
 from .contest_eligibility import ContestAgeEligibility, CategoryAgePolicy, ContestEntrySafety
 from .content_moderation import ContentModeration
 from .email import EmailSettings, EmailEventSetting, EmailDelivery, EmailWebhookEvent
+# Registered here so that anything building the schema from app.models sees it
+# (it used to be imported only by its endpoint module).
+from .verification import UserVerification
 from .progression_safety import ProgressionSafetyHold
 from .interaction_safety import UserBlock
 
 __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",
     "Guardian", "GuardianRelationship", "GuardianConsent", "PendingRegistration", "UserPrivacyPreference",
-    "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety", "ContentModeration", "EmailSettings", "EmailEventSetting", "EmailDelivery", "EmailWebhookEvent", "ProgressionSafetyHold", "UserBlock",
+    "ContestAgeEligibility", "CategoryAgePolicy", "ContestEntrySafety", "ContentModeration", "UserVerification", "EmailSettings", "EmailEventSetting", "EmailDelivery", "EmailWebhookEvent", "ProgressionSafetyHold", "UserBlock",
     "User", "Role", "Permission", "role_permissions", "UserTransaction", "Wallet",
     "KYCVerification", "KYCDocument", "KYCAuditLog",
     "Vote", "VoteSession", "MyFavorites", "ContestComment", "ContestLike", "PageView", "ContestantReaction", "ContestantShare", "ReactionType",
