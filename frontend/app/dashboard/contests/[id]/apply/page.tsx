@@ -15,6 +15,7 @@ import { cacheService } from '@/lib/cache-service'
 import ApiService from '@/lib/api-service'
 import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 import { verificationService } from '@/services/verification-service'
+import { nomineeClaimLink } from '@/lib/nominee-claim-link'
 import {
   VerificationRequirementsDialog,
   SelfieVerificationDialog,
@@ -57,7 +58,7 @@ function ApplyToContestPageContent() {
   const [pendingReviewMessage, setPendingReviewMessage] = useState<string | null>(null)
   const [pendingNextStep, setPendingNextStep] = useState<string | null>(null)
   // Nominations: single-use claim link for the nominee (shown once).
-  const [nomineeClaimLink, setNomineeClaimLink] = useState<string | null>(null)
+  const [nomineeClaimLinkUrl, setNomineeClaimLink] = useState<string | null>(null)
   /** Round id returned by API after submit (source of truth for View nominations link). */
   const [submittedRoundId, setSubmittedRoundId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -677,6 +678,13 @@ function ApplyToContestPageContent() {
         })
       }
 
+      // The nominee's one-time claim link, when the backend returned one. A
+      // nomination is public at once, so the link is shown on the normal success
+      // state as well as on a pending one.
+      setNomineeClaimLink(
+        isEditingParticipation ? null : nomineeClaimLink(response, typeof window !== 'undefined' ? window.location.origin : null)
+      )
+
       // Child/Teen Safety Phase 5: the entry exists but stays private until the
       // backend's required checks are complete (the reason is never shown in detail).
       if (!isEditingParticipation && response?.public_status === 'PENDING_REVIEW') {
@@ -686,17 +694,11 @@ function ApplyToContestPageContent() {
           'Your entry was received. It will become visible after the required checks are complete.'
         setPendingReviewMessage(pendingMessage)
         setPendingNextStep(typeof response?.next_step === 'string' ? response.next_step : null)
-        setNomineeClaimLink(
-          typeof response?.nominee_claim_token === 'string' && typeof window !== 'undefined'
-            ? `${window.location.origin}/nominations/claim#token=${response.nominee_claim_token}`
-            : null
-        )
         addToast(pendingMessage, 'info')
         return
       }
       setPendingReviewMessage(null)
       setPendingNextStep(null)
-      setNomineeClaimLink(null)
 
       // Afficher un toast de succès
       addToast(
@@ -1038,17 +1040,17 @@ function ApplyToContestPageContent() {
                       {t('participation.update_profile') || 'Update my profile'}
                     </button>
                   )}
-                  {nomineeClaimLink && (
+                  {nomineeClaimLinkUrl && (
                     <div className="mt-3 space-y-1">
                       <p className="text-green-300 text-xs">
                         {t('participation.claim_link_note') || 'Send this one-time link to the person you nominated so they can confirm it. It is shown only once.'}
                       </p>
                       <div className="flex gap-2">
-                        <input readOnly value={nomineeClaimLink} aria-label="Nominee claim link"
+                        <input readOnly value={nomineeClaimLinkUrl} aria-label="Nominee claim link"
                           className="flex-1 px-2 py-1 text-xs rounded bg-gray-900 text-gray-100 border border-gray-700" />
                         <button
                           type="button"
-                          onClick={() => { navigator.clipboard?.writeText(nomineeClaimLink).catch(() => undefined) }}
+                          onClick={() => { navigator.clipboard?.writeText(nomineeClaimLinkUrl).catch(() => undefined) }}
                           className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded"
                         >
                           {t('common.copy') || 'Copy'}

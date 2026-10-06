@@ -588,6 +588,7 @@
       "level_city": "City",
       "no_rounds": "No contest rounds are available right now.",
       "api_retry_hint": "If this persists, try again in a minute or contact support.",
+      "list_load_failed": "Could not load contests. Please try again.",
       "all": "All",
       "city": "City",
       "country": "Country",
@@ -2490,12 +2491,12 @@
   "email_verify_error": "Email Verify Error",
   "returnUrl": "Return Url",
   "not_found": {
-    "title": "Page introuvable",
-    "description": "Description",
-    "go_back": "Retour",
-    "go_home": "Go Home",
+    "title": "Page not found",
+    "description": "Sorry, the page you are looking for does not exist or has been moved.",
+    "go_back": "Go back",
+    "go_home": "Go home",
     "quick_links": "Quick links",
-    "help_text": "Help Text"
+    "help_text": "If you think this is a mistake, please contact our support team."
   },
   "token": "Token",
   "id": "24",

@@ -14,6 +14,8 @@ import { GeographyLevelIcon, type GeographyLevelIconKey } from '@/components/das
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { logger } from '@/lib/logger'
+import { listViewState } from '@/lib/participants-state'
+import { ContestListFeedback } from '@/components/dashboard/contest-list-feedback'
 import { LocationFilterBar } from '@/components/dashboard/location-filter-bar'
 import { normalizeMediaUrl } from '@/lib/media-url'
 import { rewriteLocalhostUrl } from '@/lib/config'
@@ -289,6 +291,8 @@ function ContestsPageContent() {
   const [roundsLoading, setRoundsLoading] = useState(true)
   const [contestsData, setContestsData] = useState<Round | null>(null)
   const [contestsLoading, setContestsLoading] = useState(false)
+  // The list request failed: an error with a retry, never the "no contests" text.
+  const [contestsLoadFailed, setContestsLoadFailed] = useState(false)
   const [initialLoadComplete, setInitialLoadComplete] = useState(false)
 
   // Infinite scroll states
@@ -685,6 +689,7 @@ function ContestsPageContent() {
 
     const fetchContestsForRound = async () => {
       setContestsLoading(true)
+      setContestsLoadFailed(false)
       const contestMode = categoryTab === 'nomination' ? 'nomination' : categoryTab === 'participations' ? 'participation' : undefined
       const activeSearch = committedSearch || undefined
       const fetchLimit =
@@ -831,6 +836,7 @@ function ContestsPageContent() {
           } catch {
             // Retry also failed
           }
+          setContestsLoadFailed(true)
           setContestsData(null)
           setAllContests([])
           setTotalContests(0)
@@ -840,6 +846,7 @@ function ContestsPageContent() {
           return
         }
         logger.error('Failed to fetch contests:', error)
+        setContestsLoadFailed(true)
         setContestsData(null)
         setAllContests([])
         setTotalContests(0)
@@ -1637,7 +1644,7 @@ function ContestsPageContent() {
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
             <p className="text-gray-500 dark:text-gray-400">{t('common.loading') || 'Loading...'}</p>
           </div>
-        ) : rounds.length === 0 ? (
+        ) : rounds.length === 0 && !contestsLoadFailed ? (
           <div className="text-center py-20 space-y-2">
             <p className="text-gray-500 dark:text-gray-400">
               {t('dashboard.contests.no_rounds') || 'No contest rounds are available right now.'}
@@ -1647,9 +1654,11 @@ function ContestsPageContent() {
             </p>
           </div>
         ) : (
-          <div className="text-center py-20">
-            <p className="text-gray-500 dark:text-gray-400">
-              {categoryTab === 'nomination'
+          <ContestListFeedback
+            state={listViewState({ loading: false, error: contestsLoadFailed, count: 0 })}
+            onRetry={() => setListRefreshKey((key) => key + 1)}
+            emptyMessage={
+              categoryTab === 'nomination'
                 ? nominationMigrationLevel === 'city'
                   ? t('dashboard.contests.no_nominated_yet')
                   : nominationMigrationLevel === 'regional'
@@ -1661,9 +1670,9 @@ function ContestsPageContent() {
                         : nominationMigrationLevel === 'country'
                           ? t('dashboard.contests.no_country_migration')
                           : t('dashboard.contests.no_nomination_contests')
-                : t('contests.no_contests')}
-            </p>
-          </div>
+                : t('contests.no_contests')
+            }
+          />
         )}
 
         <SuggestContestDialog open={showSuggestDialog} onOpenChange={setShowSuggestDialog} />

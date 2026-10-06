@@ -382,6 +382,39 @@ def _contest_season_link_for_round_relaxed(
     return row[0], row[1]
 
 
+def _stage_without_roster_stats(contest: Any, ui_level: Optional[str]) -> Dict[str, Any]:
+    """Contest stats for a nomination stage that has no roster to show: the
+    stage is not open yet for this round, or nobody has reached it.
+
+    Zero counts and no contestants, with the contest's own identity fields, so
+    the result is a complete contest response (GET /contests/{id} validates it
+    against the Contest schema, which requires created_at / updated_at)."""
+    level_value = contest.level
+    if hasattr(level_value, "value"):
+        level_value = level_value.value
+    return {
+        "id": contest.id,
+        "name": contest.name,
+        "description": contest.description,
+        "contest_type": contest.contest_type,
+        "contest_mode": getattr(contest, "contest_mode", "nomination"),
+        "level": level_value,
+        "season_level": ui_level,
+        "category_id": getattr(contest, "category_id", None),
+        "created_at": contest.created_at,
+        "updated_at": contest.updated_at,
+        "entries_count": 0,
+        "participants_count": 0,
+        "total_votes": 0,
+        "total_points": 0,
+        "top_contestants": [],
+        "current_user_contesting": False,
+        "is_active": contest.is_active,
+        "is_submission_open": getattr(contest, "is_submission_open", False),
+        "is_voting_open": getattr(contest, "is_voting_open", False),
+    }
+
+
 def _normalize_requested_ui_level(raw: Optional[str]) -> Optional[str]:
     if not raw:
         return None
@@ -1135,54 +1168,14 @@ class CRUDContest:
             if nomination_vote_list_blocked(
                 round_row_enrich, "nomination", ui_level_norm
             ):
-                level_value = contest.level
-                if hasattr(level_value, "value"):
-                    level_value = level_value.value
-                return {
-                    "id": contest.id,
-                    "name": contest.name,
-                    "description": contest.description,
-                    "contest_type": contest.contest_type,
-                    "contest_mode": getattr(contest, "contest_mode", "nomination"),
-                    "level": level_value,
-                    "season_level": ui_level_norm,
-                    "entries_count": 0,
-                    "participants_count": 0,
-                    "total_votes": 0,
-                    "total_points": 0,
-                    "top_contestants": [],
-                    "current_user_contesting": False,
-                    "is_active": contest.is_active,
-                    "is_submission_open": getattr(contest, "is_submission_open", False),
-                    "is_voting_open": getattr(contest, "is_voting_open", False),
-                }
+                return _stage_without_roster_stats(contest, ui_level_norm)
 
         if (
             _nomination_contest
             and ui_level_norm in ("regional", "continental", "global")
             and season is None
         ):
-            level_value = contest.level
-            if hasattr(level_value, "value"):
-                level_value = level_value.value
-            return {
-                "id": contest.id,
-                "name": contest.name,
-                "description": contest.description,
-                "contest_type": contest.contest_type,
-                "contest_mode": getattr(contest, "contest_mode", "nomination"),
-                "level": level_value,
-                "season_level": ui_level_norm,
-                "entries_count": 0,
-                "participants_count": 0,
-                "total_votes": 0,
-                "total_points": 0,
-                "top_contestants": [],
-                "current_user_contesting": False,
-                "is_active": contest.is_active,
-                "is_submission_open": getattr(contest, "is_submission_open", False),
-                "is_voting_open": getattr(contest, "is_voting_open", False),
-            }
+            return _stage_without_roster_stats(contest, ui_level_norm)
 
         if season is not None:
             season_level = (
@@ -2137,23 +2130,6 @@ class CRUDContest:
         ):
             contest_data["contestants"] = []
             contest_data["display_round_id"] = target_round_id
-            # #region agent log
-            try:
-                from app.core.agent_debug_log import agent_debug_log
-                agent_debug_log(
-                    hypothesis_id="F",
-                    location="crud_contest.py:get_contest_with_enriched_contestants",
-                    message="empty pooled roster — no season for requested ui level",
-                    data={
-                        "runId": "post-fix-3",
-                        "contest_id": contest_id,
-                        "requested_ui_level": ui_level_norm,
-                        "target_round_id": target_round_id,
-                    },
-                )
-            except Exception:
-                pass
-            # #endregion
             return contest_data
 
         contest_mode = contest_mode_early

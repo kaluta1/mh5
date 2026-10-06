@@ -831,36 +831,6 @@ def read_contest(
     if isinstance(enriched_contest, dict) and enriched_contest.get("contestants"):
         enriched_contest["contestants"] = _va.secure_entry_list(db, _viewer_ctx, enriched_contest["contestants"])
 
-    # #region agent log
-    try:
-        from app.core.agent_debug_log import agent_debug_log
-
-        _roster = (enriched_contest or {}).get("contestants") or []
-        _season_level = None
-        if _roster and isinstance(_roster[0], dict):
-            _season_level = (_roster[0].get("season") or {}).get("level")
-        agent_debug_log(
-            hypothesis_id="D",
-            location="contests.py:read_contest",
-            message="detail nomination roster",
-            data={
-                "runId": "post-fix",
-                "contest_id": contest_id,
-                "contest_level": contest_level,
-                "round_id": round_id,
-                "filter_country": merged_country,
-                "filter_region": filter_region,
-                "filter_continent": merged_continent,
-                "roster_count": len(_roster),
-                "contestant_ids": [r.get("id") for r in _roster[:50]],
-                "nominator_user_ids": [r.get("user_id") for r in _roster[:50]],
-                "season_level": _season_level,
-                "display_round_id": (enriched_contest or {}).get("display_round_id"),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     
     if not enriched_contest:
         raise HTTPException(
