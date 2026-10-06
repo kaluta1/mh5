@@ -154,3 +154,61 @@ def test_stale_claims_are_recovered_once_and_bounded(pg, monkeypatch):
         assert _requeue_stale(db, later + STALE_PROCESSING_AFTER * 2) == 4
         rows = db.query(EmailDelivery).all()
         assert all((r.status, r.failure_category, r.attempt_count) == ("FAILED", "stale_claim", 2) for r in rows)
+
+def test_a_reclaimed_delivery_resends_the_message_it_first_sent(pg, monkeypatch):
+    """EMAIL-5 hardening on a real server: worker A stores the message, hands
+    it to the provider and dies before recording the send. Worker B (another
+    connection) reclaims the row after the settings changed and sends the very
+    same request under the same key."""
+    from app.models.email import EmailSettings
+    from app.services import email_crypto
+    from app.services import email_outbox as outbox_module
+    from app.services.email import email_service
+    from app.services.email_events import EmailEvent
+    from app.services.email_providers import FakeEmailProvider
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_synthetic_test_key_not_real")
+    requests = []
+
+    class Recording(FakeEmailProvider):
+        def send(self, message, *, api_key, idempotency_key=None):
+            requests.append((idempotency_key, message))
+            return super().send(message, api_key=api_key, idempotency_key=idempotency_key)
+
+    provider = Recording()
+    t0 = datetime.utcnow()
+    with pg() as db:
+        row = email_service.enqueue(db, event=EmailEvent.KYC_APPROVED, recipient="member@example.com", lang="fr",
+                                    idempotency_key="pg:frozen", now=t0)
+        assert row is not None and row.status == "QUEUED"
+        delivery_id = row.id
+
+    a = pg()
+    try:
+        assert claim_batch(a, now=t0, batch_size=10) == [delivery_id]
+        row = a.query(EmailDelivery).filter(EmailDelivery.id == delivery_id).one()
+        assert outbox_module._send_one(a, row, provider, t0) == "SENT"       # the provider accepted ...
+    finally:
+        a.rollback()                                                         # ... and worker A died before its commit
+        a.close()
+
+    with pg() as db:
+        row = db.query(EmailDelivery).filter(EmailDelivery.id == delivery_id).one()
+        assert (row.status, row.provider_message_id, row.attempt_count) == ("PROCESSING", None, 1)
+        kept = email_crypto.decrypt_payload(row.payload_ciphertext)["message"]   # committed before the provider call
+        assert kept["subject"] == requests[0][1].subject and kept["html"] == requests[0][1].html
+        db.add(EmailSettings(id=1, email_enabled=True, emergency_stop=False, resend_enabled=True,
+                             from_name="Renamed Sender", reply_to="other-reply@example.com",
+                             support_address="help2@example.com"))
+        db.commit()
+
+    with pg() as db:
+        summary = outbox_module.process_outbox(db, provider=provider, now=t0 + STALE_PROCESSING_AFTER * 2)
+        assert (summary["requeued"], summary["sent"], summary["failed"]) == (1, 1, 0)
+        row = db.query(EmailDelivery).filter(EmailDelivery.id == delivery_id).one()
+        assert (row.status, row.provider_message_id, row.attempt_count) == ("SENT", "fake-1", 2)
+        assert row.payload_ciphertext is None
+        key = outbox_module.provider_idempotency_key(row)
+    assert requests == [(key, requests[0][1])] * 2                           # same key, same request, byte for byte
+    assert requests[0][1].to == "member@example.com" and "Renamed Sender" not in requests[1][1].from_header
+    assert len(provider.sent) == 1

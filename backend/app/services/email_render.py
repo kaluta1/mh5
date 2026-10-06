@@ -1,11 +1,18 @@
 """Event -> (subject, html, text) rendering for the outbox worker (EMAIL-1).
 
-Rendering happens when a delivery is SENT, not when it is queued, from the
-small encrypted context stored with the delivery. One-time links (email
-verification, password reset) are created here, at send time: the credential
-goes into the email and only its digest is stored (app.services.auth_tokens),
-so it never sits in the outbox. Templates are source controlled; every dynamic
-value is escaped by the template helpers.
+A delivery is rendered ONCE, when it is first about to be sent, from the small
+encrypted context stored with it and from the application state at that
+moment. The outbox worker then keeps that exact message with the delivery
+(email_outbox): another attempt for the same delivery sends it again and never
+renders a second time, so nothing that changes afterwards (the entry, the
+account, the language, the templates, the settings, the date) can change it.
+
+One-time links (email verification, password reset) are the exception to
+"keep the message": the credential must never be stored. The renderer writes
+LINK_CREDENTIAL where it belongs; `link_credential` issues the credential for
+each attempt, and it is the delivery's own (app.services.auth_tokens), so it is
+the same value every time. Only its digest is stored. Templates are source
+controlled; every dynamic value is escaped by the template helpers.
 """
 from __future__ import annotations
 
@@ -19,9 +26,10 @@ from app.services.email_events import TEST_EMAIL_KEY, EmailEvent
 
 Rendered = Tuple[str, str, Optional[str]]
 
-# Reserved context key: the identity of the delivery being rendered, set by the
-# outbox worker (never stored, never chosen by a caller of email_service).
-DELIVERY_REF = "_delivery"
+# What a rendered message carries in place of a one-time credential. It is
+# replaced only for the events that have one (link_credential), and their
+# templates take no value from a member, so nobody can plant it in a message.
+LINK_CREDENTIAL = "MH5-ONE-TIME-LINK-CREDENTIAL"
 
 
 class RenderError(Exception):
@@ -55,25 +63,16 @@ def _user(db: Session, user_id: Optional[int]):
     return user
 
 
-def _one_time_link(db: Session, user, purpose: str, path: str, delivery_ref: Optional[str] = None) -> str:
-    """Issue the one-time credential NOW (send time) and build its link.
+def _one_time_link(path: str) -> str:
+    """The link of a one-time credential, with LINK_CREDENTIAL where the
+    credential goes (see link_credential).
 
-    Only the credential's digest is stored (auth_tokens); the credential lives
-    in this one email. It rides in the URL FRAGMENT: a browser never sends a
+    The credential rides in the URL FRAGMENT: a browser never sends a
     fragment to a server, so it is absent from nginx/application access logs,
     from proxies and from the Referer header. The page reads it, removes it
     from the address bar and exchanges it over POST (see the frontend pages
     /verify-email and /reset-password)."""
-    from app.services import auth_tokens
-
-    try:
-        # `delivery_ref` (set by the outbox) makes the link the delivery's own:
-        # sending the same delivery again produces the same link and body.
-        token = auth_tokens.issue(db, user, purpose, delivery_ref=delivery_ref)
-    except auth_tokens.AuthTokenError as exc:
-        # The link of this delivery was already used, or replaced by a newer one.
-        raise RenderError(f"link_{exc.reason}") from None
-    return f"{public_site_base()}{path}#token={token}"
+    return f"{public_site_base()}{path}#token={LINK_CREDENTIAL}"
 
 
 def _recipient_account(db: Session, to: str, user_id: Optional[int]):
@@ -85,16 +84,24 @@ def _recipient_account(db: Session, to: str, user_id: Optional[int]):
     return user
 
 
+def _link_account(db: Session, to: str, user_id: Optional[int], purpose: str):
+    """The account a one-time link may still be mailed to."""
+    from app.models.auth_security import PURPOSE_EMAIL_VERIFICATION
+
+    user = _recipient_account(db, to, user_id)
+    if purpose == PURPOSE_EMAIL_VERIFICATION and user.email_verified:
+        raise RenderError("already_verified")       # nothing left to verify: no email, no credential
+    return user
+
+
 def _verification(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
     from app.models.auth_security import PURPOSE_EMAIL_VERIFICATION
     from app.services import auth_tokens
 
-    user = _recipient_account(db, to, user_id)
-    if user.email_verified:
-        raise RenderError("already_verified")       # nothing left to verify: no email, no credential
-    link = _one_time_link(db, user, PURPOSE_EMAIL_VERIFICATION, "/verify-email", ctx.get(DELIVERY_REF))
+    _link_account(db, to, user_id, PURPOSE_EMAIL_VERIFICATION)
     minutes = int(auth_tokens.lifetime(PURPOSE_EMAIL_VERIFICATION).total_seconds() // 60)
-    return tpl.get_verify_email(lang, link, minutes, new_account=bool(ctx.get("new_account")))
+    return tpl.get_verify_email(lang, _one_time_link("/verify-email"), minutes,
+                                new_account=bool(ctx.get("new_account")))
 
 
 def _welcome(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
@@ -106,10 +113,9 @@ def _password_reset(db: Session, to: str, user_id: Optional[int], ctx: dict, lan
     from app.models.auth_security import PURPOSE_PASSWORD_RESET
     from app.services import auth_tokens
 
-    user = _recipient_account(db, to, user_id)
-    link = _one_time_link(db, user, PURPOSE_PASSWORD_RESET, "/reset-password", ctx.get(DELIVERY_REF))
+    _link_account(db, to, user_id, PURPOSE_PASSWORD_RESET)
     minutes = int(auth_tokens.lifetime(PURPOSE_PASSWORD_RESET).total_seconds() // 60)
-    return tpl.get_password_reset_email(lang, link, minutes)
+    return tpl.get_password_reset_email(lang, _one_time_link("/reset-password"), minutes)
 
 
 def _password_changed(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:
@@ -162,8 +168,9 @@ def _kyc_action_required(db, to, user_id, ctx, lang) -> Rendered:
 
 
 # ---- contest entry status (EMAIL-3) -----------------------------------------
-# The email is rendered when it is SENT, from the entry's state at that moment.
-# If the state it was queued for is no longer true, it is not sent at all.
+# The email is rendered when it is first SENT, from the entry's state at that
+# moment. If the state it was queued for is no longer true, it is not sent at
+# all. A later attempt for the same delivery repeats that first message.
 
 def _entry(db: Session, to: str, user_id: Optional[int], ctx: dict):
     from app.models.contest import Contest
@@ -307,6 +314,44 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
 
 def has_renderer(event_key: str) -> bool:
     return event_key in RENDERERS
+
+
+def _link_purposes() -> Dict[str, str]:
+    from app.models.auth_security import PURPOSE_EMAIL_VERIFICATION, PURPOSE_PASSWORD_RESET
+
+    return {EmailEvent.AUTH_EMAIL_VERIFICATION.value: PURPOSE_EMAIL_VERIFICATION,
+            EmailEvent.AUTH_PASSWORD_RESET.value: PURPOSE_PASSWORD_RESET}
+
+
+def link_credential(db: Session, *, event_key: str, to: str, user_id: Optional[int],
+                    delivery_ref: str) -> Optional[str]:
+    """The one-time credential of a delivery, for the attempt about to be made
+    (None for an event without one).
+
+    It is issued on EVERY attempt and never read back from storage: the value
+    is derived from the delivery's own identity (auth_tokens.delivery_credential),
+    so each attempt gets the same one and only its digest exists in the
+    database. Unlike the message, the right to send it is checked each time:
+    a link is not mailed again once the account or its address changed, the
+    address was verified, or the link was used or replaced by a newer one."""
+    from app.services import auth_tokens
+
+    purpose = _link_purposes().get(event_key)
+    if purpose is None:
+        return None
+    user = _link_account(db, to, user_id, purpose)
+    try:
+        return auth_tokens.issue(db, user, purpose, delivery_ref=delivery_ref)
+    except auth_tokens.AuthTokenError as exc:
+        # The link of this delivery was already used, or replaced by a newer one.
+        raise RenderError(f"link_{exc.reason}") from None
+
+
+def with_credential(value: Optional[str], credential: Optional[str]) -> Optional[str]:
+    """`value` with the one-time credential in its place."""
+    if value is None or credential is None:
+        return value
+    return value.replace(LINK_CREDENTIAL, credential)
 
 
 def render(db: Session, *, event_key: str, to: str, user_id: Optional[int], context: Optional[dict], lang: str,

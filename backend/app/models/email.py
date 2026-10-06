@@ -7,8 +7,10 @@ EmailDelivery        the persistent outbox AND the delivery history.
 EmailWebhookEvent    provider webhook events (EMAIL-5): one row per provider
                      event id; the ordered history of what the provider said.
 
-Privacy: a delivery row never stores an email body. The recipient address and
-the template values travel only inside `payload_ciphertext` (AES-256-GCM) and
+Privacy: a delivery row never stores an email body in the clear, and never a
+one-time credential at all. The recipient address, the template values and,
+from the first send attempt on, the message that attempt carried (so a retry
+repeats it exactly) travel only inside `payload_ciphertext` (AES-256-GCM), and
 that column is cleared when the delivery reaches a terminal state. What remains
 is a masked recipient for display and a keyed hash for counting/lookup.
 """
@@ -82,7 +84,8 @@ class EmailDelivery(Base):
     recipient_masked: Mapped[str] = mapped_column(String(320), nullable=False)
     recipient_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     lang: Mapped[str] = mapped_column(String(5), nullable=False, default="en")
-    # Recipient + template values, encrypted; cleared at a terminal state.
+    # Recipient + template values + the message first sent, encrypted; cleared
+    # at a terminal state.
     payload_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     provider_message_id: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)

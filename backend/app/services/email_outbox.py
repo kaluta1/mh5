@@ -15,8 +15,20 @@ remain, FAILED ("stale_claim") once EMAIL_MAX_ATTEMPTS is reached, so a row can
 never stay PROCESSING forever nor loop forever. A crash between the provider
 accepting a message and the row being saved does NOT send it twice (EMAIL-5):
 every attempt for a delivery carries the same provider idempotency key and the
-same content (a one-time link is the delivery's own, not redrawn per attempt),
-so on recovery the provider answers with the first message's id.
+same request, so on recovery the provider answers with the first message's id.
+
+One delivery, one message: a delivery is rendered on its FIRST attempt only.
+The result (subject, HTML, text, sender, reply-to) is written into the
+delivery's encrypted payload and committed before the provider is contacted;
+every later attempt sends those stored bytes to the stored recipient. A retry
+therefore never reflects what changed in between (the entry or its title, the
+KYC or moderation state, the account, its address or language, the templates,
+the sender settings, the date) and is not held back by it either. What is
+still decided per attempt: the send switches, and a one-time link, whose
+credential is never stored (the stored message carries a placeholder; the
+credential is the delivery's own and is derived again, see
+email_render.link_credential) and which is not mailed again once it is used,
+replaced, or the account or its address changed.
 
 Executor: exactly one mechanism drains the outbox per deployment mode. With
 USE_CELERY unset/false the in-process scheduler does; with USE_CELERY=true the
@@ -29,7 +41,8 @@ attempt, ends in FAILED. Final failures are visible in Admin > Email Settings;
 the worker never sends an alert email about a failing email provider.
 
 Retention: when a row reaches a terminal state (SENT, FAILED, SUPPRESSED) its
-encrypted payload (recipient address + template values) is deleted. The masked
+encrypted payload (recipient address + template values + the message kept for
+retries) is deleted. The masked
 recipient, the keyed recipient hash, the status and the timestamps remain.
 """
 from __future__ import annotations
@@ -52,9 +65,12 @@ from app.services import email_crypto, email_settings_service as policy
 from app.services import email_webhooks
 from app.services.email_events import EMAIL_EVENTS, TEST_EMAIL_KEY
 from app.services.email_providers import EmailMessage, EmailProvider, ProviderResult, get_provider
-from app.services.email_render import DELIVERY_REF, RenderError, render
+from app.services.email_render import RenderError, link_credential, render, with_credential
 
 logger = logging.getLogger(__name__)
+
+# Payload key of the message a delivery was first sent with (see _send_one).
+FROZEN_MESSAGE = "message"
 
 STALE_PROCESSING_AFTER = timedelta(minutes=15)
 BACKOFF_BASE_SECONDS = 60
@@ -160,11 +176,24 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
     try:
         payload = email_crypto.decrypt_payload(row.payload_ciphertext)
         to = payload["to"]
-        context = dict(payload.get("context") or {})
-        context[DELIVERY_REF] = delivery_ref(row)
-        subject, html, text = render(db, event_key=row.event_key, to=to, user_id=row.user_id,
-                                     context=context, lang=row.lang,
-                                     support_email=policy.support_address(settings_row))
+        frozen = payload.get(FROZEN_MESSAGE)
+        if frozen is None:
+            # First attempt: this is the message of the delivery. It is kept
+            # (encrypted, like the recipient) so that any later attempt sends
+            # exactly this again instead of rendering the present state.
+            subject, html, text = render(db, event_key=row.event_key, to=to, user_id=row.user_id,
+                                         context=dict(payload.get("context") or {}), lang=row.lang,
+                                         support_email=policy.support_address(settings_row))
+            frozen = {"subject": subject, "html": html, "text": text, "from": policy.from_header(settings_row),
+                      "reply_to": settings_row.reply_to or None}
+            payload[FROZEN_MESSAGE] = frozen
+            row.payload_ciphertext = email_crypto.encrypt_payload(payload)
+        # A one-time link is never part of what is kept: it is issued per attempt.
+        credential = link_credential(db, event_key=row.event_key, to=to, user_id=row.user_id,
+                                     delivery_ref=delivery_ref(row))
+        message = EmailMessage(to=to, subject=frozen["subject"], html=with_credential(frozen["html"], credential),
+                               text=with_credential(frozen.get("text"), credential),
+                               from_header=frozen["from"], reply_to=frozen.get("reply_to"))
     except email_crypto.EmailCryptoError:
         # The dedicated key is missing or was changed after the email was queued.
         _finish(row, "FAILED", now, category="encryption_unavailable")
@@ -177,11 +206,11 @@ def _send_one(db: Session, row: EmailDelivery, provider: EmailProvider, now: dat
         _finish(row, "FAILED", now, category="render_error", code=type(exc).__name__[:40])
         return row.status
 
-    message = EmailMessage(to=to, subject=subject, html=html, text=text,
-                           from_header=policy.from_header(settings_row), reply_to=settings_row.reply_to or None)
-    # What rendering wrote (the digest of a one-time link) is made durable BEFORE
-    # the provider is contacted: a link that has been mailed must exist in the
-    # database even if this process dies before recording the send.
+    # The message of the delivery and the digest of its one-time link are made
+    # durable BEFORE the provider is contacted: what has been handed to the
+    # provider must be what a later attempt finds, and a link that has been
+    # mailed must exist in the database, even if this process dies before
+    # recording the send.
     db.commit()
     try:
         result = provider.send(message, api_key=decision.api_key, idempotency_key=provider_idempotency_key(row))
