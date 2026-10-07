@@ -364,6 +364,27 @@ def _nomination_publication_policy(unmet, holds, *, rights: RightsStatus, gate,
     return tuple(kept_unmet), tuple(kept_holds), _uniq(advisory)
 
 
+# contestants.verification_status is the approval state the Admin screens show
+# ("pending" = waiting for an administrator, with an Approve button). Every new
+# entry starts as "pending". A nomination needs no manual approval, so one this
+# service publishes is recorded as approved at the same moment; otherwise it is
+# public for everyone and still listed as "Pending review" for administrators.
+APPROVAL_PENDING, APPROVAL_VERIFIED = "pending", "verified"
+
+
+def _approve_published_nomination(contestant: Optional[Contestant], row: ContestEntrySafety) -> None:
+    """Mark a PUBLIC nomination as approved. Only ever moves "pending" to
+    "verified": a rejection, a removed creative or any other status an
+    administrator set is left as it is. A held nomination stays pending (it IS
+    waiting), and personal participation entries are not touched."""
+    if contestant is None or row.entry_kind != ContestEntryKind.NOMINATION.value:
+        return
+    if row.exposure_status != EntryExposureStatus.PUBLIC.value:
+        return
+    if (contestant.verification_status or APPROVAL_PENDING).strip().lower() == APPROVAL_PENDING:
+        contestant.verification_status = APPROVAL_VERIFIED
+
+
 def _refs(raw: Optional[str]) -> List[str]:
     if not raw:
         return []
@@ -938,6 +959,7 @@ def record_new_entry(db: Session, contestant: Contestant, decision: ContestEntry
         if kind == ContestEntryKind.NOMINATION else None,
         activated_at=now if decision.public else None)
     _apply(row, decision, now)
+    _approve_published_nomination(contestant, row)
     db.add(row)
     db.flush()
     _log(db, row, "ENTRY_CREATED", submitted_by.id, _state(row), now=now)
@@ -1022,6 +1044,7 @@ def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional
         action = "ENTRY_SUSPENDED"
     if contestant is not None and not getattr(contestant, "is_deleted", False):
         contestant.is_active = d.public
+        _approve_published_nomination(contestant, row)
     if _state(row) != old:
         _log(db, row, action, actor_id, {**_state(row), "trigger": trigger}, old, now=now)
     if commit:

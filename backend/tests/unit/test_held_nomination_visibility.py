@@ -700,3 +700,131 @@ def test_removed_nomination_cannot_be_voted_on_even_in_an_open_stage(client, db,
     assert resp.status_code == 404, resp.text   # the generic "not found": no reason is disclosed
     assert _votes(db, row) == 0
     assert _is_hidden_everywhere(client, db, c, rnd, row.id)
+
+
+# ===========================================================================
+# 9. Approval state: a published nomination is not "Pending review" for admins
+# ===========================================================================
+#
+# Regression (2026-10-07): a nomination was public for everyone, yet its
+# contestants.verification_status stayed "pending", so Admin > Contestants
+# listed every new nomination as "Pending review" with an Approve button.
+
+def _approval(db, entry_id) -> str:
+    db.expire_all()
+    return db.query(Contestant).get(entry_id).verification_status
+
+
+def _admin_rows(client, admin, **params):
+    resp = client.get("/api/v1/admin/contestants", params=params, headers=auth(admin))
+    assert resp.status_code == 200, resp.text
+    return {row["id"]: row for row in resp.json()}
+
+
+def test_published_nomination_is_approved_not_pending_review(client, db, world):
+    c, rnd = world()
+    nominator = person(db, 30)
+    body = _nominate(client, db, c, nominator)
+
+    assert body["public_status"] == "PUBLIC"
+    row = db.query(Contestant).get(body["id"])
+    assert (row.verification_status, row.is_active, row.entry_type) == ("verified", True, "nomination")
+    assert _safety(db, row.id).exposure_status == "PUBLIC"
+    assert _is_public_everywhere(client, db, c, rnd, row.id)
+
+    # What the administrator sees: approved, and nothing waiting for approval.
+    admin = person(db, 40, admin=True)
+    assert _admin_rows(client, admin)[row.id]["verification_status"] == "verified"
+    assert row.id not in _admin_rows(client, admin, status_filter="pending")
+    assert row.id in _admin_rows(client, admin, status_filter="verified")
+    from app.api.api_v1.endpoints.admin import get_contest_stats
+
+    assert get_contest_stats(db, c.id) == (1, 1, 0)        # total, approved, pending
+
+
+@pytest.mark.parametrize("age, declaration", [(30, "MINOR"), (30, "UNKNOWN"), (30, None), (None, "ADULT"), (16, "ADULT")])
+def test_every_normal_nomination_is_approved_whatever_the_ages(client, db, world, age, declaration):
+    c, _rnd = world()
+    body = _nominate(client, db, c, person(db, age), nominee_age_declaration=declaration)
+    assert body["public_status"] == "PUBLIC" and _approval(db, body["id"]) == "verified"
+
+
+def test_retried_or_duplicate_submission_creates_no_pending_entry(client, db, world):
+    c, _rnd = world(category_id=category(db).id)
+    nominator = person(db, 30)
+    video = json.dumps([f"https://www.youtube.com/watch?v={uuid.uuid4().hex[:11]}"])
+    first = _nominate(client, db, c, nominator, video_media_ids=video)
+    again = _nominate(client, db, c, nominator, video_media_ids=video)
+    assert again["id"] == first["id"] and _approval(db, first["id"]) == "verified"
+    # The same creative from another member is refused, not parked for review.
+    other = _post(client, person(db, 30), c, nominee_age_declaration="ADULT", video_media_ids=video)
+    assert other.status_code == 409, other.text
+    assert db.query(Contestant).count() == 1
+    assert db.query(Contestant).filter(Contestant.verification_status == "pending").count() == 0
+
+
+def test_held_nomination_stays_pending_until_it_is_published(client, db, world, monkeypatch):
+    """A nomination that IS on hold really is waiting: it stays "pending", and
+    becomes approved at the moment a re-evaluation publishes it."""
+    c, rnd = world()
+    with monkeypatch.context() as previous_rule:
+        previous_rule.setattr(ce, "_nomination_publication_policy",
+                              lambda unmet, holds, **_k: (tuple(unmet), tuple(holds), ()))
+        body = _nominate(client, db, c, person(db, 30))
+    assert body["public_status"] == "PENDING_REVIEW" and _approval(db, body["id"]) == "pending"
+
+    ce.reevaluate_entry(db, _safety(db, body["id"]), actor_id=None, trigger="TEST", today=TODAY)
+    assert _safety(db, body["id"]).exposure_status == "PUBLIC" and _approval(db, body["id"]) == "verified"
+    assert _is_public_everywhere(client, db, c, rnd, body["id"])
+
+
+def test_existing_public_nomination_left_pending_is_approved_on_reevaluation(client, db, world):
+    """Nominations published before this fix still carry "pending"."""
+    c, _rnd = world()
+    body = _nominate(client, db, c, person(db, 30))
+    row = db.query(Contestant).get(body["id"])
+    row.verification_status = "pending"
+    db.commit()
+
+    admin = person(db, 40, admin=True)
+    assert client.post("/api/v1/admin/contest-eligibility/entries/reevaluate", headers=auth(admin)).status_code == 200
+    assert _approval(db, body["id"]) == "verified" and _safety(db, body["id"]).exposure_status == "PUBLIC"
+
+
+@pytest.mark.parametrize("status", ["rejected", "creative_unavailable"])
+def test_automatic_approval_never_overrides_a_removal(client, db, world, status):
+    c, rnd = world()
+    body = _nominate(client, db, c, person(db, 30))
+    row = db.query(Contestant).get(body["id"])
+    row.verification_status = status
+    db.commit()
+    ce.reevaluate_entry(db, _safety(db, body["id"]), actor_id=None, trigger="TEST", today=TODAY)
+    assert _approval(db, body["id"]) == status
+    assert _is_hidden_everywhere(client, db, c, rnd, body["id"])
+
+
+def test_declined_nomination_is_hidden_and_not_reapproved(client, db, world):
+    c, rnd = world()
+    body = _nominate(client, db, c, person(db, 30))
+    nominee = person(db, 28, email_verified=True)
+    assert client.post("/api/v1/contest-eligibility/claims/respond", headers=auth(nominee),
+                       json={"token": body["nominee_claim_token"], "decision": "DECLINE"}).status_code == 200
+    assert _safety(db, body["id"]).exposure_status == "HELD"
+    assert _is_hidden_everywhere(client, db, c, rnd, body["id"])
+
+
+def test_participation_approval_state_is_unchanged(client, db, world):
+    """Only nominations are approved automatically."""
+    c, _rnd = world("participation")
+    public = _post(client, person(db, 30), c, title="Morning song", description="An acoustic cover",
+                   video_media_ids=None)
+    assert public.status_code == 200 and public.json()["public_status"] == "PUBLIC"
+    assert _approval(db, public.json()["id"]) == "pending"
+    c2, _ = world("participation")
+    held = _post(client, person(db, 30), c2)                 # external video: waits for a moderator
+    assert held.status_code == 200 and held.json()["public_status"] == "PENDING_REVIEW"
+    assert _approval(db, held.json()["id"]) == "pending"
+    cs.moderate(db, _moderation(db, held.json()["id"]), action="APPROVE", actor=moderator(db), reason="REVIEWED_OK",
+                rating=ContentRating.GENERAL, today=TODAY)
+    assert _safety(db, held.json()["id"]).exposure_status == "PUBLIC"
+    assert _approval(db, held.json()["id"]) == "pending"
