@@ -3138,7 +3138,9 @@ def create_contestant(
     logger.info("Moderating text content...")
     text_moderation = content_moderation_service.moderate_text(text_to_moderate)
     logger.info(f"Text moderation completed: approved={text_moderation.is_approved}")
-    moderation_results.append(text_moderation)
+    # Nominations: the word rules do not hold the entry (see contest_eligibility).
+    if _eligibility.keyword_rules_apply(entry_kind):
+        moderation_results.append(text_moderation)
 
     if _moderation_rejects(text_moderation):
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
@@ -3974,9 +3976,11 @@ def update_contestant(
         gate = _content_safety.classify(
             db, title=contestant_data.title, description=contestant_data.description,
             image_media_ids=contestant_data.image_media_ids, video_media_ids=contestant_data.video_media_ids,
-            moderation_results=(text_moderation,), possibly_minor=possibly_minor,
+            moderation_results=((text_moderation,) if _eligibility.keyword_rules_apply(safety_row.entry_kind)
+                                else ()),
+            possibly_minor=possibly_minor,
             determined_adult=(not possibly_minor and safety_row.subject_age_tier == "ADULT_18_PLUS"),
-            run=None,
+            run=None, keyword_rules=_eligibility.keyword_rules_apply(safety_row.entry_kind),
         )
         _content_safety.record_assessment(db, contestant_id, gate, possibly_minor=possibly_minor,
                                           actor_id=current_user.id, now=_dt.utcnow(),

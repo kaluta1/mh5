@@ -324,6 +324,19 @@ _PIPELINE_FINDINGS = frozenset({SafetyConcern.THIRD_PARTY_RIGHTS, SafetyConcern.
 # guardian actively WITHDREW, and unresolved location metadata on a possible
 # minor's image.
 # Personal participation entries are not affected by this policy.
+#
+# Management decision, 2026-10-08: the automatic text rules (words such as
+# "kill", "gun", "weed", "school", or a run of digits read as a phone number)
+# no longer apply to a nomination. They held entries that nobody then reviewed;
+# inappropriate nominations are handled by member reports instead. A "real
+# content finding" above therefore means one from the media classifier or a
+# moderator. The child-safety text rule (sexual wording about a nominee who is
+# or may be a minor) is the one text rule that still applies.
+def keyword_rules_apply(kind) -> bool:
+    """Do the automatic text keyword rules apply to this kind of entry?"""
+    return getattr(kind, "value", kind) != ContestEntryKind.NOMINATION.value
+
+
 _NOMINATION_ADVISORY_UNMET = frozenset({
     R.NOMINEE_UNCLAIMED,
     R.NOMINEE_AGE_UNDETERMINED,
@@ -710,7 +723,7 @@ def _hooks(db: Session, subject: _Assessment, inputs: EntryInputs, *, kind: Cont
                            image_media_ids=inputs.image_media_ids, video_media_ids=inputs.video_media_ids,
                            moderation_results=inputs.moderation_results, extra_concerns=inputs.extra_concerns,
                            possibly_minor=possibly_minor, determined_adult=subject.determined_adult,
-                           run=inputs.classifier_run)
+                           run=inputs.classifier_run, keyword_rules=keyword_rules_apply(kind))
     concerns: Set[SafetyConcern] = set(gate.findings)
     holds: List[R] = []
     escalate = gate.child_safety_escalated
@@ -1056,6 +1069,51 @@ def reevaluate_entry(db: Session, row: ContestEntrySafety, *, actor_id: Optional
     return row
 
 
+def reassess_nomination_content(db: Session, row: ContestEntrySafety, *, actor_id: Optional[int], trigger: str,
+                                today: date, now: Optional[datetime] = None, commit: bool = True) -> bool:
+    """Apply the current content rules to a nomination assessed under earlier
+    ones, then re-evaluate it. Returns False (and changes nothing) unless the
+    entry is an open nomination, assessed by an earlier version of the rules,
+    whose content nobody has decided on: a moderator's hold, update request,
+    prohibition or approval, an administrator's block and a child-safety
+    escalation are never replaced.
+
+    Only the text rules are applied again. The media classifier is not called
+    here, so its stored outcome is kept: an entry on which it found something
+    is left as it is (for a moderator), and "checked, nothing found" stays so.
+    A stored finding that the word rules do not account for is kept as well."""
+    now = now or datetime.utcnow()
+    contestant = db.query(Contestant).filter(Contestant.id == row.contestant_id).first()
+    moderation = cs.moderation_for(db, row.contestant_id)
+    if (row.entry_kind != ContestEntryKind.NOMINATION.value
+            or row.exposure_status not in (EntryExposureStatus.PUBLIC.value, EntryExposureStatus.HELD.value)
+            or contestant is None or getattr(contestant, "is_deleted", False)
+            or moderation is None or moderation.classifier_version == cs.CLASSIFIER_VERSION
+            or not cs.gate_from_row(moderation).awaiting_first_review):
+        return False
+    media_checked = cs.gate_from_row(moderation).coverage_map().get(cs.CoverageDimension.MEDIA_CONTENT)
+    if media_checked == cs.CoverageStatus.COMPLETED_FINDING:
+        return False
+    run = None
+    if media_checked == cs.CoverageStatus.COMPLETED_NO_FINDING:
+        hosted = sum(1 for m in cs._hosted_refs(db, cs._refs(contestant.image_media_ids)
+                                                + cs._refs(contestant.video_media_ids)) if m[1])
+        run = cs.ClassifierRun(status=cs.ClassifierStatus.COMPLETED, media_total=hosted, media_classified=hosted)
+    possibly_minor = row_subject_possibly_minor(row)
+    stored = frozenset(SafetyConcern(c) for c in (moderation.findings or ()) if c in SafetyConcern.__members__)
+    kept = stored - _PIPELINE_FINDINGS - cs.keyword_rule_findings(contestant.title, contestant.description,
+                                                                  possibly_minor=possibly_minor)
+    gate = cs.classify(db, title=contestant.title, description=contestant.description,
+                       image_media_ids=contestant.image_media_ids, video_media_ids=contestant.video_media_ids,
+                       extra_concerns=kept, possibly_minor=possibly_minor,
+                       determined_adult=(not possibly_minor and row.subject_age_tier == AgeTier.ADULT_18_PLUS.value),
+                       run=run, keyword_rules=keyword_rules_apply(row.entry_kind))
+    cs.record_assessment(db, row.contestant_id, gate, possibly_minor=possibly_minor, actor_id=actor_id, now=now,
+                         action="CONTENT_REASSESSED_RULE_CHANGE")
+    reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, now=now, commit=commit)
+    return True
+
+
 def _release_progression_holds(db: Session, contestant_ids: Sequence[int], actor_id: Optional[int]) -> None:
     """Phase 8: an entry that became public again may have a progression hold
     waiting; release it through the same lifecycle (never raises)."""
@@ -1097,7 +1155,9 @@ def reevaluate_open_entries(db: Session, *, trigger: str, today: date, actor_id:
     rows = q.order_by(ContestEntrySafety.id).limit(limit).all()
     before = {r.id: r.exposure_status for r in rows}
     for row in rows:
-        reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, commit=False)
+        # A nomination assessed under earlier content rules gets the current ones first.
+        if not reassess_nomination_content(db, row, actor_id=actor_id, trigger=trigger, today=today, commit=False):
+            reevaluate_entry(db, row, actor_id=actor_id, trigger=trigger, today=today, commit=False)
     db.commit()
     changed = sum(1 for r in rows if before[r.id] != r.exposure_status)
     activated = [r.contestant_id for r in rows if before[r.id] != EntryExposureStatus.PUBLIC.value
@@ -1442,6 +1502,9 @@ def admin_review(db: Session, row: ContestEntrySafety, *, action: str, admin_id:
             contestant.is_active = False
     _log(db, row, f"ADMIN_{action}", admin_id, {**_state(row), "note_present": bool(note)}, old, now=now)
     db.flush()
+    if action == "REEVALUATE" and reassess_nomination_content(db, row, actor_id=admin_id, trigger="ADMIN_REEVALUATE",
+                                                              today=today, now=now):
+        return row
     if action not in ("BLOCK", "ESCALATE_CHILD_SAFETY"):
         return reevaluate_entry(db, row, actor_id=admin_id, trigger=f"ADMIN_{action}", today=today, now=now)
     db.commit()

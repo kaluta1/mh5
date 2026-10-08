@@ -509,9 +509,18 @@ def test_claimed_nomination_is_published_but_content_safety_stays_authoritative(
 
 
 def test_minor_nomination_with_safety_issue_stays_private(db):
+    """A real finding still holds a minor's nomination. (Since 2026-10-08 the
+    text keyword rules - here the word "school" - are not applied to a
+    nomination; they still are to a personal entry.)"""
     nominator = person(db, 35)
-    d = nominate(db, nominator, None, D.MINOR, content=None, description="She studies at Mzizima Secondary School")
-    assert SafetyConcern.SCHOOL_INFORMATION in d.safety_concerns and not d.public
+    text = "She studies at Mzizima Secondary School"
+    d = nominate(db, nominator, None, D.MINOR, content=None, description=text,
+                 extra_concerns=frozenset({SafetyConcern.HATE}))
+    assert SafetyConcern.HATE in d.safety_concerns and not d.public
+    assert SafetyConcern.SCHOOL_INFORMATION not in nominate(db, nominator, None, D.MINOR, content=None,
+                                                            description=text).safety_concerns
+    assert SafetyConcern.SCHOOL_INFORMATION in submit(db, person(db, 35), content=None,
+                                                      description=text).safety_concerns
 
 
 # ===========================================================================

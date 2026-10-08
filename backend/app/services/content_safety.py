@@ -68,7 +68,7 @@ from app.models.accounting import AuditTrail
 from app.models.content_moderation import ContentModeration
 from app.models.media import Media
 
-CLASSIFIER_VERSION = "p6-rules-2"
+CLASSIFIER_VERSION = "p6-rules-3"
 
 RATING_ORDER = [ContentRating.GENERAL, ContentRating.TEEN_13_PLUS, ContentRating.TEEN_16_PLUS,
                 ContentRating.ADULT_18_PLUS, ContentRating.PROHIBITED]
@@ -155,11 +155,38 @@ def detect_text_harm(text: Optional[str], *, possibly_minor: bool) -> Set[Safety
     return found
 
 
+def detect_child_safety_text(text: Optional[str], *, possibly_minor: bool) -> Set[SafetyConcern]:
+    """The s.11 part of detect_text_harm only: sexual text about a subject who
+    is, or may be, a minor. Stays in force where the ordinary text rules do not
+    apply (nominations)."""
+    if text and possibly_minor and _SEXUAL_TEXT.search(text):
+        return {SafetyConcern.CHILD_SEXUAL_CONTENT}
+    return set()
+
+
 def _text_language(text: str) -> Set[SafetyConcern]:
     """Local profanity/spam rules of the existing moderation service (no network)."""
     from app.services.content_moderation import content_moderation_service
 
     return concerns_from_moderation([content_moderation_service.moderate_text(text)], possibly_minor_subject=False)
+
+
+def keyword_rule_findings(title: Optional[str], description: Optional[str], *,
+                          possibly_minor: bool) -> Set[SafetyConcern]:
+    """Everything the text keyword rules find in this text (a failed rule finds
+    nothing). Tells a stored finding the word rules produced from one that came
+    from somewhere else."""
+    text = " ".join(x for x in (title, description) if x and x.strip())
+    found: Set[SafetyConcern] = set()
+    if not text:
+        return found
+    for detector in (detect_text_concerns, lambda t: detect_text_harm(t, possibly_minor=possibly_minor),
+                     _text_language):
+        try:
+            found |= detector(text)
+        except Exception:  # noqa: BLE001
+            continue
+    return found
 
 
 _FLAG_TO_FINDING = {
@@ -299,9 +326,17 @@ def _hosted_refs(db: Session, refs: List[str]):
 
 def classify(db: Session, *, title: Optional[str], description: Optional[str], image_media_ids: Optional[str],
              video_media_ids: Optional[str], moderation_results: Sequence = (), extra_concerns: Iterable = (),
-             possibly_minor: bool, determined_adult: bool, run: Optional[ClassifierRun] = None) -> ContentGate:
+             possibly_minor: bool, determined_adult: bool, run: Optional[ClassifierRun] = None,
+             keyword_rules: bool = True) -> ContentGate:
     """Automated assessment of one submission with explicit per-dimension
-    coverage (not persisted)."""
+    coverage (not persisted).
+
+    keyword_rules=False (nominations, management decision 2026-10-08): the
+    deterministic word and pattern rules for text are not applied, so a word in
+    a title or description neither holds the entry nor proposes a rating. Those
+    dimensions are recorded as NOT_RUN, never as "nothing found"; inappropriate
+    content is handled by member reports. The child-safety text rule (s.11)
+    still runs."""
     run = run or ClassifierRun()
     cov = {}
     findings: Set[SafetyConcern] = set(extra_concerns)
@@ -310,11 +345,21 @@ def classify(db: Session, *, title: Optional[str], description: Optional[str], i
 
     # --- text dimensions (deterministic, local) -------------------------------------------
     text = " ".join(x for x in (title, description) if x and x.strip())
-    for dim, detector in ((CoverageDimension.TEXT_PERSONAL_INFORMATION, lambda t: detect_text_concerns(t)),
-                          (CoverageDimension.TEXT_HARM, lambda t: detect_text_harm(t, possibly_minor=possibly_minor)),
-                          (CoverageDimension.TEXT_LANGUAGE, _text_language)):
+    if keyword_rules:
+        detectors = ((CoverageDimension.TEXT_PERSONAL_INFORMATION, lambda t: detect_text_concerns(t)),
+                     (CoverageDimension.TEXT_HARM, lambda t: detect_text_harm(t, possibly_minor=possibly_minor)),
+                     (CoverageDimension.TEXT_LANGUAGE, _text_language))
+    else:
+        detectors = ((CoverageDimension.TEXT_PERSONAL_INFORMATION, None),
+                     (CoverageDimension.TEXT_HARM,
+                      lambda t: detect_child_safety_text(t, possibly_minor=possibly_minor)),
+                     (CoverageDimension.TEXT_LANGUAGE, None))
+    for dim, detector in detectors:
         if not text:
             cov[dim] = CoverageStatus.NOT_APPLICABLE
+            continue
+        if detector is None:
+            cov[dim] = CoverageStatus.NOT_RUN
             continue
         try:
             found = detector(text)
@@ -322,7 +367,11 @@ def classify(db: Session, *, title: Optional[str], description: Optional[str], i
             cov[dim] = CoverageStatus.FAILED
             continue
         findings |= found
-        cov[dim] = CoverageStatus.COMPLETED_FINDING if found else CoverageStatus.COMPLETED_NO_FINDING
+        if found:
+            cov[dim] = CoverageStatus.COMPLETED_FINDING
+        else:
+            # Without the keyword rules only part of the dimension was checked.
+            cov[dim] = CoverageStatus.COMPLETED_NO_FINDING if keyword_rules else CoverageStatus.NOT_RUN
 
     # --- media dimensions ------------------------------------------------------------------
     images = _hosted_refs(db, _refs(image_media_ids))
