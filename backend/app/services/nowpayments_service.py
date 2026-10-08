@@ -47,7 +47,12 @@ EXPIRED_STATUSES = {"expired"}
 
 
 class NowPaymentsError(Exception):
-    """Raised when NOWPayments API calls fail."""
+    """Raised when NOWPayments API calls fail. `status_code` is the HTTP status
+    the provider answered with (None when there was no answer at all)."""
+
+    def __init__(self, message: str = "", *, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def api_base() -> str:
@@ -581,3 +586,75 @@ async def send_single_payout(
         raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
     await verify_payout(batch_id)
     return created
+
+
+# ---------------------------------------------------------------------------
+# Payout engine helpers (dual cashout). Read calls plus one create call that
+# reports WHICH step failed, so the caller can tell "not accepted" from
+# "outcome unknown". Nothing here runs unless the engine is enabled.
+# ---------------------------------------------------------------------------
+
+def _payout_get_sync(path: str, *, jwt: bool = False) -> Any:
+    headers = _payout_headers_sync() if jwt else {"x-api-key": payout_api_key()}
+    with httpx.Client(timeout=STATUS_HTTP_TIMEOUT) as client:
+        resp = client.get(f"{_payout_base()}/{path}", headers=headers)
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments GET /{path.split('?')[0]} -> {resp.status_code}: {resp.text[:200]}",
+                               status_code=resp.status_code)
+    return resp.json()
+
+
+def custody_balance_sync(currency: str) -> Decimal:
+    """Spendable balance the provider holds for this account in one currency."""
+    data = _payout_get_sync("balance")
+    entry = data.get(normalize_pay_currency(currency) or currency) if isinstance(data, dict) else None
+    return Decimal(str((entry or {}).get("amount") or 0))
+
+
+def payout_fee_estimate_sync(currency: str, amount: Decimal) -> Decimal:
+    data = _payout_get_sync(f"payout/fee?currency={normalize_pay_currency(currency)}&amount={amount}")
+    return Decimal(str(data.get("fee") or 0))
+
+
+def payout_min_amount_sync(currency: str) -> Decimal:
+    data = _payout_get_sync(f"payout-withdrawal/min-amount/{normalize_pay_currency(currency)}")
+    return Decimal(str(data.get("result") or data.get("min_amount") or 0))
+
+
+def payout_status_sync(batch_id: str) -> str:
+    """Status of the (single) withdrawal of one payout batch, upper case."""
+    data = _payout_get_sync(f"payout/{batch_id}", jwt=True)
+    rows = data if isinstance(data, list) else (data.get("withdrawals") or [data])
+    return str((rows[0] or {}).get("status") or "").upper() if rows else ""
+
+
+def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency: str,
+                              external_id: str) -> Dict[str, Any]:
+    """Create ONE withdrawal, then confirm it with the second factor.
+
+    Returns {"batch_id", "status", "verified"}. Raises NowPaymentsError with a
+    4xx status_code when the provider refused to create it (nothing exists at
+    the provider). When the batch was created but its confirmation failed, the
+    batch id is still returned with verified=False: the outcome is then
+    uncertain and must be reconciled, never retried."""
+    pay_currency = normalize_pay_currency(currency) or "usdtbsc"
+    withdrawal = {"address": wallet_address, "amount": float(money(amount)), "currency": pay_currency,
+                  "unique_external_id": external_id}
+    with httpx.Client(timeout=PAYOUT_HTTP_TIMEOUT) as client:
+        resp = client.post(f"{_payout_base()}/payout", headers=_payout_headers_sync(),
+                           json={"withdrawals": [withdrawal]})
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:200]}",
+                               status_code=resp.status_code)
+    created = resp.json()
+    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
+    if not batch_id:
+        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
+    rows = created.get("withdrawals") or []
+    status = str((rows[0] or {}).get("status") or "").upper() if rows else ""
+    try:
+        verify_payout_sync(batch_id)
+    except Exception:  # noqa: BLE001 - created but not confirmed: the caller reconciles
+        logger.exception("NOWPayments payout %s created but its confirmation failed", batch_id)
+        return {"batch_id": batch_id, "status": status, "verified": False}
+    return {"batch_id": batch_id, "status": status, "verified": True}

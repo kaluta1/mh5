@@ -9,6 +9,8 @@ from app.services.wallet_validation import normalize_payout_currency, validate_p
 class UserWalletUpdate(BaseModel):
     usdt_wallet_address: str = Field(..., min_length=34, max_length=100)
     payout_currency: Optional[str] = Field(default="usdtbsc", max_length=20)
+    # The member's current password authorises a payout destination change.
+    current_password: str = Field(default="", max_length=256)
 
     @field_validator("payout_currency")
     @classmethod
@@ -32,8 +34,11 @@ class UserWalletResponse(BaseModel):
     usdt_wallet_address: Optional[str] = None
     payout_currency: Optional[str] = None
     wallet_configured: bool = False
-    pending_commissions_paid: int = 0
+    pending_commissions_paid: int = 0      # always 0: saving a wallet never pays anything
     supported_currencies: List[str] = ["usdtbsc"]
+    # MISSING / INVALID / UNVERIFIED / ON_HOLD / VERIFIED (cashout_service.wallet_state)
+    wallet_status: Optional[str] = None
+    payable_from: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -50,6 +55,28 @@ class WithdrawRequest(BaseModel):
         return v
 
 
+class CashoutMethodUpdate(BaseModel):
+    method: str = Field(..., max_length=10, description="CRYPTO or USD")
+
+
+class UsdCashoutRequest(BaseModel):
+    # Optional: USD Cashout pays the whole available balance; a different amount is refused.
+    amount: Optional[Decimal] = Field(default=None, gt=0)
+
+
+class CashoutCancel(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+class CashoutSettle(BaseModel):
+    reference: str = Field(..., min_length=3, max_length=200)
+
+
+class CashoutResolve(BaseModel):
+    outcome: str = Field(..., max_length=10, description="SENT or NOT_SENT")
+    reference: Optional[str] = Field(default=None, max_length=200)
+
+
 class WithdrawPreviewResponse(BaseModel):
     available_to_withdraw: float
     minimum_withdrawal: float = 100.0
@@ -61,6 +88,7 @@ class WithdrawPreviewResponse(BaseModel):
     # REVIEW_REQUIRED) and a safe next step; never a reason code.
     eligibility_status: Optional[str] = None
     eligibility_next_step: Optional[str] = None
+    cashout_method: Optional[str] = None
 
 
 class WithdrawResponse(BaseModel):

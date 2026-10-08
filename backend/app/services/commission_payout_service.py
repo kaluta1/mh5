@@ -1,4 +1,11 @@
-"""Durable, replay-safe affiliate commission payouts via NOWPayments."""
+"""Durable, replay-safe affiliate commission payouts via NOWPayments.
+
+Since the dual cashout (2026-10-08) no endpoint calls the two writers below:
+members are paid by cashout_engine (Crypto Cashout) or ask for a USD Cashout
+(cashout_service). They are kept for their tested reserve/intent logic and are
+refused, before anything is reserved, unless CRYPTO_AUTO_PAYOUT_ENABLED is
+explicitly on.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.accounting import ChartOfAccounts, JournalEntry
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission, CommissionStatus
+from app.core.config import settings
 from app.models.user import User
 from app.services.accounting_service import accounting_service
 from app.services.financial_eligibility import (
@@ -349,6 +357,8 @@ def trigger_commission_payout_sync(
     """Safely auto-pay one commission through a committed payout intent."""
     if commission.status == CommissionStatus.PAID:
         return True
+    if not settings.CRYPTO_AUTO_PAYOUT_ENABLED:
+        return False
     if not payouts_configured() or not (beneficiary.usdt_wallet_address or "").strip():
         return False
     _wallet, payout_currency = _validated_payout_target(beneficiary)
@@ -451,6 +461,8 @@ def process_manual_withdrawal_sync(
     """Reserve exact FIFO rows, commit, call the provider, then post the result."""
     from app.accounting.distribution_formulas import cashout_fee_and_net
 
+    if not settings.CRYPTO_AUTO_PAYOUT_ENABLED:
+        raise ValueError("Crypto payouts are not enabled.")
     gross = positive_money(gross_amount)
     if gross < MIN_MANUAL_WITHDRAWAL_USD:
         raise ValueError(f"Minimum withdrawal is ${MIN_MANUAL_WITHDRAWAL_USD:.2f}.")

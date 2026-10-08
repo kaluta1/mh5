@@ -11,6 +11,30 @@ from app.models.user import User
 from app.services import commission_payout_service as payouts
 
 
+@pytest.fixture(autouse=True)
+def _crypto_payouts_enabled(monkeypatch):
+    """These writers are refused unless crypto payouts are explicitly enabled."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+
+
+def test_legacy_writers_do_nothing_while_crypto_payouts_are_disabled(db, monkeypatch):
+    from app.core.config import settings
+
+    user, rows = _setup(db)
+    monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", False)
+    monkeypatch.setattr(payouts, "payouts_configured", lambda: True)
+    called = []
+    monkeypatch.setattr(payouts, "send_single_payout_sync", lambda **kwargs: called.append(kwargs))
+    with pytest.raises(ValueError, match="not enabled"):
+        payouts.process_manual_withdrawal_sync(db, user, Decimal("120.00"), idempotency_key="off")
+    assert payouts.trigger_commission_payout_sync(db, user, rows[0]) is False
+    assert payouts.pay_pending_commissions_for_user_sync(db, user.id) == 0
+    assert called == [] and db.query(AffiliateCashoutRequest).count() == 0
+    assert all(row.payout_reference is None for row in db.query(AffiliateCommission).all())
+
+
 def _setup(db):
     user = User(
         email="cashout@test.com",

@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Loader2, Wallet, AlertTriangle } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
@@ -21,10 +20,9 @@ type WithdrawPreview = {
   minimum_withdrawal: number
   fee: number
   net_amount: number
-  wallet_configured: boolean
-  payout_currency?: string
   eligibility_status?: string | null
   eligibility_next_step?: string | null
+  cashout_method?: string | null
 }
 
 type Props = {
@@ -33,13 +31,13 @@ type Props = {
   onSuccess?: () => void
 }
 
+/** USD Cashout request: the whole available balance, the existing fee, the net. */
 export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
   const { t } = useLanguage()
   const { addToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [preview, setPreview] = useState<WithdrawPreview | null>(null)
-  const [amount, setAmount] = useState('')
   const idempotencyKeyRef = useRef<string | null>(null)
 
   const loadPreview = useCallback(async () => {
@@ -50,14 +48,10 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (res.ok) {
-        const data = (await res.json()) as WithdrawPreview
-        setPreview(data)
-        if (data.available_to_withdraw >= data.minimum_withdrawal) {
-          setAmount(String(Math.floor(data.available_to_withdraw * 100) / 100))
-        }
+        setPreview((await res.json()) as WithdrawPreview)
       }
     } catch {
-      addToast(t('common.error') || 'Error loading withdrawal preview', 'error')
+      addToast(t('common.error') || 'Error loading cashout preview', 'error')
     } finally {
       setLoading(false)
     }
@@ -71,51 +65,36 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
     }
   }, [open, loadPreview])
 
-  const parsedAmount = parseFloat(amount) || 0
+  const amount = preview?.available_to_withdraw ?? 0
   const min = preview?.minimum_withdrawal ?? 100
   const eligible = isFinancialActionAvailable(preview?.eligibility_status)
   const holdMessage = financialHoldMessage(preview?.eligibility_status, preview?.eligibility_next_step)
+  const usdChosen = preview?.cashout_method === 'USD'
+  const canSubmit = eligible && usdChosen && amount >= min
 
-  const handleWithdraw = async () => {
-    if (!eligible) {
-      addToast(holdMessage || 'Withdrawal is not available for your account yet.', 'error')
-      return
-    }
-    if (!preview?.wallet_configured) {
-      addToast(t('dashboard.wallet.setup_wallet_first') || 'Add a payout wallet in Settings first.', 'error')
-      return
-    }
-    if (parsedAmount < min) {
-      addToast(t('dashboard.wallet.min_withdrawal') || `Minimum withdrawal is $${min}.`, 'error')
-      return
-    }
-    if (parsedAmount > (preview?.available_to_withdraw ?? 0)) {
-      addToast(t('dashboard.wallet.insufficient_balance') || 'Insufficient approved balance.', 'error')
-      return
-    }
-
+  const handleRequest = async () => {
+    if (!canSubmit) return
     setSubmitting(true)
     try {
       const token = localStorage.getItem('access_token')
       if (!idempotencyKeyRef.current) {
         idempotencyKeyRef.current = crypto.randomUUID()
       }
-      const res = await fetch(`${getEffectiveApiUrl()}/api/v1/wallet/withdraw`, {
+      const res = await fetch(`${getEffectiveApiUrl()}/api/v1/wallet/cashout/usd`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKeyRef.current,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ amount: parsedAmount }),
+        body: JSON.stringify({ amount }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(apiErrorText(data.detail, 'Withdrawal failed'))
+        throw new Error(apiErrorText(data.detail, 'The cashout request could not be made'))
       }
       addToast(
-        t('dashboard.wallet.withdraw_success') ||
-          `Withdrawal submitted. $${Number(data.net_amount).toFixed(2)} USDT sent (fee $${Number(data.fee).toFixed(2)}).`,
+        `USD Cashout requested: $${Number(data.net_amount).toFixed(2)} after a $${Number(data.fee).toFixed(2)} fee.`,
         'success'
       )
       onOpenChange(false)
@@ -134,11 +113,11 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wallet className="w-5 h-5 text-myhigh5-primary" />
-            {t('dashboard.wallet.withdraw_title') || 'Withdraw commissions'}
+            Request USD Cashout
           </DialogTitle>
           <DialogDescription>
-            {t('dashboard.wallet.withdraw_desc') ||
-              'Batch withdraw approved commissions to your crypto wallet. Minimum $100; 1% fee (min $20, max $1,000).'}
+            Your whole available balance is requested. Minimum ${min}; fee 1% (minimum $20, maximum $1,000). The
+            amount is reserved until the MyHigh5 team has paid it or you cancel the request.
           </DialogDescription>
         </DialogHeader>
 
@@ -158,51 +137,40 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
                 {holdMessage}
               </div>
             )}
-            {!preview?.wallet_configured && (
+            {!holdMessage && !usdChosen && (
               <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-100">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                {t('dashboard.wallet.setup_wallet_first') || 'Add a payout wallet in Settings before withdrawing.'}
+                Choose USD Cashout as your cashout method first.
+              </div>
+            )}
+            {!holdMessage && usdChosen && amount < min && (
+              <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-100">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                USD Cashout needs an available balance of at least ${min}.
               </div>
             )}
 
             <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">{t('dashboard.wallet.approved_balance') || 'Approved balance'}</span>
-                <span className="font-semibold">${(preview?.available_to_withdraw ?? 0).toFixed(2)}</span>
+                <span className="text-gray-500">Amount requested</span>
+                <span className="font-semibold tabular-nums">${amount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t('dashboard.wallet.estimated_fee') || 'Estimated fee'}</span>
-                <span>${(preview?.fee ?? 0).toFixed(2)}</span>
+                <span className="text-gray-500">{t('dashboard.wallet.estimated_fee') || 'Fee'}</span>
+                <span className="tabular-nums">${(preview?.fee ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
                 <span className="text-gray-500">{t('dashboard.wallet.you_receive') || 'You receive (net)'}</span>
-                <span className="font-bold text-myhigh5-primary">
-                  ${Math.max(0, parsedAmount - (preview?.fee ?? 0)).toFixed(2)}
+                <span className="font-bold text-myhigh5-primary tabular-nums">
+                  ${(preview?.net_amount ?? 0).toFixed(2)}
                 </span>
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {t('dashboard.wallet.withdraw_amount') || 'Amount (USD)'}
-              </label>
-              <Input
-                type="number"
-                min={min}
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="mt-1"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {t('dashboard.wallet.min_withdrawal_hint') || `Minimum $${min}. Only exact whole-commission totals can currently be withdrawn.`}
-              </p>
-            </div>
-
             <Button
               className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"
-              disabled={submitting || !eligible || !preview?.wallet_configured || parsedAmount < min}
-              onClick={() => void handleWithdraw()}
+              disabled={submitting || !canSubmit}
+              onClick={() => void handleRequest()}
             >
               {submitting ? (
                 <>
@@ -210,7 +178,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
                   {t('common.processing') || 'Processing…'}
                 </>
               ) : (
-                t('dashboard.wallet.confirm_withdraw') || 'Confirm withdrawal'
+                'Confirm request'
               )}
             </Button>
           </div>

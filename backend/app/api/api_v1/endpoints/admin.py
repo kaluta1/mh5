@@ -4918,18 +4918,15 @@ def admin_nowpayments_totp_code(
 
 @router.post("/affiliate/retry-payouts")
 def admin_retry_affiliate_payouts(
-    user_id: Optional[int] = None,
-    limit: int = 50,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retry NOWPayments payouts for APPROVED commissions stuck after a transient failure.
-    Optionally scope to one user_id.
+    Run one cycle of the crypto payout engine now (reconcile, then pay members
+    who chose Crypto Cashout and meet every rule). Does nothing while the
+    engine is off. Single commissions are no longer paid one by one.
     """
     check_admin(current_user)
-    from app.services.commission_payout_service import retry_failed_payouts_sync
+    from app.services import cashout_engine
 
-    paid = retry_failed_payouts_sync(db, user_id=user_id, limit=min(limit, 200))
-    db.commit()
-    return {"retried": paid, "user_id": user_id}
+    return cashout_engine.run_cycle(db)

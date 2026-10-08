@@ -14,6 +14,9 @@ from app.models.user import User
 from app.models.affiliate import AffiliateCommission, CommissionStatus
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.schemas.wallet import (
+    CashoutCancel,
+    CashoutMethodUpdate,
+    UsdCashoutRequest,
     WithdrawPreviewResponse,
     WithdrawRequest,
     WithdrawResponse,
@@ -312,31 +315,47 @@ def preview_withdrawal(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Preview manual withdrawal fees against APPROVED commission balance."""
-    from app.accounting.distribution_formulas import cashout_fee_and_net
-    from app.services.commission_payout_service import get_approved_balance_sync
+    """Preview a USD Cashout: the whole available balance, the existing fee and the net."""
+    from app.services import cashout_service
 
-    available = get_approved_balance_sync(db, current_user.id)
-    fee = Decimal("0")
-    net = Decimal("0")
-    if available >= MIN_WITHDRAWAL:
-        preview = cashout_fee_and_net(available)
-        fee = preview.fee
-        net = preview.net_to_member
-
-    from app.services import financial_eligibility as fe
-
-    eligibility = fe.evaluate(db, current_user, fe.FinancialOperation.WITHDRAWAL)
+    data = cashout_service.summary(db, current_user)
+    usd = data["fees"]["USD"]
     return WithdrawPreviewResponse(
-        available_to_withdraw=float(available),
-        minimum_withdrawal=float(MIN_WITHDRAWAL),
-        fee=float(fee),
-        net_amount=float(net),
-        wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
-        payout_currency=current_user.payout_currency or "usdtbsc",
-        eligibility_status=eligibility.outcome.value,
-        eligibility_next_step=eligibility.next_step,
+        available_to_withdraw=data["payable_amount"],
+        minimum_withdrawal=data["minimums"]["USD"],
+        fee=usd["fee"] or 0.0,
+        net_amount=usd["net_amount"] or 0.0,
+        # USD Cashout needs no crypto wallet; kept true so older clients do not block on it.
+        wallet_configured=True,
+        payout_currency="usd",
+        eligibility_status=data["eligibility_status"],
+        eligibility_next_step=data["eligibility_next_step"],
+        cashout_method=data["cashout_method"],
     )
+
+
+def _cashout_http_error(exc) -> HTTPException:
+    codes = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "INVALID_METHOD": status.HTTP_422_UNPROCESSABLE_ENTITY,
+             "INVALID_OUTCOME": status.HTTP_422_UNPROCESSABLE_ENTITY,
+             "REFERENCE_REQUIRED": status.HTTP_422_UNPROCESSABLE_ENTITY}
+    return HTTPException(status_code=codes.get(exc.code, status.HTTP_409_CONFLICT),
+                         detail={"code": exc.code, "message": str(exc)})
+
+
+def _request_usd(db: Session, user: User, amount, idempotency_key: Optional[str]):
+    from app.services import cashout_service
+    from app.services.financial_eligibility import FinancialEligibilityHold, http_error
+
+    try:
+        return cashout_service.request_usd_cashout(db, user, idempotency_key=idempotency_key, amount=amount)
+    except FinancialEligibilityHold as exc:
+        # Phase 10: generic member-facing body; balances and commissions untouched.
+        raise http_error(exc) from None
+    except cashout_service.CashoutError as exc:
+        raise _cashout_http_error(exc) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/withdraw", response_model=WithdrawResponse)
@@ -347,37 +366,77 @@ def request_withdrawal(
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """
-    Manual batch withdrawal from APPROVED commissions.
-    Min $100; fee 1% (min $20, max $1000) per MYHIGH5 chart of accounts.
+    USD Cashout request (kept at its original address). Min $100; fee 1%
+    (min $20, max $1000). The request is reserved and tracked; no payout
+    provider is called.
     """
-    from app.services.commission_payout_service import process_manual_withdrawal_sync
-    from app.services.financial_eligibility import FinancialEligibilityHold, http_error
+    cashout = _request_usd(db, current_user, body.amount, idempotency_key)
+    return WithdrawResponse(gross_amount=float(cashout.gross_amount), fee=float(cashout.fee),
+                            net_amount=float(cashout.net_amount), payout_reference=None,
+                            commissions_marked_paid=0, status=cashout.status)
+
+
+# ---------------------------------------------------------------------------
+# Dual cashout: member preference, summary, history
+# ---------------------------------------------------------------------------
+
+@router.get("/cashout")
+def get_cashout_summary(db: Session = Depends(deps.get_db),
+                        current_user: User = Depends(deps.get_current_active_user)):
+    """Balances by state, the chosen method, its minimum and fees, the
+    destination and the member's own cashout status."""
+    from app.services import cashout_service
+
+    return cashout_service.summary(db, current_user)
+
+
+@router.put("/cashout/method")
+def set_cashout_method(body: CashoutMethodUpdate, db: Session = Depends(deps.get_db),
+                       current_user: User = Depends(deps.get_current_active_user)):
+    """Choose Crypto Cashout or USD Cashout. Moves no money and starts no payout."""
+    from app.services import cashout_service
 
     try:
-        result = process_manual_withdrawal_sync(
-            db,
-            current_user,
-            body.amount,
-            idempotency_key=idempotency_key,
-        )
-        if result.get("status") != "completed":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Payout is already in progress or requires provider reconciliation",
-            )
-        db.commit()
-    except HTTPException:
-        raise
-    except FinancialEligibilityHold as exc:
-        # Phase 10: generic member-facing body; balances and commissions untouched.
-        raise http_error(exc) from None
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
+        cashout_service.set_cashout_method(db, current_user, body.method)
+    except cashout_service.CashoutError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Withdrawal processing failed",
-        ) from exc
+        raise _cashout_http_error(exc) from exc
+    db.refresh(current_user)
+    return cashout_service.summary(db, current_user)
 
-    return WithdrawResponse(**result)
+
+@router.get("/cashout/history")
+def get_cashout_history(limit: int = Query(50, ge=1, le=100), db: Session = Depends(deps.get_db),
+                        current_user: User = Depends(deps.get_current_active_user)):
+    from app.services import cashout_service
+
+    return cashout_service.history(db, current_user.id, limit=limit)
+
+
+@router.post("/cashout/usd")
+def request_usd_cashout(body: UsdCashoutRequest, db: Session = Depends(deps.get_db),
+                        current_user: User = Depends(deps.get_current_active_user),
+                        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
+    """Ask for a USD Cashout of the whole available balance (minimum $100)."""
+    from app.services import cashout_service
+
+    return cashout_service.cashout_dict(_request_usd(db, current_user, body.amount, idempotency_key))
+
+
+@router.post("/cashout/{cashout_id}/cancel")
+def cancel_own_cashout(cashout_id: int, body: CashoutCancel, db: Session = Depends(deps.get_db),
+                       current_user: User = Depends(deps.get_current_active_user)):
+    """Cancel the member's own request while nothing has been sent."""
+    from app.models.affiliate import AffiliateCashoutRequest
+    from app.services import cashout_service
+
+    cashout = (db.query(AffiliateCashoutRequest)
+               .filter(AffiliateCashoutRequest.id == cashout_id,
+                       AffiliateCashoutRequest.user_id == current_user.id).first())
+    if cashout is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cashout not found")
+    try:
+        return cashout_service.cashout_dict(
+            cashout_service.cancel_request(db, cashout, actor=current_user, reason=body.reason))
+    except cashout_service.CashoutError as exc:
+        raise _cashout_http_error(exc) from exc

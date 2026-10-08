@@ -60,6 +60,8 @@ from app.api.api_v1.endpoints import email_webhooks as email_webhook_endpoints  
 api_router.include_router(email_webhook_endpoints.router, prefix="/webhooks", tags=["Webhooks — Email"])
 api_router.include_router(sponsor_annualads.sso_router, prefix="/sponsor-embed", tags=["Sponsor embed — Annual Ads"])
 api_router.include_router(wallet.router, prefix="/wallet", tags=["Portefeuille"])
+from app.api.api_v1.endpoints import cashouts as cashout_admin_endpoints  # noqa: E402
+api_router.include_router(cashout_admin_endpoints.admin_router, prefix="/admin/cashouts", tags=["Admin - Cashouts"])
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])
 api_router.include_router(social.router, prefix="/social", tags=["Service Social"])
 # Groups router routes already start with /groups/..., so no extra prefix is needed.

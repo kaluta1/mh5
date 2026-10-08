@@ -39,7 +39,8 @@ def test_full_member_onboarding_journey(client, db, test_user_data):
 
     wallet = client.patch(
         "/api/v1/users/me/wallet",
-        json={"usdt_wallet_address": VALID_BEP20, "payout_currency": "usdtbsc"},
+        json={"usdt_wallet_address": VALID_BEP20, "payout_currency": "usdtbsc",
+              "current_password": test_user_data["password"]},
         headers=headers,
     )
     assert wallet.status_code == 200

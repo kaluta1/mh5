@@ -322,6 +322,7 @@ def test_real_payout_path_makes_a_commission_count(world, monkeypatch):
     db.commit()
     commission = db.query(AffiliateCommission).one()
     monkeypatch.setattr(payouts, "payouts_configured", lambda: True)
+    monkeypatch.setattr(payouts.settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
     monkeypatch.setattr(payouts, "_validated_payout_target", lambda user: (user.usdt_wallet_address, "usdttrc20"))
     monkeypatch.setattr(payouts, "send_single_payout_sync", lambda **kw: {"id": "prov-123"})
     assert payouts.trigger_commission_payout_sync(db, db.get(type(direct), direct.id), commission) is True

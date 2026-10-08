@@ -224,6 +224,27 @@ class Settings(BaseModel):
     NOWPAYMENTS_PASSWORD: str = os.getenv("NOWPAYMENTS_PASSWORD", "")
     NOWPAYMENTS_PAYOUT_TOTP_SECRET: str = os.getenv("NOWPAYMENTS_PAYOUT_TOTP_SECRET", "")
 
+    # ============================================
+    # Dual cashout (affiliate commissions). See app/services/cashout_service.py
+    # ============================================
+    # The automatic crypto payout engine. OFF unless explicitly set to "true":
+    # while off, no payout is reserved and the provider is never called.
+    CRYPTO_AUTO_PAYOUT_ENABLED: bool = os.getenv("CRYPTO_AUTO_PAYOUT_ENABLED", "false").lower() == "true"
+    CRYPTO_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("CRYPTO_CASHOUT_MIN_USD", "1.00"))
+    USD_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("USD_CASHOUT_MIN_USD", "100.00"))
+    # A new or changed payout wallet is not paid to until this many hours have passed.
+    PAYOUT_WALLET_HOLD_HOURS: int = int(os.getenv("PAYOUT_WALLET_HOLD_HOURS", "72"))
+    PAYOUT_WALLET_MAX_CHANGES_PER_DAY: int = int(os.getenv("PAYOUT_WALLET_MAX_CHANGES_PER_DAY", "3"))
+    CASHOUT_ENGINE_INTERVAL_SECONDS: int = int(os.getenv("CASHOUT_ENGINE_INTERVAL_SECONDS", "900"))
+    CASHOUT_ENGINE_BATCH_LIMIT: int = int(os.getenv("CASHOUT_ENGINE_BATCH_LIMIT", "25"))
+    # After a payout the provider reported as failed, the member is not retried for this long.
+    CASHOUT_RETRY_BACKOFF_HOURS: int = int(os.getenv("CASHOUT_RETRY_BACKOFF_HOURS", "24"))
+    # USD cashout: requests are recorded and tracked; recording a settlement
+    # stays refused until a USD payout channel exists, this is "true" and the
+    # ledger account the money leaves from is named here.
+    USD_CASHOUT_SETTLEMENT_ENABLED: bool = os.getenv("USD_CASHOUT_SETTLEMENT_ENABLED", "false").lower() == "true"
+    USD_CASHOUT_SETTLEMENT_ACCOUNT: str = os.getenv("USD_CASHOUT_SETTLEMENT_ACCOUNT", "")
+
     # GLOBAL Top High5 finalization: first Global-stage closing date the
     # AUTOMATIC scheduler finalizes (YYYY-MM-DD). Empty = the built-in rule
     # activation date. See SeasonMigrationService.global_stage_is_historical.

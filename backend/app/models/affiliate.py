@@ -1,5 +1,5 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum
+from sqlalchemy import Column, Index, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 import enum
@@ -33,10 +33,17 @@ class CommissionStatus(str, enum.Enum):
 
 
 class CashoutStatus(str, enum.Enum):
-    REQUESTED = "requested"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    REQUESTED = "requested"      # reserved; nothing sent anywhere yet
+    PROCESSING = "processing"    # handed to the payout provider / being settled
+    UNKNOWN = "unknown"          # provider outcome uncertain: never retried automatically
+    COMPLETED = "completed"      # paid; commissions PAID and the journal posted
+    FAILED = "failed"            # confirmed not paid; the reservation was released
+    CANCELLED = "cancelled"      # withdrawn before anything was sent; reservation released
+
+
+# A member has at most one cashout in these states (enforced by a partial
+# unique index, uq_cashout_one_active_per_user).
+ACTIVE_CASHOUT_STATUSES = ("requested", "processing", "unknown")
 
 
 class CommissionRule(Base):
@@ -135,6 +142,14 @@ class AffiliateCommission(Base):
 class AffiliateCashoutRequest(Base):
     """Audit trail for affiliate commission payouts (auto or manual)."""
     __tablename__ = "affiliate_cashout_requests"
+    __table_args__ = (
+        # The database itself refuses a second open cashout for a member, so two
+        # workers (or a worker and a request) can never both reserve.
+        Index("uq_cashout_one_active_per_user", "user_id", unique=True,
+              postgresql_where=text("status IN ('requested', 'processing', 'unknown')"),
+              sqlite_where=text("status IN ('requested', 'processing', 'unknown')")),
+        Index("uq_cashout_payout_reference", "payout_reference", unique=True),
+    )
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     gross_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
@@ -146,8 +161,32 @@ class AffiliateCashoutRequest(Base):
     payout_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Dual cashout (NULL on rows written before it).
+    cashout_method: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)      # CRYPTO / USD
+    payout_currency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)     # e.g. usdtbsc
+    provider_batch_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # provider's payout id
+    provider_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)     # last status it reported
+    failure_code: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    settlement_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
+class PayoutWalletChange(Base):
+    """Append-only history of a member's payout destination. One row per
+    accepted change; rows are never updated or deleted."""
+    __tablename__ = "payout_wallet_changes"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    old_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    new_address: Mapped[str] = mapped_column(String(100), nullable=False)
+    currency: Mapped[str] = mapped_column(String(20), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    payable_from: Mapped[datetime] = mapped_column(DateTime, nullable=False)   # end of the security hold
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
 
 
 class ReferralLink(Base):

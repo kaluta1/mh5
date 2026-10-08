@@ -41,6 +41,9 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/v1/kyc/webhook": (300, 60),
     "/api/v1/payments": (20, 60),
     "/api/v1/wallet": (30, 60),
+    # Payout wallet: a change is authorised by the account password, so the
+    # number of attempts is bounded (the GET shares this small budget).
+    "/api/v1/users/me/wallet": (20, 3600),
     "/api/v1/votes": (120, 60),
     "/api/v1/comments": (30, 60),
     # Phase 9: abuse-prone interaction writers not covered above.

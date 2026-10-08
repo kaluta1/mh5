@@ -87,6 +87,7 @@ def provider(monkeypatch):
         return {"id": f"p10-{len(calls)}"}
 
     monkeypatch.setattr(payouts, "payouts_configured", lambda: True)
+    monkeypatch.setattr(payouts.settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
     monkeypatch.setattr(payouts, "send_single_payout_sync", fake)
     return calls
 
@@ -383,21 +384,28 @@ def test_Q_R_eligibility_payloads_carry_no_kyc_or_protected_data(client, db):
 # ===========================================================================
 
 def test_S_AA_AB_adult_withdrawal_works_and_replay_is_idempotent(client, db, provider):
+    """Dual cashout: the withdrawal endpoint is a USD Cashout REQUEST. It is
+    reserved once and no payout provider is called."""
     a = adult(db)
     earnings(db, a)
+    a.cashout_method = "USD"
+    db.commit()
     r = withdraw(client, a, 120, "adult-1")
     assert r.status_code == 200, r.text
-    again = withdraw(client, a, 120, "adult-1")                   # AA: same key -> no second payout
-    assert again.status_code in (200, 409)
-    assert len(provider) == 1                                      # AB/AD: exactly one (fake) provider call
+    assert r.json()["status"] == "requested" and r.json()["fee"] == 20.0
+    again = withdraw(client, a, 120, "adult-1")                   # AA: same key -> the same request
+    assert again.status_code == 200
+    assert provider == []                                          # AB/AD: nothing is sent to a provider
     assert db.query(AffiliateCashoutRequest).count() == 1
-    assert db.query(JournalEntry).filter(JournalEntry.description.like("Affiliate Cashout #%")).count() == 1
+    assert db.query(JournalEntry).filter(JournalEntry.description.like("Affiliate Cashout #%")).count() == 0
 
 
 @pytest.mark.parametrize("who", ["unknown", "minor_kyc"])
 def test_T_U_V_unknown_or_kyc_minor_cannot_withdraw_via_direct_endpoint(client, db, provider, who):
     u = unknown(db) if who == "unknown" else minor(db, 16, identity_verified=True)
     earnings(db, u)
+    u.cashout_method = "USD"                                        # so the request reaches the eligibility gate
+    db.commit()
     before, fp = snapshot(db, u.id), fin_fingerprint(db)
     r = withdraw(client, u)
     assert r.status_code == 403 and payload_is_generic(r.text)
@@ -415,10 +423,11 @@ def test_W_AH_admin_retry_and_wallet_autopay_do_not_bypass(client, db, provider)
     admin.is_admin = True
     db.commit()
     r = client.post(f"/api/v1/admin/affiliate/retry-payouts?user_id={m.id}", headers=auth(admin))
-    assert r.status_code == 200 and r.json()["retried"] == 0
+    assert r.status_code == 200 and "SUBMITTED" not in r.json()["members"]
+    # Saving a wallet never pays anything (and needs the member's password).
     r = client.patch("/api/v1/users/me/wallet", json={"usdt_wallet_address": "0x" + "c" * 40,
                                                        "payout_currency": "usdtbsc"}, headers=auth(m))
-    assert r.status_code == 200
+    assert r.status_code == 403
     assert provider == []
     db.expire_all()
     assert [(i, a, s) for i, a, s, _ in snapshot(db, m.id)] == [(i, a, s) for i, a, s, _ in before]
@@ -636,6 +645,8 @@ def test_marketplace_buyer_and_seller_are_gated(db):
 def test_AG_forged_ids_and_other_users_cannot_bypass(client, db, provider):
     m, a = minor(db, 16), adult(db)
     earnings(db, m)
+    m.cashout_method = "USD"
+    db.commit()
     # A member cannot act for another member: the withdrawal always uses the caller's own identity.
     r = client.post("/api/v1/wallet/withdraw", json={"amount": 120, "user_id": a.id},
                     headers={**auth(m), "Idempotency-Key": "forge"})

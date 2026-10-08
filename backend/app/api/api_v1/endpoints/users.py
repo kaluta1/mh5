@@ -1,7 +1,7 @@
 from typing import Any, List, Union
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
@@ -95,43 +95,51 @@ def update_my_privacy(preferences: dict, db: Session = Depends(get_db),
     return {"settings": eff.settings, "locked_fields": eff.locked_fields, "display": eff.display}
 
 
+def _wallet_response(user: UserModel) -> UserWalletResponse:
+    from app.services import cashout_service
+
+    state = cashout_service.wallet_state(user)
+    return UserWalletResponse(
+        usdt_wallet_address=user.usdt_wallet_address,
+        payout_currency=user.payout_currency or "usdtbsc",
+        wallet_configured=bool((user.usdt_wallet_address or "").strip()),
+        pending_commissions_paid=0,
+        supported_currencies=["usdtbsc"],
+        wallet_status=state.status,
+        payable_from=state.payable_from.isoformat() if state.payable_from else None,
+    )
+
+
 @router.patch("/me/wallet", response_model=UserWalletResponse)
 def update_user_wallet(
     *,
+    request: Request,
     db: Session = Depends(get_db),
     wallet_in: UserWalletUpdate,
     current_user: UserModel = Depends(get_current_active_user),
 ) -> Any:
     """
-    Register or update the member's USDT BSC payout wallet.
-    Pays any pending APPROVED/PENDING commissions after save.
+    Register or change the member's USDT BSC payout wallet.
+
+    Requires the member's current password. The wallet is then on a security
+    hold before anything is paid to it. Saving a wallet never pays anything.
     """
-    from app.services.commission_payout_service import pay_pending_commissions_for_user_sync
+    from app.core.client_ip import client_ip
+    from app.services import cashout_service
 
-    current_user.usdt_wallet_address = wallet_in.usdt_wallet_address
-    current_user.payout_currency = wallet_in.payout_currency or "usdtbsc"
-    db.add(current_user)
-    db.commit()
-    db.refresh(current_user)
-
-    paid_count = 0
     try:
-        paid_count = pay_pending_commissions_for_user_sync(db, current_user.id)
-        db.commit()
-    except Exception:
-        logger.exception(
-            "Wallet saved for user %s; pending commission payout skipped",
-            current_user.id,
-        )
+        cashout_service.change_payout_wallet(
+            db, current_user, address=wallet_in.usdt_wallet_address, currency=wallet_in.payout_currency,
+            password=wallet_in.current_password, ip=client_ip(request))
+    except cashout_service.CashoutError as exc:
         db.rollback()
-
-    return UserWalletResponse(
-        usdt_wallet_address=current_user.usdt_wallet_address,
-        payout_currency=current_user.payout_currency,
-        wallet_configured=bool(current_user.usdt_wallet_address),
-        pending_commissions_paid=paid_count,
-        supported_currencies=["usdtbsc"],
-    )
+        code = status.HTTP_403_FORBIDDEN if exc.code == "PASSWORD_REQUIRED" else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)}) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    db.refresh(current_user)
+    return _wallet_response(current_user)
 
 
 @router.get("/me/wallet", response_model=UserWalletResponse)
@@ -139,13 +147,7 @@ def get_user_wallet(
     current_user: UserModel = Depends(get_current_active_user),
 ) -> Any:
     """Return payout wallet configuration (masked address in frontend)."""
-    return UserWalletResponse(
-        usdt_wallet_address=current_user.usdt_wallet_address,
-        payout_currency=current_user.payout_currency or "usdtbsc",
-        wallet_configured=bool((current_user.usdt_wallet_address or "").strip()),
-        pending_commissions_paid=0,
-        supported_currencies=["usdtbsc"],
-    )
+    return _wallet_response(current_user)
 
 
 def _build_follow_users(

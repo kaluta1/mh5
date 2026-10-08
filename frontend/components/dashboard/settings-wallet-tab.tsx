@@ -19,6 +19,8 @@ type WalletInfo = {
   usdt_wallet_address?: string | null
   payout_currency?: string | null
   wallet_configured?: boolean
+  wallet_status?: string | null
+  payable_from?: string | null
   supported_currencies?: string[]
 }
 
@@ -47,6 +49,7 @@ function maskAddress(addr: string): string {
 
 function formatApiError(detail: unknown, fallback: string): string {
   if (typeof detail === 'string') return detail
+  if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message: unknown }).message)
   if (Array.isArray(detail)) {
     return detail.map((item) => (typeof item === 'object' && item && 'msg' in item ? String(item.msg) : JSON.stringify(item))).join(', ')
   }
@@ -69,6 +72,7 @@ export function SettingsWalletTab() {
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
   const [address, setAddress] = useState('')
   const [payoutCurrency, setPayoutCurrency] = useState('usdtbsc')
+  const [password, setPassword] = useState('')
 
   const supportedCurrencies = useMemo(
     () => walletInfo?.supported_currencies?.length ? walletInfo.supported_currencies : ['usdtbsc'],
@@ -121,6 +125,7 @@ export function SettingsWalletTab() {
         body: JSON.stringify({
           usdt_wallet_address: trimmed,
           payout_currency: payoutCurrency,
+          current_password: password,
         }),
       })
       if (!res.ok) {
@@ -131,11 +136,11 @@ export function SettingsWalletTab() {
       setWalletInfo(data)
       setAddress(data.usdt_wallet_address || trimmed)
       setPayoutCurrency(data.payout_currency || payoutCurrency)
-      const paid = data.pending_commissions_paid ?? 0
+      setPassword('')
       addToast(
-        paid > 0
-          ? (t('settings.wallet.saved_with_payout') || `Wallet saved. ${paid} pending commission(s) paid.`)
-          : (t('settings.wallet.saved') || 'Payout wallet saved.'),
+        data.wallet_status === 'ON_HOLD'
+          ? 'Payout wallet saved. For your security, payouts to it start after a short hold.'
+          : 'Payout wallet saved.',
         'success'
       )
     } catch (e) {
@@ -181,6 +186,17 @@ export function SettingsWalletTab() {
             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
               {(CURRENCY_META[walletInfo!.payout_currency || 'usdtbsc'] ?? CURRENCY_META.usdtbsc).label}
             </p>
+            {walletInfo?.wallet_status === 'UNVERIFIED' && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Not confirmed yet: save it again with your password to receive payouts.
+              </p>
+            )}
+            {walletInfo?.wallet_status === 'ON_HOLD' && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Security hold: payouts to this wallet start on{' '}
+                {walletInfo.payable_from ? new Date(`${walletInfo.payable_from}Z`).toLocaleDateString() : 'a later date'}.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -226,9 +242,22 @@ export function SettingsWalletTab() {
         <p className="text-xs text-gray-500 dark:text-gray-400">{currencyMeta.hint}</p>
       </div>
 
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Current password</label>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Required to set or change where your commissions are paid.
+        </p>
+      </div>
+
       <Button
         onClick={() => void handleSave()}
-        disabled={saving || !address.trim()}
+        disabled={saving || !address.trim() || !password}
         className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
       >
         {saving ? (

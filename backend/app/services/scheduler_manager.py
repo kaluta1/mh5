@@ -14,6 +14,7 @@ from app.services.season_migration_scheduler import SeasonMigrationScheduler
 from app.services.monthly_round_scheduler import MonthlyRoundScheduler
 from app.services.creative_link_check import CreativeLinkScheduler
 from app.services.email_outbox import EmailOutboxScheduler
+from app.services.cashout_engine import CashoutScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,8 @@ _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     "monthly-ops": (MonthlyRoundScheduler(), "ensure_month_and_run_migrations"),
     "creative-links": (CreativeLinkScheduler(), "_check_creative_links"),
     "email-outbox": (EmailOutboxScheduler(), "_drain_outbox"),
+    # Crypto cashout engine: every tick is a no-op unless CRYPTO_AUTO_PAYOUT_ENABLED=true.
+    "cashouts": (CashoutScheduler(), "_run_cycle"),
 }
 
 _TASK_ALIASES = {"monthly-round": "monthly-ops"}

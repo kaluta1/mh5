@@ -121,6 +121,12 @@ class User(Base):
     # Crypto payout wallet — deferred so login works before migration adds columns
     usdt_wallet_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, deferred=True)
     payout_currency: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="usdtbsc", deferred=True)
+    # Dual cashout. cashout_method: NULL (not chosen) / "CRYPTO" / "USD".
+    # payout_wallet_verified_at: when the current wallet was set by the member
+    # with their password; NULL = a wallet saved before that rule (unverified).
+    cashout_method: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, deferred=True)
+    cashout_method_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, deferred=True)
+    payout_wallet_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, deferred=True)
     
     # Relations géographiques (dépréciées - les données sont maintenant stockées directement)
     # city_rel: Mapped[Optional["City"]] = relationship("City")
