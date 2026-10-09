@@ -856,7 +856,7 @@ def test_daily_amount_and_count_limits_stop_new_payouts(ledger, engine_on):
     assert run(db, provider)["members"] == {"SUBMITTED": 2, "DAILY_LIMIT_REACHED": 2}
     assert run(db, provider)["members"] == {"DAILY_LIMIT_REACHED": 2}             # counted from the database too
     assert len(provider.created) == 2
-    assert engine.reconciliation_report(db)["last_24_hours"]["crypto_payout_amount"] == 80.0
+    assert engine.reconciliation_report(db, now=NOW)["last_24_hours"]["crypto_payout_amount"] == 80.0
     configure(db, max_daily_payout_usd=Decimal("5000.00"), max_daily_payout_count=3)
     assert run(db, provider)["members"] == {"SUBMITTED": 1, "DAILY_LIMIT_REACHED": 1}
     assert run(db, provider, now=NOW + timedelta(hours=25))["members"] == {"SUBMITTED": 1}

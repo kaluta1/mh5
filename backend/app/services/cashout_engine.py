@@ -503,7 +503,8 @@ def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 2
     return out
 
 
-def reconciliation_report(db: Session, *, provider=None, read_provider: bool = False) -> dict:
+def reconciliation_report(db: Session, *, provider=None, read_provider: bool = False,
+                          now: Optional[datetime] = None) -> dict:
     """What MyHigh5 owes in commissions, by state, next to what the provider
     says it holds. The provider is asked only when `read_provider` is true and
     its credentials exist; otherwise its balance is reported as not verified.
@@ -536,7 +537,7 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
         except Exception:  # noqa: BLE001
             provider_state = "UNAVAILABLE"
     unpaid = money(owed["pending"] + owed["available"] + owed["reserved"])
-    day_total, day_count = day_usage(db, datetime.utcnow())
+    day_total, day_count = day_usage(db, now or datetime.utcnow())
     items = discrepancies(db)
     if balance is not None and balance < crypto_members:
         items.insert(0, {"type": "PROVIDER_BALANCE_SHORT", "severity": "critical",
