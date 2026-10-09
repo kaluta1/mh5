@@ -302,7 +302,12 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
             return "PAID_BUT_NOT_POSTED"
         cs._audit(db, record_id=cashout_id, action="CASHOUT_PROVIDER_EVIDENCE", actor_id=None, old=None,
                   new={"provider_status": status, "provider_batch_id": batch_id,
-                       "transaction_hash": details.get("hash"), "withdrawal_id": details.get("withdrawal_id")})
+                       "transaction_hash": details.get("hash"), "withdrawal_id": details.get("withdrawal_id"),
+                       # Recorded for the books; not posted (see the network-fee accounting note in the runbook).
+                       "provider_fee": details.get("fee"), "provider_fee_paid_by": details.get("fee_paid_by"),
+                       "network_fee_estimate": (str(money(cashout.network_fee))
+                                                if cashout.network_fee is not None else None),
+                       "network_fee_policy": cashout.network_fee_policy})
         db.commit()
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:

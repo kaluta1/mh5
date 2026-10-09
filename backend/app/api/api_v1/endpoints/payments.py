@@ -2,7 +2,7 @@
 Payment API Endpoints — NOWPayments crypto checkout.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from app.services.nowpayments_service import (
     sync_deposit_with_provider,
 )
 from app.core.config import settings
+from app.core.rate_limit import _is_rate_limited
 from app.crud import crud_deposit
 from app.services.financial_integrity import (
     FinancialIntegrityError,
@@ -96,25 +97,39 @@ def _stored_payment_response(deposit: Deposit) -> PaymentResponse:
     )
 
 
+# Recipient confirmation in the purchase dialog. A signed-in member may check
+# a handful of names; nobody may walk the member list with it.
+VERIFY_USER_LIMIT, VERIFY_USER_WINDOW = 30, 600        # lookups per member per 10 minutes
+
+
 @router.get("/verify-user")
 async def verify_user_exists(
-    username_or_email: str,
+    username_or_email: str = Query(..., min_length=1, max_length=254),
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Check if a user exists by username or email."""
-    user = db.query(User).filter(
-        (User.username == username_or_email) | (User.email == username_or_email)
-    ).first()
+    """Confirm that the member a purchase is meant for exists.
 
-    if not user:
+    Returns ONLY what the purchase dialog shows to confirm the recipient: the
+    public username and display name. Never another member's email address or
+    internal id, and never an email-derived name."""
+    if _is_rate_limited(f"payments-verify-user:{current_user.id}", VERIFY_USER_LIMIT, VERIFY_USER_WINDOW):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Too many lookups. Please try again in a few minutes.")
+    wanted = username_or_email.strip()
+    if not wanted or any(ord(ch) < 32 for ch in wanted):
+        raise HTTPException(status_code=404, detail="User not found")
+    user = db.query(User).filter((User.username == wanted) | (User.email == wanted)).first()
+
+    if not user or not user.is_active or getattr(user, "is_deleted", False):
         raise HTTPException(status_code=404, detail="User not found")
 
+    is_self = user.id == current_user.id
+    # A member without a username is shown a neutral label, not a piece of their email address.
+    username = user.username or (user.email.split("@")[0] if is_self else "member")
     return {
-        "id": user.id,
-        "username": user.username or user.email.split("@")[0],
-        "email": user.email,
-        "display_name": user.full_name or user.username or user.email.split("@")[0],
+        "username": username,
+        "display_name": user.full_name or username,
     }
 
 
@@ -280,7 +295,15 @@ async def create_payment(
         raise HTTPException(status_code=500, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
 
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
-    deposit.external_payment_id = str(provider_payload.get("payment_id") or "")
+    provider_payment_id = str(provider_payload.get("payment_id") or "")
+    if (db.query(Deposit.id).filter(Deposit.external_payment_id == provider_payment_id,
+                                    Deposit.id != deposit_id).first()) is not None:
+        # One provider payment belongs to one deposit. Never attach it twice.
+        deposit.status = DepositStatus.FAILED
+        db.commit()
+        logger.error("NOWPayments returned a payment id that another deposit already holds (deposit %s)", deposit_id)
+        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE)
+    deposit.external_payment_id = provider_payment_id
     deposit.payment_address = provider_payload.get("pay_address")
     deposit.crypto_amount = (
         str(provider_payload.get("pay_amount"))

@@ -753,7 +753,10 @@ def _withdrawal_view(row: Any, batch_id: Optional[str] = None) -> Dict[str, Any]
             "batch_id": text("batch_withdrawal_id") or batch_id, "address": text("address"),
             "currency": (text("currency") or "").lower() or None, "amount": text("amount"),
             "hash": text("hash"), "unique_external_id": text("unique_external_id"),
-            "error": (text("error") or "")[:120] or None}
+            "error": (text("error") or "")[:120] or None,
+            # What the provider says it charged for THIS payout, when it says so
+            # (both are null until it does). Never an estimate.
+            "fee": text("fee"), "fee_paid_by": text("fee_paid_by")}
 
 
 def payout_details_sync(batch_id: str, credentials) -> Dict[str, Any]:

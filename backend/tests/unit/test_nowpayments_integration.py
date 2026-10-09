@@ -129,6 +129,9 @@ def provider(monkeypatch):
     stand_in.waits = []
     monkeypatch.setattr(nowpayments, "_wait_for_next_code", lambda: stand_in.waits.append(1))
     nowpayments._last_code["value"] = None
+    from app.api.api_v1.endpoints import payment_webhooks
+
+    payment_webhooks._bad_callbacks.clear()
     nowpayments.forget_payout_session()
     pc.invalidate_runtime()
     yield stand_in
@@ -730,7 +733,7 @@ def test_payout_status_reads_the_documented_answer_with_the_api_key(provider):
     details = nowpayments.payout_details_sync("5000000713", CREDENTIALS)
     assert details == {"status": "FINISHED", "withdrawal_id": "5000000000", "batch_id": "5000000713",
                        "address": WALLET, "currency": "usdtbsc", "amount": "5", "hash": "0xtransactionhash",
-                       "unique_external_id": "ref-abc", "error": None}
+                       "unique_external_id": "ref-abc", "error": None, "fee": None, "fee_paid_by": None}
     assert nowpayments.payout_status_sync("5000000713", CREDENTIALS) == "FINISHED"
     assert provider.paths() == ["GET /v1/payout/5000000713"] * 2                           # no login needed
     assert "authorization" not in provider.requests[0].headers

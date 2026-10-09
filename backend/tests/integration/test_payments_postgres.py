@@ -748,3 +748,93 @@ def test_a_payout_that_cannot_be_posted_leaves_no_partial_trace(pg, engine_on):
     with Session() as db:                                              # once the ledger is fixed it posts, once
         assert engine_service.reconcile_cashout(db, cashout_id, provider, now=NOW) == "COMPLETED"
         assert get_commission_balance(db, user_id).paid_lifetime == Decimal("5.00")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.1
+# ---------------------------------------------------------------------------
+
+def test_concurrent_workers_never_post_a_payout_to_an_inactive_account(pg, engine_on):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        commission(db, user, "5.00")
+        configure(db, crypto_auto_payout_enabled=True)
+        provider = FakeProvider()
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        user_id = user.id
+        cashout_id = db.query(AffiliateCashoutRequest.id).filter_by(user_id=user_id).scalar()
+    with engine.begin() as c:
+        c.execute(text("update chart_of_accounts set is_active = false where account_code = '1001'"))
+    provider.statuses["batch-1"] = "FINISHED"
+
+    def reconcile(_i):
+        with Session() as db:
+            return engine_service.reconcile_cashout(db, cashout_id, provider, now=NOW)
+
+    assert in_threads(4, reconcile) == ["PAID_BUT_NOT_POSTED"] * 4
+    with Session() as db:
+        balance = get_commission_balance(db, user_id)
+        assert db.get(AffiliateCashoutRequest, cashout_id).status == "processing"
+        assert (balance.reserved, balance.paid_lifetime) == (Decimal("5.00"), 0)
+        assert db.query(JournalEntry).count() == 0
+    with engine.begin() as c:
+        c.execute(text("update chart_of_accounts set is_active = true where account_code = '1001'"))
+    assert sorted(in_threads(4, reconcile)) == ["COMPLETED", "SKIPPED", "SKIPPED", "SKIPPED"]
+    with Session() as db:
+        assert db.query(JournalEntry).filter(JournalEntry.description == f"Affiliate Cashout #{cashout_id}").count() == 1
+
+
+# PROPOSAL, not part of the migration chain: a unique rule for the provider's
+# payment id. Only NOWPayments writes deposits.external_payment_id today and
+# the table has no provider column, so the rule is on the id alone; NULL and
+# the empty string (legacy rows that never reached a provider) are left out.
+# A second provider would need a provider column and (provider, id) instead.
+PROPOSED_UNIQUE_PAYMENT_ID = (
+    "CREATE UNIQUE INDEX uq_deposits_external_payment_id ON deposits (external_payment_id) "
+    "WHERE external_payment_id IS NOT NULL AND external_payment_id <> ''")
+DUPLICATE_PAYMENT_IDS = (
+    "select external_payment_id, count(*), array_agg(id order by id) from deposits "
+    "where external_payment_id is not null and external_payment_id <> '' "
+    "group by external_payment_id having count(*) > 1")
+
+
+def test_the_proposed_unique_payment_id_rule_on_representative_legacy_rows(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        buyer = _user(db, "buyer@t.com")
+        for tag, payment_id in (("stub1", None), ("stub2", None), ("empty1", ""), ("empty2", ""),
+                                ("np1", "5745459419"), ("np2", "6249365965"), ("old", "0xlegacy-reference"),
+                                ("dup1", "4000000001"), ("dup2", "4000000001")):
+            _deposit(db, buyer, "kyc", status=DepositStatus.PENDING, tag=tag, external_payment_id=payment_id)
+        db.commit()
+        buyer_id = buyer.id
+    with engine.connect() as c:
+        duplicates = [(r[0], r[1]) for r in c.execute(text(DUPLICATE_PAYMENT_IDS)).fetchall()]
+    assert duplicates == [("4000000001", 2)]                       # NULL and '' are not duplicates of each other
+    with pytest.raises(DBAPIError):                                # it cannot be created over a duplicate
+        with engine.begin() as c:
+            c.execute(text(PROPOSED_UNIQUE_PAYMENT_ID))
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from deposits")).scalar() == 9      # and nothing was removed
+    with engine.begin() as c:                                      # (the remediation is a human decision, simulated here)
+        c.execute(text("update deposits set external_payment_id = null where id = "
+                       "(select max(id) from deposits where external_payment_id = '4000000001')"))
+        c.execute(text(PROPOSED_UNIQUE_PAYMENT_ID))
+
+    def add(payment_id):
+        def build(db):
+            _deposit(db, db.get(User, buyer_id), "kyc", status=DepositStatus.PENDING,
+                     tag=uuid.uuid4().hex[:8], external_payment_id=payment_id)
+        return build
+
+    assert refused(Session, add("5745459419"))                     # a second deposit for the same provider payment
+    assert not refused(Session, add(None)) and not refused(Session, add(""))       # still any number of these
+    assert not refused(Session, add("7000000001"))
+
+    def race(_i):                                                  # two workers attaching the same new id
+        return refused(Session, add("8000000001"))
+
+    assert sorted(in_threads(4, race)) == [False, True, True, True]

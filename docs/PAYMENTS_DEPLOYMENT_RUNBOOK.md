@@ -237,3 +237,78 @@ Only with separate authorisation, on staging with sandbox credentials: one
 sandbox payment end to end (proves the IPN secret and signature), and one
 sandbox payout (proves login, second factor, status shape and the unique
 reference).
+
+## 11. Proposals awaiting the owner's approval (NOT implemented)
+
+### 11.1 Company-paid crypto network fee
+
+Today a completed crypto cashout posts one balanced entry:
+Dr 2001 commissions payable (gross) / Cr 1001 (gross less the MyHigh5 fee) /
+Cr 4005 (MyHigh5 fee, zero for crypto). When MyHigh5 pays the network fee
+(policy COMPANY_PAYS) the provider takes that fee from custody as well, and
+nothing records it: account 1001 is overstated by the fees paid.
+
+The chart of accounts has no suitable account. Existing expense accounts are
+5001 Commission Expense, 5002 KYC Provider Expense, 5003 Ad Revenue Share,
+5004 Leaders program expense and 7110 FX / Crypto Conversion Loss; none of
+them is a payment-processing cost.
+
+Proposed account (needs approval before it is created):
+
+| Code | Name | Type | Parent |
+|---|---|---|---|
+| 5005 | Crypto payout network fees (paid by MyHigh5) | EXPENSE | 5000 |
+
+Proposed posting, a second entry per completed cashout, only when the policy
+on the cashout is COMPANY_PAYS and the provider reported the fee it charged:
+
+    Dr 5005 network fee expense      (actual fee reported by the provider)
+        Cr 1001 custody / cash           (same amount)
+
+Rules: posted once per cashout (its own description, checked before posting);
+never from the estimate taken when the payout was created; nothing posted for
+a failed, rejected or unknown payout; when the provider reports no fee the
+cashout is listed for an administrator to record it by hand. With policy
+MEMBER_PAYS there is no expense: the member received less and 1001 already
+falls by the full gross.
+
+What is in place now: the fee and payer the provider reports for a finished
+payout are stored in the cashout's audit trail (`CASHOUT_PROVIDER_EVIDENCE`:
+`provider_fee`, `provider_fee_paid_by`, next to the estimate and the policy),
+so the expense can be posted for earlier payouts once the account exists.
+Not verified with the provider: whether it returns the fee on a finished
+payout, and in which unit.
+
+### 11.2 Unique provider payment id on `deposits`
+
+`deposits.external_payment_id` has no unique rule. Only NOWPayments writes it
+and the table has no provider column, so the proposed rule is on the id alone:
+
+```sql
+-- Read-only check first. Expect: no rows.
+SELECT external_payment_id, count(*), array_agg(id ORDER BY id)
+FROM deposits
+WHERE external_payment_id IS NOT NULL AND external_payment_id <> ''
+GROUP BY external_payment_id HAVING count(*) > 1;
+
+-- Shape of the legacy values (how many never reached a provider).
+SELECT count(*) FILTER (WHERE external_payment_id IS NULL)  AS null_ids,
+       count(*) FILTER (WHERE external_payment_id = '')     AS empty_ids,
+       count(*) FILTER (WHERE external_payment_id ~ '^[0-9]+$') AS numeric_ids,
+       count(*) FILTER (WHERE external_payment_id <> '' AND external_payment_id !~ '^[0-9]+$') AS other_ids
+FROM deposits;
+
+-- The rule (a later migration, only after the first query returns no rows).
+CREATE UNIQUE INDEX uq_deposits_external_payment_id ON deposits (external_payment_id)
+WHERE external_payment_id IS NOT NULL AND external_payment_id <> '';
+```
+
+NULL and empty values (legacy rows that never had a provider payment) are
+left out of the rule. If the check returns rows they are reconciled by hand;
+no row is deleted or rewritten by a migration. If a second payment provider
+is ever added, the table first needs a provider column and the rule becomes
+(provider, id).
+
+Until the rule exists the application refuses the two cases it would
+prevent: a new payment is never given an id another deposit holds, and a
+callback that matches more than one deposit by payment id credits neither.

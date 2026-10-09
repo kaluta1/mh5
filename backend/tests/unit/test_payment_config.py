@@ -79,6 +79,9 @@ def payment_env(monkeypatch):
                  "NOWPAYMENTS_PASSWORD", "NOWPAYMENTS_PAYOUT_TOTP_SECRET"):
         monkeypatch.setattr(settings, name, "")
     pc.invalidate_runtime()
+    from app.api.api_v1.endpoints import payment_webhooks
+
+    payment_webhooks._bad_callbacks.clear()
     yield
     pc.invalidate_runtime()
 

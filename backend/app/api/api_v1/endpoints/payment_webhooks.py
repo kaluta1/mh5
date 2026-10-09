@@ -3,10 +3,13 @@ Payment provider webhooks (NOWPayments IPN).
 """
 import json
 import logging
+import time
+from collections import defaultdict, deque
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.client_ip import client_ip
 from app.crud import crud_deposit
 from app.db.session import get_db
 from app.models.payment import Deposit
@@ -21,6 +24,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_IPN_BODY_BYTES = 64 * 1024
+
+# Abuse limit for callbacks that FAIL verification. A correctly signed
+# notification is never counted and never refused by it, whatever else came
+# from the same address, so a provider retry burst cannot be lost here. Once an
+# address has sent too many unsigned or wrongly signed requests, each further
+# rejected one is answered 429 without a log line or a database write (every
+# rejection otherwise costs a counter update); an unsigned one is not even
+# compared.
+BAD_CALLBACK_LIMIT, BAD_CALLBACK_WINDOW = 30, 60          # rejected callbacks per address per minute
+_MAX_TRACKED_ADDRESSES = 10_000
+_bad_callbacks: dict[str, deque] = defaultdict(deque)
+
+
+def _recent_bad_callbacks(address: str, now: float) -> int:
+    hits = _bad_callbacks.get(address)
+    if not hits:
+        return 0
+    while hits and hits[0] <= now - BAD_CALLBACK_WINDOW:
+        hits.popleft()
+    if not hits:
+        _bad_callbacks.pop(address, None)
+        return 0
+    return len(hits)
+
+
+def _note_bad_callback(address: str, now: float) -> None:
+    if len(_bad_callbacks) >= _MAX_TRACKED_ADDRESSES and address not in _bad_callbacks:
+        _bad_callbacks.pop(next(iter(_bad_callbacks)), None)
+    _bad_callbacks[address].append(now)
 
 
 def _count(db: Session, outcome: str, *, commit: bool = True) -> None:
@@ -45,28 +77,36 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     same idempotent path as the status poll, and a payout notification never
     pays or releases anything (the cashout engine asks the provider itself).
     """
+    sender, started = client_ip(request), time.monotonic()
+    # Over the limit, a callback is still VERIFIED (a correctly signed one is
+    # always processed); only the bookkeeping of yet another rejected one is
+    # skipped, and it is answered 429.
+    throttled = _recent_bad_callbacks(sender, started) >= BAD_CALLBACK_LIMIT
+
+    def reject(outcome: str, status_code: int, detail: str) -> HTTPException:
+        if throttled:
+            return HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many rejected callbacks")
+        _note_bad_callback(sender, started)
+        _count(db, outcome)
+        return HTTPException(status_code=status_code, detail=detail)
+
     raw = await request.body()
     if len(raw) > MAX_IPN_BODY_BYTES:
         # A provider notification is a few hundred bytes. Nothing larger is parsed.
-        _count(db, "INVALID_JSON")
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Payload too large")
+        raise reject("INVALID_JSON", status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Payload too large")
     try:
         body = json.loads(raw.decode("utf-8") or "{}")
-    except json.JSONDecodeError as exc:
-        _count(db, "INVALID_JSON")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
-    except (UnicodeDecodeError, RecursionError) as exc:
-        _count(db, "INVALID_JSON")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as exc:
+        raise reject("INVALID_JSON", status.HTTP_400_BAD_REQUEST, "Invalid JSON") from exc
     if not isinstance(body, dict):
-        _count(db, "INVALID_JSON")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON")
+        raise reject("INVALID_JSON", status.HTTP_400_BAD_REQUEST, "Invalid JSON")
 
     signature = request.headers.get("x-nowpayments-sig", "")
-    if not verify_ipn_signature(body, signature, secret=payment_config.ipn_secret(db) or "", raw=raw):
-        logger.warning("NOWPayments IPN rejected: invalid signature")
-        _count(db, "REJECTED_SIGNATURE")
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
+    secret = "" if throttled and not signature else (payment_config.ipn_secret(db) or "")
+    if not verify_ipn_signature(body, signature, secret=secret, raw=raw):
+        if not throttled:
+            logger.warning("NOWPayments IPN rejected: invalid signature")
+        raise reject("REJECTED_SIGNATURE", status.HTTP_403_FORBIDDEN, "Invalid signature")
 
     order_id = body.get("order_id")
     payment_id = str(body.get("payment_id") or "")
@@ -86,12 +126,22 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
             .first()
         )
     if not deposit and payment_id:
-        deposit = (
+        matches = (
             db.query(Deposit)
             .filter(Deposit.external_payment_id == payment_id)
             .with_for_update()
-            .first()
+            .limit(2)
+            .all()
         )
+        if len(matches) > 1:
+            # The column has no unique rule yet; a provider payment that more than
+            # one deposit claims is never credited to a guess.
+            db.rollback()
+            logger.error("NOWPayments IPN payment=%s matches more than one deposit; nothing applied", payment_id)
+            _count(db, "IDENTITY_REJECTED")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Provider payment matches more than one deposit")
+        deposit = matches[0] if matches else None
 
     if not deposit:
         logger.warning("NOWPayments IPN for unknown order=%s payment=%s", order_id, payment_id)

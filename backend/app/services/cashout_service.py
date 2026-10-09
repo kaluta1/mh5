@@ -566,11 +566,18 @@ def _post_journal(db: Session, cashout: AffiliateCashoutRequest, rows: List[Affi
     if db.query(JournalEntry.id).filter(JournalEntry.description == description).first():
         return
     needed = {cash_account, "2001", "2002", "4005"}
-    present = {code for (code,) in db.query(ChartOfAccounts.account_code)
-               .filter(ChartOfAccounts.account_code.in_(needed)).all()}
-    if needed - present:
+    accounts = dict(db.query(ChartOfAccounts.account_code, ChartOfAccounts.is_active)
+                    .filter(ChartOfAccounts.account_code.in_(needed)).all())
+    if needed - set(accounts):
         raise CashoutError("LEDGER_NOT_CONFIGURED",
-                           "Payout accounting is not configured; missing accounts: " + ", ".join(sorted(needed - present)))
+                           "Payout accounting is not configured; missing accounts: "
+                           + ", ".join(sorted(needed - set(accounts))))
+    # A NEW entry is never posted to an account that was switched off, and is
+    # never redirected to another one. Entries already posted are not touched.
+    inactive = sorted(code for code, active in accounts.items() if active is False)
+    if inactive:
+        raise CashoutError("LEDGER_ACCOUNT_INACTIVE",
+                           "Payout accounting cannot post to an inactive account: " + ", ".join(inactive))
     direct = sum((money(r.commission_amount) for r in rows if r.level == 1), Decimal("0.00"))
     indirect = sum((money(r.commission_amount) for r in rows if r.level != 1), Decimal("0.00"))
     lines: list[dict] = []

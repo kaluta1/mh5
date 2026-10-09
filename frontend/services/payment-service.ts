@@ -18,10 +18,9 @@ export interface PaymentRequest {
   recipients?: PaymentRecipient[]
 }
 
+/** What the server returns to confirm a recipient: public names only. */
 export interface VerifiedUser {
-  id: number
   username: string
-  email: string
   display_name: string
 }
 
