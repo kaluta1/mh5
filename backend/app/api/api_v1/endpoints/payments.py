@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _SYNCABLE_DEPOSIT_STATUSES = (DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID)
+PAYMENT_PROVIDER_UNAVAILABLE = "The payment provider could not process this request. Please try again in a few minutes."
 
 
 def _should_sync_deposit_with_provider(deposit: Deposit) -> bool:
@@ -269,13 +270,14 @@ async def create_payment(
         deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("NOWPayments create error: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # The provider's own answer stays in the server log; the member gets a fixed sentence.
+        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
     except Exception as exc:
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("Payment creation error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
 
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
     deposit.external_payment_id = str(provider_payload.get("payment_id") or "")
@@ -328,7 +330,8 @@ async def sync_payment(
         return payload
     except NowPaymentsError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("NOWPayments sync failed for deposit %s: %s", deposit_id, exc)
+        raise HTTPException(status_code=400, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
 
 
 @router.post("/check/{deposit_id}")

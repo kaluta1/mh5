@@ -20,6 +20,8 @@ from app.services import payment_config
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+MAX_IPN_BODY_BYTES = 64 * 1024
+
 
 def _count(db: Session, outcome: str, *, commit: bool = True) -> None:
     """Webhook health counter (Admin > Finance & Payments). Never raises and
@@ -44,6 +46,10 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     pays or releases anything (the cashout engine asks the provider itself).
     """
     raw = await request.body()
+    if len(raw) > MAX_IPN_BODY_BYTES:
+        # A provider notification is a few hundred bytes. Nothing larger is parsed.
+        _count(db, "INVALID_JSON")
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Payload too large")
     try:
         body = json.loads(raw.decode("utf-8") or "{}")
     except json.JSONDecodeError as exc:

@@ -1234,3 +1234,40 @@ def test_the_connection_test_is_bounded_per_administrator(client, db, monkeypatc
     assert answers == [200] * payment_settings.CONNECTION_TEST_LIMIT + [429, 429]
     assert len(runs) == payment_settings.CONNECTION_TEST_LIMIT
     rate_limit._buckets.clear()
+
+
+# ===========================================================================
+# 10. Phase 3 hardening
+# ===========================================================================
+
+def test_an_oversized_callback_is_refused_before_it_is_parsed(client, db, monkeypatch):
+    from app.api.api_v1.endpoints import payment_webhooks
+
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", IPN_SECRET)
+    huge = b'{"order_id":"' + b"a" * payment_webhooks.MAX_IPN_BODY_BYTES + b'"}'
+    answer = client.post(IPN_URL, content=huge, headers={"content-type": "application/json",
+                                                         "x-nowpayments-sig": sign(huge)})
+    assert answer.status_code == 413                                # even when correctly signed
+    assert pc.webhook_health(db)["last_7_days"]["INVALID_JSON"] == 1
+
+
+@pytest.mark.parametrize("answer", [
+    (400, {"status": False, "statusCode": 400, "code": "INVALID_REQUEST_PARAMS",
+           "message": "internal provider wording about account 12345"}),
+    (500, "internal provider wording about account 12345"),
+    httpx.ReadTimeout("internal provider wording about account 12345"),
+])
+def test_a_member_never_sees_the_providers_own_error_text(client, world, provider, monkeypatch, answer):
+    db = world
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-key")
+    pc.invalidate_runtime()
+    buyer = _user(db, "buyer-create@t.com")
+    db.commit()
+    provider.routes[("POST", "/v1/payment")] = answer
+    response = client.post("/api/v1/payments/create", headers=auth(buyer),
+                           json={"amount": 10, "currency": "usd", "product_code": "kyc"})
+    assert response.status_code in (500, 502)
+    assert "internal provider wording" not in response.text and "12345" not in response.text
+    assert "synthetic-payin-key" not in response.text
+    deposit = db.query(Deposit).filter(Deposit.user_id == buyer.id).one()
+    assert deposit.status == DepositStatus.FAILED and not deposit.external_payment_id      # nothing left pending
