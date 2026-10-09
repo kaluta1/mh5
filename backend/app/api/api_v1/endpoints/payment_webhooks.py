@@ -15,9 +15,21 @@ from app.services.nowpayments_service import (
     verify_ipn_signature,
 )
 from app.services.financial_integrity import FinancialIntegrityError
+from app.services import payment_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _count(db: Session, outcome: str, *, commit: bool = True) -> None:
+    """Webhook health counter (Admin > Finance & Payments). Never raises and
+    never changes what the callback answers."""
+    try:
+        payment_config.record_webhook(db, outcome)
+        if commit:
+            db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
 
 
 @router.post("/nowpayments")
@@ -30,11 +42,13 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     try:
         body = json.loads(raw.decode("utf-8") or "{}")
     except json.JSONDecodeError as exc:
+        _count(db, "INVALID_JSON")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
 
     signature = request.headers.get("x-nowpayments-sig", "")
-    if not verify_ipn_signature(body, signature):
+    if not verify_ipn_signature(body, signature, secret=payment_config.ipn_secret(db) or ""):
         logger.warning("NOWPayments IPN rejected: invalid signature")
+        _count(db, "REJECTED_SIGNATURE")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
 
     order_id = body.get("order_id")
@@ -58,6 +72,7 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
 
     if not deposit:
         logger.warning("NOWPayments IPN for unknown order=%s payment=%s", order_id, payment_id)
+        _count(db, "UNKNOWN_ORDER")
         return {"ok": True}
 
     try:
@@ -65,14 +80,17 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     except FinancialIntegrityError as exc:
         db.rollback()
         logger.error("NOWPayments IPN financial identity rejected for deposit %s", deposit.id)
+        _count(db, "IDENTITY_REJECTED")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not ok:
         db.rollback()
+        _count(db, "ERROR")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process payment notification",
         )
 
+    _count(db, "ACCEPTED", commit=False)
     db.commit()
     logger.info(
         "NOWPayments IPN processed deposit=%s status=%s payment_status=%s",

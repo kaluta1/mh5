@@ -8,7 +8,8 @@ Admin overrides, so a new event gets a sane default without any seed data.
 `trigger_implemented` says whether the application emits the event today.
 Registering an event does not make the application send it.
 
-Status by phase (53 events; no key has been added or renamed since EMAIL-1)
+Status by phase (54 events; the 53 keys of EMAIL-1 are unchanged, and the dual
+cashout added one: PAYOUT.WALLET_CONFIRMATION)
 ---------------------------------------------------------------------------
 EMAIL-1  foundation + the events that already existed (auth, guardian, admin
          KYC approve/reject, payment confirmed, invitation, admin, support).
@@ -46,6 +47,9 @@ EMAIL-5  provider delivery layer (app.services.email_webhooks,
          Resend dashboard for POST /api/v1/webhooks/resend with the events
          email.sent, email.delivered, email.delivery_delayed, email.bounced,
          email.complained, email.failed.
+CASHOUT  PAYOUT.WALLET_CONFIRMATION: the one-time link that confirms a new or
+         changed payout wallet (app.services.cashout_service). The other
+         PAYOUT.* events stay unwired until the payout policy is approved.
 Open backlog outside these phases: email branding / deliverability (logo in
 received mail, spam placement).
 """
@@ -134,6 +138,7 @@ class EmailEvent(str, Enum):
     PAYOUT_REQUESTED = "PAYOUT.REQUESTED"
     PAYOUT_COMPLETED = "PAYOUT.COMPLETED"
     PAYOUT_FAILED = "PAYOUT.FAILED"
+    PAYOUT_WALLET_CONFIRMATION = "PAYOUT.WALLET_CONFIRMATION"
     # ADMIN
     ADMIN_CONTENT_REPORT = "ADMIN.CONTENT_REPORT"
     ADMIN_CONTACT_MESSAGE = "ADMIN.CONTACT_MESSAGE"
@@ -246,6 +251,9 @@ _DEFINITIONS: List[EmailEventDefinition] = [
     _d(E.PAYOUT_REQUESTED, "Payout requested", _T, "Member", on=False, phase=_APPROVAL),
     _d(E.PAYOUT_COMPLETED, "Payout completed", _T, "Member", on=False, phase=_APPROVAL),
     _d(E.PAYOUT_FAILED, "Payout failed", _T, "Member", on=False, phase=_APPROVAL),
+    _d(E.PAYOUT_WALLET_CONFIRMATION, "Payout wallet confirmation", _S, "Member", live=True, critical=True,
+       warning="Members will not receive the link that confirms a new or changed payout wallet, so no "
+               "payout wallet can be set or changed while wallet email verification is required."),
     # ---- ADMIN ---------------------------------------------------------------
     _d(E.ADMIN_CONTENT_REPORT, "Content report", _O, "Admin recipients", live=True),
     _d(E.ADMIN_CONTACT_MESSAGE, "Contact form message", _O, "Support address", live=True),

@@ -506,8 +506,8 @@ def test_url_helper_allows_only_safe_schemes(url, ok):
 # 6. registry (re-validated)
 # ===========================================================================
 
-def test_registry_is_exactly_the_53_audited_events():
-    assert len(EMAIL_EVENTS) == 53 and "CONTEST.NOMINATION_PUBLISHED" in EMAIL_EVENTS
+def test_registry_is_exactly_the_53_audited_events_and_the_wallet_confirmation():
+    assert len(EMAIL_EVENTS) == 54 and "CONTEST.NOMINATION_PUBLISHED" in EMAIL_EVENTS
     for forbidden in ("CONTEST.NOMINATION_PENDING_REVIEW", "CONTEST.NOMINATION_SUBMITTED",
                       "CONTEST.PARTICIPATION_SUBMITTED", "KYC.PENDING_REVIEW", "AUTH.EMAIL_CHANGED",
                       "PAYOUT.APPROVED", "PAYOUT.REJECTED", "BILLING.INVOICE"):

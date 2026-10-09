@@ -51,6 +51,10 @@ from .verification import UserVerification
 from .auth_security import AuthToken, AuthRateLimit
 from .progression_safety import ProgressionSafetyHold
 from .interaction_safety import UserBlock
+# Finance & Payments configuration (dual cashout)
+from .payment_config import (  # noqa: F401
+    PaymentSettings, PaymentCredential, PaymentConfigAudit, PayoutWalletVerification, PaymentWebhookStat,
+)
 
 __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",

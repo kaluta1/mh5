@@ -223,10 +223,22 @@ class Settings(BaseModel):
     NOWPAYMENTS_EMAIL: str = os.getenv("NOWPAYMENTS_EMAIL", "")
     NOWPAYMENTS_PASSWORD: str = os.getenv("NOWPAYMENTS_PASSWORD", "")
     NOWPAYMENTS_PAYOUT_TOTP_SECRET: str = os.getenv("NOWPAYMENTS_PAYOUT_TOTP_SECRET", "")
+    # Dedicated secret protecting Admin-managed payment credentials stored in the
+    # database (Finance & Payments). Never stored in the database itself, and
+    # never replaced by another application secret: without it no credential
+    # can be stored or read. See app/services/payment_crypto.py
+    PAYMENT_SETTINGS_ENCRYPTION_KEY: str = os.getenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "")
 
     # ============================================
-    # Dual cashout (affiliate commissions). See app/services/cashout_service.py
+    # Dual cashout (affiliate commissions). See app/services/payment_config.py
     # ============================================
+    # Business settings (thresholds, fees, limits, wallet hold, switches) are
+    # managed in Admin > Finance & Payments and stored in the database. The
+    # values below marked "seed" are only the defaults used until the first
+    # change is saved there; CRYPTO_AUTO_PAYOUT_ENABLED and
+    # USD_CASHOUT_SETTLEMENT_ENABLED are SERVER master switches that the Admin
+    # Panel cannot override.
+    #
     # The automatic crypto payout engine. OFF unless explicitly set to "true":
     # while off, no payout is reserved and the provider is never called.
     CRYPTO_AUTO_PAYOUT_ENABLED: bool = os.getenv("CRYPTO_AUTO_PAYOUT_ENABLED", "false").lower() == "true"

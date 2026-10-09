@@ -26,8 +26,10 @@ from app.models.affiliate import (
     CommissionType,
     PayoutWalletChange,
 )
-from app.models.user import User
+from app.models.payment_config import PaymentSettings
+from app.models.user import Permission, Role, User
 from app.services import cashout_engine as engine
+from app.services import payment_config
 from app.services import cashout_service as cs
 from app.services import nowpayments_service as nowpayments
 from app.services.commission_distribution import process_payment_validation
@@ -94,10 +96,43 @@ def no_network(monkeypatch):
         monkeypatch.setattr(nowpayments, name, refuse)
 
 
+# Synthetic payout credentials (never sent anywhere: the provider is a fake).
+PAYOUT_ENV = {"NOWPAYMENTS_PAYOUT_API_KEY": "synthetic-payout-api-key", "NOWPAYMENTS_EMAIL": "payouts@example.com",
+              "NOWPAYMENTS_PASSWORD": "synthetic-password", "NOWPAYMENTS_PAYOUT_TOTP_SECRET": "JBSWY3DPEHPK3PXP"}
+
+
+def configure(db, **values):
+    """Write Finance & Payments settings directly (test set-up only)."""
+    row = db.query(PaymentSettings).filter(PaymentSettings.id == 1).first()
+    if row is None:
+        row = PaymentSettings(id=1, version=0, **payment_config.defaults())
+        db.add(row)
+    for name, value in values.items():
+        assert name in payment_config.FIELDS, name
+        setattr(row, name, value)
+    db.commit()
+
+
+def finance_role(db) -> Role:
+    """A role that explicitly holds both Finance & Payments permissions."""
+    role = db.query(Role).filter(Role.name == "finance_admin").first()
+    if role is None:
+        role = Role(name="finance_admin", permissions=[
+            Permission(name=name, category="admin")
+            for name in (payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS)])
+        db.add(role)
+        db.flush()
+    return role
+
+
 @pytest.fixture
-def engine_on(monkeypatch):
+def engine_on(monkeypatch, db):
+    """Server master switch on, payout credentials present, automatic payouts
+    switched on in Finance & Payments."""
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
-    monkeypatch.setattr(nowpayments, "payouts_configured", lambda: True)
+    for name, value in PAYOUT_ENV.items():
+        monkeypatch.setattr(settings, name, value)
+    configure(db, crypto_auto_payout_enabled=True)
 
 
 @pytest.fixture
@@ -116,6 +151,7 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=name.upper(),
                usdt_wallet_address=wallet, payout_currency="usdtbsc", cashout_method=method,
+               role_id=finance_role(db).id if admin else None,
                payout_wallet_verified_at=verified_at if wallet else None)
     db.add(row)
     db.commit()
@@ -188,7 +224,8 @@ def test_the_flag_alone_does_not_enable_the_engine_without_provider_credentials(
     commission(db, user, "5.00")
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)     # credentials still missing
     provider = FakeProvider()
-    assert engine.engine_enabled() is False and run(db, provider)["enabled"] is False
+    configure(db, crypto_auto_payout_enabled=True)
+    assert engine.engine_enabled(db) is False and run(db, provider)["enabled"] is False
     assert provider.created == [] and cashouts(db) == []
 
 
@@ -274,6 +311,7 @@ def test_wallet_change_needs_the_password_and_starts_a_hold(client, ledger, engi
     db = ledger
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "5.00")
+    configure(db, wallet_email_verification_required=False)            # the password-only rule
     body = {"usdt_wallet_address": OTHER_WALLET, "payout_currency": "usdtbsc"}
 
     for password in ("", "wrong-password"):
@@ -293,7 +331,7 @@ def test_wallet_change_needs_the_password_and_starts_a_hold(client, ledger, engi
     provider = FakeProvider()
     now = datetime.utcnow()
     assert run(db, provider, now=now)["members"] == {"WALLET_ON_HOLD": 1} and provider.created == []
-    after_hold = now + timedelta(hours=settings.PAYOUT_WALLET_HOLD_HOURS + 1)
+    after_hold = now + timedelta(hours=payment_config.load(db).wallet_hold_hours + 1)
     assert run(db, provider, now=after_hold)["members"] == {"SUBMITTED": 1}
     assert provider.created[0]["address"] == OTHER_WALLET
 
@@ -308,7 +346,7 @@ def test_wallet_changes_are_limited_and_refused_during_a_payout(ledger, engine_o
     assert held.value.code == "PAYOUT_IN_PROGRESS"
 
     other = member(db, "m2")
-    monkeypatch.setattr(settings, "PAYOUT_WALLET_MAX_CHANGES_PER_DAY", 2)
+    configure(db, wallet_max_changes_per_day=2, wallet_email_verification_required=False)
     for index in (1, 2):
         cs.change_payout_wallet(db, other, address="0x" + str(index) * 40, currency="usdtbsc", password=PASSWORD,
                                 now=NOW)
@@ -597,8 +635,11 @@ def test_usd_settlement_is_disabled_until_configured_then_posts_fee_and_payable(
     assert disabled.value.code == "USD_SETTLEMENT_DISABLED"
     assert cashouts(db, user)[0].status == "requested" and db.query(JournalEntry).count() == 0
 
-    monkeypatch.setattr(settings, "USD_CASHOUT_SETTLEMENT_ENABLED", True)
-    monkeypatch.setattr(settings, "USD_CASHOUT_SETTLEMENT_ACCOUNT", "1010")
+    monkeypatch.setattr(settings, "USD_CASHOUT_SETTLEMENT_ENABLED", True)         # server master switch
+    with pytest.raises(cs.CashoutError) as still_off:                             # the Admin switch is still off
+        cs.settle_usd_cashout(db, row, admin=admin, reference="wire-1", now=NOW)
+    assert still_off.value.code == "USD_SETTLEMENT_DISABLED"
+    configure(db, usd_settlement_enabled=True, usd_settlement_account="1010")
     with pytest.raises(cs.CashoutError):
         cs.settle_usd_cashout(db, row, admin=user, reference="wire-1", now=NOW)           # not an administrator
     cs.settle_usd_cashout(db, row, admin=admin, reference="wire-1", now=NOW)
@@ -666,8 +707,10 @@ def test_summary_reports_minimum_fee_destination_and_status_per_method(ledger):
     data = cs.summary(db, user, now=NOW)
     assert data["minimum"] == 1.0 and data["status"] == "BELOW_MINIMUM" and data["payable_amount"] == 0.7
     assert data["destination"] == {"type": "CRYPTO", "wallet": "0xaaaa...aaaa", "wallet_status": "VERIFIED",
-                                   "payout_currency": "usdtbsc",
-                                   "payable_from": (LONG_AGO + cs.wallet_hold()).isoformat()}
+                                   "payout_currency": "usdtbsc", "network": "USDT BSC (BEP20)",
+                                   "payable_from": (LONG_AGO + cs.wallet_hold(db)).isoformat(),
+                                   "hold_hours": 72, "email_verification_required": True,
+                                   "pending_wallet": None}
     assert data["fees"]["CRYPTO"]["platform_fee"] == 0.0 and data["crypto_payouts_active"] is False
     cs.set_cashout_method(db, user, "USD", now=NOW)
     db.refresh(user)

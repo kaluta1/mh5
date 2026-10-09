@@ -39,6 +39,12 @@ class UserWalletResponse(BaseModel):
     # MISSING / INVALID / UNVERIFIED / ON_HOLD / VERIFIED (cashout_service.wallet_state)
     wallet_status: Optional[str] = None
     payable_from: Optional[str] = None
+    # A change waiting for its email confirmation (masked), if any.
+    pending_wallet: Optional[dict] = None
+    # Set by a save: the change needs the emailed link / whether that email was queued.
+    confirmation_required: bool = False
+    confirmation_email_sent: Optional[bool] = None
+    hold_hours: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -62,6 +68,12 @@ class CashoutMethodUpdate(BaseModel):
 class UsdCashoutRequest(BaseModel):
     # Optional: USD Cashout pays the whole available balance; a different amount is refused.
     amount: Optional[Decimal] = Field(default=None, gt=0)
+    # Where the member wants to be paid (required when the administrator asks for it).
+    destination: Optional[str] = Field(default=None, max_length=500)
+
+
+class PayoutWalletConfirm(BaseModel):
+    token: str = Field(..., min_length=20, max_length=200)
 
 
 class CashoutCancel(BaseModel):

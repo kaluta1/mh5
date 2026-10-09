@@ -233,6 +233,29 @@ def _payment_confirmed(db, to, user_id, ctx, lang) -> Rendered:
                                               ctx.get("reference", ""), ctx.get("date", ""))
 
 
+def _payout_wallet_confirmation(db, to, user_id, ctx, lang) -> Rendered:
+    """Confirmation link of a payout wallet change (dual cashout). The link is
+    single-use, expires, is bound to the wallet and network named here, and is
+    accepted only from the signed-in account it was issued to. Its token rides
+    in the URL fragment, like the other one-time links."""
+    from urllib.parse import quote
+
+    _recipient_account(db, to, user_id)
+    token = str(ctx.get("link_credential") or "")
+    if not token:
+        raise RenderError("no_credential")
+    url = f"{public_site_base()}/payout-wallet/confirm#token={quote(token, safe='')}"
+    return _simple("en", "Confirm your payout wallet", [
+        f"A request was made to set the payout wallet of your MyHigh5 account to {ctx.get('wallet', '')} "
+        f"on {ctx.get('network', '')}.",
+        "If you made this request, sign in and confirm it with the button below. The link works once and "
+        f"expires in {int(ctx.get('minutes') or 60)} minutes.",
+        "After you confirm, payouts to this wallet start once a security hold has passed.",
+        "If you did not make this request, do not confirm it and change your account password now. Your "
+        "current payout wallet stays as it is.",
+    ], button_text="Confirm payout wallet", button_url=url, subject="Confirm your MyHigh5 payout wallet")
+
+
 def _invitation(db, to, user_id, ctx, lang) -> Rendered:
     code = ctx.get("referral_code", "")
     from urllib.parse import quote
@@ -304,6 +327,7 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.CONTEST_CREATIVE_UNAVAILABLE.value: _entry_email("creative_unavailable", _link_dead),
     EmailEvent.BILLING_PAYMENT_CONFIRMED.value: _payment_confirmed,
     EmailEvent.AFFILIATE_INVITATION.value: _invitation,
+    EmailEvent.PAYOUT_WALLET_CONFIRMATION.value: _payout_wallet_confirmation,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,
     EmailEvent.ADMIN_CONTACT_MESSAGE.value: _contact_message,
     EmailEvent.SUPPORT_CONTACT_CONFIRMATION.value: _contact_confirmation,

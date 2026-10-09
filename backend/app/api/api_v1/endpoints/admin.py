@@ -4927,6 +4927,9 @@ def admin_retry_affiliate_payouts(
     engine is off. Single commissions are no longer paid one by one.
     """
     check_admin(current_user)
-    from app.services import cashout_engine
+    from app.services import cashout_engine, payment_config
 
+    if not payment_config.has_permission(current_user, payment_config.PERMISSION_PROCESS):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"The {payment_config.PERMISSION_PROCESS} permission is required.")
     return cashout_engine.run_cycle(db)

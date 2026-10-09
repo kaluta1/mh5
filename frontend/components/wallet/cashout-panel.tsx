@@ -14,8 +14,11 @@ import {
   cashoutStatusText,
   formatDate,
   formatUsd,
+  methodAvailable,
   methodLabel,
+  needsAttention,
   recordStatusLabel,
+  walletStatusLabel,
   type CashoutMethod,
   type CashoutRecord,
   type CashoutSummary,
@@ -152,8 +155,10 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
               icon: Coins,
               lines: [
                 `Minimum ${formatUsd(summary.minimums.CRYPTO)}`,
-                'Paid automatically to your USDT BSC wallet',
-                'No MyHigh5 fee',
+                `Paid automatically to your ${summary.destination.network ?? 'USDT BSC'} wallet`,
+                summary.fees.CRYPTO.network_fee_policy === 'MEMBER_PAYS'
+                  ? 'No MyHigh5 fee; the network fee is deducted'
+                  : 'No MyHigh5 fee',
               ],
             },
             {
@@ -164,12 +169,13 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
           ]
         ).map(({ key, icon: Icon, lines }) => {
           const selected = method === key
+          const offered = methodAvailable(summary, key)
           return (
             <button
               key={key}
               type="button"
               aria-pressed={selected}
-              disabled={saving !== null}
+              disabled={saving !== null || (!offered && !selected)}
               onClick={() => void chooseMethod(key)}
               className={`rounded-xl border-2 p-4 text-left transition-colors ${
                 selected
@@ -187,6 +193,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                 {lines.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
+                {!offered && <li className="font-medium text-amber-700 dark:text-amber-300">Not available at the moment</li>}
               </ul>
             </button>
           )
@@ -244,6 +251,34 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                   </Link>
                 </dd>
               </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-gray-500 dark:text-gray-400">Network</dt>
+                <dd className="text-right font-medium text-gray-900 dark:text-white">
+                  {summary.destination.network ?? summary.destination.payout_currency.toUpperCase()}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-gray-500 dark:text-gray-400">Wallet verification</dt>
+                <dd className="text-right font-medium text-gray-900 dark:text-white" data-testid="wallet-verification">
+                  {walletStatusLabel(summary.destination.wallet_status)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-gray-500 dark:text-gray-400">Security hold</dt>
+                <dd className="text-right font-medium text-gray-900 dark:text-white" data-testid="wallet-hold">
+                  {summary.destination.wallet_status === 'ON_HOLD'
+                    ? `Payouts start on ${formatDate(summary.destination.payable_from)}`
+                    : summary.destination.wallet_status === 'VERIFIED'
+                      ? 'Completed'
+                      : `${summary.destination.hold_hours ?? 72} hours after the wallet is confirmed`}
+                </dd>
+              </div>
+              {summary.destination.pending_wallet && (
+                <div className="sm:col-span-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+                  A change to <span className="font-mono">{summary.destination.pending_wallet.wallet}</span> is waiting
+                  for the confirmation link we sent to your email address.
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -283,6 +318,12 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
 
       <div>
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Cashout history</h3>
+        {history.some(needsAttention) && (
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300" data-testid="history-attention">
+            {history.filter(needsAttention).length} cashout(s) were not paid or are still being verified. Nothing is
+            lost: an amount that was not paid is back in your available balance.
+          </p>
+        )}
         {history.length === 0 ? (
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">No cashouts yet.</p>
         ) : (
@@ -305,14 +346,19 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                     <td className="py-2 pr-3 text-gray-700 dark:text-gray-200">{formatDate(row.requested_at)}</td>
                     <td className="py-2 pr-3 text-gray-700 dark:text-gray-200">{methodLabel(row.method)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{formatUsd(row.gross_amount)}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{formatUsd(row.fee)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {formatUsd(row.fee)}
+                      {row.network_fee_policy === 'MEMBER_PAYS' && row.network_fee ? (
+                        <span className="block text-xs text-gray-500">+ {formatUsd(row.network_fee)} network</span>
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{formatUsd(row.net_amount)}</td>
                     <td className="py-2 pr-3 text-gray-700 dark:text-gray-200">
                       {recordStatusLabel(row.status)}
                       {row.reference ? <span className="block font-mono text-xs text-gray-500">{row.reference}</span> : null}
                     </td>
                     <td className="py-2 text-right">
-                      {canCancel(row) && (
+                      {canCancel(row, summary) && (
                         <Button
                           variant="outline"
                           size="sm"

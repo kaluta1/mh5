@@ -1187,7 +1187,7 @@ def test_registry_keys_are_unchanged_and_welcome_is_live():
     auth_keys = sorted(k for k in EMAIL_EVENTS if k.startswith("AUTH."))
     assert auth_keys == ["AUTH.ACCOUNT_RESTORED", "AUTH.ACCOUNT_SUSPENDED", "AUTH.EMAIL_VERIFICATION",
                          "AUTH.PASSWORD_CHANGED", "AUTH.PASSWORD_RESET", "AUTH.WELCOME"]
-    assert len(EMAIL_EVENTS) == 53
+    assert len(EMAIL_EVENTS) == 54                  # 53 of EMAIL-1 + PAYOUT.WALLET_CONFIRMATION (dual cashout)
     live = {k for k in auth_keys if EMAIL_EVENTS[k].trigger_implemented}
     assert live == {"AUTH.EMAIL_VERIFICATION", "AUTH.WELCOME", "AUTH.PASSWORD_RESET", "AUTH.PASSWORD_CHANGED"}
     for key in ("AUTH.EMAIL_VERIFICATION", "AUTH.PASSWORD_RESET", "AUTH.PASSWORD_CHANGED"):

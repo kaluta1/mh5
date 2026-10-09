@@ -4,8 +4,11 @@ import {
   canCancel,
   canRequestUsd,
   cashoutStatusText,
+  methodAvailable,
   methodLabel,
+  needsAttention,
   recordStatusLabel,
+  walletStatusLabel,
   type CashoutRecord,
   type CashoutSummary,
 } from './cashout'
@@ -71,6 +74,32 @@ describe('cashout status wording', () => {
   })
 })
 
+describe('payout wallet wording', () => {
+  it('explains the email confirmation and a method the administrator switched off', () => {
+    expect(cashoutStatusText(summary({ status: 'WALLET_CONFIRMATION_PENDING' }))).toContain('confirmation link')
+    const unavailable = cashoutStatusText(summary({ status: 'METHOD_UNAVAILABLE' }))
+    expect(unavailable).toContain('not available')
+    expect(unavailable).toContain('kept in full')
+  })
+
+  it('names every wallet state without calling an unconfirmed wallet verified', () => {
+    expect(walletStatusLabel('VERIFIED')).toBe('Verified')
+    expect(walletStatusLabel('ON_HOLD')).toContain('security hold')
+    expect(walletStatusLabel('UNVERIFIED')).toBe('Not confirmed')
+    expect(walletStatusLabel('MISSING')).toBe('Not set')
+  })
+
+  it('treats a method as offered unless the server says otherwise', () => {
+    expect(methodAvailable(summary(), 'CRYPTO')).toBe(true)                    // older API answer without `methods`
+    const methods = {
+      CRYPTO: { available: false },
+      USD: { available: true, destination_required: false, destination_note: null, cancellation_allowed: true },
+    }
+    expect(methodAvailable(summary({ methods }), 'CRYPTO')).toBe(false)
+    expect(methodAvailable(summary({ methods }), 'USD')).toBe(true)
+  })
+})
+
 describe('cashout actions', () => {
   it('offers a USD request only when the server says it is ready', () => {
     expect(canRequestUsd(summary({ cashout_method: 'USD', status: 'READY_TO_REQUEST' }))).toBe(true)
@@ -84,6 +113,23 @@ describe('cashout actions', () => {
     expect(canCancel(record({ status: 'completed' }))).toBe(false)
     expect(canCancel(record({ method: 'CRYPTO', status: 'processing' }))).toBe(false)
     expect(canCancel(record({ method: 'CRYPTO', status: 'requested' }))).toBe(false)
+  })
+
+  it('respects the administrator rule on member cancellation', () => {
+    const methods = {
+      CRYPTO: { available: true },
+      USD: { available: true, destination_required: false, destination_note: null, cancellation_allowed: false },
+    }
+    expect(canCancel(record(), summary({ methods }))).toBe(false)
+    methods.USD.cancellation_allowed = true
+    expect(canCancel(record(), summary({ methods }))).toBe(true)
+  })
+
+  it('flags the records that were not paid or are still being verified', () => {
+    expect(needsAttention(record({ status: 'failed' }))).toBe(true)
+    expect(needsAttention(record({ status: 'unknown' }))).toBe(true)
+    expect(needsAttention(record({ status: 'completed' }))).toBe(false)
+    expect(needsAttention(record({ status: 'requested' }))).toBe(false)
   })
 
   it('says where the money is for every record state', () => {

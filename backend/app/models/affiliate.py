@@ -171,6 +171,12 @@ class AffiliateCashoutRequest(Base):
     reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     settlement_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Crypto: the provider's network fee estimate when the payout was sent, and
+    # who bears it (COMPANY_PAYS / MEMBER_PAYS). `fee` stays the MyHigh5 fee.
+    network_fee: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    network_fee_policy: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # USD: the member's payout destination details, AES-256-GCM ciphertext only.
+    destination_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
 
@@ -187,6 +193,8 @@ class PayoutWalletChange(Base):
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     payable_from: Mapped[datetime] = mapped_column(DateTime, nullable=False)   # end of the security hold
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    # How the member proved the change: EMAIL (confirmation link) or PASSWORD.
+    verification_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
 
 class ReferralLink(Base):

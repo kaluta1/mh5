@@ -103,7 +103,7 @@ SENSITIVE = ("Jane", "Doe", "1990-01-01", "P1234567", "document number", "passpo
 # ===========================================================================
 
 def test_registry_is_unchanged_and_only_the_audited_events_are_wired():
-    assert len(EMAIL_EVENTS) == 53
+    assert len(EMAIL_EVENTS) == 54                  # 53 of EMAIL-1 + PAYOUT.WALLET_CONFIRMATION (dual cashout)
     wired_now = {k for k, d in EMAIL_EVENTS.items() if d.trigger_implemented and (k.startswith("KYC.") or k.startswith("CONTEST."))}
     assert wired_now == {
         "KYC.APPROVED", "KYC.REJECTED", "KYC.ACTION_REQUIRED",
@@ -121,7 +121,8 @@ def test_registry_is_unchanged_and_only_the_audited_events_are_wired():
     # EMAIL-4 / EMAIL-5 untouched: no billing, affiliate or payout event became live here
     live_money = {k for k, d in EMAIL_EVENTS.items() if d.trigger_implemented
                   and k.split(".")[0] in ("BILLING", "AFFILIATE", "PAYOUT")}
-    assert live_money == {"BILLING.PAYMENT_CONFIRMED", "AFFILIATE.INVITATION"}        # as before EMAIL-3
+    # as before EMAIL-3, plus the payout wallet confirmation link added by the dual cashout
+    assert live_money == {"BILLING.PAYMENT_CONFIRMED", "AFFILIATE.INVITATION", "PAYOUT.WALLET_CONFIRMATION"}
 
 
 def test_business_modules_never_talk_to_a_provider():

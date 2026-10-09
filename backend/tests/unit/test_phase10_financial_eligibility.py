@@ -422,6 +422,14 @@ def test_W_AH_admin_retry_and_wallet_autopay_do_not_bypass(client, db, provider)
     admin = role_user(db, "admin")
     admin.is_admin = True
     db.commit()
+    # An administrator without the explicit process_cashouts permission cannot run a payout cycle...
+    r = client.post(f"/api/v1/admin/affiliate/retry-payouts?user_id={m.id}", headers=auth(admin))
+    assert r.status_code == 403
+    # ... and one who holds it still pays nothing to a member on a financial hold.
+    from app.models.user import Permission
+
+    admin.role.permissions.append(Permission(name="process_cashouts", category="admin"))
+    db.commit()
     r = client.post(f"/api/v1/admin/affiliate/retry-payouts?user_id={m.id}", headers=auth(admin))
     assert r.status_code == 200 and "SUBMITTED" not in r.json()["members"]
     # Saving a wallet never pays anything (and needs the member's password).

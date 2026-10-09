@@ -62,9 +62,13 @@ def api_base() -> str:
 
 
 def _headers() -> Dict[str, str]:
-    key = (settings.NOWPAYMENTS_API_KEY or "").strip()
+    # The pay-in key comes from the ONE source selected in Finance & Payments
+    # (the environment unless an administrator switched it to the database).
+    from app.services import payment_config
+
+    key = (payment_config.payin_runtime().api_key or "").strip()
     if not key:
-        raise NowPaymentsError("NOWPAYMENTS_API_KEY is not configured")
+        raise NowPaymentsError("The NOWPayments pay-in API key is not configured")
     return {"x-api-key": key, "Content-Type": "application/json"}
 
 
@@ -173,8 +177,10 @@ def resolve_deposit_status_from_provider(deposit: Deposit, payload: Dict[str, An
     return mapped
 
 
-def verify_ipn_signature(body: Dict[str, Any], signature: str) -> bool:
-    secret = (settings.NOWPAYMENTS_IPN_SECRET or "").strip()
+def verify_ipn_signature(body: Dict[str, Any], signature: str, *, secret: Optional[str] = None) -> bool:
+    """HMAC-SHA512 over the sorted JSON body. `secret` is the IPN secret in
+    force (payment_config.ipn_secret); None means the environment secret."""
+    secret = (settings.NOWPAYMENTS_IPN_SECRET or "").strip() if secret is None else secret.strip()
     if not secret or not signature:
         return False
     payload = json.dumps(body, sort_keys=True, separators=(",", ":"))
@@ -266,6 +272,10 @@ async def create_payment(
     success_url: Optional[str] = None,
     cancel_url: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from app.services import payment_config
+
+    if not payment_config.payin_runtime().provider_enabled:
+        raise NowPaymentsError("Crypto payments are switched off (Finance & Payments > Payment Providers)")
     payload: Dict[str, Any] = {
         "price_amount": float(money(price_amount)),
         "price_currency": price_currency.lower(),
@@ -592,44 +602,100 @@ async def send_single_payout(
 # Payout engine helpers (dual cashout). Read calls plus one create call that
 # reports WHICH step failed, so the caller can tell "not accepted" from
 # "outcome unknown". Nothing here runs unless the engine is enabled.
+#
+# Every helper takes the payout credentials resolved by payment_config for
+# that run (`credentials.get(name)`). They are never read from the pay-in key:
+# a payout needs its own API key, the account login and the authenticator
+# secret. The login only yields a short-lived session token, kept in memory
+# for under five minutes; the second factor is a fresh one-time code computed
+# for each confirmation and is never stored, logged or reused.
 # ---------------------------------------------------------------------------
 
-def _payout_get_sync(path: str, *, jwt: bool = False) -> Any:
-    headers = _payout_headers_sync() if jwt else {"x-api-key": payout_api_key()}
-    with httpx.Client(timeout=STATUS_HTTP_TIMEOUT) as client:
-        resp = client.get(f"{_payout_base()}/{path}", headers=headers)
+_engine_session: dict[str, Any] = {"token": None, "expires_at": 0.0, "owner": None}
+
+
+def forget_payout_session() -> None:
+    """Drop every cached provider session (called when credentials change)."""
+    _engine_session.update(token=None, expires_at=0.0, owner=None)
+    _jwt_cache.update(token=None, expires_at=0.0)
+
+
+def _require(credentials, name: str) -> str:
+    value = credentials.get(name) if credentials is not None else None
+    if not value:
+        raise NowPaymentsError(f"Payout credential {name} is not configured")
+    return value
+
+
+def _engine_token_sync(credentials) -> str:
+    email, password = _require(credentials, "PAYOUT_EMAIL"), _require(credentials, "PAYOUT_PASSWORD")
+    owner = hashlib.sha256(f"{_payout_base()}|{email}|{password}".encode("utf-8")).hexdigest()
+    if (_engine_session["token"] and _engine_session["owner"] == owner
+            and time.time() < float(_engine_session["expires_at"] or 0)):
+        return str(_engine_session["token"])
+    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
+        resp = client.post(f"{_payout_base()}/auth", json={"email": email, "password": password})
     if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments GET /{path.split('?')[0]} -> {resp.status_code}: {resp.text[:200]}",
+        raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}", status_code=resp.status_code)
+    token = resp.json().get("token")
+    if not token:
+        raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
+    _engine_session.update(token=token, expires_at=time.time() + 4.5 * 60, owner=owner)
+    return str(token)
+
+
+def _engine_headers(credentials, *, jwt: bool) -> Dict[str, str]:
+    headers = {"x-api-key": _require(credentials, "PAYOUT_API_KEY"), "Content-Type": "application/json"}
+    if jwt:
+        headers["Authorization"] = f"Bearer {_engine_token_sync(credentials)}"
+    return headers
+
+
+def _payout_get_sync(path: str, credentials, *, jwt: bool = False) -> Any:
+    with httpx.Client(timeout=STATUS_HTTP_TIMEOUT) as client:
+        resp = client.get(f"{_payout_base()}/{path}", headers=_engine_headers(credentials, jwt=jwt))
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments GET /{path.split('?')[0]} -> {resp.status_code}",
                                status_code=resp.status_code)
     return resp.json()
 
 
-def custody_balance_sync(currency: str) -> Decimal:
+def custody_balance_sync(currency: str, credentials) -> Decimal:
     """Spendable balance the provider holds for this account in one currency."""
-    data = _payout_get_sync("balance")
+    data = _payout_get_sync("balance", credentials)
     entry = data.get(normalize_pay_currency(currency) or currency) if isinstance(data, dict) else None
     return Decimal(str((entry or {}).get("amount") or 0))
 
 
-def payout_fee_estimate_sync(currency: str, amount: Decimal) -> Decimal:
-    data = _payout_get_sync(f"payout/fee?currency={normalize_pay_currency(currency)}&amount={amount}")
+def payout_fee_estimate_sync(currency: str, amount: Decimal, credentials) -> Decimal:
+    data = _payout_get_sync(f"payout/fee?currency={normalize_pay_currency(currency)}&amount={amount}", credentials)
     return Decimal(str(data.get("fee") or 0))
 
 
-def payout_min_amount_sync(currency: str) -> Decimal:
-    data = _payout_get_sync(f"payout-withdrawal/min-amount/{normalize_pay_currency(currency)}")
+def payout_min_amount_sync(currency: str, credentials) -> Decimal:
+    data = _payout_get_sync(f"payout-withdrawal/min-amount/{normalize_pay_currency(currency)}", credentials)
     return Decimal(str(data.get("result") or data.get("min_amount") or 0))
 
 
-def payout_status_sync(batch_id: str) -> str:
+def payout_status_sync(batch_id: str, credentials) -> str:
     """Status of the (single) withdrawal of one payout batch, upper case."""
-    data = _payout_get_sync(f"payout/{batch_id}", jwt=True)
+    data = _payout_get_sync(f"payout/{batch_id}", credentials, jwt=True)
     rows = data if isinstance(data, list) else (data.get("withdrawals") or [data])
     return str((rows[0] or {}).get("status") or "").upper() if rows else ""
 
 
-def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency: str,
-                              external_id: str) -> Dict[str, Any]:
+def _confirm_payout_sync(batch_id: str, credentials) -> None:
+    code = pyotp.TOTP(_require(credentials, "PAYOUT_TOTP_SECRET")).now()
+    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
+        resp = client.post(f"{_payout_base()}/payout/{batch_id}/verify",
+                           headers=_engine_headers(credentials, jwt=True), json={"verification_code": code})
+    if resp.status_code >= 400:
+        raise NowPaymentsError(f"NowPayments POST /payout/verify -> {resp.status_code}",
+                               status_code=resp.status_code)
+
+
+def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency: str, external_id: str,
+                              credentials) -> Dict[str, Any]:
     """Create ONE withdrawal, then confirm it with the second factor.
 
     Returns {"batch_id", "status", "verified"}. Raises NowPaymentsError with a
@@ -640,12 +706,12 @@ def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency:
     pay_currency = normalize_pay_currency(currency) or "usdtbsc"
     withdrawal = {"address": wallet_address, "amount": float(money(amount)), "currency": pay_currency,
                   "unique_external_id": external_id}
+    _require(credentials, "PAYOUT_TOTP_SECRET")          # refuse before anything is created
+    headers = _engine_headers(credentials, jwt=True)
     with httpx.Client(timeout=PAYOUT_HTTP_TIMEOUT) as client:
-        resp = client.post(f"{_payout_base()}/payout", headers=_payout_headers_sync(),
-                           json={"withdrawals": [withdrawal]})
+        resp = client.post(f"{_payout_base()}/payout", headers=headers, json={"withdrawals": [withdrawal]})
     if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:200]}",
-                               status_code=resp.status_code)
+        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}", status_code=resp.status_code)
     created = resp.json()
     batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
     if not batch_id:
@@ -653,8 +719,8 @@ def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency:
     rows = created.get("withdrawals") or []
     status = str((rows[0] or {}).get("status") or "").upper() if rows else ""
     try:
-        verify_payout_sync(batch_id)
+        _confirm_payout_sync(batch_id, credentials)
     except Exception:  # noqa: BLE001 - created but not confirmed: the caller reconciles
-        logger.exception("NOWPayments payout %s created but its confirmation failed", batch_id)
+        logger.error("NOWPayments payout %s created but its confirmation failed", batch_id)
         return {"batch_id": batch_id, "status": status, "verified": False}
     return {"batch_id": batch_id, "status": status, "verified": True}

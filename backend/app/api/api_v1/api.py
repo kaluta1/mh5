@@ -62,6 +62,17 @@ api_router.include_router(sponsor_annualads.sso_router, prefix="/sponsor-embed",
 api_router.include_router(wallet.router, prefix="/wallet", tags=["Portefeuille"])
 from app.api.api_v1.endpoints import cashouts as cashout_admin_endpoints  # noqa: E402
 api_router.include_router(cashout_admin_endpoints.admin_router, prefix="/admin/cashouts", tags=["Admin - Cashouts"])
+from app.api.api_v1.endpoints import payment_settings as payment_settings_endpoints  # noqa: E402
+
+# Finance & Payments: reads need an administrator; every change additionally
+# needs the explicit manage_payment_settings permission and the administrator's
+# current password (checked per route).
+api_router.include_router(
+    payment_settings_endpoints.router,
+    prefix="/admin/finance",
+    tags=["Admin - Finance & Payments"],
+    dependencies=[Depends(admin.require_admin)],
+)
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])
 api_router.include_router(social.router, prefix="/social", tags=["Service Social"])
 # Groups router routes already start with /groups/..., so no extra prefix is needed.

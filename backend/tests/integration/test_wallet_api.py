@@ -30,13 +30,17 @@ def test_update_and_get_wallet(client, auth_headers, test_user_data):
     patch = client.patch("/api/v1/users/me/wallet", json=payload, headers=auth_headers)
     assert patch.status_code == 200, patch.text
     body = patch.json()
-    assert body["usdt_wallet_address"] == VALID_BEP20
-    assert body["wallet_configured"] is True
+    # The password alone records a pending change: the wallet takes effect only
+    # when the one-time link sent to the account's email address is confirmed.
+    assert body["confirmation_required"] is True
+    assert body["usdt_wallet_address"] is None and body["wallet_configured"] is False
     assert body["payout_currency"] == "usdtbsc"
+    assert body["pending_wallet"]["wallet"] == f"{VALID_BEP20[:6]}...{VALID_BEP20[-4:]}"
 
     get_resp = client.get("/api/v1/users/me/wallet", headers=auth_headers)
     assert get_resp.status_code == 200
-    assert get_resp.json()["wallet_configured"] is True
+    assert get_resp.json()["wallet_configured"] is False
+    assert get_resp.json()["pending_wallet"]["payout_currency"] == "usdtbsc"
 
 
 def test_update_wallet_rejects_invalid_address(client, auth_headers):

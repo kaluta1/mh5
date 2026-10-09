@@ -305,7 +305,7 @@ def test_links_from_before_email2_are_dead_and_harmless(client, db, email_outbox
 # ===========================================================================
 
 def test_email1_registry_is_unchanged():
-    assert len(EMAIL_EVENTS) == 53
+    assert len(EMAIL_EVENTS) == 54                  # 53 of EMAIL-1 + PAYOUT.WALLET_CONFIRMATION (dual cashout)
     assert EMAIL_EVENTS["AUTH.EMAIL_VERIFICATION"].trigger_implemented
     assert EMAIL_EVENTS["AUTH.WELCOME"].trigger_implemented
     for key in ("AUTH.ACCOUNT_SUSPENDED", "AUTH.ACCOUNT_RESTORED"):         # deliberately not wired in this task

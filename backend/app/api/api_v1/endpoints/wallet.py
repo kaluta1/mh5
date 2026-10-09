@@ -3,7 +3,7 @@ Wallet API Endpoints
 """
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, case
 from typing import List, Optional
@@ -16,6 +16,7 @@ from app.models.payment import Deposit, DepositStatus, ProductType
 from app.schemas.wallet import (
     CashoutCancel,
     CashoutMethodUpdate,
+    PayoutWalletConfirm,
     UsdCashoutRequest,
     WithdrawPreviewResponse,
     WithdrawRequest,
@@ -23,8 +24,6 @@ from app.schemas.wallet import (
 )
 
 router = APIRouter()
-
-MIN_WITHDRAWAL = Decimal("100")
 
 
 @router.get("/balance")
@@ -335,19 +334,23 @@ def preview_withdrawal(
 
 
 def _cashout_http_error(exc) -> HTTPException:
-    codes = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "INVALID_METHOD": status.HTTP_422_UNPROCESSABLE_ENTITY,
-             "INVALID_OUTCOME": status.HTTP_422_UNPROCESSABLE_ENTITY,
-             "REFERENCE_REQUIRED": status.HTTP_422_UNPROCESSABLE_ENTITY}
+    unprocessable = status.HTTP_422_UNPROCESSABLE_ENTITY
+    codes = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "INVALID_METHOD": unprocessable,
+             "INVALID_OUTCOME": unprocessable, "REFERENCE_REQUIRED": unprocessable,
+             "DESTINATION_REQUIRED": unprocessable, "DESTINATION_TOO_LONG": unprocessable,
+             "LINK_INVALID": status.HTTP_400_BAD_REQUEST}
     return HTTPException(status_code=codes.get(exc.code, status.HTTP_409_CONFLICT),
                          detail={"code": exc.code, "message": str(exc)})
 
 
-def _request_usd(db: Session, user: User, amount, idempotency_key: Optional[str]):
+def _request_usd(db: Session, user: User, amount, idempotency_key: Optional[str],
+                 destination: Optional[str] = None):
     from app.services import cashout_service
     from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 
     try:
-        return cashout_service.request_usd_cashout(db, user, idempotency_key=idempotency_key, amount=amount)
+        return cashout_service.request_usd_cashout(db, user, idempotency_key=idempotency_key, amount=amount,
+                                                   destination=destination)
     except FinancialEligibilityHold as exc:
         # Phase 10: generic member-facing body; balances and commissions untouched.
         raise http_error(exc) from None
@@ -366,9 +369,9 @@ def request_withdrawal(
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """
-    USD Cashout request (kept at its original address). Min $100; fee 1%
-    (min $20, max $1000). The request is reserved and tracked; no payout
-    provider is called.
+    USD Cashout request (kept at its original address). The minimum and the
+    fee are the configured ones (Admin > Finance & Payments). The request is
+    reserved and tracked; no payout provider is called.
     """
     cashout = _request_usd(db, current_user, body.amount, idempotency_key)
     return WithdrawResponse(gross_amount=float(cashout.gross_amount), fee=float(cashout.fee),
@@ -417,10 +420,30 @@ def get_cashout_history(limit: int = Query(50, ge=1, le=100), db: Session = Depe
 def request_usd_cashout(body: UsdCashoutRequest, db: Session = Depends(deps.get_db),
                         current_user: User = Depends(deps.get_current_active_user),
                         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
-    """Ask for a USD Cashout of the whole available balance (minimum $100)."""
+    """Ask for a USD Cashout of the whole available balance."""
     from app.services import cashout_service
 
-    return cashout_service.cashout_dict(_request_usd(db, current_user, body.amount, idempotency_key))
+    return cashout_service.cashout_dict(
+        _request_usd(db, current_user, body.amount, idempotency_key, body.destination))
+
+
+@router.post("/payout-wallet/confirm")
+def confirm_payout_wallet(body: PayoutWalletConfirm, request: Request, db: Session = Depends(deps.get_db),
+                          current_user: User = Depends(deps.get_current_active_user)):
+    """Confirm a payout wallet change with the one-time link sent by email.
+    The link works once, for the signed-in account it was issued to, and only
+    for the exact wallet and network it names. The security hold starts now."""
+    from app.core.client_ip import client_ip
+    from app.services import cashout_service
+
+    try:
+        state = cashout_service.confirm_payout_wallet(db, current_user, body.token, ip=client_ip(request))
+    except cashout_service.CashoutError as exc:
+        db.rollback()
+        raise _cashout_http_error(exc) from None
+    return {"wallet": cashout_service.mask_address(state.address), "wallet_status": state.status,
+            "payout_currency": state.currency, "network": cashout_service.network_label(state.currency),
+            "payable_from": state.payable_from.isoformat() if state.payable_from else None}
 
 
 @router.post("/cashout/{cashout_id}/cancel")

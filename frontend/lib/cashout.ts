@@ -7,7 +7,9 @@ export type CashoutMethod = 'CRYPTO' | 'USD'
 export type CashoutStatus =
   | 'METHOD_REQUIRED'
   | 'WALLET_REQUIRED'
+  | 'WALLET_CONFIRMATION_PENDING'
   | 'WALLET_ON_HOLD'
+  | 'METHOD_UNAVAILABLE'
   | 'BELOW_MINIMUM'
   | 'AUTOMATIC_PAYOUT_PENDING'
   | 'AUTOMATIC_PAYOUT_NOT_ACTIVE'
@@ -22,6 +24,9 @@ export type CashoutRecord = {
   gross_amount: number
   fee: number
   net_amount: number
+  /** Crypto: the network fee estimate, and who bears it. */
+  network_fee?: number | null
+  network_fee_policy?: 'COMPANY_PAYS' | 'MEMBER_PAYS' | null
   destination?: string | null
   payout_currency?: string | null
   reference?: string | null
@@ -36,8 +41,13 @@ export type CashoutSummary = {
   payable_amount: number
   minimum: number | null
   minimums: Record<CashoutMethod, number>
+  /** Which methods the administrator currently offers, and what a USD request needs. */
+  methods?: {
+    CRYPTO: { available: boolean }
+    USD: { available: boolean; destination_required: boolean; destination_note: string | null; cancellation_allowed: boolean }
+  }
   fees: {
-    CRYPTO: { platform_fee: number; note: string }
+    CRYPTO: { platform_fee: number; note: string; network_fee_policy?: 'COMPANY_PAYS' | 'MEMBER_PAYS' }
     USD: { rule: string; fee: number | null; net_amount: number | null }
   }
   destination: {
@@ -46,6 +56,11 @@ export type CashoutSummary = {
     wallet_status: 'MISSING' | 'INVALID' | 'UNVERIFIED' | 'ON_HOLD' | 'VERIFIED'
     payout_currency: string
     payable_from: string | null
+    network?: string
+    hold_hours?: number
+    email_verification_required?: boolean
+    /** A wallet change waiting for the emailed confirmation link (masked). */
+    pending_wallet?: { wallet: string; payout_currency: string; network: string; expires_at: string } | null
   }
   crypto_payouts_active: boolean
   usd_settlement_active: boolean
@@ -66,8 +81,12 @@ export function cashoutStatusText(summary: CashoutSummary): string {
       return 'Choose how you want to be paid: Crypto Cashout or USD Cashout.'
     case 'WALLET_REQUIRED':
       return summary.destination.wallet_status === 'UNVERIFIED'
-        ? 'Confirm your payout wallet in Settings (save it again with your password) to receive crypto payouts.'
+        ? 'Confirm your payout wallet in Settings (save it again with your password, then open the link we email you) to receive crypto payouts.'
         : 'Add a valid USDT BSC payout wallet in Settings to receive crypto payouts.'
+    case 'WALLET_CONFIRMATION_PENDING':
+      return 'Open the confirmation link we sent to your email address to confirm your payout wallet.'
+    case 'METHOD_UNAVAILABLE':
+      return 'This cashout method is not available at the moment. Your earnings are kept in full; you can choose the other method.'
     case 'WALLET_ON_HOLD':
       return `Your payout wallet was changed recently. For your security, payouts to it start on ${formatDate(
         summary.destination.payable_from,
@@ -114,6 +133,30 @@ export function recordStatusLabel(status: CashoutRecord['status']): string {
   }
 }
 
+export function methodAvailable(summary: CashoutSummary, method: CashoutMethod): boolean {
+  return summary.methods?.[method]?.available !== false
+}
+
+export function walletStatusLabel(status: CashoutSummary['destination']['wallet_status']): string {
+  switch (status) {
+    case 'VERIFIED':
+      return 'Verified'
+    case 'ON_HOLD':
+      return 'Verified - security hold'
+    case 'UNVERIFIED':
+      return 'Not confirmed'
+    case 'INVALID':
+      return 'Not valid for the payout network'
+    default:
+      return 'Not set'
+  }
+}
+
+/** Records the member should look at: not paid, or still being checked. */
+export function needsAttention(record: CashoutRecord): boolean {
+  return record.status === 'failed' || record.status === 'unknown'
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '-'
   // The API sends UTC timestamps without a zone suffix.
@@ -122,7 +165,8 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 /** Only a USD request that nobody has processed yet can be cancelled by the member. */
-export function canCancel(record: CashoutRecord): boolean {
+export function canCancel(record: CashoutRecord, summary?: CashoutSummary | null): boolean {
+  if (summary?.methods?.USD.cancellation_allowed === false) return false
   return record.status === 'requested' && record.method === 'USD'
 }
 

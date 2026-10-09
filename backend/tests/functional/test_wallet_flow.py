@@ -21,9 +21,10 @@ def test_wallet_configuration_flow(client, auth_headers, test_user_data):
     assert save.status_code == 200
     saved = save.json()
     assert saved["payout_currency"] == "usdtbsc"
-    assert saved["wallet_configured"] is True
-    # A new wallet is on a security hold and saving it pays nothing.
-    assert saved["wallet_status"] == "ON_HOLD" and saved["pending_commissions_paid"] == 0
+    # The wallet waits for the emailed confirmation link; saving it pays nothing.
+    assert saved["confirmation_required"] is True and saved["wallet_configured"] is False
+    assert saved["wallet_status"] == "MISSING" and saved["pending_commissions_paid"] == 0
+    assert saved["pending_wallet"]["wallet"] == f"{VALID_BEP20[:6]}...{VALID_BEP20[-4:]}"
 
     preview = client.get("/api/v1/wallet/withdraw/preview", headers=auth_headers)
     assert preview.status_code == 200

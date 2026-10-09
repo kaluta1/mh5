@@ -95,18 +95,22 @@ def update_my_privacy(preferences: dict, db: Session = Depends(get_db),
     return {"settings": eff.settings, "locked_fields": eff.locked_fields, "display": eff.display}
 
 
-def _wallet_response(user: UserModel) -> UserWalletResponse:
-    from app.services import cashout_service
+def _wallet_response(db: Session, user: UserModel, **extra) -> UserWalletResponse:
+    from app.services import cashout_service, payment_config
 
-    state = cashout_service.wallet_state(user)
+    config = payment_config.load(db)
+    state = cashout_service.wallet_state(user, config=config)
     return UserWalletResponse(
         usdt_wallet_address=user.usdt_wallet_address,
-        payout_currency=user.payout_currency or "usdtbsc",
+        payout_currency=user.payout_currency or config.crypto_payout_currency,
         wallet_configured=bool((user.usdt_wallet_address or "").strip()),
         pending_commissions_paid=0,
-        supported_currencies=["usdtbsc"],
+        supported_currencies=[config.crypto_payout_currency],
         wallet_status=state.status,
         payable_from=state.payable_from.isoformat() if state.payable_from else None,
+        pending_wallet=cashout_service.pending_wallet(db, user.id),
+        hold_hours=int(config.wallet_hold_hours),
+        **extra,
     )
 
 
@@ -121,14 +125,17 @@ def update_user_wallet(
     """
     Register or change the member's USDT BSC payout wallet.
 
-    Requires the member's current password. The wallet is then on a security
-    hold before anything is paid to it. Saving a wallet never pays anything.
+    Requires the member's current password and, unless an administrator
+    switched that off, a confirmation from a one-time link sent to the
+    account's email address: until that link is opened the wallet in force
+    does not change. The wallet is then on a security hold before anything is
+    paid to it. Saving a wallet never pays anything.
     """
     from app.core.client_ip import client_ip
     from app.services import cashout_service
 
     try:
-        cashout_service.change_payout_wallet(
+        result = cashout_service.change_payout_wallet(
             db, current_user, address=wallet_in.usdt_wallet_address, currency=wallet_in.payout_currency,
             password=wallet_in.current_password, ip=client_ip(request))
     except cashout_service.CashoutError as exc:
@@ -138,16 +145,18 @@ def update_user_wallet(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    sent = cashout_service.send_wallet_confirmation(db, current_user, result) if result.pending else None
     db.refresh(current_user)
-    return _wallet_response(current_user)
+    return _wallet_response(db, current_user, confirmation_required=result.pending, confirmation_email_sent=sent)
 
 
 @router.get("/me/wallet", response_model=UserWalletResponse)
 def get_user_wallet(
+    db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
 ) -> Any:
     """Return payout wallet configuration (masked address in frontend)."""
-    return _wallet_response(current_user)
+    return _wallet_response(db, current_user)
 
 
 def _build_follow_users(

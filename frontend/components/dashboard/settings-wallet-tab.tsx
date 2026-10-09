@@ -22,6 +22,10 @@ type WalletInfo = {
   wallet_status?: string | null
   payable_from?: string | null
   supported_currencies?: string[]
+  pending_wallet?: { wallet: string; payout_currency: string; network: string; expires_at: string } | null
+  confirmation_required?: boolean
+  confirmation_email_sent?: boolean | null
+  hold_hours?: number | null
 }
 
 const CURRENCY_META: Record<string, { label: string; placeholder: string; hint: string }> = {
@@ -137,12 +141,21 @@ export function SettingsWalletTab() {
       setAddress(data.usdt_wallet_address || trimmed)
       setPayoutCurrency(data.payout_currency || payoutCurrency)
       setPassword('')
-      addToast(
-        data.wallet_status === 'ON_HOLD'
-          ? 'Payout wallet saved. For your security, payouts to it start after a short hold.'
-          : 'Payout wallet saved.',
-        'success'
-      )
+      if (data.confirmation_required) {
+        addToast(
+          data.confirmation_email_sent === false
+            ? 'Your request was recorded, but the confirmation email could not be sent. Please try again later.'
+            : 'Check your email: open the confirmation link to confirm this wallet. Your current payout wallet stays in use until then.',
+          data.confirmation_email_sent === false ? 'error' : 'success'
+        )
+      } else {
+        addToast(
+          data.wallet_status === 'ON_HOLD'
+            ? 'Payout wallet saved. For your security, payouts to it start after a short hold.'
+            : 'Payout wallet saved.',
+          'success'
+        )
+      }
     } catch (e) {
       addToast(e instanceof Error ? e.message : t('common.error') || 'Error', 'error')
     } finally {
@@ -188,7 +201,7 @@ export function SettingsWalletTab() {
             </p>
             {walletInfo?.wallet_status === 'UNVERIFIED' && (
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Not confirmed yet: save it again with your password to receive payouts.
+                Not confirmed yet: save it again with your password, then open the link we email you, to receive payouts.
               </p>
             )}
             {walletInfo?.wallet_status === 'ON_HOLD' && (
@@ -198,6 +211,23 @@ export function SettingsWalletTab() {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {walletInfo?.pending_wallet && (
+        <div
+          role="status"
+          data-testid="pending-wallet"
+          className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm text-blue-900 dark:text-blue-100"
+        >
+          <p className="font-medium">Waiting for your confirmation</p>
+          <p className="mt-1">
+            We sent a confirmation link to your email address for{' '}
+            <span className="font-mono">{walletInfo.pending_wallet.wallet}</span> ({walletInfo.pending_wallet.network}).
+            Open it while signed in to confirm the wallet. The link works once and expires on{' '}
+            {new Date(`${walletInfo.pending_wallet.expires_at}Z`).toLocaleString()}. To get a new link, save the wallet
+            again.
+          </p>
         </div>
       )}
 
@@ -251,7 +281,9 @@ export function SettingsWalletTab() {
           autoComplete="current-password"
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Required to set or change where your commissions are paid.
+          Required to set or change where your commissions are paid. The change is then confirmed from a link sent to
+          your email address, and payouts to the new wallet start after a {walletInfo?.hold_hours ?? 72}-hour security
+          hold.
         </p>
       </div>
 

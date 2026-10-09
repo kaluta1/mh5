@@ -38,17 +38,32 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [preview, setPreview] = useState<WithdrawPreview | null>(null)
+  // The fee rule and what a request needs come from the server's configuration.
+  const [rules, setRules] = useState<{ feeRule: string; destinationRequired: boolean; destinationNote: string | null }>({
+    feeRule: '', destinationRequired: false, destinationNote: null,
+  })
+  const [destination, setDestination] = useState('')
   const idempotencyKeyRef = useRef<string | null>(null)
 
   const loadPreview = useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('access_token')
-      const res = await fetch(`${getEffectiveApiUrl()}/api/v1/wallet/withdraw/preview`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const [res, summaryRes] = await Promise.all([
+        fetch(`${getEffectiveApiUrl()}/api/v1/wallet/withdraw/preview`, { headers }),
+        fetch(`${getEffectiveApiUrl()}/api/v1/wallet/cashout`, { headers }),
+      ])
       if (res.ok) {
         setPreview((await res.json()) as WithdrawPreview)
+      }
+      if (summaryRes.ok) {
+        const summary = await summaryRes.json()
+        setRules({
+          feeRule: summary?.fees?.USD?.rule ?? '',
+          destinationRequired: Boolean(summary?.methods?.USD?.destination_required),
+          destinationNote: summary?.methods?.USD?.destination_note ?? null,
+        })
       }
     } catch {
       addToast(t('common.error') || 'Error loading cashout preview', 'error')
@@ -70,7 +85,8 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
   const eligible = isFinancialActionAvailable(preview?.eligibility_status)
   const holdMessage = financialHoldMessage(preview?.eligibility_status, preview?.eligibility_next_step)
   const usdChosen = preview?.cashout_method === 'USD'
-  const canSubmit = eligible && usdChosen && amount >= min
+  const canSubmit =
+    eligible && usdChosen && amount >= min && (!rules.destinationRequired || destination.trim().length > 0)
 
   const handleRequest = async () => {
     if (!canSubmit) return
@@ -87,7 +103,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
           'Idempotency-Key': idempotencyKeyRef.current,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, destination: destination.trim() || undefined }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -98,6 +114,7 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
         'success'
       )
       onOpenChange(false)
+      setDestination('')
       idempotencyKeyRef.current = null
       onSuccess?.()
     } catch (e) {
@@ -116,8 +133,9 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
             Request USD Cashout
           </DialogTitle>
           <DialogDescription>
-            Your whole available balance is requested. Minimum ${min}; fee 1% (minimum $20, maximum $1,000). The
-            amount is reserved until the MyHigh5 team has paid it or you cancel the request.
+            Your whole available balance is requested. Minimum ${min}
+            {rules.feeRule ? `; fee ${rules.feeRule}` : ''}. The amount is reserved until the MyHigh5 team has paid it
+            or the request is cancelled.
           </DialogDescription>
         </DialogHeader>
 
@@ -166,6 +184,28 @@ export function WithdrawDialog({ open, onOpenChange, onSuccess }: Props) {
                 </span>
               </div>
             </div>
+
+            {(rules.destinationRequired || rules.destinationNote) && (
+              <div className="space-y-1">
+                <label htmlFor="usd-destination" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Payout destination{rules.destinationRequired ? '' : ' (optional)'}
+                </label>
+                {rules.destinationNote && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{rules.destinationNote}</p>
+                )}
+                <textarea
+                  id="usd-destination"
+                  rows={3}
+                  maxLength={500}
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Stored encrypted and shown only to the MyHigh5 team member who pays your request.
+                </p>
+              </div>
+            )}
 
             <Button
               className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90"
