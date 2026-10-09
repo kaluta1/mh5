@@ -247,7 +247,9 @@ async def create_payment(
         raise HTTPException(status_code=409, detail="Payment creation is already in progress") from exc
     db.refresh(deposit)
     deposit_id = int(deposit.id)
-    order_description = f"MyHigh5 {product.name} — deposit {deposit_id}"
+    # ASCII only: the provider echoes this text in its signed callbacks, and a
+    # non-ASCII character is serialized differently by different JSON writers.
+    order_description = f"MyHigh5 {product.name} - deposit {deposit_id}".encode("ascii", "replace").decode("ascii")
     # Commit/refresh starts a new read transaction; release it before the
     # bounded provider call so Neon never sees an idle transaction here.
     db.rollback()

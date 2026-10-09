@@ -37,6 +37,11 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     """
     NOWPayments instant payment notification callback.
     Validates HMAC SHA-512 signature (sorted JSON keys) and finalizes deposits.
+
+    The signature is checked against the body exactly as it was received. A
+    callback is only ever a reason to look: a payment is credited through the
+    same idempotent path as the status poll, and a payout notification never
+    pays or releases anything (the cashout engine asks the provider itself).
     """
     raw = await request.body()
     try:
@@ -44,15 +49,27 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     except json.JSONDecodeError as exc:
         _count(db, "INVALID_JSON")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+    except (UnicodeDecodeError, RecursionError) as exc:
+        _count(db, "INVALID_JSON")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+    if not isinstance(body, dict):
+        _count(db, "INVALID_JSON")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON")
 
     signature = request.headers.get("x-nowpayments-sig", "")
-    if not verify_ipn_signature(body, signature, secret=payment_config.ipn_secret(db) or ""):
+    if not verify_ipn_signature(body, signature, secret=payment_config.ipn_secret(db) or "", raw=raw):
         logger.warning("NOWPayments IPN rejected: invalid signature")
         _count(db, "REJECTED_SIGNATURE")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid signature")
 
     order_id = body.get("order_id")
     payment_id = str(body.get("payment_id") or "")
+
+    if not payment_id and not order_id and body.get("batch_withdrawal_id"):
+        # A payout (withdrawal) notification. It is acknowledged and counted,
+        # never acted on: the engine reads the payout status from the provider.
+        _count(db, "PAYOUT_NOTICE")
+        return {"ok": True}
 
     deposit = None
     if order_id:

@@ -18,11 +18,21 @@ anything by itself.
 One cycle
 ---------
 1. Reconcile: for every crypto cashout already handed to the provider, ask
-   the provider for its status. FINISHED -> the commissions become PAID and the
-   journal is posted. FAILED / REJECTED -> the reservation is released. Anything
-   else is left as it is.
-2. Read the provider's facts once: its custody balance, its minimum payout and
-   its network fee. If they cannot be read, the cycle stops (nothing reserved).
+   the provider for its status. The provider documents that ONLY "finished"
+   and "rejected" are final:
+     FINISHED  and the payout it describes is ours (same address, same unique
+               reference) -> the commissions become PAID, the journal is posted
+     REJECTED  -> the reservation is released
+     FAILED    is NOT final ("processing may resume or the payout may be
+               retried on NOWPayments' side"): the cashout stays reserved, is
+               marked for review and keeps being checked; it is never re-sent
+     anything else is left as it is.
+   A cashout whose creation got no answer has no payout id; it is looked up in
+   the provider's list of payouts by its unique reference. Not finding it
+   proves nothing, so it stays reserved for an administrator.
+2. Read the provider's facts once: the payout login, its custody balance, its
+   minimum payout and its network fee. If any cannot be read, the cycle stops
+   (nothing reserved).
 3. For each member who chose CRYPTO, under a lock on the member row:
      payable wallet (verified, hold elapsed), financial eligibility, no open
      cashout, no recent failed payout and not too many of them, the minimum
@@ -30,7 +40,7 @@ One cycle
      configured minimum and <= the maximum single payout, the daily amount and
      count limits, the amount sent >= the provider's minimum, the network fee
      within its allowed share, provider balance less the configured reserve
-     >= amount + network fee
+     >= amount + network fee, the provider accepts the address
    -> reserve the rows and COMMIT the intent
    -> re-check the same conditions, mark it processing, COMMIT
    -> ask the provider to create the payout (once).
@@ -38,6 +48,9 @@ One cycle
 Provider answers
 ----------------
   refused with a 4xx          nothing exists at the provider: released, FAILED
+                              (a refused LOGIN or a refused server IP is the
+                              platform's problem, not the member's: released as
+                              CANCELLED and the cycle stops)
   created and confirmed       stays reserved and PROCESSING until step 1 of a
                               later cycle sees FINISHED
   created, confirmation failed / timeout / 5xx / no answer
@@ -64,7 +77,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.accounting import JournalEntry
@@ -85,14 +98,19 @@ from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
 
+# The provider's two FINAL payout statuses. "FAILED" is deliberately in neither
+# set: the provider may still process a failed payout.
 PROVIDER_PAID = {"FINISHED"}
-PROVIDER_NOT_PAID = {"FAILED", "REJECTED"}
+PROVIDER_NOT_PAID = {"REJECTED"}
+PROVIDER_NOT_FINAL_FAILURE = {"FAILED"}
+PROVIDER_IN_PROGRESS = {"CREATING", "WAITING", "PROCESSING", "SENDING"}
 
 
 # Handed to the provider (or possibly): what the daily limits count.
 SENT_STATUSES = (CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value, CashoutStatus.COMPLETED.value)
 RETRY_WINDOW = timedelta(days=7)
 STALE_PROCESSING_AFTER = timedelta(hours=24)
+LOCATE_WINDOW = timedelta(days=7)       # how long a payout without an id is looked for in the provider's list
 
 
 class NowPaymentsPayoutProvider:
@@ -118,6 +136,19 @@ class NowPaymentsPayoutProvider:
     def payout_status(self, batch_id: str) -> str:
         return nowpayments.payout_status_sync(batch_id, self._credentials)
 
+    def payout_details(self, batch_id: str) -> dict:
+        return nowpayments.payout_details_sync(batch_id, self._credentials)
+
+    def find_payout(self, external_id: str) -> Optional[dict]:
+        return nowpayments.find_payout_by_external_id_sync(external_id, self._credentials)
+
+    def check_session(self) -> None:
+        """Raises when the provider refuses the payout login."""
+        nowpayments._engine_token_sync(self._credentials)
+
+    def validate_address(self, address: str, currency: str) -> bool:
+        return nowpayments.validate_payout_address_sync(address, currency, self._credentials)
+
 
 def engine_enabled(db: Session, *, config=None) -> bool:
     config = config or payment_config.load(db)
@@ -140,22 +171,105 @@ def engine_status(db: Session) -> dict:
 # Reconciliation of payouts already at the provider
 # ---------------------------------------------------------------------------
 
+def external_reference(cashout: AffiliateCashoutRequest) -> str:
+    """The unique reference this cashout was (or would be) sent to the provider with."""
+    return cs._intent(cashout).split(":", 1)[-1]
+
+
+def _provider_details(provider, batch_id: str) -> dict:
+    """What the provider reports for one payout. A provider that can only
+    report a status yields {"status"}; the evidence check then has nothing to
+    compare and is skipped."""
+    read = getattr(provider, "payout_details", None)
+    if read is None:
+        return {"status": str(provider.payout_status(batch_id) or "").upper()}
+    details = dict(read(batch_id) or {})
+    details["status"] = str(details.get("status") or "").upper()
+    return details
+
+
+def _same_address(left: Optional[str], right: Optional[str]) -> bool:
+    left, right = str(left or "").strip(), str(right or "").strip()
+    if left.lower().startswith("0x") and right.lower().startswith("0x"):
+        return left.lower() == right.lower()        # EVM addresses differ only by checksum case
+    return bool(left) and left == right
+
+
+def evidence_problem(cashout: AffiliateCashoutRequest, details: dict) -> Optional[str]:
+    """Why the payout the provider describes is NOT proof that this cashout
+    was paid (None = it is this cashout's payout). Only fields the provider
+    actually returned are compared."""
+    if "address" in details and not _same_address(details.get("address"), cashout.wallet_snapshot):
+        return "PROVIDER_ADDRESS_MISMATCH"
+    reference = details.get("unique_external_id")
+    if reference and str(reference) != external_reference(cashout):
+        return "PROVIDER_REFERENCE_MISMATCH"
+    currency = details.get("currency")
+    if currency and cashout.payout_currency and str(currency).lower() != str(cashout.payout_currency).lower():
+        return "PROVIDER_CURRENCY_MISMATCH"
+    return None
+
+
+def _locate_unknown(db: Session, cashout_id: int, provider, now: datetime) -> str:
+    """A cashout whose creation got no answer has no payout id. Look for its
+    unique reference in the provider's list of payouts; when exactly one
+    payout to the same address carries it, attach that payout so the normal
+    reconciliation takes over. Not finding it proves nothing: the cashout
+    stays reserved for an administrator. Commits."""
+    find = getattr(provider, "find_payout", None)
+    cashout = db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout_id).one()
+    reference, requested_at = external_reference(cashout), cashout.requested_at
+    db.rollback()
+    if find is None or not reference or requested_at < now - LOCATE_WINDOW:
+        return "SKIPPED"                            # old: an administrator settles it by hand
+    try:
+        found = find(reference)
+    except Exception:  # noqa: BLE001 - not knowing is not a result
+        logger.warning("Cashout %s: the provider's list of payouts could not be read", cashout_id)
+        return "STATUS_UNAVAILABLE"
+    cashout = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout_id)
+               .with_for_update().one())
+    if cashout.status != CashoutStatus.UNKNOWN.value or cashout.provider_batch_id:
+        db.rollback()
+        return "SKIPPED"
+    cashout.last_checked_at = now
+    if not found or not found.get("batch_id"):
+        db.commit()
+        return "NOT_LOCATED"
+    if evidence_problem(cashout, found) is not None:
+        cashout.failure_code = evidence_problem(cashout, found)
+        db.commit()
+        return "EVIDENCE_MISMATCH"
+    cashout.provider_batch_id = str(found["batch_id"])[:100]
+    cashout.provider_status = (str(found.get("status") or "")[:30] or None)
+    db.flush()
+    cs._audit(db, record_id=cashout.id, action="CASHOUT_PAYOUT_LOCATED", actor_id=None, old=None,
+              new={"provider_batch_id": cashout.provider_batch_id, "provider_status": cashout.provider_status})
+    db.commit()
+    return "LOCATED"
+
+
 def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[datetime] = None) -> str:
     """Apply the provider's status to one crypto cashout. Commits."""
     now = now or datetime.utcnow()
     cashout = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout_id)
                .with_for_update().one())
-    if (cashout.cashout_method != cs.METHOD_CRYPTO or not cashout.provider_batch_id
+    if (cashout.cashout_method != cs.METHOD_CRYPTO
             or cashout.status not in (CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value)):
         db.rollback()
         return "SKIPPED"
+    if not cashout.provider_batch_id:
+        unknown = cashout.status == CashoutStatus.UNKNOWN.value
+        db.rollback()
+        return _locate_unknown(db, cashout_id, provider, now) if unknown else "SKIPPED"
     batch_id = str(cashout.provider_batch_id)
     db.rollback()                                   # no lock is held while waiting for the provider
     try:
-        status = str(provider.payout_status(batch_id) or "").upper()
+        details = _provider_details(provider, batch_id)
     except Exception:  # noqa: BLE001 - not knowing is not a result
         logger.warning("Cashout %s: provider status could not be read", cashout_id)
         return "STATUS_UNAVAILABLE"
+    status = details["status"]
     cashout = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout_id)
                .with_for_update().one())
     if cashout.status not in (CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value):
@@ -163,6 +277,21 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
         return "SKIPPED"
     cashout.provider_status = status[:30] or None
     cashout.last_checked_at = now
+    problem = evidence_problem(cashout, details)
+    if problem is not None:
+        # The provider is describing a payout that is not this cashout's. Nothing
+        # it says about it may pay or release anything here.
+        cashout.status = CashoutStatus.UNKNOWN.value
+        cashout.failure_code = problem
+        db.commit()
+        logger.error("Cashout %s: the provider payout does not match (%s)", cashout_id, problem)
+        return "EVIDENCE_MISMATCH"
+    if status in PROVIDER_NOT_FINAL_FAILURE:
+        # Not final: the provider may still send it. Keep the money reserved.
+        cashout.status = CashoutStatus.UNKNOWN.value
+        cashout.failure_code = "PROVIDER_FAILED_NOT_FINAL"
+        db.commit()
+        return "PROVIDER_FAILED"
     if status in PROVIDER_PAID:
         try:
             cs.complete(db, cashout, settlement_reference=batch_id,
@@ -171,6 +300,9 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
             db.rollback()
             logger.error("Cashout %s was paid by the provider but cannot be posted: %s", cashout_id, exc.code)
             return "PAID_BUT_NOT_POSTED"
+        cs._audit(db, record_id=cashout_id, action="CASHOUT_PROVIDER_EVIDENCE", actor_id=None, old=None,
+                  new={"provider_status": status, "provider_batch_id": batch_id,
+                       "transaction_hash": details.get("hash"), "withdrawal_id": details.get("withdrawal_id")})
         db.commit()
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:
@@ -178,6 +310,10 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
                                failure_code=f"PROVIDER_{status}", actor_id=None, now=now)
         db.commit()
         return "FAILED"
+    if cashout.failure_code == "PROVIDER_FAILED_NOT_FINAL" and status in PROVIDER_IN_PROGRESS:
+        # The provider resumed a payout it had reported as failed.
+        cashout.status = CashoutStatus.PROCESSING.value
+        cashout.failure_code = None
     db.commit()
     return "PENDING"
 
@@ -185,7 +321,8 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
 def reconcile_open(db: Session, provider, *, now: Optional[datetime] = None) -> Counter:
     ids = [row.id for row in db.query(AffiliateCashoutRequest.id)
            .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
-                   AffiliateCashoutRequest.provider_batch_id.isnot(None),
+                   or_(AffiliateCashoutRequest.provider_batch_id.isnot(None),
+                       AffiliateCashoutRequest.status == CashoutStatus.UNKNOWN.value),
                    AffiliateCashoutRequest.status.in_([CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value]))
            .order_by(AffiliateCashoutRequest.id).all()]
     db.rollback()
@@ -304,6 +441,27 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         return stop("INSUFFICIENT_PROVIDER_BALANCE")
 
     wallet = cs.wallet_state(user, now, config=config)
+    validate = getattr(provider, "validate_address", None)
+    if validate is not None:
+        # The provider's own recommended first step. Nothing is reserved yet.
+        target, target_currency = str(wallet.address), str(wallet.currency)
+        db.commit()
+        try:
+            accepted = bool(validate(target, target_currency))
+        except Exception:  # noqa: BLE001 - no answer: do not send to an unchecked address
+            logger.warning("Cashout cycle: the provider could not validate member %s's address", user_id)
+            return "ADDRESS_CHECK_UNAVAILABLE"
+        if not accepted:
+            return "PROVIDER_ADDRESS_INVALID"
+        user = db.query(User).filter(User.id == user_id).with_for_update().one()
+        wallet = cs.wallet_state(user, now, config=config)
+        if (wallet.address, wallet.currency) != (target, target_currency) or cs.active_cashout(db, user.id):
+            db.rollback()
+            return "WALLET_CHANGED"
+        rows = cs.available_rows(db, user.id)
+        if cs.rows_total(rows) != amount:
+            db.rollback()
+            return "BALANCE_CHANGED"
     intent_ref = _intent_reference(user.id, None)
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
                          now=now, wallet=wallet.address, currency=wallet.currency, net=send, network_fee=fee,
@@ -331,6 +489,7 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     db.commit()
 
     refused = False
+    platform_fault: Optional[str] = None
     result: Optional[dict] = None
     try:
         result = provider.create_payout(address=address, amount=send, currency=currency,
@@ -338,7 +497,12 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     except nowpayments.NowPaymentsError as exc:
         code = exc.status_code
         refused = code is not None and 400 <= code < 500 and code not in (408, 429)
-        logger.warning("Cashout %s: provider create failed (status %s)", cashout_id, code)
+        if refused and getattr(exc, "ip_refused", False):
+            platform_fault = "PROVIDER_IP_NOT_WHITELISTED"
+        elif refused and getattr(exc, "stage", None) == "auth":
+            platform_fault = "PROVIDER_AUTH_FAILED"
+        logger.warning("Cashout %s: provider create failed (status %s, stage %s, code %s)", cashout_id, code,
+                       getattr(exc, "stage", None), getattr(exc, "code", None))
     except Exception:  # noqa: BLE001 - no answer: the outcome is unknown
         logger.error("Cashout %s: provider create raised", cashout_id)
 
@@ -356,6 +520,13 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             return "OUTCOME_UNKNOWN"
         db.commit()
         return "SUBMITTED"
+    if refused and platform_fault is not None:
+        # Nothing was created and the member did nothing wrong: not a failed
+        # attempt of theirs (it must not count towards their retry limit).
+        cs.release_reservation(db, cashout, status=CashoutStatus.CANCELLED.value, failure_code=platform_fault,
+                               actor_id=None, now=now)
+        db.commit()
+        return platform_fault
     if refused:
         cs.release_reservation(db, cashout, status=CashoutStatus.FAILED.value, failure_code="PROVIDER_REFUSED",
                                actor_id=None, now=now)
@@ -407,6 +578,14 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
     if not user_ids:
         return report
     currency = config.crypto_payout_currency
+    check_session = getattr(provider, "check_session", None)
+    if check_session is not None:
+        try:
+            check_session()
+        except Exception:  # noqa: BLE001 - a payout cannot be created without the login
+            logger.warning("Cashout cycle stopped: the provider refused the payout login")
+            report["stopped"] = "PROVIDER_AUTH_FAILED"
+            return report
     try:
         facts = {"balance": Decimal(provider.balance(currency)), "minimum": Decimal(provider.minimum(currency)),
                  "network_fee": money(provider.network_fee(currency, cs.crypto_minimum(config=config)))}
@@ -425,6 +604,9 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             logger.exception("Cashout cycle: member %s failed", user_id)
             outcome = "ERROR"
         results[outcome] += 1
+        if outcome in ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED"):
+            report["stopped"] = outcome             # the same refusal awaits every other member
+            break
         if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
             # Assume the money left (or may have): never count it for the next member.
             sent = (db.query(AffiliateCashoutRequest.gross_amount)
@@ -470,7 +652,20 @@ def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 2
                 f"Cashout #{cashout.id}: reserved commissions (${money(reserved or 0):.2f}) do not equal the "
                 f"cashout amount (${money(cashout.gross_amount):.2f}).", cashout_id=cashout.id,
                 user_id=cashout.user_id)
-        if cashout.status == CashoutStatus.UNKNOWN.value:
+        if (cashout.status == CashoutStatus.UNKNOWN.value
+                and cashout.failure_code == "PROVIDER_FAILED_NOT_FINAL"):
+            add("PROVIDER_FAILED_NOT_FINAL", "critical",
+                f"Cashout #{cashout.id}: the provider reports the payout as failed. That status is not final "
+                "(the provider may still send it). Ask the provider's support whether it will be processed "
+                "before recording it as not sent; do not create another payout for it.",
+                cashout_id=cashout.id, user_id=cashout.user_id)
+        elif (cashout.status == CashoutStatus.UNKNOWN.value
+              and str(cashout.failure_code or "").endswith("_MISMATCH")):
+            add("PROVIDER_EVIDENCE_MISMATCH", "critical",
+                f"Cashout #{cashout.id}: the payout the provider reports does not match this cashout "
+                f"({cashout.failure_code}). Check the provider by hand.",
+                cashout_id=cashout.id, user_id=cashout.user_id)
+        elif cashout.status == CashoutStatus.UNKNOWN.value:
             add("UNKNOWN_OUTCOME", "critical",
                 f"Cashout #{cashout.id}: the provider outcome is unknown. Check the provider, then record it "
                 "as sent or not sent.", cashout_id=cashout.id, user_id=cashout.user_id)

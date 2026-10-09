@@ -186,6 +186,36 @@ describe('AdminFinance', () => {
       { current_password: PASSWORD }))
   })
 
+  it('shows what is verified, configured or blocked without calling a present credential verified', async () => {
+    const readiness = {
+      states: ['DISABLED', 'UNVERIFIED', 'CONFIGURED', 'BLOCKED', 'VERIFIED'],
+      items: [
+        { key: 'api_authentication', label: 'API authentication (pay-in key)', state: 'VERIFIED', detail: 'Successful.' },
+        { key: 'custody', label: 'Custody balance access', state: 'BLOCKED', detail: "The provider refused this server's IP address." },
+        { key: 'payout_2fa', label: 'Payout second factor (authenticator)', state: 'CONFIGURED', detail: 'It can be proven only by confirming a real payout.' },
+        { key: 'automatic_payouts', label: 'Automatic crypto payouts', state: 'DISABLED', detail: 'The server master switch is off.' },
+      ],
+      outstanding: ["Whitelist this server's IPv4 and IPv6 addresses in the provider dashboard (Settings > Whitelist)."],
+      last_test_at: '2026-10-09T09:00:00', last_success_at: null,
+      last_error: { check: 'custody_balance', code: 'IP_NOT_WHITELISTED', message: "The provider refused this server's IP address.", at: '2026-10-09T09:00:00' },
+    }
+    setup({ p: provider({ readiness }) })
+    render(<AdminFinance section="nowpayments" />)
+    const pill = async (key: string) => (await screen.findByTestId(`readiness-${key}`)).querySelector('span.inline-block')!
+    expect(await pill('api_authentication')).toHaveTextContent('Verified')
+    expect((await pill('api_authentication')).className).toContain('green')
+    expect(await pill('custody')).toHaveTextContent('Blocked')
+    expect((await pill('custody')).className).toContain('red')
+    expect(await pill('payout_2fa')).toHaveTextContent('Configured')
+    expect((await pill('payout_2fa')).className).not.toContain('green')                     // present is not proven
+    expect(await pill('automatic_payouts')).toHaveTextContent('Disabled')
+    expect(screen.getByTestId('provider-last-error')).toHaveTextContent("refused this server's IP address")
+    expect(screen.getByTestId('provider-outstanding')).toHaveTextContent('Whitelist this server')
+    const card = screen.getByTestId('provider-readiness').closest('div')!
+    expect(card.querySelector('button')).toBeNull()                                         // a status, never an action
+    expect(postMock).not.toHaveBeenCalled()
+  })
+
   it('explains a failed connection test and runs a new one without sending anything else', async () => {
     setup()
     render(<AdminFinance section="nowpayments" />)

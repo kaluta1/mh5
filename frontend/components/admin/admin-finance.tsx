@@ -17,6 +17,7 @@ import {
   dateTime,
   financeErrorText,
   humanize,
+  readinessTone,
   webhookStatusLabel,
   type FinanceOverview,
   type FinanceSection,
@@ -26,7 +27,7 @@ import {
   type WebhookHealth,
 } from '@/lib/finance-admin'
 import { CashoutTransactions, ReconciliationAndAudit } from './admin-finance-cashouts'
-import { Row, StatusPill, inputClass } from './admin-finance-ui'
+import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
 
 /**
  * Admin > Finance & Payments.
@@ -133,6 +134,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
       {section === 'nowpayments' && provider && settings && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <ProviderSettingsCard provider={provider} />
+          {provider.readiness && <ReadinessCard provider={provider} />}
           <SettingsForm title="Provider settings" fields={group('provider')} settings={settings} canManage={canManage}
             busy={busy} change={change} idPrefix="provider" />
           <CredentialsCard provider={provider} canManage={canManage} busy={busy} change={change} />
@@ -432,6 +434,65 @@ function CredentialsCard({ provider, canManage, busy, change }: {
   )
 }
 
+const READINESS_LEGEND: Record<string, string> = {
+  VERIFIED: 'a check against the provider succeeded with the current credentials',
+  CONFIGURED: 'credentials are present; nothing has proven that they work',
+  UNVERIFIED: 'not configured, or not determinable yet',
+  BLOCKED: 'the provider refused; see the reason',
+  DISABLED: 'switched off here',
+}
+
+/**
+ * What is proven, what is only configured and what the provider refused. The
+ * server builds it from the last connection test, the callback counters and
+ * the configuration; this card only displays it and has no action.
+ */
+function ReadinessCard({ provider }: { provider: ProviderView }) {
+  const readiness = provider.readiness
+  if (!readiness) return null
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <h2 className="font-semibold text-gray-900 dark:text-white">Provider status</h2>
+        <ul className="text-sm space-y-2" data-testid="provider-readiness">
+          {readiness.items.map((item) => (
+            <li key={item.key} data-testid={`readiness-${item.key}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-gray-900 dark:text-white">{item.label}</span>
+                <TonePill tone={readinessTone(item.state)}>{humanize(item.state)}</TonePill>
+              </div>
+              <p className="text-xs text-gray-500">{item.detail}</p>
+            </li>
+          ))}
+        </ul>
+        <dl className="text-sm space-y-1 border-t border-gray-100 dark:border-gray-700 pt-2">
+          <Row label="Payout currency / network" value={`${provider.payout_currency} / ${provider.payout_network}`} />
+          <Row label="Last connection test" value={dateTime(readiness.last_test_at)} />
+          <Row label="Last successful connection test" value={dateTime(readiness.last_success_at)} />
+        </dl>
+        {readiness.last_error && (
+          <p className="text-sm text-red-700 dark:text-red-300" data-testid="provider-last-error">
+            Last provider error ({checkLabel(readiness.last_error.check)}, {dateTime(readiness.last_error.at)}):{' '}
+            {readiness.last_error.message}
+          </p>
+        )}
+        {readiness.outstanding.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Outstanding requirements</h3>
+            <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-gray-300 space-y-1"
+              data-testid="provider-outstanding">
+              {readiness.outstanding.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          </div>
+        )}
+        <p className="text-xs text-gray-500">
+          {readiness.states.map((state) => `${humanize(state)}: ${READINESS_LEGEND[state] ?? ''}`).join('. ')}.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 function ConnectionCard({ provider, canManage, busy, change }: {
   provider: ProviderView; canManage: boolean; busy: boolean; change: Change
 }) {
@@ -444,9 +505,10 @@ function ConnectionCard({ provider, canManage, busy, change }: {
           <StatusPill status={c.status} />
         </div>
         <p className="text-xs text-gray-500">
-          Read-only: it only reads the provider status, the supported currencies, the custody balance, the payout
-          minimum and the network fee estimate. It creates no payment, starts no payout and moves no funds. The payout
-          login and the second factor cannot be verified without a real payout and are not tested here.
+          Read-only: it reads the provider status, the supported currencies, the custody balance, the payout
+          minimum and the network fee estimate, and checks that the payout login is accepted (the session is
+          discarded at once). It creates no payment, starts no payout and moves no funds. The second factor cannot
+          be verified without a real payout and is not tested here.
         </p>
         <p className="text-sm" data-testid="connection-message">{c.message}</p>
         {c.checks.length > 0 && (
@@ -464,6 +526,7 @@ function ConnectionCard({ provider, canManage, busy, change }: {
         {Object.keys(c.facts).length > 0 && (
           <dl className="text-sm space-y-1 border-t border-gray-100 dark:border-gray-700 pt-2">
             {c.facts.custody_balance !== undefined && <Row label={`Custody balance (${provider.payout_currency})`} value={c.facts.custody_balance} />}
+            {c.facts.custody_pending !== undefined && <Row label="Custody amount being processed" value={c.facts.custody_pending} />}
             {c.facts.payout_minimum !== undefined && <Row label="Provider payout minimum" value={c.facts.payout_minimum} />}
             {c.facts.network_fee !== undefined && <Row label="Network fee estimate" value={c.facts.network_fee} />}
           </dl>
@@ -498,7 +561,9 @@ function WebhookCard({ webhook }: { webhook: WebhookHealth }) {
           <Row label="Accepted (7 days)" value={counts.ACCEPTED ?? 0} />
           <Row label="Rejected: invalid signature (7 days)" value={counts.REJECTED_SIGNATURE ?? 0} />
           <Row label="Unknown order (7 days)" value={counts.UNKNOWN_ORDER ?? 0} />
+          <Row label="Payout notifications (7 days)" value={webhook.payout_notices_7_days ?? 0} />
           <Row label="Last accepted" value={dateTime(webhook.last_accepted_at)} />
+          <Row label="Last valid signature" value={dateTime(webhook.last_verified_signature_at)} />
           <Row label="Last signature rejection" value={dateTime(webhook.last_signature_rejection_at)} />
         </dl>
         <p className="text-xs text-gray-500">{webhook.signature_verification}</p>

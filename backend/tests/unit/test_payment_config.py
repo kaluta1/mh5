@@ -83,6 +83,15 @@ def payment_env(monkeypatch):
     pc.invalidate_runtime()
 
 
+@pytest.fixture(autouse=True)
+def payout_logins(monkeypatch):
+    """The connection test's payout login never leaves the process: it is
+    recorded here and succeeds unless a test replaces it."""
+    seen = []
+    monkeypatch.setattr(pc, "_payout_login", lambda credentials: seen.append(credentials))
+    return seen
+
+
 def plain_admin(db, name="plainadmin") -> User:
     """An administrator who holds NEITHER Finance & Payments permission."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
@@ -487,7 +496,7 @@ def test_pay_in_keeps_working_from_the_environment_when_the_store_was_never_read
 # 6. Connection test: read-only, sanitized
 # ===========================================================================
 
-def test_connection_test_uses_only_read_requests_and_records_a_sanitized_result(db, monkeypatch):
+def test_connection_test_uses_only_read_requests_and_records_a_sanitized_result(db, monkeypatch, payout_logins):
     admin = member(db, "boss", admin=True)
     env_payout_credentials(monkeypatch)
     http, calls = fake_http()
@@ -495,9 +504,10 @@ def test_connection_test_uses_only_read_requests_and_records_a_sanitized_result(
     assert result["status"] == "OK" and result["last_success_at"] == NOW.isoformat()
     assert {c["name"]: c["status"] for c in result["checks"]} == {
         "api_status": "OK", "payin_api_key": "OK", "custody_balance": "OK", "payout_minimum": "OK",
-        "payout_network_fee": "OK"}
-    assert result["facts"] == {"custody_balance": "250.5", "payout_minimum": "0.5", "network_fee": "0.0234"}
-    assert result["payout_login"] == "NOT_TESTED"
+        "payout_network_fee": "OK", "payout_login": "OK"}
+    assert result["facts"] == {"custody_balance": "250.5", "custody_pending": "0", "payout_minimum": "0.5",
+                               "network_fee": "0.0234"}
+    assert result["payout_login"] == "OK" and len(payout_logins) == 1             # one login, nothing else
 
     paths = [url.split("/v1/", 1)[1].split("?")[0] for url, _ in calls]
     assert paths == ["status", "currencies", "balance", "payout-withdrawal/min-amount/usdtbsc", "payout/fee"]
@@ -647,7 +657,9 @@ def test_ipn_signature_is_still_required_and_rejections_are_counted(client, db, 
     health = client.get("/api/v1/admin/finance/webhook", headers=auth(admin)).json()
     assert health["last_7_days"]["REJECTED_SIGNATURE"] == 3 and health["last_7_days"]["UNKNOWN_ORDER"] == 1
     assert health["last_7_days"]["INVALID_JSON"] == 1 and health["last_7_days"]["ACCEPTED"] == 0
-    assert health["status"] == "SIGNATURE_REJECTIONS" and health["callback_url_editable"] is False
+    # The last SIGNED callback verified (after three rejected ones): the secret in force is right.
+    assert health["status"] == "HEALTHY" and health["callback_url_editable"] is False
+    assert health["last_verified_signature_at"] is not None and health["last_accepted_at"] is None
     assert health["callback_url"].endswith("/api/v1/webhooks/nowpayments")
     assert db.query(PaymentWebhookStat).count() == 3                                        # bounded: one row per outcome/day
 

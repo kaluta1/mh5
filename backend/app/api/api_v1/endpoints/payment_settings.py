@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user
 from app.core.client_ip import client_ip
+from app.core.rate_limit import _is_rate_limited
 from app.db.session import get_db
 from app.models.accounting import AuditTrail
 from app.models.affiliate import PayoutWalletChange
@@ -32,6 +33,8 @@ from app.models.user import User
 from app.services import cashout_engine, cashout_service, payment_config as config
 
 router = APIRouter()
+
+CONNECTION_TEST_LIMIT, CONNECTION_TEST_WINDOW = 6, 600        # per administrator
 
 # Actions written by the cashout services (cashout_service._audit).
 FINANCIAL_AUDIT_TABLES = ("affiliate_cashout_requests",)
@@ -241,8 +244,15 @@ def delete_credential(name: str, body: ReauthBody, request: Request, db: Session
 @router.post("/connection-test")
 def connection_test(request: Request, db: Session = Depends(get_db),
                     actor: User = Depends(get_current_active_user)):
-    """Read-only provider check (GET requests only). Creates no payment, starts
-    no payout and moves no funds."""
+    """Read-only provider check: documented GET requests and the payout login
+    (whose session is discarded at once). Creates no payment, starts no
+    payout, confirms nothing and moves no funds."""
+    # Each run logs in to the provider with the payout account. Bounded so that
+    # a wrong stored password can never be replayed into an account lock-out.
+    if _is_rate_limited(f"connection-test:{actor.id}", CONNECTION_TEST_LIMIT, CONNECTION_TEST_WINDOW):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail={"code": "RATE_LIMITED",
+                                    "message": "Too many connection tests. Try again in a few minutes."})
     try:
         return config.run_connection_test(db, actor, ip=client_ip(request))
     except config.PaymentConfigError as exc:

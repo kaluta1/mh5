@@ -19,6 +19,11 @@ export function StatusPill({ status, children }: { status: string | null | undef
   )
 }
 
+/** A pill with an explicit tone (for vocabularies `tone()` does not cover). */
+export function TonePill({ tone: shade, children }: { tone: keyof typeof TONES; children: React.ReactNode }) {
+  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${TONES[shade]}`}>{children}</span>
+}
+
 export function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-3">

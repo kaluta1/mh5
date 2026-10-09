@@ -1,0 +1,30 @@
+{
+ "secret": "synthetic-ipn-secret-for-test-vectors",
+ "vectors": {
+  "em_dash": {
+   "raw": "{\"payment_id\":123456789,\"parent_payment_id\":null,\"invoice_id\":null,\"payment_status\":\"finished\",\"pay_address\":\"address\",\"payin_extra_id\":null,\"price_amount\":10,\"price_currency\":\"usd\",\"pay_amount\":10.02,\"actually_paid\":10.02,\"actually_paid_at_fiat\":0,\"pay_currency\":\"usdtbsc\",\"order_id\":\"mh5-0123456789abcdef\",\"order_description\":\"MyHigh5 KYC — deposit 42\",\"purchase_id\":\"123456789\",\"outcome_amount\":9.97,\"outcome_currency\":\"usdtbsc\",\"payment_extra_ids\":null,\"fee\":{\"currency\":\"usdtbsc\",\"depositFee\":0.05,\"withdrawalFee\":0,\"serviceFee\":0}}",
+   "documented_node": "da3eed9f8dfcb2437bc16320cff11687137219ac07b13b21bc2794db7f65c988a4cfd970d36c8bd9e30b510878ed211f5daf2ea19630de9e68975d2cf91c1aae",
+   "arrays_kept": "da3eed9f8dfcb2437bc16320cff11687137219ac07b13b21bc2794db7f65c988a4cfd970d36c8bd9e30b510878ed211f5daf2ea19630de9e68975d2cf91c1aae"
+  },
+  "ascii_only": {
+   "raw": "{\"payment_id\":5745459419,\"payment_status\":\"waiting\",\"pay_address\":\"0xabc\",\"price_amount\":10,\"price_currency\":\"usd\",\"pay_amount\":10.02,\"actually_paid\":0,\"pay_currency\":\"usdtbsc\",\"order_id\":\"mh5-fedcba9876543210\",\"order_description\":\"MyHigh5 KYC - deposit 43\",\"purchase_id\":\"5837122679\",\"outcome_amount\":9.97,\"outcome_currency\":\"usdtbsc\"}",
+   "documented_node": "cfadd9e1045909e09aa0c9fa0e0e3833d4762ac97942bee55944ed2a7b2739f3cea31efe9f8ac8b20797aa6ab1db0e7ce11fa8ba4681adb772fe7e6858b49d18",
+   "arrays_kept": "cfadd9e1045909e09aa0c9fa0e0e3833d4762ac97942bee55944ed2a7b2739f3cea31efe9f8ac8b20797aa6ab1db0e7ce11fa8ba4681adb772fe7e6858b49d18"
+  },
+  "small_numbers": {
+   "raw": "{\"payment_id\":77,\"payment_status\":\"partially_paid\",\"price_amount\":10,\"price_currency\":\"usd\",\"pay_amount\":0.00000012,\"actually_paid\":1e-7,\"pay_currency\":\"btc\",\"order_id\":\"mh5-small\",\"outcome_amount\":0.0001817185463659148,\"fee\":{\"depositFee\":0.09853637216235617,\"serviceFee\":0}}",
+   "documented_node": "367063a2e1c512c6f9b01c38cceee63270694e5a88cf38b5c9b08bb62ed22d5e7f4bff995ad35119ad671aa6fb85720fbdcb2edb26528341798cd4217cb5adc8",
+   "arrays_kept": "367063a2e1c512c6f9b01c38cceee63270694e5a88cf38b5c9b08bb62ed22d5e7f4bff995ad35119ad671aa6fb85720fbdcb2edb26528341798cd4217cb5adc8"
+  },
+  "with_array": {
+   "raw": "{\"payment_id\":6249365965,\"payment_status\":\"finished\",\"price_amount\":1,\"price_currency\":\"usd\",\"order_id\":\"mh5-array\",\"payment_extra_ids\":[5513339153,5513339154],\"fee\":{\"b\":1,\"a\":2}}",
+   "documented_node": "98f59df5ee1fc6f440f5495357a532e03c052c11e2ed6647be3649d1449a7f07cf9f646be7d5cb9e2a12eba543ffb5cebe0bcef11fff9c4f5e1b7352dc1c6fd0",
+   "arrays_kept": "b6c760e26d3cc4fb32706017fe84a797fcff76c4e435b675cf5b4a1bb54c3f0e60f79547efc42b80d1143a177571e870b775e17ba4afc98313264f1d9c4c72d6"
+  },
+  "withdrawal": {
+   "raw": "{\"id\":\"123456789\",\"batch_withdrawal_id\":\"987654321\",\"status\":\"FINISHED\",\"error\":null,\"currency\":\"usdtbsc\",\"amount\":\"50\",\"address\":\"0x1EBAeF7Bee7B3a7B2EEfC72e86593Bf15ED37522\",\"fee\":null,\"extra_id\":null,\"hash\":\"0xhash\",\"ipn_callback_url\":\"callback_url\",\"created_at\":\"2023-07-27T15:29:40.803Z\",\"requested_at\":null,\"updated_at\":null}",
+   "documented_node": "61b2733ef48c4785486e7c6987282a37dd78ee850120ba286af34d8c4934f2d2e810fefd455b973a4aa5fe98f5c5ad231562d8dcbe3f9e2b4408d2475f3a954d",
+   "arrays_kept": "61b2733ef48c4785486e7c6987282a37dd78ee850120ba286af34d8c4934f2d2e810fefd455b973a4aa5fe98f5c5ad231562d8dcbe3f9e2b4408d2475f3a954d"
+  }
+ }
+}

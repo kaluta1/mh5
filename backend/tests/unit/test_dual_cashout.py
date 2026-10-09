@@ -92,7 +92,9 @@ def no_network(monkeypatch):
         raise AssertionError("a test tried to reach the payout provider")
 
     for name in ("send_payout_sync", "verify_payout_sync", "create_single_payout_sync", "custody_balance_sync",
-                 "payout_fee_estimate_sync", "payout_min_amount_sync", "payout_status_sync", "_get_payout_jwt_sync"):
+                 "payout_fee_estimate_sync", "payout_min_amount_sync", "payout_status_sync", "_get_payout_jwt_sync",
+                 "payout_details_sync", "find_payout_by_external_id_sync", "validate_payout_address_sync",
+                 "payout_login_check_sync", "_engine_token_sync", "_confirm_payout_sync", "_payout_get_sync"):
         monkeypatch.setattr(nowpayments, name, refuse)
 
 
@@ -482,15 +484,16 @@ def test_a_payout_the_provider_refuses_is_released_and_not_retried_at_once(ledge
     assert get_commission_balance(db, user.id).reserved == Decimal("5.00")
 
 
-def test_a_payout_the_provider_later_fails_is_released_by_reconciliation(ledger, engine_on):
+def test_a_payout_the_provider_later_rejects_is_released_by_reconciliation(ledger, engine_on):
+    """REJECTED is one of the provider's two final statuses (the other is FINISHED)."""
     db = ledger
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "5.00")
-    provider = FakeProvider(statuses={"batch-1": "FAILED"})
+    provider = FakeProvider(statuses={"batch-1": "REJECTED"})
     run(db, provider)
     assert run(db, provider)["reconciled"] == {"FAILED": 1}
     row = cashouts(db, user)[0]
-    assert (row.status, row.failure_code) == ("failed", "PROVIDER_FAILED")
+    assert (row.status, row.failure_code) == ("failed", "PROVIDER_REJECTED")
     balance = get_commission_balance(db, user.id)
     assert (balance.available, balance.reserved, balance.paid_lifetime) == (Decimal("5.00"), 0, 0)
     assert db.query(JournalEntry).count() == 0
@@ -829,5 +832,5 @@ def test_every_cashout_step_is_audited_without_full_wallet_addresses(ledger, eng
     run(db, provider)
     row = cashouts(db, user)[0]
     trail = db.query(AuditTrail).filter_by(table_name="affiliate_cashout_requests", record_id=row.id).all()
-    assert [a.action for a in trail] == ["CASHOUT_RESERVED", "CASHOUT_COMPLETED"]
+    assert [a.action for a in trail] == ["CASHOUT_RESERVED", "CASHOUT_COMPLETED", "CASHOUT_PROVIDER_EVIDENCE"]
     assert WALLET not in str([a.new_values for a in trail])

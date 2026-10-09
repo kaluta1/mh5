@@ -77,6 +77,18 @@ export type ConnectionResult = {
   payout_login: string
 }
 
+/** One vocabulary for every provider capability (set by the server). */
+export type ReadinessState = 'DISABLED' | 'UNVERIFIED' | 'CONFIGURED' | 'BLOCKED' | 'VERIFIED'
+
+export type ProviderReadiness = {
+  states: ReadinessState[]
+  items: { key: string; label: string; state: ReadinessState; detail: string }[]
+  outstanding: string[]
+  last_test_at: string | null
+  last_success_at: string | null
+  last_error: { check: string; code: string; message: string; at: string | null } | null
+}
+
 export type ProviderView = {
   provider: string
   display_name: string
@@ -91,6 +103,7 @@ export type ProviderView = {
   credentials: CredentialStatus[]
   encryption_key_configured: boolean
   connection: ConnectionResult
+  readiness?: ProviderReadiness
   last_configuration_update: string | null
   configuration_version: number
 }
@@ -122,7 +135,9 @@ export type WebhookHealth = {
   status: string
   last_7_days: Record<string, number>
   last_accepted_at: string | null
+  last_verified_signature_at?: string | null
   last_signature_rejection_at: string | null
+  payout_notices_7_days?: number
   signature_verification: string
 }
 
@@ -183,6 +198,19 @@ const CHECK_LABEL: Record<string, string> = {
   custody_balance: 'Custody balance (payout key)',
   payout_minimum: 'Provider payout minimum',
   payout_network_fee: 'Network fee estimate',
+  payout_login: 'Payout login',
+}
+
+/**
+ * VERIFIED is the only state shown as proven. CONFIGURED means the credentials
+ * are present and nothing has proven that they work, so it is never green.
+ */
+export function readinessTone(state: string | null | undefined): 'green' | 'amber' | 'red' | 'gray' {
+  const value = (state ?? '').toUpperCase()
+  if (value === 'VERIFIED') return 'green'
+  if (value === 'CONFIGURED') return 'amber'
+  if (value === 'BLOCKED') return 'red'
+  return 'gray'
 }
 
 export const webhookStatusLabel = (status: string) => WEBHOOK_STATUS_LABEL[status] ?? status

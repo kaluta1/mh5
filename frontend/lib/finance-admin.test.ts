@@ -6,6 +6,7 @@ import {
   credentialPayload,
   financeErrorText,
   isFinanceSection,
+  readinessTone,
   tone,
   type SettingField,
 } from './finance-admin'
@@ -53,5 +54,12 @@ describe('finance admin helpers', () => {
     expect(tone('IP_NOT_WHITELISTED')).toBe('red')
     expect(tone('NOT_VERIFIED')).toBe('amber')
     expect(tone('NOT CONFIGURED')).toBe('gray')
+    // Readiness: only VERIFIED is shown as proven.
+    expect(readinessTone('VERIFIED')).toBe('green')
+    expect(readinessTone('CONFIGURED')).toBe('amber')
+    expect(readinessTone('BLOCKED')).toBe('red')
+    expect(readinessTone('UNVERIFIED')).toBe('gray')
+    expect(readinessTone('DISABLED')).toBe('gray')
+    expect(readinessTone(undefined)).toBe('gray')
   })
 })

@@ -857,10 +857,14 @@ def ipn_secret(db: Session) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Connection test (GET only: creates nothing, sends nothing, moves nothing)
+# Connection test. Read-only: documented GET requests, plus the provider's
+# login request (POST /v1/auth), which only returns a five-minute session
+# token that is discarded at once. It creates no payment, starts no payout,
+# confirms nothing and moves nothing.
 # ---------------------------------------------------------------------------
 
 HttpGet = Callable[[str, Dict[str, str]], Tuple[int, str]]
+PayoutLogin = Callable[["ProviderCredentials"], None]
 
 
 def _http_get(url: str, headers: Dict[str, str]) -> Tuple[int, str]:
@@ -885,6 +889,34 @@ def _classify(status_code: int, body: str) -> str:
     return "PROVIDER_ERROR" if status_code >= 500 else "REFUSED"
 
 
+def _payout_login(credentials: "ProviderCredentials") -> None:
+    from app.services import nowpayments_service
+
+    nowpayments_service.payout_login_check_sync(credentials)
+
+
+def _login_result(credentials: "ProviderCredentials", login: PayoutLogin) -> str:
+    """One code for the payout login check; never the provider's message."""
+    from app.services import nowpayments_service
+
+    if not (credentials.get("PAYOUT_EMAIL") and credentials.get("PAYOUT_PASSWORD")):
+        return "NOT_CONFIGURED"
+    try:
+        login(credentials)
+    except nowpayments_service.NowPaymentsError as exc:
+        if exc.status_code is None:
+            return "INVALID_RESPONSE" if exc.stage == "auth" else "UNREACHABLE"
+        if exc.ip_refused:
+            return "IP_NOT_WHITELISTED"
+        code = int(exc.status_code)
+        # Any other 4xx answer to a login is a refused login (the provider
+        # answers an unknown account with 404).
+        return "AUTH_FAILED" if 400 <= code < 500 and code != 429 else _classify(code, "")
+    except Exception:  # noqa: BLE001 - no answer
+        return "UNREACHABLE"
+    return "OK"
+
+
 CONNECTION_MESSAGES = {
     "OK": "Successful.",
     "PARTIAL": "Pay-in is working. Payout credentials are not configured.",
@@ -900,12 +932,13 @@ CONNECTION_MESSAGES = {
     "REFUSED": "The provider refused the request.",
     "UNREACHABLE": "The provider could not be reached.",
     "INVALID_RESPONSE": "The provider's answer could not be read.",
+    "NOT_TESTED": "Not tested (an earlier check has to succeed first).",
 }
 
 
 def run_connection_test(db: Session, actor, *, http: Optional[HttpGet] = None, ip: Optional[str] = None,
-                        now: Optional[datetime] = None) -> dict:
-    """Check the provider with documented read-only GET requests and record a
+                        now: Optional[datetime] = None, login: Optional[PayoutLogin] = None) -> dict:
+    """Check the provider with documented read-only requests and record a
     sanitized result (codes and numbers; never a credential or a response
     body). Commits."""
     import json
@@ -953,7 +986,10 @@ def run_connection_test(db: Session, actor, *, http: Optional[HttpGet] = None, i
     payout_key = credentials.get("PAYOUT_API_KEY")
     balance = get("custody_balance", "balance", payout_key)
     if isinstance(balance, dict):
-        facts["custody_balance"] = number((balance.get(currency) or {}).get("amount") or 0) or "0"
+        entry = next((v for k, v in balance.items() if str(k).lower() == currency), None)
+        facts["custody_balance"] = number((entry or {}).get("amount") if isinstance(entry, dict) else 0) or "0"
+        if isinstance(entry, dict) and number(entry.get("pendingAmount")):
+            facts["custody_pending"] = number(entry.get("pendingAmount"))
     minimum = get("payout_minimum", f"payout-withdrawal/min-amount/{currency}", payout_key)
     if isinstance(minimum, dict):
         value = number(minimum.get("result") or minimum.get("min_amount"))
@@ -965,8 +1001,18 @@ def run_connection_test(db: Session, actor, *, http: Optional[HttpGet] = None, i
         if value:
             facts["network_fee"] = value
 
+    # The payout login is tried only when the payout key itself was accepted:
+    # a wrong password is never sent again and again to a provider that is
+    # already refusing this server.
+    if checks["custody_balance"] == "OK":
+        checks["payout_login"] = _login_result(credentials, login or _payout_login)
+    elif checks["custody_balance"] == "NOT_CONFIGURED":
+        checks["payout_login"] = "NOT_CONFIGURED"
+    else:
+        checks["payout_login"] = "NOT_TESTED"
+
     payin_ok = checks["api_status"] == "OK" and checks["payin_api_key"] == "OK"
-    payout_names = ("custody_balance", "payout_minimum", "payout_network_fee")
+    payout_names = ("custody_balance", "payout_minimum", "payout_network_fee", "payout_login")
     if all(code == "OK" for code in checks.values()):
         overall = "OK"
     elif payin_ok and all(checks[n] == "NOT_CONFIGURED" for n in payout_names):
@@ -976,7 +1022,7 @@ def run_connection_test(db: Session, actor, *, http: Optional[HttpGet] = None, i
 
     detail = {"checks": checks, "facts": facts, "environment": "sandbox" if settings.NOWPAYMENTS_SANDBOX else "production",
               "payin_source": credentials.payin_source, "payout_source": credentials.payout_source,
-              "payout_login": "NOT_TESTED"}
+              "payout_login": checks["payout_login"]}
     row = _row_for_update(db)
     row.last_connection_test_at = now
     row.last_connection_test_status = overall
@@ -1013,7 +1059,11 @@ def connection_view(row: Optional[PaymentSettings]) -> dict:
 # Webhook (IPN) health: bounded daily counters, never a request body
 # ---------------------------------------------------------------------------
 
-WEBHOOK_OUTCOMES = ("ACCEPTED", "REJECTED_SIGNATURE", "INVALID_JSON", "UNKNOWN_ORDER", "IDENTITY_REJECTED", "ERROR")
+WEBHOOK_OUTCOMES = ("ACCEPTED", "REJECTED_SIGNATURE", "INVALID_JSON", "UNKNOWN_ORDER", "IDENTITY_REJECTED", "ERROR",
+                    "PAYOUT_NOTICE")
+
+
+SIGNED_WEBHOOK_OUTCOMES = ("ACCEPTED", "UNKNOWN_ORDER", "IDENTITY_REJECTED", "ERROR", "PAYOUT_NOTICE")
 
 
 def record_webhook(db: Session, outcome: str, *, now: Optional[datetime] = None) -> None:
@@ -1057,11 +1107,14 @@ def webhook_health(db: Session, *, now: Optional[datetime] = None) -> dict:
             last[row.outcome] = row.last_at
     url = nowpayments_service.ipn_callback_url()
     accepted, rejected = last["ACCEPTED"], last["REJECTED_SIGNATURE"]
+    # Every outcome below was reached only AFTER the signature had verified.
+    signed = [last[o] for o in SIGNED_WEBHOOK_OUTCOMES if last.get(o) is not None]
+    verified = max(signed) if signed else None
     if not rows:
         status = "NO_CALLBACKS_RECORDED"
-    elif rejected is not None and (accepted is None or rejected > accepted):
+    elif rejected is not None and (verified is None or rejected > verified):
         status = "SIGNATURE_REJECTIONS"
-    elif accepted is not None:
+    elif verified is not None:
         status = "HEALTHY"
     else:
         status = "ATTENTION"
@@ -1072,7 +1125,9 @@ def webhook_health(db: Session, *, now: Optional[datetime] = None) -> dict:
         "status": status,
         "last_7_days": totals,
         "last_accepted_at": accepted.isoformat() if accepted else None,
+        "last_verified_signature_at": verified.isoformat() if verified else None,
         "last_signature_rejection_at": rejected.isoformat() if rejected else None,
+        "payout_notices_7_days": totals.get("PAYOUT_NOTICE", 0),
         "signature_verification": "HMAC-SHA512 over the sorted JSON body (x-nowpayments-sig). Never bypassed.",
     }
 
@@ -1144,9 +1199,154 @@ def provider_view(db: Session) -> dict:
         "credentials": statuses,
         "encryption_key_configured": payment_crypto.key_configured(),
         "connection": connection,
+        "readiness": readiness_view(db, config=config, statuses=statuses, connection=connection),
         "last_configuration_update": row.updated_at.isoformat() if row is not None and row.updated_at else None,
         "configuration_version": config.version,
     }
+
+
+# One vocabulary for every provider capability:
+#   DISABLED     switched off here (provider, feature or server switch)
+#   UNVERIFIED   not configured, or configured but never proven
+#   CONFIGURED   the credentials are present; nothing has proven that they work
+#   BLOCKED      a check ran and the provider refused (the reason is given)
+#   VERIFIED     a check against the provider succeeded with the current credentials
+# Nothing is VERIFIED because a credential is present.
+READINESS_STATES = ("DISABLED", "UNVERIFIED", "CONFIGURED", "BLOCKED", "VERIFIED")
+
+
+def _check_state(configured: bool, code: Optional[str]) -> str:
+    if not configured:
+        return "UNVERIFIED"
+    if code == "OK":
+        return "VERIFIED"
+    if code in (None, "NOT_TESTED", "NOT_CONFIGURED"):
+        return "CONFIGURED"
+    return "BLOCKED"
+
+
+def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statuses: Optional[List[dict]] = None,
+                   connection: Optional[dict] = None, webhook: Optional[dict] = None) -> dict:
+    """What is proven, what is only configured and what the provider refused,
+    per capability, with the outstanding requirements in plain words. Built
+    only from the stored result of the last connection test, the webhook
+    counters and the configuration: it calls nobody."""
+    config = config or load(db)
+    statuses = statuses if statuses is not None else credential_status(db, config)
+    connection = connection or connection_view(load_row(db))
+    webhook = webhook or webhook_health(db)
+    in_use = {s["name"]: s["in_use"] == "CONFIGURED" for s in statuses}
+    codes = {c["name"]: c["status"] for c in connection["checks"]}
+    items: List[dict] = []
+    todo: List[str] = []
+
+    def item(key: str, label: str, state: str, detail: str) -> None:
+        items.append({"key": key, "label": label, "state": state, "detail": detail})
+
+    def explain(code: Optional[str]) -> str:
+        return CONNECTION_MESSAGES.get(code or "", "No connection test has been run with the current credentials.")
+
+    if not config.provider_enabled:
+        item("provider", "Provider", "DISABLED", "The provider is switched off in Payment Providers.")
+        todo.append("Switch the provider on in Payment Providers.")
+    else:
+        item("provider", "Provider", "CONFIGURED", "The provider is switched on.")
+
+    state = _check_state(in_use["PAYIN_API_KEY"], codes.get("payin_api_key"))
+    item("api_authentication", "API authentication (pay-in key)", state,
+         explain(codes.get("payin_api_key")) if in_use["PAYIN_API_KEY"] else "The pay-in API key is not configured.")
+    if state != "VERIFIED":
+        todo.append("Configure the pay-in API key and run the connection test." if not in_use["PAYIN_API_KEY"]
+                    else "Run the connection test to prove the pay-in API key.")
+
+    if not in_use["IPN_SECRET"]:
+        item("ipn", "Payment notifications (IPN)", "UNVERIFIED", "The IPN secret is not configured.")
+        todo.append("Generate an IPN secret in the provider dashboard and configure the same value here.")
+    elif not webhook["callback_url_secure"]:
+        item("ipn", "Payment notifications (IPN)", "BLOCKED", "The callback URL is not an https address.")
+        todo.append("Set BACKEND_PUBLIC_URL to the public https address of the API.")
+    elif webhook["status"] == "HEALTHY":
+        item("ipn", "Payment notifications (IPN)", "VERIFIED",
+             "The most recent signed callback from the provider verified with the configured IPN secret.")
+    elif webhook["status"] == "SIGNATURE_REJECTIONS":
+        item("ipn", "Payment notifications (IPN)", "BLOCKED",
+             "The most recent callbacks were rejected: their signature did not verify.")
+        todo.append("Check that the IPN secret configured here is the one shown in the provider dashboard "
+                    "(it is displayed in full only when it is generated).")
+    else:
+        item("ipn", "Payment notifications (IPN)", "CONFIGURED",
+             "The IPN secret is configured. No signed callback has been accepted yet, so it is not proven.")
+        todo.append("Make one test payment and confirm that its callback is accepted.")
+
+    payout_key = in_use["PAYOUT_API_KEY"]
+    custody_code = codes.get("custody_balance")
+    custody = _check_state(payout_key, custody_code)
+    item("custody", "Custody balance access", custody,
+         explain(custody_code) if payout_key else "The payout API key is not configured.")
+    whitelist = ("BLOCKED" if "IP_NOT_WHITELISTED" in codes.values()
+                 else "VERIFIED" if custody == "VERIFIED" else "UNVERIFIED")
+    item("ip_whitelist", "Server IP whitelist", whitelist,
+         CONNECTION_MESSAGES["IP_NOT_WHITELISTED"] if whitelist == "BLOCKED"
+         else "The provider answered a request that needs a whitelisted address." if whitelist == "VERIFIED"
+         else "Not determinable until the payout API key is tested.")
+    if whitelist == "BLOCKED":
+        todo.append("Whitelist this server's IPv4 and IPv6 addresses in the provider dashboard "
+                    "(Settings > Whitelist).")
+    elif custody != "VERIFIED":
+        todo.append("Configure the payout API key and run the connection test." if not payout_key
+                    else "Run the connection test to prove custody access.")
+
+    login_configured = in_use["PAYOUT_EMAIL"] and in_use["PAYOUT_PASSWORD"]
+    login = _check_state(login_configured, codes.get("payout_login"))
+    item("payout_login", "Payout login", login,
+         explain(codes.get("payout_login")) if login_configured
+         else "The payout login email and password are not configured.")
+    if login != "VERIFIED":
+        todo.append("Configure the payout login email and password." if not login_configured
+                    else "Run the connection test to prove the payout login.")
+
+    # The second factor can only be proven by confirming a real payout.
+    item("payout_2fa", "Payout second factor (authenticator)",
+         "CONFIGURED" if in_use["PAYOUT_TOTP_SECRET"] else "UNVERIFIED",
+         "The authenticator secret is configured. It can be proven only by confirming a real payout, so it is "
+         "never shown as verified here." if in_use["PAYOUT_TOTP_SECRET"]
+         else "The authenticator (TOTP) secret is not configured.")
+    if not in_use["PAYOUT_TOTP_SECRET"]:
+        todo.append("Enable authenticator-app two-step verification on the provider account and configure its "
+                    "secret here (email codes cannot be automated).")
+
+    credentials_ready = all(in_use[n] for n in PAYOUT_CREDENTIALS)
+    if not crypto_master_switch():
+        payouts, detail = "DISABLED", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off."
+    elif not (config.provider_enabled and config.crypto_cashout_enabled and config.crypto_auto_payout_enabled):
+        payouts, detail = "DISABLED", "Automatic payouts are switched off in Crypto Cashout."
+    elif not credentials_ready:
+        payouts, detail = "UNVERIFIED", "A payout credential is missing."
+    elif "BLOCKED" in (custody, login, whitelist):
+        payouts, detail = "BLOCKED", "The provider refused a payout check (see above)."
+    elif custody == "VERIFIED" and login == "VERIFIED":
+        payouts, detail = "CONFIGURED", ("Custody access and the payout login are proven. Creating and "
+                                         "confirming a payout is proven only by the first real payout.")
+    else:
+        payouts, detail = "CONFIGURED", "The payout credentials are present but have not been tested."
+    item("automatic_payouts", "Automatic crypto payouts", payouts, detail)
+
+    todo.append("Provider side, cannot be checked from here: custody enabled on the account, the payout "
+                "wallet addresses whitelisted (or address whitelisting switched off by the provider), and "
+                "the custody balance funded in the payout currency.")
+    return {"states": list(READINESS_STATES), "items": items, "outstanding": todo,
+            "last_test_at": connection["tested_at"], "last_success_at": connection["last_success_at"],
+            "last_error": _last_error(connection)}
+
+
+def _last_error(connection: dict) -> Optional[dict]:
+    """The first check of the last connection test that did not succeed, as a
+    code and a fixed sentence. Never a provider response."""
+    for check in connection["checks"]:
+        if check["status"] not in ("OK", "NOT_CONFIGURED", "NOT_TESTED"):
+            return {"check": check["name"], "code": check["status"], "message": check["message"],
+                    "at": connection["tested_at"]}
+    return None
 
 
 def audit_view(db: Session, *, skip: int = 0, limit: int = 50) -> dict:

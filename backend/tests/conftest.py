@@ -65,6 +65,10 @@ def _patch_metadata_for_sqlite(metadata) -> None:
 import pytest
 from fastapi.testclient import TestClient
 
+# Fail-closed guard, active in every test: nothing can be sent to the payment
+# provider, and a test that tries fails (see tests/provider_network_guard.py).
+from tests.provider_network_guard import _no_local_provider_credentials, provider_network  # noqa: E402,F401
+
 import app.models  # noqa: F401 — register all models
 from app.db.base_class import Base
 from app.db.session import get_db

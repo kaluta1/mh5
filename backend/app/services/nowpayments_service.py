@@ -3,11 +3,11 @@ NOWPayments integration — create payments, poll status, verify IPN callbacks, 
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -36,9 +36,6 @@ STATUS_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, po
 PAYOUT_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, pool=5.0)
 AUTH_HTTP_TIMEOUT = httpx.Timeout(15.0, connect=5.0, read=10.0, write=10.0, pool=5.0)
 
-_jwt_cache: dict[str, float | str | None] = {"token": None, "expires_at": 0.0}
-_jwt_lock = asyncio.Lock()
-
 FINISHED_STATUSES = {"finished", "confirmed"}
 PENDING_STATUSES = {"waiting", "confirming", "sending"}
 PARTIAL_STATUSES = {"partially_paid"}
@@ -48,11 +45,19 @@ EXPIRED_STATUSES = {"expired"}
 
 class NowPaymentsError(Exception):
     """Raised when NOWPayments API calls fail. `status_code` is the HTTP status
-    the provider answered with (None when there was no answer at all)."""
+    the provider answered with (None when there was no answer at all), `code`
+    the provider's own error code when it sent one, `stage` the step that
+    failed (auth / create / verify / read) and `ip_refused` whether it refused
+    this server's IP address. The message never carries a credential or a
+    response body."""
 
-    def __init__(self, message: str = "", *, status_code: Optional[int] = None):
+    def __init__(self, message: str = "", *, status_code: Optional[int] = None, code: Optional[str] = None,
+                 stage: Optional[str] = None, ip_refused: bool = False):
         super().__init__(message)
         self.status_code = status_code
+        self.code = code
+        self.stage = stage
+        self.ip_refused = ip_refused
 
 
 def api_base() -> str:
@@ -177,15 +182,125 @@ def resolve_deposit_status_from_provider(deposit: Deposit, payload: Dict[str, An
     return mapped
 
 
-def verify_ipn_signature(body: Dict[str, Any], signature: str, *, secret: Optional[str] = None) -> bool:
-    """HMAC-SHA512 over the sorted JSON body. `secret` is the IPN secret in
-    force (payment_config.ipn_secret); None means the environment secret."""
+# ---------------------------------------------------------------------------
+# IPN signature
+#
+# NOWPayments documents: "Sort the POST request by keys and convert it to
+# string using JSON.stringify ... Sign a string with an IPN-secret key with
+# HMAC and sha-512", and publishes a Node, a PHP and a Python example. The
+# examples do NOT produce the same string for every body:
+#   * JSON.stringify keeps non-ASCII characters as they are (an em dash stays
+#     an em dash); Python's json.dumps writes them as \uXXXX escapes;
+#   * JavaScript writes 1e-7 where Python writes 1e-07;
+#   * the Node example rebuilds an array as an object keyed by its indexes.
+# The provider signs with its own serializer, so a callback is accepted when
+# its signature equals the HMAC of ANY of these canonical forms. Each form is
+# still an HMAC-SHA512 with the IPN secret over the whole sorted body: nothing
+# is accepted unsigned and no field is left out.
+# ---------------------------------------------------------------------------
+
+class _JsonNumber(str):
+    """A JSON number kept as the exact characters that were received."""
+
+
+def _reject_constant(_name: str):
+    raise ValueError("not a JSON value")
+
+
+def _js_number(token: str) -> str:
+    """The number as JavaScript's JSON.stringify writes it."""
+    if re.fullmatch(r"-?(0|[1-9]\d{0,14})", token):
+        return "0" if token == "-0" else token
+    value = float(token)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError("not a JSON number")
+    if value == 0:
+        return "0"
+    sign, digits, exponent = Decimal(repr(value)).as_tuple()
+    text = "".join(str(d) for d in digits).rstrip("0") or "0"
+    exponent += len(digits) - len(text)
+    k, n = len(text), len(text) + exponent            # ECMA-262 Number::toString
+    if k <= n <= 21:
+        out = text + "0" * (n - k)
+    elif 0 < n <= 21:
+        out = f"{text[:n]}.{text[n:]}"
+    elif -6 < n <= 0:
+        out = "0." + "0" * (-n) + text
+    else:
+        e = n - 1
+        mantissa = text[0] + ("." + text[1:] if k > 1 else "")
+        out = f"{mantissa}e{'+' if e >= 0 else '-'}{abs(e)}"
+    return ("-" if sign else "") + out
+
+
+def _canonical(value: Any, *, js_numbers: bool, arrays_as_objects: bool) -> str:
+    if isinstance(value, _JsonNumber):
+        return _js_number(str(value)) if js_numbers else str(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if value is None:
+        return "null"
+    if value is True or value is False:
+        return "true" if value else "false"
+    if isinstance(value, list):
+        items = [_canonical(v, js_numbers=js_numbers, arrays_as_objects=arrays_as_objects) for v in value]
+        if arrays_as_objects:
+            return "{" + ",".join(f'"{i}":{item}' for i, item in enumerate(items)) + "}"
+        return "[" + ",".join(items) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(
+            json.dumps(key, ensure_ascii=False) + ":"
+            + _canonical(value[key], js_numbers=js_numbers, arrays_as_objects=arrays_as_objects)
+            for key in sorted(value)) + "}"
+    raise ValueError("not a JSON value")
+
+
+def ipn_canonical_forms(body: Dict[str, Any], raw: Optional[bytes] = None) -> List[str]:
+    """Every documented canonical string for one callback body, without
+    duplicates. `raw` is the request body exactly as received; with it the
+    numbers are taken from the bytes on the wire instead of from a float."""
+    forms: List[str] = []
+
+    def add(text: str) -> None:
+        if text not in forms:
+            forms.append(text)
+
+    if raw is not None:
+        try:
+            exact = json.loads(raw.decode("utf-8"), parse_float=_JsonNumber, parse_int=_JsonNumber,
+                               parse_constant=_reject_constant)
+            if isinstance(exact, dict):
+                for arrays_as_objects in (False, True):
+                    for js_numbers in (False, True):
+                        add(_canonical(exact, js_numbers=js_numbers, arrays_as_objects=arrays_as_objects))
+        except (ValueError, UnicodeDecodeError, RecursionError):
+            pass
+    try:
+        # The provider's Python example (non-ASCII as \uXXXX), then the same with it kept.
+        add(json.dumps(body, sort_keys=True, separators=(",", ":")))
+        add(json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+    except (TypeError, ValueError):
+        pass
+    return forms
+
+
+def verify_ipn_signature(body: Dict[str, Any], signature: str, *, secret: Optional[str] = None,
+                         raw: Optional[bytes] = None) -> bool:
+    """HMAC-SHA512 (hex, header x-nowpayments-sig) over the sorted JSON body,
+    compared in constant time. `secret` is the IPN secret in force
+    (payment_config.ipn_secret); None means the environment secret. A missing
+    secret, a missing or malformed signature, or a body that is not a JSON
+    object is refused."""
     secret = (settings.NOWPAYMENTS_IPN_SECRET or "").strip() if secret is None else secret.strip()
-    if not secret or not signature:
+    received = str(signature or "").strip().lower()
+    if not secret or not re.fullmatch(r"[0-9a-f]{128}", received) or not isinstance(body, dict):
         return False
-    payload = json.dumps(body, sort_keys=True, separators=(",", ":"))
-    computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha512).hexdigest()
-    return hmac.compare_digest(computed, signature)
+    key = secret.encode("utf-8")
+    matched = False
+    for form in ipn_canonical_forms(body, raw):
+        computed = hmac.new(key, form.encode("utf-8"), hashlib.sha512).hexdigest()
+        matched = hmac.compare_digest(computed, received) or matched
+    return matched
 
 
 def apply_nowpayments_payload_to_deposit(deposit: Deposit, payload: Dict[str, Any]) -> DepositStatus:
@@ -231,6 +346,14 @@ def finalize_deposit_from_nowpayments(
         return reverse_provider_refund(db, deposit, payload, defer_commit=defer_commit)
 
     if deposit.status == DepositStatus.VALIDATED:
+        return True
+
+    from app.services.financial_reversal import _REFUND_MARKER
+
+    if _REFUND_MARKER in str(deposit.admin_notes or ""):
+        # Already refunded and reversed. An older "finished" notification that
+        # arrives late (or is replayed) must not validate the deposit again.
+        logger.warning("Deposit %s was refunded; ignoring provider status %s", deposit.id, provider_status)
         return True
 
     new_status = apply_nowpayments_payload_to_deposit(deposit, payload)
@@ -294,8 +417,17 @@ async def create_payment(
         response = await client.post(f"{api_base()}/payment", headers=_headers(), json=payload)
         if response.status_code >= 400:
             logger.error("NOWPayments create failed: %s %s", response.status_code, response.text)
-            raise NowPaymentsError(response.text or "NOWPayments payment creation failed")
-        return response.json()
+            raise NowPaymentsError(response.text or "NOWPayments payment creation failed",
+                                   status_code=response.status_code, stage="create")
+        try:
+            created = response.json()
+        except ValueError as exc:
+            raise NowPaymentsError("NOWPayments payment creation returned an unreadable answer",
+                                   stage="create") from exc
+        if not isinstance(created, dict) or not created.get("payment_id"):
+            # Without the provider's payment id the deposit could never be polled.
+            raise NowPaymentsError("NOWPayments payment creation returned no payment id", stage="create")
+        return created
 
 
 async def get_payment_status(payment_id: str) -> Dict[str, Any]:
@@ -408,200 +540,59 @@ def payouts_configured() -> bool:
     return bool(payout_config_status()["payouts_ready"])
 
 
-def _get_payout_jwt_sync() -> str:
-    if not settings.NOWPAYMENTS_EMAIL or not settings.NOWPAYMENTS_PASSWORD:
-        raise NowPaymentsError("NOWPAYMENTS_EMAIL/NOWPAYMENTS_PASSWORD required for payouts.")
-
-    if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
-        return str(_jwt_cache["token"])
-
-    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
-        resp = client.post(
-            f"{_payout_base()}/auth",
-            json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
-        )
-    if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}: {resp.text[:300]}")
-    token = resp.json().get("token")
-    if not token:
-        raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
-
-    _jwt_cache["token"] = token
-    _jwt_cache["expires_at"] = time.time() + 4.5 * 60
-    return str(token)
+def _retired_payout_path(*_args, **_kwargs):
+    """The earlier direct payout senders. They used the environment credentials
+    without the Finance & Payments switches, sent no unique reference and let
+    the payout key fall back to the pay-in key. They are kept only as names:
+    every one of them refuses, so the cashout engine below is the single path
+    that can ask the provider to send money."""
+    raise NowPaymentsError("This payout path is retired. Crypto cashouts are sent only by the cashout engine.")
 
 
-async def _get_payout_jwt() -> str:
-    if not settings.NOWPAYMENTS_EMAIL or not settings.NOWPAYMENTS_PASSWORD:
-        raise NowPaymentsError("NOWPAYMENTS_EMAIL/NOWPAYMENTS_PASSWORD required for payouts.")
-
-    async with _jwt_lock:
-        if _jwt_cache["token"] and time.time() < float(_jwt_cache["expires_at"] or 0):
-            return str(_jwt_cache["token"])
-
-        async with httpx.AsyncClient(timeout=AUTH_HTTP_TIMEOUT) as client:
-            resp = await client.post(
-                f"{_payout_base()}/auth",
-                json={"email": settings.NOWPAYMENTS_EMAIL, "password": settings.NOWPAYMENTS_PASSWORD},
-            )
-        if resp.status_code >= 400:
-            raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}: {resp.text[:300]}")
-        token = resp.json().get("token")
-        if not token:
-            raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
-
-        _jwt_cache["token"] = token
-        _jwt_cache["expires_at"] = time.time() + 4.5 * 60
-        return str(token)
+_get_payout_jwt_sync = _retired_payout_path
+send_payout_sync = _retired_payout_path
+verify_payout_sync = _retired_payout_path
+send_single_payout_sync = _retired_payout_path
 
 
-def _payout_headers_sync() -> Dict[str, str]:
-    token = _get_payout_jwt_sync()
-    return {
-        "x-api-key": payout_api_key(),
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+async def send_payout(*_args, **_kwargs) -> dict:
+    return _retired_payout_path()
 
 
-async def _payout_headers() -> Dict[str, str]:
-    token = await _get_payout_jwt()
-    return {
-        "x-api-key": payout_api_key(),
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+async def verify_payout(*_args, **_kwargs) -> dict:
+    return _retired_payout_path()
 
 
-def send_payout_sync(*, withdrawals: List[dict]) -> dict:
-    if not payout_api_key():
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
-
-    with httpx.Client(timeout=PAYOUT_HTTP_TIMEOUT) as client:
-        resp = client.post(
-            f"{_payout_base()}/payout",
-            headers=_payout_headers_sync(),
-            json={"withdrawals": withdrawals},
-        )
-    if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:300]}")
-    return resp.json()
-
-
-async def send_payout(*, withdrawals: List[dict]) -> dict:
-    if not payout_api_key():
-        raise NowPaymentsError("NOWPAYMENTS_PAYOUT_API_KEY / NOWPAYMENTS_API_KEY is not configured.")
-
-    async with httpx.AsyncClient(timeout=PAYOUT_HTTP_TIMEOUT) as client:
-        resp = await client.post(
-            f"{_payout_base()}/payout",
-            headers=await _payout_headers(),
-            json={"withdrawals": withdrawals},
-        )
-    if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}: {resp.text[:300]}")
-    return resp.json()
-
-
-def verify_payout_sync(batch_withdrawal_id: str) -> dict:
-    secret = payout_totp_secret()
-    if not secret:
-        raise NowPaymentsError(
-            "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured. "
-            "Enable Authenticator 2FA on the NOWPayments dashboard (not email 2FA) "
-            "and store the TOTP secret in backend/.env — same as SmartBlogger."
-        )
-
-    code = pyotp.TOTP(secret).now()
-    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
-        resp = client.post(
-            f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
-            headers=_payout_headers_sync(),
-            json={"verification_code": code},
-        )
-    if resp.status_code >= 400:
-        raise NowPaymentsError(
-            f"NowPayments POST /payout/{batch_withdrawal_id}/verify -> {resp.status_code}: {resp.text[:300]}"
-        )
-    try:
-        return resp.json()
-    except ValueError:
-        return {"raw": resp.text}
-
-
-async def verify_payout(batch_withdrawal_id: str) -> dict:
-    secret = payout_totp_secret()
-    if not secret:
-        raise NowPaymentsError(
-            "NOWPAYMENTS_PAYOUT_TOTP_SECRET is not configured. "
-            "Enable Authenticator 2FA on the NOWPayments dashboard (not email 2FA) "
-            "and store the TOTP secret in backend/.env — same as SmartBlogger."
-        )
-
-    code = pyotp.TOTP(secret).now()
-    async with httpx.AsyncClient(timeout=AUTH_HTTP_TIMEOUT) as client:
-        resp = await client.post(
-            f"{_payout_base()}/payout/{batch_withdrawal_id}/verify",
-            headers=await _payout_headers(),
-            json={"verification_code": code},
-        )
-    if resp.status_code >= 400:
-        raise NowPaymentsError(
-            f"NowPayments POST /payout/{batch_withdrawal_id}/verify -> {resp.status_code}: {resp.text[:300]}"
-        )
-    try:
-        return resp.json()
-    except ValueError:
-        return {"raw": resp.text}
-
-
-def send_single_payout_sync(
-    *,
-    wallet_address: str,
-    amount_usd: float,
-    currency: str = "usdtbsc",
-) -> dict:
-    """
-    Create + verify a single USDT payout. Never send extra_id for BEP20 — it causes silent REJECTED.
-    """
-    pay_currency = normalize_pay_currency(currency) or "usdtbsc"
-    withdrawal = {
-        "address": wallet_address,
-        "amount": round(amount_usd, 2),
-        "currency": pay_currency,
-    }
-    created = send_payout_sync(withdrawals=[withdrawal])
-    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
-    if not batch_id:
-        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
-    verify_payout_sync(batch_id)
-    return created
-
-
-async def send_single_payout(
-    *,
-    wallet_address: str,
-    amount_usd: float,
-    currency: str = "usdtbsc",
-) -> dict:
-    pay_currency = normalize_pay_currency(currency) or "usdtbsc"
-    withdrawal = {
-        "address": wallet_address,
-        "amount": round(amount_usd, 2),
-        "currency": pay_currency,
-    }
-    created = await send_payout(withdrawals=[withdrawal])
-    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
-    if not batch_id:
-        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
-    await verify_payout(batch_id)
-    return created
+async def send_single_payout(*_args, **_kwargs) -> dict:
+    return _retired_payout_path()
 
 
 # ---------------------------------------------------------------------------
-# Payout engine helpers (dual cashout). Read calls plus one create call that
-# reports WHICH step failed, so the caller can tell "not accepted" from
-# "outcome unknown". Nothing here runs unless the engine is enabled.
+# Payout engine adapter (dual cashout). Nothing here runs unless the engine is
+# enabled, and nothing here decides to pay: the engine does.
+#
+# What the provider documents (Mass payouts) and this adapter follows:
+#   POST /v1/auth                        email + password -> JWT, "JWT tokens
+#                                        expire in 5 minutes"
+#   GET  /v1/balance                     x-api-key; {ticker: {amount, pendingAmount}}
+#   GET  /v1/payout-withdrawal/min-amount/:coin   x-api-key; {success, result}
+#   GET  /v1/payout/fee?currency&amount  x-api-key; {currency, fee} (an estimate)
+#   POST /v1/payout/validate-address     x-api-key; 200 "OK" / 400
+#   POST /v1/payout                      x-api-key + Bearer; {withdrawals: [...]}
+#                                        -> {id: <batch>, withdrawals: [{id, status, ...}]}
+#   POST /v1/payout/:batch/verify        x-api-key + Bearer; {verification_code}
+#                                        10 attempts; an unverified payout is
+#                                        rejected automatically after an hour
+#   GET  /v1/payout/:id                  x-api-key; {id, withdrawals: [{status, hash, ...}]}
+#   GET  /v1/payout                      x-api-key; {payouts: [...]} (list)
+# Payout statuses: creating, waiting, processing, sending, finished, failed,
+# rejected. ONLY finished and rejected are final; a failed payout may still be
+# processed by the provider.
+#
+# NOT documented, therefore not relied on: whether the provider refuses a
+# second payout with the same unique_external_id, and whether GET /v1/payout/:id
+# takes the batch id or the single payout id (the engine sends one withdrawal
+# per batch and reads the batch it created).
 #
 # Every helper takes the payout credentials resolved by payment_config for
 # that run (`credentials.get(name)`). They are never read from the pay-in key:
@@ -612,12 +603,12 @@ async def send_single_payout(
 # ---------------------------------------------------------------------------
 
 _engine_session: dict[str, Any] = {"token": None, "expires_at": 0.0, "owner": None}
+_SESSION_SECONDS = 4.5 * 60          # the provider's token lives 5 minutes
 
 
 def forget_payout_session() -> None:
-    """Drop every cached provider session (called when credentials change)."""
+    """Drop the cached provider session (called when credentials change)."""
     _engine_session.update(token=None, expires_at=0.0, owner=None)
-    _jwt_cache.update(token=None, expires_at=0.0)
 
 
 def _require(credentials, name: str) -> str:
@@ -627,21 +618,52 @@ def _require(credentials, name: str) -> str:
     return value
 
 
-def _engine_token_sync(credentials) -> str:
+def _provider_code(resp) -> Optional[str]:
+    """The provider's own error code (e.g. BAD_CREATE_WITHDRAWAL_REQUEST), never its message."""
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+    code = data.get("code") if isinstance(data, dict) else None
+    return code if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_]{1,60}", code) else None
+
+
+def _refused(resp, action: str, stage: str) -> NowPaymentsError:
+    """A sanitized error for a 4xx/5xx answer: status and code only."""
+    ip_refused = resp.status_code == 403 and bool(re.search(r"\bip\b", resp.text or "", re.IGNORECASE))
+    return NowPaymentsError(f"NowPayments {action} -> {resp.status_code}", status_code=resp.status_code,
+                            code=_provider_code(resp), stage=stage, ip_refused=ip_refused)
+
+
+def _engine_token_sync(credentials, *, fresh: bool = False) -> str:
     email, password = _require(credentials, "PAYOUT_EMAIL"), _require(credentials, "PAYOUT_PASSWORD")
     owner = hashlib.sha256(f"{_payout_base()}|{email}|{password}".encode("utf-8")).hexdigest()
-    if (_engine_session["token"] and _engine_session["owner"] == owner
+    if (not fresh and _engine_session["token"] and _engine_session["owner"] == owner
             and time.time() < float(_engine_session["expires_at"] or 0)):
         return str(_engine_session["token"])
     with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
         resp = client.post(f"{_payout_base()}/auth", json={"email": email, "password": password})
     if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /auth -> {resp.status_code}", status_code=resp.status_code)
-    token = resp.json().get("token")
+        forget_payout_session()
+        raise _refused(resp, "POST /auth", "auth")
+    try:
+        token = resp.json().get("token")
+    except (ValueError, AttributeError):
+        token = None
     if not token:
-        raise NowPaymentsError("NowPayments /v1/auth: token missing from response.")
-    _engine_session.update(token=token, expires_at=time.time() + 4.5 * 60, owner=owner)
+        raise NowPaymentsError("NowPayments /v1/auth: token missing from response.", stage="auth")
+    _engine_session.update(token=token, expires_at=time.time() + _SESSION_SECONDS, owner=owner)
     return str(token)
+
+
+def payout_login_check_sync(credentials) -> None:
+    """Log in with the payout account and discard the session. Creates no
+    payout and moves nothing; it proves only that the login is accepted (the
+    second factor can be proven only by a real payout confirmation)."""
+    try:
+        _engine_token_sync(credentials, fresh=True)
+    finally:
+        forget_payout_session()
 
 
 def _engine_headers(credentials, *, jwt: bool) -> Dict[str, str]:
@@ -651,76 +673,210 @@ def _engine_headers(credentials, *, jwt: bool) -> Dict[str, str]:
     return headers
 
 
-def _payout_get_sync(path: str, credentials, *, jwt: bool = False) -> Any:
+def _payout_get_sync(path: str, credentials, *, jwt: bool = False, params: Optional[dict] = None) -> Any:
     with httpx.Client(timeout=STATUS_HTTP_TIMEOUT) as client:
-        resp = client.get(f"{_payout_base()}/{path}", headers=_engine_headers(credentials, jwt=jwt))
+        resp = client.get(f"{_payout_base()}/{path}", headers=_engine_headers(credentials, jwt=jwt), params=params)
     if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments GET /{path.split('?')[0]} -> {resp.status_code}",
-                               status_code=resp.status_code)
-    return resp.json()
+        raise _refused(resp, f"GET /{path}", "read")
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise NowPaymentsError(f"NowPayments GET /{path}: unreadable answer", stage="read") from exc
+
+
+def _decimal(value: Any, what: str) -> Decimal:
+    try:
+        parsed = Decimal(str(value))
+    except Exception as exc:  # noqa: BLE001
+        raise NowPaymentsError(f"NowPayments {what}: not a number", stage="read") from exc
+    if not parsed.is_finite() or parsed < 0:
+        raise NowPaymentsError(f"NowPayments {what}: not a usable number", stage="read")
+    return parsed
 
 
 def custody_balance_sync(currency: str, credentials) -> Decimal:
-    """Spendable balance the provider holds for this account in one currency."""
+    """Spendable (`amount`, not `pendingAmount`) custody balance the provider
+    reports for one currency. A currency missing from the answer is a balance
+    of zero; an answer that is not the documented object is an error, never
+    an assumed balance."""
     data = _payout_get_sync("balance", credentials)
-    entry = data.get(normalize_pay_currency(currency) or currency) if isinstance(data, dict) else None
-    return Decimal(str((entry or {}).get("amount") or 0))
+    if not isinstance(data, dict):
+        raise NowPaymentsError("NowPayments GET /balance: unexpected answer", stage="read")
+    wanted = (normalize_pay_currency(currency) or str(currency)).lower()
+    for ticker, entry in data.items():
+        if str(ticker).lower() == wanted:
+            if not isinstance(entry, dict) or entry.get("amount") is None:
+                raise NowPaymentsError("NowPayments GET /balance: unexpected answer", stage="read")
+            return _decimal(entry["amount"], "GET /balance")
+    return Decimal("0")
 
 
 def payout_fee_estimate_sync(currency: str, amount: Decimal, credentials) -> Decimal:
-    data = _payout_get_sync(f"payout/fee?currency={normalize_pay_currency(currency)}&amount={amount}", credentials)
-    return Decimal(str(data.get("fee") or 0))
+    data = _payout_get_sync("payout/fee", credentials,
+                            params={"currency": normalize_pay_currency(currency), "amount": str(amount)})
+    if not isinstance(data, dict) or data.get("fee") is None:
+        raise NowPaymentsError("NowPayments GET /payout/fee: unexpected answer", stage="read")
+    return _decimal(data["fee"], "GET /payout/fee")
 
 
 def payout_min_amount_sync(currency: str, credentials) -> Decimal:
     data = _payout_get_sync(f"payout-withdrawal/min-amount/{normalize_pay_currency(currency)}", credentials)
-    return Decimal(str(data.get("result") or data.get("min_amount") or 0))
+    if not isinstance(data, dict) or data.get("result") is None:
+        raise NowPaymentsError("NowPayments GET /payout-withdrawal/min-amount: unexpected answer", stage="read")
+    return _decimal(data["result"], "GET /payout-withdrawal/min-amount")
+
+
+def validate_payout_address_sync(address: str, currency: str, credentials) -> bool:
+    """Ask the provider whether it can pay this address in this currency
+    (the step its documentation recommends before creating a payout). True
+    when it answers 200, False when it answers 400; anything else raises."""
+    body = {"address": address, "currency": normalize_pay_currency(currency) or currency, "extra_id": None}
+    with httpx.Client(timeout=STATUS_HTTP_TIMEOUT) as client:
+        resp = client.post(f"{_payout_base()}/payout/validate-address",
+                           headers=_engine_headers(credentials, jwt=False), json=body)
+    if resp.status_code == 400:
+        return False
+    if resp.status_code >= 400:
+        raise _refused(resp, "POST /payout/validate-address", "read")
+    return True
+
+
+def _withdrawal_view(row: Any, batch_id: Optional[str] = None) -> Dict[str, Any]:
+    """The documented fields of one withdrawal, nothing else."""
+    row = row if isinstance(row, dict) else {}
+
+    def text(name: str) -> Optional[str]:
+        value = row.get(name)
+        return str(value) if value not in (None, "") else None
+
+    return {"status": str(row.get("status") or "").upper(), "withdrawal_id": text("id"),
+            "batch_id": text("batch_withdrawal_id") or batch_id, "address": text("address"),
+            "currency": (text("currency") or "").lower() or None, "amount": text("amount"),
+            "hash": text("hash"), "unique_external_id": text("unique_external_id"),
+            "error": (text("error") or "")[:120] or None}
+
+
+def payout_details_sync(batch_id: str, credentials) -> Dict[str, Any]:
+    """The single withdrawal of one payout batch, as the provider reports it.
+
+    The documentation lists only x-api-key for this request; if the provider
+    answers 401 the call is repeated once with the session token as well."""
+    try:
+        data = _payout_get_sync(f"payout/{batch_id}", credentials)
+    except NowPaymentsError as exc:
+        if exc.status_code != 401:
+            raise
+        data = _payout_get_sync(f"payout/{batch_id}", credentials, jwt=True)
+    if isinstance(data, list):
+        rows = data
+    elif isinstance(data, dict):
+        rows = data.get("withdrawals") if isinstance(data.get("withdrawals"), list) else [data]
+    else:
+        rows = []
+    if len(rows) != 1:
+        # One batch = one withdrawal here. Anything else is not our payout as we created it.
+        raise NowPaymentsError("NowPayments GET /payout: unexpected number of withdrawals", stage="read")
+    return _withdrawal_view(rows[0], str(batch_id))
 
 
 def payout_status_sync(batch_id: str, credentials) -> str:
     """Status of the (single) withdrawal of one payout batch, upper case."""
-    data = _payout_get_sync(f"payout/{batch_id}", credentials, jwt=True)
-    rows = data if isinstance(data, list) else (data.get("withdrawals") or [data])
-    return str((rows[0] or {}).get("status") or "").upper() if rows else ""
+    return payout_details_sync(batch_id, credentials)["status"]
+
+
+def find_payout_by_external_id_sync(external_id: str, credentials, *, pages: int = 3,
+                                    page_size: int = 100) -> Optional[Dict[str, Any]]:
+    """Look for a payout carrying our unique reference in the provider's list
+    of payouts (newest first). Returns it when exactly one is found, None when
+    none is. Finding nothing does NOT prove that no payout exists."""
+    found: List[Dict[str, Any]] = []
+    for page in range(max(1, pages)):
+        data = _payout_get_sync("payout", credentials,
+                                params={"limit": page_size, "page": page, "order_by": "id", "order": "desc"})
+        rows = data.get("payouts") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise NowPaymentsError("NowPayments GET /payout: unexpected answer", stage="read")
+        found += [_withdrawal_view(r) for r in rows
+                  if isinstance(r, dict) and str(r.get("unique_external_id") or "") == str(external_id)]
+        if len(rows) < page_size:
+            break
+    if len(found) > 1:
+        raise NowPaymentsError("NowPayments GET /payout: more than one payout carries the same reference",
+                               stage="read")
+    return found[0] if found else None
+
+
+_TOTP_STEP_SECONDS = 30
+_last_code: dict[str, Any] = {"value": None}
+
+
+def _fresh_code(totp) -> str:
+    """A one-time code that this process has not sent before. Two payouts
+    confirmed inside the same 30-second step would otherwise carry the same
+    code, and a one-time code may be accepted only once."""
+    code = totp.now()
+    if code == _last_code["value"]:
+        _wait_for_next_code()
+        code = totp.now()
+    _last_code["value"] = code
+    return code
+
+
+def _wait_for_next_code() -> None:
+    time.sleep(_TOTP_STEP_SECONDS - (time.time() % _TOTP_STEP_SECONDS) + 0.5)
 
 
 def _confirm_payout_sync(batch_id: str, credentials) -> None:
-    code = pyotp.TOTP(_require(credentials, "PAYOUT_TOTP_SECRET")).now()
-    with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
-        resp = client.post(f"{_payout_base()}/payout/{batch_id}/verify",
-                           headers=_engine_headers(credentials, jwt=True), json={"verification_code": code})
-    if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /payout/verify -> {resp.status_code}",
-                               status_code=resp.status_code)
+    """Confirm a created payout with the second factor. Verifying is not
+    sending again: the provider allows 10 attempts per payout, and this makes
+    at most two (the second with the next code, only after a 4xx answer)."""
+    totp = pyotp.TOTP(_require(credentials, "PAYOUT_TOTP_SECRET"))
+    for attempt in (1, 2):
+        code = _fresh_code(totp)
+        with httpx.Client(timeout=AUTH_HTTP_TIMEOUT) as client:
+            resp = client.post(f"{_payout_base()}/payout/{batch_id}/verify",
+                               headers=_engine_headers(credentials, jwt=True), json={"verification_code": code})
+        if resp.status_code < 400:
+            return
+        if attempt == 2 or resp.status_code >= 500 or resp.status_code in (401, 403, 404, 429):
+            raise _refused(resp, "POST /payout/verify", "verify")
 
 
 def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency: str, external_id: str,
                               credentials) -> Dict[str, Any]:
     """Create ONE withdrawal, then confirm it with the second factor.
 
-    Returns {"batch_id", "status", "verified"}. Raises NowPaymentsError with a
-    4xx status_code when the provider refused to create it (nothing exists at
-    the provider). When the batch was created but its confirmation failed, the
-    batch id is still returned with verified=False: the outcome is then
-    uncertain and must be reconciled, never retried."""
+    Returns {"batch_id", "withdrawal_id", "status", "verified"}. Raises
+    NowPaymentsError with a 4xx status_code when the provider refused the
+    login or the creation (nothing exists at the provider). When the batch was
+    created but its confirmation failed, the batch id is still returned with
+    verified=False: the provider then rejects it by itself after an hour, and
+    until it reports that the outcome is uncertain and is reconciled, never
+    retried."""
     pay_currency = normalize_pay_currency(currency) or "usdtbsc"
-    withdrawal = {"address": wallet_address, "amount": float(money(amount)), "currency": pay_currency,
+    # "amount ... Must not exceed 6 decimals"; a cashout amount has two.
+    withdrawal = {"address": wallet_address, "currency": pay_currency, "amount": float(money(amount)),
                   "unique_external_id": external_id}
     _require(credentials, "PAYOUT_TOTP_SECRET")          # refuse before anything is created
     headers = _engine_headers(credentials, jwt=True)
     with httpx.Client(timeout=PAYOUT_HTTP_TIMEOUT) as client:
         resp = client.post(f"{_payout_base()}/payout", headers=headers, json={"withdrawals": [withdrawal]})
     if resp.status_code >= 400:
-        raise NowPaymentsError(f"NowPayments POST /payout -> {resp.status_code}", status_code=resp.status_code)
-    created = resp.json()
-    batch_id = str(created.get("id") or created.get("batch_withdrawal_id") or "")
+        raise _refused(resp, "POST /payout", "create")
+    try:
+        created = resp.json()
+    except ValueError:
+        created = None
+    # A 2xx answer means a payout may exist: from here on nothing may be reported as "refused".
+    batch_id = str(created.get("id") or "") if isinstance(created, dict) else ""
     if not batch_id:
-        raise NowPaymentsError("NowPayments payout: batch id missing from create response.")
-    rows = created.get("withdrawals") or []
-    status = str((rows[0] or {}).get("status") or "").upper() if rows else ""
+        raise NowPaymentsError("NowPayments payout: batch id missing from create response.", stage="create")
+    rows = created.get("withdrawals") if isinstance(created.get("withdrawals"), list) else []
+    first = _withdrawal_view(rows[0], batch_id) if rows else {"status": "", "withdrawal_id": None}
+    result = {"batch_id": batch_id, "withdrawal_id": first["withdrawal_id"], "status": first["status"]}
     try:
         _confirm_payout_sync(batch_id, credentials)
     except Exception:  # noqa: BLE001 - created but not confirmed: the caller reconciles
         logger.error("NOWPayments payout %s created but its confirmation failed", batch_id)
-        return {"batch_id": batch_id, "status": status, "verified": False}
-    return {"batch_id": batch_id, "status": status, "verified": True}
+        return {**result, "verified": False}
+    return {**result, "verified": True}
