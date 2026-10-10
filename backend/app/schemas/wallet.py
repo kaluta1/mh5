@@ -84,6 +84,12 @@ class CashoutSettle(BaseModel):
     reference: str = Field(..., min_length=3, max_length=200)
 
 
+class CashoutNetworkFee(BaseModel):
+    # The fee read from the provider's statement, in the payout currency. Zero = none was charged.
+    amount: Decimal = Field(..., ge=0, max_digits=18, decimal_places=8)
+    reference: str = Field(..., min_length=3, max_length=200)
+
+
 class CashoutResolve(BaseModel):
     outcome: str = Field(..., max_length=10, description="SENT or NOT_SENT")
     reference: Optional[str] = Field(default=None, max_length=200)

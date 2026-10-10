@@ -343,6 +343,16 @@ def init_chart_of_accounts(db: Session):
         {"code": "5002", "name": "KYC Provider Expense", "type": AccountType.EXPENSE, "parent": "5000"},
         {"code": "5003", "name": "Ad Revenue Share to Members (Expense)", "type": AccountType.EXPENSE, "parent": "5000"},
         {
+            "code": "5005",
+            "name": "Crypto payout network fees (paid by MyHigh5)",
+            "type": AccountType.EXPENSE,
+            "parent": "5000",
+            # Created if missing; an account 5005 that already exists is never renamed or redescribed.
+            "create_only": True,
+            "description": "Network fee the payout provider takes from the USDT treasury when MyHigh5 bears the fee "
+            "of a member's crypto cashout: Dr 5005, Cr 1001. Posted from the provider's actual fee only, once per cashout.",
+        },
+        {
             "code": "7110",
             "name": "FX / Crypto Conversion Loss",
             "type": AccountType.EXPENSE,
@@ -376,6 +386,8 @@ def init_chart_of_accounts(db: Session):
             db.add(new_account)
             db.flush()
             created_count += 1
+        elif acc_data.get("create_only"):
+            continue
         else:
             changed = False
             if existing.account_name != acc_data["name"]:

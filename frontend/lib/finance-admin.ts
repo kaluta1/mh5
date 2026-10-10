@@ -164,6 +164,42 @@ export type AdminCashout = {
   has_destination_details: boolean
 }
 
+/** What the books say about the network fee MyHigh5 paid for one crypto payout. */
+export type NetworkFeeRecord = {
+  status: 'POSTED' | 'NONE' | 'NOT_RECORDED' | 'NOT_APPLICABLE'
+  amount: string | null
+  source: 'PROVIDER_REPORTED' | 'ADMIN_RECORDED' | null
+  reported: string | null
+  estimate: string | null
+}
+
+export type NetworkFeeSummary = {
+  expense_account: string
+  posted_count: number
+  posted_total: number
+  /** Exact fees as reported, before rounding to cents, and their difference from the ledger total. */
+  reported_total: string
+  rounding_difference: string
+  confirmed_none_count: number
+  not_recorded_count: number
+  not_recorded: { cashout_id: number; user_id: number; estimate: number | null }[]
+  automatic_posting: boolean
+}
+
+export const NETWORK_FEE_LABEL: Record<NetworkFeeRecord['status'], string> = {
+  POSTED: 'Recorded as an expense',
+  NONE: 'Confirmed: no fee to record',
+  NOT_RECORDED: 'Not recorded yet',
+  NOT_APPLICABLE: 'Not applicable',
+}
+
+/** A fee typed by an administrator: a plain non-negative number, never larger than the payout. */
+export function validNetworkFee(text: string, gross: number): boolean {
+  const value = text.trim()
+  if (!/^\d+(\.\d{1,8})?$/.test(value)) return false
+  return Number(value) <= gross
+}
+
 export type Reconciliation = {
   owed: { pending: number; available: number; reserved: number }
   owed_total: number
@@ -174,6 +210,7 @@ export type Reconciliation = {
   provider_covers_crypto_members: boolean | null
   last_24_hours: { crypto_payout_amount: number; crypto_payout_count: number; amount_limit: number; count_limit: number }
   discrepancies: { type: string; severity: 'critical' | 'warning'; message: string; cashout_id?: number; user_id?: number }[]
+  network_fees?: NetworkFeeSummary
 }
 
 export const CASHOUT_STATUS_LABEL: Record<AdminCashout['status'], string> = {

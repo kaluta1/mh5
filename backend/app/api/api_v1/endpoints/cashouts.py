@@ -23,14 +23,14 @@ from app.core.client_ip import client_ip
 from app.db.session import get_db
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission
 from app.models.user import User
-from app.schemas.wallet import CashoutCancel, CashoutResolve, CashoutSettle
+from app.schemas.wallet import CashoutCancel, CashoutNetworkFee, CashoutResolve, CashoutSettle
 from app.services import cashout_engine, payment_config
 from app.services import cashout_service as service
 from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 
 admin_router = APIRouter()
 
-_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED")
+_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE")
 
 
 def _error(exc: service.CashoutError) -> HTTPException:
@@ -115,6 +115,7 @@ def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(req
     wallet = service.wallet_state(member) if member is not None else None
     return {
         "cashout": service.cashout_dict(cashout, admin=True),
+        "network_fee_record": service.network_fee_state(db, cashout),
         "member": {"id": cashout.user_id, "username": member.username if member else None,
                    "cashout_method": member.cashout_method if member else None,
                    "wallet": service.mask_address(wallet.address) if wallet else None,
@@ -176,3 +177,19 @@ def resolve(cashout_id: int, body: CashoutResolve, db: Session = Depends(get_db)
     except service.CashoutError as exc:
         db.rollback()
         raise _error(exc) from exc
+
+
+@admin_router.post("/{cashout_id}/network-fee")
+def network_fee(cashout_id: int, body: CashoutNetworkFee, db: Session = Depends(get_db),
+                admin: User = Depends(require_processor)):
+    """Record the network fee MyHigh5 paid for a completed crypto payout, read
+    from the provider's statement (Dr 5005 / Cr the treasury account). Never an
+    estimate, once per payout. Sends nothing to the provider."""
+    try:
+        cashout = service.record_network_fee_by_admin(db, _get(db, cashout_id), admin=admin, amount=body.amount,
+                                                      reference=body.reference)
+    except service.CashoutError as exc:
+        db.rollback()
+        raise _error(exc) from exc
+    return {"cashout": service.cashout_dict(cashout, admin=True),
+            "network_fee_record": service.network_fee_state(db, cashout)}

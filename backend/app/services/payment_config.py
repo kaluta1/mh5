@@ -56,6 +56,22 @@ PROVIDER = "nowpayments"
 
 SOURCE_ENVIRONMENT, SOURCE_DATABASE = "ENVIRONMENT", "DATABASE"
 FEE_COMPANY_PAYS, FEE_MEMBER_PAYS = "COMPANY_PAYS", "MEMBER_PAYS"
+# Ledger account for the network fee MyHigh5 pays on a crypto payout
+# (approved by the owner 2026-10-10).
+NETWORK_FEE_EXPENSE_ACCOUNT = "5005"
+
+
+def company_fee_payer_values() -> frozenset:
+    """The values of the provider's `fee_paid_by` field that mean "the fee was
+    taken from OUR balance". The provider does not document that field's
+    values, so none is assumed: the list is empty until the values have been
+    confirmed with the provider and set in NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES
+    (comma separated). While it is empty no network fee is posted automatically;
+    an administrator records each one from the provider's statement."""
+    import os
+
+    raw = os.getenv("NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES", "")
+    return frozenset(v.strip().lower() for v in raw.split(",") if v.strip())
 USD_POLICY_MANUAL = "MANUAL_REVIEW"
 
 # The only payout asset the ledger has a treasury account for (1001).

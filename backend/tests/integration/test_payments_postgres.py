@@ -64,6 +64,7 @@ DATABASE_PREFIX = "mh5_pay_test_"
 VERSIONS = Path(__file__).resolve().parents[2] / "migrations" / "versions"
 DUAL_CASHOUT = "f3a4b5c6d7e8_dual_cashout.py"
 PAYMENT_CONFIGURATION = "a5b6c7d8e9f0_payment_configuration.py"
+FEE_ACCOUNT = "b6c7d8e9f0a1_crypto_payout_network_fee_account.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -244,8 +245,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
         for line in source.splitlines():
             if line.startswith("down_revision"):
                 revisions[path.name] = line
+    third = load_migration(FEE_ACCOUNT)
+    assert (third.revision, third.down_revision, third.depends_on) == ("b6c7d8e9f0a1", "a5b6c7d8e9f0", None)
     children = [name for name, line in revisions.items() if '"a5b6c7d8e9f0"' in line or "'a5b6c7d8e9f0'" in line]
-    assert children == []                                          # a5b6c7d8e9f0 is the single head
+    assert children == [FEE_ACCOUNT]                               # one line, no branch
+    heads = [name for name, line in revisions.items() if '"b6c7d8e9f0a1"' in line or "'b6c7d8e9f0a1'" in line]
+    assert heads == []                                             # b6c7d8e9f0a1 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -838,3 +843,131 @@ def test_the_proposed_unique_payment_id_rule_on_representative_legacy_rows(pg):
         return refused(Session, add("8000000001"))
 
     assert sorted(in_threads(4, race)) == [False, True, True, True]
+
+
+# ---------------------------------------------------------------------------
+# Network fee account (migration b6c7d8e9f0a1) and its posting
+# ---------------------------------------------------------------------------
+
+def account_5005(engine):
+    with engine.connect() as c:
+        return [tuple(r) for r in c.execute(text(
+            "select a.account_code, a.account_name, a.account_type::text, p.account_code, a.is_active "
+            "from chart_of_accounts a left join chart_of_accounts p on p.id = a.parent_id "
+            "where a.account_code = '5005'")).fetchall()]
+
+
+def test_the_fee_account_migration_adds_one_expense_account_and_nothing_else(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        production_like_rows(db)
+    rows = money_fingerprint(engine)
+    with engine.connect() as c:
+        accounts_before = c.execute(text("select count(*) from chart_of_accounts")).scalar()
+    assert account_5005(engine) == []
+    for _ in range(2):                                             # applying it twice adds it once
+        migrate(engine, FEE_ACCOUNT, "upgrade")
+        assert account_5005(engine) == [("5005", "Crypto payout network fees (paid by MyHigh5)", "EXPENSE", "5000",
+                                         True)]
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from chart_of_accounts")).scalar() == accounts_before + 1
+    assert money_fingerprint(engine) == rows
+    migrate(engine, FEE_ACCOUNT, "downgrade")                      # never used: removed
+    assert account_5005(engine) == []
+    migrate(engine, FEE_ACCOUNT, "upgrade")
+    with Session() as db:                                          # used once: a downgrade keeps it and its history
+        from app.services.accounting_service import accounting_service
+
+        accounting_service.create_journal_entry(db, description="synthetic fee", commit=True, lines=[
+            {"account_code": "5005", "debit": 1, "credit": 0}, {"account_code": "1001", "debit": 0, "credit": 1}])
+    migrate(engine, FEE_ACCOUNT, "downgrade")
+    assert len(account_5005(engine)) == 1
+
+
+def test_the_fee_account_migration_does_nothing_without_the_expense_parent(pg):
+    engine, _Session = pg
+    migrate(engine, FEE_ACCOUNT, "upgrade")                        # empty chart of accounts
+    assert account_5005(engine) == []
+
+
+def test_an_existing_account_5005_is_left_exactly_as_it_is(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        db.add(ChartOfAccounts(account_code="5005", account_name="Already here", account_type=AccountType.EXPENSE,
+                               is_active=False))
+        db.commit()
+    migrate(engine, FEE_ACCOUNT, "upgrade")
+    assert account_5005(engine) == [("5005", "Already here", "EXPENSE", None, False)]
+
+
+def test_concurrent_administrators_record_one_network_fee(pg, engine_on):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+    migrate(engine, FEE_ACCOUNT, "upgrade")
+    with Session() as db:
+        user = member(db, "m1", method="CRYPTO")
+        admin = member(db, "boss", admin=True)
+        commission(db, user, "5.00")
+        configure(db, crypto_auto_payout_enabled=True)
+        provider = FakeProvider(statuses={})
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        provider.statuses["batch-1"] = "FINISHED"
+        assert engine_service.run_cycle(db, provider=provider, now=NOW)["reconciled"] == {"COMPLETED": 1}
+        cashout_id = db.query(AffiliateCashoutRequest.id).filter_by(user_id=user.id).scalar()
+        admin_id = admin.id
+
+    def record(i):
+        with Session() as db:
+            try:
+                cs.record_network_fee_by_admin(db, db.get(AffiliateCashoutRequest, cashout_id),
+                                               admin=db.get(User, admin_id), amount="0.25",
+                                               reference=f"statement {i}", now=NOW)
+                return "POSTED"
+            except cs.CashoutError as exc:
+                return exc.code
+
+    results = in_threads(4, record)
+    assert sorted(results) == ["FEE_ALREADY_RECORDED"] * 3 + ["POSTED"], results
+    with Session() as db:
+        entries = db.query(JournalEntry).filter(
+            JournalEntry.description == cs.network_fee_description(cashout_id)).all()
+        assert len(entries) == 1 and Decimal(str(entries[0].total_debit)) == Decimal("0.25")
+        assert cs.network_fee_state(db, db.get(AffiliateCashoutRequest, cashout_id))["status"] == "POSTED"
+    with engine.connect() as c:
+        totals = c.execute(text("select coalesce(sum(debit_amount), 0), coalesce(sum(credit_amount), 0) "
+                                "from journal_lines")).one()
+    assert totals[0] == totals[1] == Decimal("5.25")               # the payout and its fee, balanced
+
+
+def test_the_seed_never_renames_an_existing_account_5005_and_still_updates_the_others(pg):
+    from app.scripts.init_coa import init_chart_of_accounts
+
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        db.add(ChartOfAccounts(account_code="5005", account_name="Already here", description="Someone else's account",
+                               account_type=AccountType.EXPENSE, is_active=False))
+        db.add(ChartOfAccounts(account_code="5002", account_name="Old name", account_type=AccountType.EXPENSE))
+        db.commit()
+        init_chart_of_accounts(db)
+    with engine.connect() as c:
+        rows = dict((code, (name, description)) for code, name, description in c.execute(text(
+            "select account_code, account_name, description from chart_of_accounts "
+            "where account_code in ('5005', '5002')")).fetchall())
+    assert rows["5005"] == ("Already here", "Someone else's account")
+    assert account_5005(engine) == [("5005", "Already here", "EXPENSE", None, False)]
+    assert rows["5002"][0] == "KYC Provider Expense"               # every other account behaves as before
+
+
+def test_the_seed_creates_account_5005_when_it_is_missing(pg):
+    from app.scripts.init_coa import init_chart_of_accounts
+
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        init_chart_of_accounts(db)
+        init_chart_of_accounts(db)
+    assert account_5005(engine) == [("5005", "Crypto payout network fees (paid by MyHigh5)", "EXPENSE", "5000", True)]

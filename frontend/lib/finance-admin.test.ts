@@ -7,6 +7,7 @@ import {
   financeErrorText,
   isFinanceSection,
   readinessTone,
+  validNetworkFee,
   tone,
   type SettingField,
 } from './finance-admin'
@@ -61,5 +62,14 @@ describe('finance admin helpers', () => {
     expect(readinessTone('UNVERIFIED')).toBe('gray')
     expect(readinessTone('DISABLED')).toBe('gray')
     expect(readinessTone(undefined)).toBe('gray')
+  })
+})
+
+describe('validNetworkFee', () => {
+  it('accepts only a plain non-negative amount no larger than the payout', () => {
+    for (const ok of ['0', '0.02', '0.0234', '1.32765969', '5', '5.00']) expect(validNetworkFee(ok, 5)).toBe(true)
+    for (const bad of ['', ' ', '-0.01', 'abc', '1e-2', '0.123456789', '5.01', '0,02', '.5', '5.']) {
+      expect(validNetworkFee(bad, 5)).toBe(false)
+    }
   })
 })

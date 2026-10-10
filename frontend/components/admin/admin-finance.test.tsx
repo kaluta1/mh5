@@ -314,6 +314,40 @@ describe('AdminFinance', () => {
     await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/9/resolve', { outcome: 'NOT_SENT' }))
   })
 
+  it('records the actual network fee of a completed crypto payout and never offers the estimate', async () => {
+    const row = cashout({ id: 11, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 5,
+      network_fee: 0.02, network_fee_policy: 'COMPANY_PAYS', payout_currency: 'usdtbsc', provider_batch_id: '5000000713' })
+    setup({ rows: [row] })
+    getMock.mockImplementation(((original) => (url: string, config?: unknown) => {
+      if (/\/cashouts\/11$/.test(url)) {
+        return Promise.resolve({ status: 200, data: {
+          cashout: row, network_fee_record: { status: 'NOT_RECORDED', amount: null, source: null, reported: null, estimate: '0.02' },
+          member: { id: 42, username: 'synthetic_member', cashout_method: 'CRYPTO', wallet: '0xaaaa...aaaa', wallet_status: 'VERIFIED' },
+          commissions: [], attempts: [row] } })
+      }
+      return original(url, config)
+    })(getMock.getMockImplementation()!))
+    render(<AdminFinance section="transactions" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
+    const form = await screen.findByTestId('network-fee-form')
+    expect(screen.getByTestId('network-fee-record')).toHaveTextContent('Not recorded yet')
+    const button = within(form).getByRole('button', { name: 'Record network fee' })
+    const amount = within(form).getByLabelText(/Actual network fee/) as HTMLInputElement
+    expect(amount.value).toBe('')                                                           // the estimate is not pre-filled
+    expect(button).toBeDisabled()
+    fireEvent.change(within(form).getByLabelText(/Where it was read/), { target: { value: 'payout 5000000713' } })
+    for (const bad of ['-1', 'abc', '5.01', '0.123456789', '']) {
+      fireEvent.change(amount, { target: { value: bad } })
+      expect(button).toBeDisabled()
+    }
+    fireEvent.change(amount, { target: { value: '0.0234' } })
+    expect(button).not.toBeDisabled()
+    fireEvent.click(button)
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/11/network-fee',
+      { amount: '0.0234', reference: 'payout 5000000713' }))
+    expect(postMock).toHaveBeenCalledTimes(1)
+  })
+
   it('hides every cashout action from an administrator who may not process cashouts', async () => {
     setup({ o: overview({ permissions: { can_manage: false, can_process: false }, warnings: [] }) })
     render(<AdminFinance section="transactions" />)

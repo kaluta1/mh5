@@ -308,6 +308,8 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
                        "network_fee_estimate": (str(money(cashout.network_fee))
                                                 if cashout.network_fee is not None else None),
                        "network_fee_policy": cashout.network_fee_policy})
+        # Books the fee only when the provider reported it AND said it came from our balance.
+        cs.record_provider_network_fee(db, cashout, details, now)
         db.commit()
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:
@@ -743,6 +745,17 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
         items.insert(0, {"type": "PROVIDER_BALANCE_SHORT", "severity": "critical",
                          "message": f"The provider balance ({balance}) is lower than what is owed to Crypto "
                                     f"Cashout members (${crypto_members:.2f})."})
+    # A completed payout whose fee MyHigh5 paid is not reconciled until that fee is in the books.
+    fees = cs.network_fee_summary(db)
+    for row in fees["not_recorded"]:
+        items.append({"type": "NETWORK_FEE_NOT_RECORDED", "severity": "warning",
+                      "message": f"Cashout #{row['cashout_id']} is completed but the network fee MyHigh5 paid for it "
+                                 "is not recorded: the treasury account is overstated by that fee until it is.",
+                      "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
+    if fees["not_recorded_count"] > len(fees["not_recorded"]):
+        items.append({"type": "NETWORK_FEE_NOT_RECORDED", "severity": "warning",
+                      "message": f"{fees['not_recorded_count'] - len(fees['not_recorded'])} more completed payouts "
+                                 "have no network fee recorded."})
     return {
         "owed": {k: float(v) for k, v in owed.items()},
         "owed_total": float(unpaid),
@@ -755,6 +768,7 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
                           "amount_limit": float(config.max_daily_payout_usd),
                           "count_limit": int(config.max_daily_payout_count)},
         "discrepancies": items,
+        "network_fees": fees,
         "engine": engine_status(db),
     }
 

@@ -15,9 +15,11 @@ Production today runs `d208c1d` with Alembic revision `e2f3a4b5c6d7`.
 | 1 | `f3a4b5c6d7e8` | `e2f3a4b5c6d7` | 3 columns on `users`, 9 on `affiliate_cashout_requests`, two unique indexes, `payout_wallet_changes` |
 | 2 | `a5b6c7d8e9f0` | `f3a4b5c6d7e8` | `payment_settings`, `payment_credentials`, `payment_config_audit`, `payout_wallet_verifications`, `payment_webhook_stats`, 3 + 1 columns, two permissions held by nobody |
 
-Both are additive, idempotent (`IF NOT EXISTS`) and run in one transaction
-each. They read and change no commission, deposit, cashout or journal row.
-`a5b6c7d8e9f0` is the single head. The later commits add no migration.
+| 3 | `b6c7d8e9f0a1` | `a5b6c7d8e9f0` | one row in `chart_of_accounts`: 5005 Crypto payout network fees (paid by MyHigh5), under 5000 |
+
+All three are additive, idempotent and run in one transaction each. They read
+and change no commission, deposit, cashout or journal row. `b6c7d8e9f0a1` is
+the single head.
 
 Verified on a disposable local PostgreSQL 16 database with production-like
 rows: upgrade from `e2f3a4b5c6d7`, a second upgrade, downgrade, upgrade again;
@@ -118,8 +120,11 @@ with destination details is open.
 8. Run the pre-migration checks (section 2).
 9. Stop the backend (or put it in maintenance) so no request runs across the
    schema change.
-10. `alembic upgrade f3a4b5c6d7e8`, then `alembic upgrade a5b6c7d8e9f0`.
-    `alembic current` must print `a5b6c7d8e9f0 (head)`.
+10. `alembic upgrade f3a4b5c6d7e8`, then `alembic upgrade a5b6c7d8e9f0`, then
+    `alembic upgrade b6c7d8e9f0a1`. `alembic current` must print
+    `b6c7d8e9f0a1 (head)`, and
+    `SELECT account_code, account_name, is_active FROM chart_of_accounts WHERE account_code = '5005';`
+    must return one active row.
 11. Re-run 2.6 and compare with the saved baseline: identical.
 12. Deploy the exact tested commit, backend and frontend together (frontend
     built with the production `NEXT_PUBLIC_*` values).
@@ -238,54 +243,74 @@ sandbox payment end to end (proves the IPN secret and signature), and one
 sandbox payout (proves login, second factor, status shape and the unique
 reference).
 
-## 11. Proposals awaiting the owner's approval (NOT implemented)
+## 11. Network fee accounting and the open proposal
 
-### 11.1 Company-paid crypto network fee
+### 11.1 Company-paid crypto network fee (approved 2026-10-10, implemented, not deployed)
 
-Today a completed crypto cashout posts one balanced entry:
-Dr 2001 commissions payable (gross) / Cr 1001 (gross less the MyHigh5 fee) /
-Cr 4005 (MyHigh5 fee, zero for crypto). When MyHigh5 pays the network fee
-(policy COMPANY_PAYS) the provider takes that fee from custody as well, and
-nothing records it: account 1001 is overstated by the fees paid.
+A completed crypto cashout posts its own balanced entry: Dr 2001 commissions
+payable (gross) / Cr 1001 (what the member received). When MyHigh5 bears the
+network fee (policy COMPANY_PAYS) the provider takes that fee from the same
+balance, and a SECOND entry records it:
 
-The chart of accounts has no suitable account. Existing expense accounts are
-5001 Commission Expense, 5002 KYC Provider Expense, 5003 Ad Revenue Share,
-5004 Leaders program expense and 7110 FX / Crypto Conversion Loss; none of
-them is a payment-processing cost.
+    Dr 5005 Crypto payout network fees (paid by MyHigh5)
+        Cr 1001 USDT Treasury (BSC)
 
-Proposed account (needs approval before it is created):
+Why 1001: it is the account pay-ins are debited to and payouts are credited
+from; it stands for the USDT (BSC) balance held at the provider. The fee
+leaves that same balance.
 
-| Code | Name | Type | Parent |
-|---|---|---|---|
-| 5005 | Crypto payout network fees (paid by MyHigh5) | EXPENSE | 5000 |
+Rules built in:
+- Only an ACTUAL fee is posted. The estimate taken when the payout was created
+  is never posted.
+- Automatic posting happens only when the provider reports the fee on the
+  finished payout AND reports that it came from the merchant balance. The
+  provider does not document the values of its `fee_paid_by` field, so none is
+  assumed: automatic posting is OFF until those values are confirmed with the
+  provider and set in `NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES`.
+- Until then (and whenever the provider reports nothing) the payout is listed
+  under Reconciliation as "fee not recorded yet", and an administrator with
+  `process_cashouts` records it from the provider's statement in Cashout
+  Transactions (0 = the provider charged none).
+- Once per cashout. Nothing for a failed, rejected, unknown or member-paid
+  payout. A missing or inactive account refuses the posting; the payout itself
+  is still completed.
 
-Proposed posting, a second entry per completed cashout, only when the policy
-on the cashout is COMPANY_PAYS and the provider reported the fee it charged:
+Currency and precision:
+- The payout currency is USDT, which this ledger carries at 1 USDT = 1 USD (as
+  the payout amount itself is). No conversion is applied; a payout in any other
+  kind of currency is refused by the posting and needs a manual entry.
+- The ledger stores cents. A fee is rounded half-up to the cent and the exact
+  reported figure is kept in the audit trail; a fee under half a cent is
+  recorded as "none" and posts no entry. Reconciliation shows the exact total
+  next to the ledger total and the difference rounding left out, so the books
+  can be agreed with the provider's statement; that difference is not posted.
+- A completed payout whose fee is not recorded is listed under Discrepancies
+  (warning `NETWORK_FEE_NOT_RECORDED`): the report never shows it as clean.
+- The chart-of-accounts seed (`init_coa.py`, run by `start.py` and by the admin "ensure chart of accounts" action) creates 5005 only
+  if it is missing; like the migration, it never renames or redescribes an
+  account 5005 that already exists. No other account's seeding changed.
+- The 1 USDT = 1 USD basis is written into each fee's audit record. It is the
+  ledger's existing convention, not a market valuation: nothing re-measures
+  account 1001 and nothing posts to 7110.
 
-    Dr 5005 network fee expense      (actual fee reported by the provider)
-        Cr 1001 custody / cash           (same amount)
+Not verified with the provider (do this on staging or with its support before
+switching automatic posting on): that a finished payout reports its fee, the
+unit of that fee, and the `fee_paid_by` values.
 
-Rules: posted once per cashout (its own description, checked before posting);
-never from the estimate taken when the payout was created; nothing posted for
-a failed, rejected or unknown payout; when the provider reports no fee the
-cashout is listed for an administrator to record it by hand. With policy
-MEMBER_PAYS there is no expense: the member received less and 1001 already
-falls by the full gross.
+Known limit, outside this change: a correction of a fee already recorded is a
+manual reversing journal entry by accounting; the application records one fee
+per cashout. Provider fees on PAY-INS (the provider settles slightly less than
+the invoice price) are not booked anywhere and are not part of this change.
 
-What is in place now: the fee and payer the provider reports for a finished
-payout are stored in the cashout's audit trail (`CASHOUT_PROVIDER_EVIDENCE`:
-`provider_fee`, `provider_fee_paid_by`, next to the estimate and the policy),
-so the expense can be posted for earlier payouts once the account exists.
-Not verified with the provider: whether it returns the fee on a finished
-payout, and in which unit.
-
-### 11.2 Unique provider payment id on `deposits`
+### 11.2 Unique provider payment id on `deposits` (awaiting approval, NOT implemented)
 
 `deposits.external_payment_id` has no unique rule. Only NOWPayments writes it
 and the table has no provider column, so the proposed rule is on the id alone:
 
 ```sql
 -- Read-only check first. Expect: no rows.
+-- (Run on production 2026-10-10 in a read-only transaction: no rows; 157
+-- deposits = 110 without an id, 0 empty, 41 numeric, 6 in another format.)
 SELECT external_payment_id, count(*), array_agg(id ORDER BY id)
 FROM deposits
 WHERE external_payment_id IS NOT NULL AND external_payment_id <> ''

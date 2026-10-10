@@ -628,6 +628,198 @@ def complete(db: Session, cashout: AffiliateCashoutRequest, *, settlement_refere
 
 
 # ---------------------------------------------------------------------------
+# Network fee of a crypto payout that MyHigh5 pays (policy COMPANY_PAYS)
+#
+# The cashout's own entry debits the commission liability and credits the
+# treasury account with what the member received. When MyHigh5 also bears the
+# network fee, the provider takes that fee from the same balance, so a second
+# entry records it:   Dr 5005 network fee expense / Cr treasury (1001).
+#
+# Only an ACTUAL fee is ever posted: the amount the provider reported for the
+# finished payout (and only when it says the fee came from our balance), or
+# the amount an authorised administrator reads from the provider's statement.
+# The estimate taken when the payout was created is never posted. Nothing is
+# posted for a payout that is not completed. One record per cashout.
+#
+# The payout currency is a US-dollar stablecoin that this ledger carries at
+# 1 USDT = 1 USD (as the payout itself is), so no conversion is applied; a
+# payout in any other kind of currency is refused here. The ledger keeps
+# cents: the fee is rounded half-up to the cent and the exact reported figure
+# is kept in the audit trail.
+# ---------------------------------------------------------------------------
+
+FEE_SOURCE_PROVIDER, FEE_SOURCE_ADMIN = "PROVIDER_REPORTED", "ADMIN_RECORDED"
+FEE_POSTED, FEE_NONE, FEE_NOT_RECORDED, FEE_NOT_APPLICABLE = "POSTED", "NONE", "NOT_RECORDED", "NOT_APPLICABLE"
+_FEE_AUDIT_ACTIONS = ("CASHOUT_NETWORK_FEE_POSTED", "CASHOUT_NETWORK_FEE_NONE")
+
+
+def network_fee_description(cashout_id: int) -> str:
+    return f"Network fee - Affiliate Cashout #{cashout_id}"
+
+
+def network_fee_applies(cashout: AffiliateCashoutRequest) -> bool:
+    return (cashout.cashout_method == METHOD_CRYPTO and cashout.status == CashoutStatus.COMPLETED.value
+            and cashout.network_fee_policy == payment_config.FEE_COMPANY_PAYS)
+
+
+def network_fee_state(db: Session, cashout: AffiliateCashoutRequest) -> dict:
+    """What the books say about this payout's network fee."""
+    estimate = str(money(cashout.network_fee)) if cashout.network_fee is not None else None
+    out = {"status": FEE_NOT_APPLICABLE, "amount": None, "source": None, "reported": None, "estimate": estimate}
+    if not network_fee_applies(cashout):
+        return out
+    record = (db.query(AuditTrail)
+              .filter(AuditTrail.table_name == "affiliate_cashout_requests", AuditTrail.record_id == cashout.id,
+                      AuditTrail.action.in_(_FEE_AUDIT_ACTIONS)).order_by(AuditTrail.id.desc()).first())
+    if record is None:
+        return {**out, "status": FEE_NOT_RECORDED}
+    values = record.new_values or {}
+    posted = record.action == "CASHOUT_NETWORK_FEE_POSTED"
+    return {**out, "status": FEE_POSTED if posted else FEE_NONE, "amount": values.get("amount"),
+            "source": values.get("source"), "reported": values.get("reported_amount")}
+
+
+def record_network_fee(db: Session, cashout: AffiliateCashoutRequest, *, amount, source: str,
+                       actor_id: Optional[int], now: datetime, reference: Optional[str] = None,
+                       reported_by: Optional[str] = None) -> str:
+    """Record the network fee MyHigh5 actually paid for one completed crypto
+    cashout: Dr 5005 / Cr the treasury account, in the caller's transaction.
+    Returns POSTED, or NONE when the fee is zero or rounds to no cents (the
+    figure is still recorded; no entry is posted). Once per cashout. No commit.
+    The cashout row must be locked by the caller."""
+    if cashout.cashout_method != METHOD_CRYPTO or cashout.status != CashoutStatus.COMPLETED.value:
+        raise CashoutError("NOT_COMPLETED", "A network fee is recorded only for a completed crypto payout.")
+    if cashout.network_fee_policy != payment_config.FEE_COMPANY_PAYS:
+        raise CashoutError("FEE_NOT_COMPANY_PAID",
+                           "The member bore the network fee of this payout; MyHigh5 has no expense to record.")
+    try:
+        exact = Decimal(str(amount))
+    except Exception as exc:  # noqa: BLE001
+        raise CashoutError("INVALID_FEE", "The network fee is not a number.") from exc
+    if not exact.is_finite() or exact < 0:
+        raise CashoutError("INVALID_FEE", "The network fee cannot be negative.")
+    if exact > money(cashout.gross_amount):
+        raise CashoutError("INVALID_FEE", "The network fee cannot be larger than the payout itself.")
+    currency = payment_config.SUPPORTED_PAYOUT_CURRENCIES.get(str(cashout.payout_currency or ""))
+    if currency is None or currency.get("currency") != "USDT":
+        raise CashoutError("FEE_CURRENCY_UNSUPPORTED",
+                           "This payout was not made in a US-dollar stablecoin; its fee needs a manual journal entry.")
+    description = network_fee_description(cashout.id)
+    already = (db.query(JournalEntry.id).filter(JournalEntry.description == description).first() is not None
+               or db.query(AuditTrail.id).filter(AuditTrail.table_name == "affiliate_cashout_requests",
+                                                 AuditTrail.record_id == cashout.id,
+                                                 AuditTrail.action.in_(_FEE_AUDIT_ACTIONS)).first() is not None)
+    if already:
+        raise CashoutError("FEE_ALREADY_RECORDED", "The network fee of this payout has already been recorded.")
+    fee = money(exact)
+    details = {"source": source, "amount": str(fee), "reported_amount": str(exact),
+               "estimate": str(money(cashout.network_fee)) if cashout.network_fee is not None else None,
+               "reference": (str(reference).strip()[:200] or None) if reference else None,
+               "fee_paid_by": reported_by, "payout_currency": cashout.payout_currency,
+               "valuation": "1 USDT = 1 USD (ledger convention, no market rate applied)"}
+    if fee <= 0:
+        db.flush()
+        _audit(db, record_id=cashout.id, action="CASHOUT_NETWORK_FEE_NONE", actor_id=actor_id, old=None, new=details)
+        return FEE_NONE
+    treasury = currency["treasury_account"]
+    needed = {payment_config.NETWORK_FEE_EXPENSE_ACCOUNT, treasury}
+    accounts = dict(db.query(ChartOfAccounts.account_code, ChartOfAccounts.is_active)
+                    .filter(ChartOfAccounts.account_code.in_(needed)).all())
+    if needed - set(accounts):
+        raise CashoutError("LEDGER_NOT_CONFIGURED",
+                           "Network fee accounting is not configured; missing accounts: "
+                           + ", ".join(sorted(needed - set(accounts))))
+    inactive = sorted(code for code, active in accounts.items() if active is False)
+    if inactive:
+        raise CashoutError("LEDGER_ACCOUNT_INACTIVE",
+                           "Network fee accounting cannot post to an inactive account: " + ", ".join(inactive))
+    accounting_service.create_journal_entry(db, description=description, date=now, commit=False, lines=[
+        {"account_code": payment_config.NETWORK_FEE_EXPENSE_ACCOUNT, "debit": fee, "credit": 0,
+         "description": description},
+        {"account_code": treasury, "debit": 0, "credit": fee, "description": description},
+    ])
+    db.flush()
+    _audit(db, record_id=cashout.id, action="CASHOUT_NETWORK_FEE_POSTED", actor_id=actor_id, old=None,
+           new={**details, "expense_account": payment_config.NETWORK_FEE_EXPENSE_ACCOUNT,
+                "treasury_account": treasury})
+    return FEE_POSTED
+
+
+def record_provider_network_fee(db: Session, cashout: AffiliateCashoutRequest, details: dict,
+                                now: datetime) -> str:
+    """Post the fee the PROVIDER reported for a payout that has just been
+    completed, if and only if it says the fee came from our balance. Runs in
+    a savepoint and never raises: a payout is completed whether or not its fee
+    can be booked (an unbooked fee stays listed for an administrator)."""
+    if not network_fee_applies(cashout):
+        return FEE_NOT_APPLICABLE
+    reported, payer = details.get("fee"), str(details.get("fee_paid_by") or "").strip().lower()
+    if reported in (None, ""):
+        return "NOT_REPORTED"
+    if not payer or payer not in payment_config.company_fee_payer_values():
+        return "PAYER_NOT_CONFIRMED"
+    try:
+        with db.begin_nested():
+            return record_network_fee(db, cashout, amount=reported, source=FEE_SOURCE_PROVIDER, actor_id=None,
+                                      now=now, reference=cashout.provider_batch_id, reported_by=payer)
+    except CashoutError as exc:
+        logger.warning("Cashout %s: the provider's network fee was not posted (%s)", cashout.id, exc.code)
+        return exc.code
+    except Exception:  # noqa: BLE001
+        logger.exception("Cashout %s: the provider's network fee could not be posted", cashout.id)
+        return "ERROR"
+
+
+def record_network_fee_by_admin(db: Session, cashout: AffiliateCashoutRequest, *, admin: User, amount,
+                                reference: str, now: Optional[datetime] = None) -> AffiliateCashoutRequest:
+    """An authorised administrator records the network fee read from the
+    provider's statement (zero = the provider charged none). Commits."""
+    now = now or datetime.utcnow()
+    _require_processor(admin)
+    reference = str(reference or "").strip()
+    if len(reference) < 3:
+        raise CashoutError("REFERENCE_REQUIRED", "Say where the fee was read (the provider's payout id or statement).")
+    locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
+              .with_for_update().one())
+    try:
+        record_network_fee(db, locked, amount=amount, source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now,
+                           reference=reference)
+    except Exception:
+        db.rollback()
+        raise
+    db.commit()
+    return locked
+
+
+def network_fee_summary(db: Session, *, limit: int = 200) -> dict:
+    """Totals of the fees booked, and the completed company-paid payouts whose
+    fee has not been recorded yet."""
+    rows = (db.query(AffiliateCashoutRequest.id, AffiliateCashoutRequest.user_id, AffiliateCashoutRequest.network_fee)
+            .filter(AffiliateCashoutRequest.cashout_method == METHOD_CRYPTO,
+                    AffiliateCashoutRequest.status == CashoutStatus.COMPLETED.value,
+                    AffiliateCashoutRequest.network_fee_policy == payment_config.FEE_COMPANY_PAYS)
+            .order_by(AffiliateCashoutRequest.id.desc()).limit(2000).all())
+    recorded = {record_id: (action, new_values or {}) for record_id, action, new_values in
+                db.query(AuditTrail.record_id, AuditTrail.action, AuditTrail.new_values)
+                .filter(AuditTrail.table_name == "affiliate_cashout_requests",
+                        AuditTrail.action.in_(_FEE_AUDIT_ACTIONS)).all()}
+    posted = [Decimal(str(values.get("amount") or 0)) for action, values in recorded.values()
+              if action == "CASHOUT_NETWORK_FEE_POSTED"]
+    # The ledger keeps cents; the exact figures stay comparable with the provider's statement here.
+    reported = sum((Decimal(str(values.get("reported_amount") or 0)) for _, values in recorded.values()), Decimal("0"))
+    missing = [{"cashout_id": cid, "user_id": uid,
+                "estimate": float(money(estimate)) if estimate is not None else None}
+               for cid, uid, estimate in rows if cid not in recorded]
+    return {"expense_account": payment_config.NETWORK_FEE_EXPENSE_ACCOUNT,
+            "posted_count": len(posted), "posted_total": float(sum(posted, Decimal("0.00"))),
+            "reported_total": format(reported, "f"),
+            "rounding_difference": format(reported - sum(posted, Decimal("0.00")), "f"),
+            "confirmed_none_count": sum(1 for action, _ in recorded.values() if action == "CASHOUT_NETWORK_FEE_NONE"),
+            "not_recorded_count": len(missing), "not_recorded": missing[:limit],
+            "automatic_posting": bool(payment_config.company_fee_payer_values())}
+
+
+# ---------------------------------------------------------------------------
 # USD cashout (member request; settlement is recorded by an administrator)
 # ---------------------------------------------------------------------------
 
