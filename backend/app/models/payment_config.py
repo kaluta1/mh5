@@ -8,6 +8,8 @@ PaymentConfigAudit         append-only, versioned history of configuration
                            changes: who, when, which fields. Never a secret.
 PayoutWalletVerification   one pending email confirmation of a payout wallet;
                            only a digest of the one-time token is stored.
+CashoutFeeConsent          a member's acceptance of the network fee terms of
+                           Crypto Cashout and of the limits shown with them.
 PaymentWebhookStat         bounded per-day counters of provider callbacks by
                            outcome (webhook health; never a request body).
 
@@ -20,7 +22,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +51,15 @@ class PaymentSettings(Base):
     crypto_min_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     crypto_payout_currency: Mapped[str] = mapped_column(String(20), nullable=False)
     network_fee_policy: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Beneficiary-paid network fee: where the provider takes its fee from (as
+    # confirmed with it), the limits a member accepts, and their approval.
+    provider_fee_mode: Mapped[str] = mapped_column(String(24), nullable=False)
+    member_fee_cap_percent: Mapped[Decimal] = mapped_column(Numeric(6, 3), nullable=False)
+    member_fee_cap_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    min_net_payout_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    fee_terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    fee_consent_valid_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    fee_terms_approved: Mapped[bool] = mapped_column(Boolean, nullable=False)
     max_network_fee_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
     payout_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     max_single_payout_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -127,6 +138,29 @@ class PayoutWalletVerification(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+
+
+class CashoutFeeConsent(Base):
+    """A member's acceptance of the network fee terms of Crypto Cashout: the
+    beneficiary bears the fee, up to the limits shown at that moment. One row
+    per acceptance; a row is never edited, only revoked (by the member, or by
+    a newer acceptance). At most one unrevoked row per member."""
+    __tablename__ = "cashout_fee_consents"
+    __table_args__ = (
+        Index("uq_cashout_fee_consents_active", "user_id", unique=True,
+              postgresql_where=text("revoked_at IS NULL"), sqlite_where=text("revoked_at IS NULL")),
+    )
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The limits the member accepted (0 = that limit was not part of the terms).
+    cap_percent: Mapped[Decimal] = mapped_column(Numeric(6, 3), nullable=False)
+    cap_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
 
 

@@ -4,9 +4,13 @@ import {
   canCancel,
   canRequestUsd,
   cashoutStatusText,
+  feeLimitText,
+  formatExact,
   methodAvailable,
   methodLabel,
   needsAttention,
+  networkFeeText,
+  receivedText,
   recordStatusLabel,
   walletStatusLabel,
   type CashoutRecord,
@@ -71,6 +75,46 @@ describe('cashout status wording', () => {
       'Choose how you want to be paid',
     )
     expect(methodLabel(null)).toBe('Not chosen')
+  })
+})
+
+describe('network fee paid by the member', () => {
+  const fee = (over = {}) => ({ applies: true, gross: '5.00', estimate: '0.3', actual: null, net_received: null,
+    fee_cap: '0.5', status: 'NOT_RECORDED' as const, flag: null, ...over })
+
+  it('asks for the fee terms before promising a payout', () => {
+    const text = cashoutStatusText(summary({ status: 'FEE_TERMS_REQUIRED' }))
+    expect(text).toContain('Accept the network fee terms')
+    expect(text).toContain('kept in full')
+  })
+
+  it('states the limit exactly as it was configured, whichever kinds are set', () => {
+    expect(feeLimitText({ cap_percent: '10', cap_usd: '1' })).toBe('10% of the payout or $1.00, whichever is lower')
+    expect(feeLimitText({ cap_percent: '2.5', cap_usd: '0' })).toBe('2.5% of the payout')
+    expect(feeLimitText({ cap_percent: '0', cap_usd: '0.75' })).toBe('$0.75')
+    expect(feeLimitText({ cap_percent: '0', cap_usd: '0' })).toBe('')
+  })
+
+  it('never shows an estimate as the fee that was paid', () => {
+    const sent = record({ method: 'CRYPTO', status: 'processing', gross_amount: 5, fee: 0, net_amount: 4.7,
+      beneficiary_fee: fee() })
+    expect(networkFeeText(sent)).toBe('about $0.30 network fee (estimate)')
+    expect(receivedText(sent)).toBe('$4.70')                                               // what is expected, in cents
+    const paid = record({ method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.7,
+      beneficiary_fee: fee({ actual: '0.2874', net_received: '4.7126', status: 'RECORDED' }) })
+    expect(networkFeeText(paid)).toBe('$0.2874 network fee')                               // exact, not rounded away
+    expect(receivedText(paid)).toBe('$4.7126')
+  })
+
+  it('shows no network fee for a USD cashout or an earlier company-paid payout', () => {
+    expect(networkFeeText(record())).toBeNull()
+    expect(networkFeeText(record({ method: 'CRYPTO', beneficiary_fee: fee({ applies: false }) }))).toBeNull()
+    expect(receivedText(record())).toBe('$130.00')
+  })
+
+  it('keeps an exact figure exact', () => {
+    expect([formatExact('5'), formatExact('0.5'), formatExact('0.12345678'), formatExact(null)]).toEqual(
+      ['$5.00', '$0.50', '$0.12345678', '-'])
   })
 })
 

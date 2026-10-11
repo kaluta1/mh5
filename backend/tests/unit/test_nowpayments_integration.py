@@ -34,6 +34,7 @@ from app.services.financial_balances import get_commission_balance
 from app.services.financial_reversal import _REFUND_MARKER
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_dual_cashout import (  # noqa: F401
+    FEE_RULES,
     NOW,
     PASSWORD,
     PAYOUT_ENV,
@@ -1109,7 +1110,8 @@ def test_credentials_alone_are_never_shown_as_verified(db, monkeypatch):
     assert set(i["state"] for i in view["items"]) <= set(view["states"]) == set(pc.READINESS_STATES)
     assert states(db) == {"provider": "CONFIGURED", "api_authentication": "CONFIGURED", "ipn": "CONFIGURED",
                           "custody": "CONFIGURED", "ip_whitelist": "UNVERIFIED", "payout_login": "CONFIGURED",
-                          "payout_2fa": "CONFIGURED", "automatic_payouts": "DISABLED"}
+                          "payout_2fa": "CONFIGURED", "automatic_payouts": "DISABLED",
+                          "network_fee_terms": "UNVERIFIED"}
     assert view["last_error"] is None and view["last_test_at"] is None and view["outstanding"]
 
 
@@ -1118,7 +1120,8 @@ def test_nothing_configured_is_unverified_and_says_what_is_missing(db, monkeypat
         monkeypatch.setattr(settings, name, "")
     assert states(db) == {"provider": "CONFIGURED", "api_authentication": "UNVERIFIED", "ipn": "UNVERIFIED",
                           "custody": "UNVERIFIED", "ip_whitelist": "UNVERIFIED", "payout_login": "UNVERIFIED",
-                          "payout_2fa": "UNVERIFIED", "automatic_payouts": "DISABLED"}
+                          "payout_2fa": "UNVERIFIED", "automatic_payouts": "DISABLED",
+                          "network_fee_terms": "UNVERIFIED"}
     outstanding = " ".join(pc.provider_view(db)["readiness"]["outstanding"])
     assert "pay-in API key" in outstanding and "IPN secret" in outstanding and "authenticator" in outstanding
 
@@ -1132,7 +1135,8 @@ def test_a_successful_connection_test_verifies_what_it_proved_and_nothing_more(d
     assert states(db) == {"provider": "CONFIGURED", "api_authentication": "VERIFIED", "ipn": "CONFIGURED",
                           "custody": "VERIFIED", "ip_whitelist": "VERIFIED", "payout_login": "VERIFIED",
                           "payout_2fa": "CONFIGURED",                 # provable only by a real payout
-                          "automatic_payouts": "DISABLED"}            # the switches are off
+                          "automatic_payouts": "DISABLED",            # the switches are off
+                          "network_fee_terms": "UNVERIFIED"}          # the provider's fee behaviour is not confirmed
     assert result["facts"]["custody_balance"] == "250.5" and result["facts"]["custody_pending"] == "1.25"
 
 
@@ -1188,6 +1192,9 @@ def test_readiness_follows_the_switches(db, monkeypatch):
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
     assert states(db)["automatic_payouts"] == "DISABLED"                           # the admin switch is still off
     configure(db, crypto_auto_payout_enabled=True)
+    assert states(db)["automatic_payouts"] == "UNVERIFIED"                         # the network fee rules are not in force
+    configure(db, **FEE_RULES)
+    assert states(db)["network_fee_terms"] == "CONFIGURED"
     assert states(db)["automatic_payouts"] == "CONFIGURED"                         # proven only by a real payout
     configure(db, provider_enabled=False)
     assert states(db)["provider"] == "DISABLED" and states(db)["automatic_payouts"] == "DISABLED"

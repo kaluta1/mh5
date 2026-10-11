@@ -16,10 +16,12 @@ Production today runs `d208c1d` with Alembic revision `e2f3a4b5c6d7`.
 | 2 | `a5b6c7d8e9f0` | `f3a4b5c6d7e8` | `payment_settings`, `payment_credentials`, `payment_config_audit`, `payout_wallet_verifications`, `payment_webhook_stats`, 3 + 1 columns, two permissions held by nobody |
 
 | 3 | `b6c7d8e9f0a1` | `a5b6c7d8e9f0` | one row in `chart_of_accounts`: 5005 Crypto payout network fees (paid by MyHigh5), under 5000 |
+| 4 | `c7d8e9f0a1b2` | `b6c7d8e9f0a1` | beneficiary-paid network fee (section 12): 7 columns on `payment_settings` (every default fails closed), 9 nullable columns on `affiliate_cashout_requests`, `cashout_fee_consents` |
 
-All three are additive, idempotent and run in one transaction each. They read
-and change no commission, deposit, cashout or journal row. `b6c7d8e9f0a1` is
-the single head.
+All four are additive, idempotent and run in one transaction each. They read
+and change no commission, deposit, cashout or journal row. `c7d8e9f0a1b2` is
+the single head. Its downgrade refuses to run once a member's acceptance or a
+beneficiary-paid payout has been recorded.
 
 Verified on a disposable local PostgreSQL 16 database with production-like
 rows: upgrade from `e2f3a4b5c6d7`, a second upgrade, downgrade, upgrade again;
@@ -121,10 +123,11 @@ with destination details is open.
 9. Stop the backend (or put it in maintenance) so no request runs across the
    schema change.
 10. `alembic upgrade f3a4b5c6d7e8`, then `alembic upgrade a5b6c7d8e9f0`, then
-    `alembic upgrade b6c7d8e9f0a1`. `alembic current` must print
-    `b6c7d8e9f0a1 (head)`, and
+    `alembic upgrade b6c7d8e9f0a1`, then `alembic upgrade c7d8e9f0a1b2`.
+    `alembic current` must print `c7d8e9f0a1b2 (head)`, and
     `SELECT account_code, account_name, is_active FROM chart_of_accounts WHERE account_code = '5005';`
-    must return one active row.
+    must return one active row, and
+    `SELECT count(*) FROM cashout_fee_consents;` must return 0.
 11. Re-run 2.6 and compare with the saved baseline: identical.
 12. Deploy the exact tested commit, backend and frontend together (frontend
     built with the production `NEXT_PUBLIC_*` values).
@@ -174,6 +177,10 @@ with destination details is open.
 - `POST /admin/cashouts/run` (with `process_cashouts`) answers
   `{"enabled": false, ...}`.
 - `affiliate_cashout_requests` has no new row.
+- `Admin > Finance & Payments > Crypto Cashout`: "Provider fee behaviour" reads
+  UNVERIFIED, both member fee limits read 0, "Network fee limits approved" is
+  off. Reconciliation states "No crypto payout can be created". Leave all of
+  them as they are (section 12.5).
 
 ## 8. Go / no-go
 
@@ -246,6 +253,13 @@ reference).
 ## 11. Network fee accounting and the open proposal
 
 ### 11.1 Company-paid crypto network fee (approved 2026-10-10, implemented, not deployed)
+
+**Superseded on 2026-10-11 by section 12: the owner decided that the network
+fee is paid by the beneficiary.** What follows is kept as the record of what
+account 5005 and its posting are. They remain in the code for a payout written
+under the retired COMPANY_PAYS policy only (there is none in production); the
+engine no longer creates such a payout and an ordinary payout never touches
+5005.
 
 A completed crypto cashout posts its own balanced entry: Dr 2001 commissions
 payable (gross) / Cr 1001 (what the member received). When MyHigh5 bears the
@@ -337,3 +351,111 @@ is ever added, the table first needs a provider column and the rule becomes
 Until the rule exists the application refuses the two cases it would
 prevent: a new payment is never given an id another deposit holds, and a
 callback that matches more than one deposit by payment id credits neither.
+
+## 12. Network fee paid by the beneficiary (Phase 3.2, implemented, not deployed)
+
+Owner decision (2026-10-11): the network fee of a crypto payout is paid by the
+beneficiary, who receives the payout net of it; the provider takes the fee out
+of the amount (`DEDUCTED_BY_PROVIDER`); members accept the fee terms and a
+maximum fee before automatic payouts.
+
+### 12.1 How a payout works
+
+1. The engine asks the provider for the fee of THIS payout, for its own amount.
+2. That estimate is checked against the lowest limit that applies to the
+   member (12.3). Above it: nothing is reserved or sent; the balance stays.
+3. The WHOLE commission amount is handed to the provider. The application
+   never subtracts the fee itself, so the fee is taken once. One function
+   (`cashout_service.amount_to_send`) decides the amount and refuses every
+   provider fee behaviour other than `DEDUCTED_BY_PROVIDER`.
+4. When the provider reports the payout finished, the cashout is completed and
+   its entry posted (12.2). The actual fee and the amount received are recorded
+   on the cashout when they are known (12.4).
+
+### 12.2 Accounting
+
+One entry per completed payout, unchanged from before:
+
+    Dr 2001 Commissions payable      gross
+        Cr 1001 USDT Treasury (BSC)  gross
+
+The whole amount left the treasury and the whole liability to the member is
+settled; the fee is a cost the member bears out of their own proceeds. It is
+neither income nor an expense of MyHigh5: no line, no entry, and account 5005
+is not used. Gross, amount sent, fee estimate, actual fee and amount received
+are kept on the cashout at eight decimal places (`amount_sent`,
+`network_fee_estimate`, `network_fee_actual`, `net_received`), so the cent
+ledger needs no rounding entry.
+
+Nothing is posted for a payout that is pending, failed, rejected or of unknown
+outcome; its commissions stay reserved or return to the balance as before.
+
+This is an accounting DESIGN, not a confirmed requirement of the Singapore
+standards. For Mr. Abeid or a Singapore-qualified accountant: (a) direct
+settlement without a clearing account; (b) carrying USDT at 1 USDT = 1 USD
+with no re-measurement; (c) the treasury account being credited when the
+provider reports the payout finished, not when it is sent; (d) any GST or
+Payment Services Act consequence.
+
+### 12.3 Limits and the member's acceptance
+
+- Two configurable limits: a share of the payout and an amount per payout. 0
+  means "not set". When both are set the lower one applies. **Both ship as 0:
+  no value is a decided policy.** No payout is created while neither is set.
+- The limits, the provider fee behaviour and the terms version are approved in
+  a SEPARATE change ("Network fee limits approved", typed phrase). Any later
+  change to one of them withdraws the approval.
+- A member accepts the terms exactly as shown (version and limits). A
+  different version or limit is refused. One acceptance is in force per member
+  (unique index). It ends when the member withdraws it, when the terms version
+  is raised, or after the configured lifetime (0 = no expiry by time).
+- The member's limit for a payout is the LOWEST of: the limits they accepted
+  and the limits in force now. The company's own "maximum network fee share"
+  still applies on top.
+- A payout is never sent when the member would receive nothing, or less than
+  "Minimum amount received".
+
+### 12.4 The actual fee and what stops payouts
+
+The provider documents neither the values of `fee_paid_by` nor the unit of
+`fee`. So the actual fee is recorded automatically only when the reported
+payer value is one that was confirmed with the provider and set in
+`NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES`. Otherwise the payout is listed under
+Reconciliation (`MEMBER_FEE_NOT_RECORDED`) and an administrator with
+`process_cashouts` records the fee from the provider's statement, stating where
+the provider took it from.
+
+Each of these is listed as critical, sets the provider fee behaviour back to
+UNVERIFIED and withdraws the approval, so that NO further payout is created
+until a person has looked:
+
+| Flag | Meaning |
+|---|---|
+| `PROVIDER_FEE_MODE_MISMATCH` | the provider charged its fee to the MyHigh5 balance instead of the payout. The member received the whole amount. The fee is recorded, NOT posted: the treasury account is overstated by it until accounting books it, with the owner's approval (the only case 5005 could apply to) |
+| `PROVIDER_AMOUNT_MISMATCH` | the provider reports a larger amount than it was asked to send |
+| `FEE_CAP_EXCEEDED` | the fee the provider took is above the member's limit. Nothing more is taken from the member; whether MyHigh5 makes up the difference is the owner's decision |
+
+### 12.5 Activation (NOT part of the deployment; each step needs the owner)
+
+Deploying this code changes nothing for members: every default fails closed.
+Before a single payout can be created, in this order:
+
+1. Confirm with the provider, in writing or by a sandbox payout: that the
+   account's "withdrawal fee paid by" setting is Receiver and applies to API
+   payouts; that a finished payout reports `fee` and `fee_paid_by`, their
+   exact values and the unit of `fee`; whether `amount` is the amount requested
+   or received; whether the minimum payout applies before or after the fee.
+2. The owner decides the member fee limits. Set them; set "Provider fee
+   behaviour" to DEDUCTED_BY_PROVIDER (typed phrase).
+3. The owner approves the configured values; an administrator records it
+   ("Network fee limits approved", typed phrase).
+4. Set `NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES` and
+   `NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES` to the confirmed values.
+5. Members accept the terms in their wallet page.
+6. Only then the existing switches for automatic payouts (server switch,
+   connection test, typed phrase), which also refuse while steps 2 and 3 are
+   not done.
+
+A settings row saved before this migration keeps its stored policy. If it
+reads COMPANY_PAYS no payout is created (`FEE_POLICY_NOT_BENEFICIARY_PAID`)
+until an administrator sets MEMBER_PAYS. Production has no settings row yet.

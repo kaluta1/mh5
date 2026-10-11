@@ -2,6 +2,7 @@ from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import Column, Index, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from decimal import Decimal
 import enum
 from app.db.base_class import Base
 
@@ -175,6 +176,19 @@ class AffiliateCashoutRequest(Base):
     # who bears it (COMPANY_PAYS / MEMBER_PAYS). `fee` stays the MyHigh5 fee.
     network_fee: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     network_fee_policy: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # Beneficiary-paid network fee (NULL on rows written before it), at the
+    # provider's own precision. `network_fee` and `net_amount` above stay the
+    # cent figures known when the payout was created.
+    provider_fee_mode: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    amount_sent: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)           # handed to the provider
+    network_fee_estimate: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)  # for THIS payout
+    network_fee_actual: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)    # never an estimate
+    net_received: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)
+    network_fee_source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    fee_cap: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)   # the member's limit for it
+    fee_consent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("cashout_fee_consents.id"),
+                                                          nullable=True)
+    fee_flag: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)          # what did not add up
     # USD: the member's payout destination details, AES-256-GCM ciphertext only.
     destination_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

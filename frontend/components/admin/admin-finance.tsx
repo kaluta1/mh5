@@ -278,7 +278,10 @@ export function SettingsForm({ title, fields, settings, canManage, busy, change,
 
   const changes = changedValues(fields, draft)
   // Switching on something that moves money needs a typed confirmation phrase.
-  const phrase = Object.keys(changes).map((name) => changes[name] === true ? settings.confirmations[name] : undefined)
+  // So does declaring that the provider's fee behaviour was confirmed with it.
+  const needsPhrase = (name: string) => changes[name] === true
+    || (name === 'provider_fee_mode' && changes[name] === 'DEDUCTED_BY_PROVIDER')
+  const phrase = Object.keys(changes).map((name) => needsPhrase(name) ? settings.confirmations[name] : undefined)
     .find(Boolean)
   const disabled = !canManage || busy
 

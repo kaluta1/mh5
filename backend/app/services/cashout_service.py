@@ -78,7 +78,7 @@ from app.models.affiliate import (
     CommissionStatus,
     PayoutWalletChange,
 )
-from app.models.payment_config import PayoutWalletVerification
+from app.models.payment_config import CashoutFeeConsent, PayoutWalletVerification
 from app.models.user import User
 from app.services import financial_eligibility as fe
 from app.services import payment_config, payment_crypto
@@ -485,14 +485,16 @@ def rows_total(rows: Iterable[AffiliateCommission]) -> Decimal:
 def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method: str, fee: Decimal,
             intent_ref: str, now: datetime, wallet: Optional[str] = None, currency: Optional[str] = None,
             network_fee: Optional[Decimal] = None, network_fee_policy: Optional[str] = None,
-            net: Optional[Decimal] = None,
-            destination_ciphertext: Optional[str] = None) -> Optional[AffiliateCashoutRequest]:
+            net: Optional[Decimal] = None, destination_ciphertext: Optional[str] = None,
+            beneficiary_fee: Optional[dict] = None) -> Optional[AffiliateCashoutRequest]:
     """Reserve these whole rows for ONE new cashout and commit. Returns None
     (after a rollback, with nothing reserved) when the database refused it
     because the member already has an open cashout or the intent exists.
 
     `fee` is the MyHigh5 fee. `net` is what the member receives; it defaults
-    to gross - fee and may only be lower (a network fee the member bears)."""
+    to gross - fee and may only be lower (a network fee the member bears).
+    `beneficiary_fee` carries the full-precision figures of a payout whose
+    network fee the beneficiary bears (see beneficiary_fee_plan)."""
     gross = rows_total(rows)
     fee = money(fee)
     net = money(gross - fee) if net is None else money(net)
@@ -506,14 +508,17 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
         payout_method="nowpayments_crypto" if method == METHOD_CRYPTO else "usd_manual",
         wallet_snapshot=wallet, payout_currency=currency, payout_reference=intent_ref, requested_at=now,
         network_fee=money(network_fee) if network_fee is not None else None,
-        network_fee_policy=network_fee_policy, destination_ciphertext=destination_ciphertext)
+        network_fee_policy=network_fee_policy, destination_ciphertext=destination_ciphertext,
+        **(beneficiary_fee or {}))
     db.add(cashout)
     try:
         db.flush()
         _audit(db, record_id=cashout.id, action="CASHOUT_RESERVED", actor_id=user.id, old=None,
                new={"method": method, "gross": str(gross), "fee": str(fee), "net": str(net),
                     "commission_ids": [int(r.id) for r in rows], "wallet": mask_address(wallet),
-                    "network_fee_policy": network_fee_policy})
+                    "network_fee_policy": network_fee_policy,
+                    **{name: (_exact(value) if isinstance(value, Decimal) else value)
+                       for name, value in (beneficiary_fee or {}).items()}})
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -560,8 +565,13 @@ def _post_journal(db: Session, cashout: AffiliateCashoutRequest, rows: List[Affi
                   cash_account: str, now: datetime) -> None:
     """Dr commissions payable (2001 direct / 2002 historical indirect), Cr the
     account the money left from (the amount less the MyHigh5 fee), Cr 4005
-    cashout fee. Once per cashout. A network fee the member bears is part of
-    what left the account, not MyHigh5 income."""
+    cashout fee. Once per cashout.
+
+    A network fee the BENEFICIARY bears is not a line here: the whole amount
+    was handed to the provider, which took its fee out of it, so the whole
+    amount left the treasury and the whole liability is settled. It is neither
+    income nor an expense of MyHigh5 and never touches 5005; what the provider
+    kept and what the beneficiary received are kept on the cashout itself."""
     description = f"Affiliate Cashout #{cashout.id}"
     if db.query(JournalEntry.id).filter(JournalEntry.description == description).first():
         return
@@ -820,6 +830,357 @@ def network_fee_summary(db: Session, *, limit: int = 200) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Network fee of a crypto payout that the BENEFICIARY pays (owner decision:
+# policy MEMBER_PAYS, provider fee behaviour DEDUCTED_BY_PROVIDER)
+#
+# The fee is taken in exactly ONE place. The whole commission amount is handed
+# to the provider, the provider takes its fee out of it, and the beneficiary
+# receives the rest. This application never subtracts the fee itself, so it
+# cannot be taken twice; amount_to_send() is the only function that decides
+# what is handed over and it refuses every other provider fee behaviour.
+#
+# A member is paid only after accepting the network fee terms, which state the
+# highest fee they accept. The estimate for THEIR payout is checked against it
+# before anything is reserved. The actual fee is known only once the provider
+# has sent the payout: it is recorded then (never the estimate), compared with
+# the member's limit, and anything that does not add up is flagged and stops
+# further payouts. Nothing more is ever taken from the member.
+#
+# Books: the cashout's own entry (Dr 2001 / Cr 1001, the whole amount) is the
+# only one. No entry is posted for the fee and account 5005 is not used.
+# ---------------------------------------------------------------------------
+
+CHARGED_TO_PAYOUT, CHARGED_TO_BALANCE = "PAYOUT_AMOUNT", "PROVIDER_BALANCE"
+FLAG_MODE_MISMATCH, FLAG_AMOUNT_MISMATCH, FLAG_CAP_EXCEEDED = (
+    "PROVIDER_FEE_MODE_MISMATCH", "PROVIDER_AMOUNT_MISMATCH", "FEE_CAP_EXCEEDED")
+# A flag that means the provider did not behave as configured: no further payout until a person has looked.
+SUSPENDING_FLAGS = (FLAG_MODE_MISMATCH, FLAG_AMOUNT_MISMATCH, FLAG_CAP_EXCEEDED)
+_EXACT = Decimal("0.00000001")
+
+
+def _exact(value) -> Optional[str]:
+    """A provider-precision figure as plain text (never a float)."""
+    if value is None:
+        return None
+    text = format(Decimal(str(value)).quantize(_EXACT), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _provider_number(value, what: str) -> Decimal:
+    try:
+        number = Decimal(str(value).strip())
+    except Exception as exc:  # noqa: BLE001
+        raise CashoutError("INVALID_FEE", f"The {what} is not a number.") from exc
+    if not number.is_finite() or number < 0:
+        raise CashoutError("INVALID_FEE", f"The {what} cannot be negative.")
+    if number != number.quantize(_EXACT):
+        raise CashoutError("INVALID_FEE", f"The {what} has more than 8 decimal places.")
+    return number
+
+
+def amount_to_send(mode: Optional[str], gross: Decimal) -> Decimal:
+    """What is handed to the provider for a payout of `gross`. The ONLY place
+    that decides it. DEDUCTED_BY_PROVIDER: the whole amount, because the
+    provider takes its fee out of it. Every other behaviour is refused, so a
+    fee is never subtracted here and then taken again by the provider."""
+    if mode != payment_config.FEE_MODE_DEDUCTED:
+        raise CashoutError("PROVIDER_FEE_MODE_UNVERIFIED",
+                           "The provider's fee behaviour is not confirmed; no payout is created.")
+    return money(gross)
+
+
+def fee_terms(config: PaymentConfig) -> dict:
+    """The network fee terms a member is asked to accept."""
+    return {"available": config.fee_gate() is None, "version": int(config.fee_terms_version),
+            "cap_percent": _exact(config.member_fee_cap_percent), "cap_usd": _exact(config.member_fee_cap_usd),
+            "valid_days": int(config.fee_consent_valid_days),
+            "minimum_received": float(money(config.min_net_payout_usd))}
+
+
+def active_fee_consent(db: Session, user_id: int, config: PaymentConfig,
+                       now: Optional[datetime] = None) -> Optional[CashoutFeeConsent]:
+    """The member's acceptance of the CURRENT terms, if it is still in force."""
+    now = now or datetime.utcnow()
+    row = (db.query(CashoutFeeConsent)
+           .filter(CashoutFeeConsent.user_id == user_id, CashoutFeeConsent.revoked_at.is_(None))
+           .order_by(CashoutFeeConsent.id.desc()).first())
+    if row is None or int(row.terms_version) != int(config.fee_terms_version):
+        return None
+    if row.expires_at is not None and now >= row.expires_at:
+        return None
+    return row
+
+
+def member_fee_cap(config: PaymentConfig, consent: CashoutFeeConsent, gross: Decimal) -> Decimal:
+    """The highest network fee this member may bear on a payout of `gross`:
+    the LOWEST of every limit that is set, in the terms they accepted and in
+    the configuration now in force."""
+    limits = [Decimal(gross) * Decimal(str(percent)) / Decimal("100")
+              for percent in (config.member_fee_cap_percent, consent.cap_percent) if Decimal(str(percent)) > 0]
+    limits += [Decimal(str(amount)) for amount in (config.member_fee_cap_usd, consent.cap_usd)
+               if Decimal(str(amount)) > 0]
+    if not limits:
+        raise CashoutError("FEE_LIMITS_NOT_CONFIGURED", "No member network fee limit is set.")
+    return min(limits).quantize(_EXACT)
+
+
+def beneficiary_fee_plan(config: PaymentConfig, consent: CashoutFeeConsent, gross: Decimal,
+                         estimate: Decimal) -> tuple[Optional[str], dict]:
+    """Check the provider's estimate for THIS payout against every limit.
+    Returns (why it may not be sent or None, the figures to store)."""
+    gross, estimate = money(gross), Decimal(str(estimate))
+    cap = member_fee_cap(config, consent, gross)
+    expected = gross - estimate
+    plan = {"provider_fee_mode": config.provider_fee_mode, "network_fee_estimate": estimate.quantize(_EXACT),
+            "fee_cap": cap, "fee_consent_id": int(consent.id)}
+    if expected <= 0 or estimate > gross * Decimal(config.max_network_fee_percent) / Decimal("100"):
+        return "NETWORK_FEE_TOO_HIGH", plan
+    if estimate > cap:
+        return "NETWORK_FEE_ABOVE_MEMBER_LIMIT", plan
+    if expected < money(config.min_net_payout_usd):
+        return "BELOW_MINIMUM_RECEIVED", plan
+    plan["amount_sent"] = amount_to_send(config.provider_fee_mode, gross)
+    return None, plan
+
+
+def accept_fee_terms(db: Session, user: User, *, version: int, cap_percent, cap_usd,
+                     ip: Optional[str] = None, now: Optional[datetime] = None) -> CashoutFeeConsent:
+    """The member accepts the network fee terms and limits they were SHOWN.
+    Commits. Refused when the terms are not on offer, or are no longer the
+    ones shown. Moves no money and starts no payout."""
+    now = now or datetime.utcnow()
+    locked = db.query(User).filter(User.id == user.id).with_for_update().one()
+    config = payment_config.load(db)
+    if config.fee_gate() is not None:
+        db.rollback()
+        raise CashoutError("FEE_TERMS_UNAVAILABLE", "The network fee terms cannot be accepted at the moment.")
+    try:
+        shown = (int(version), Decimal(str(cap_percent)), Decimal(str(cap_usd)))
+    except Exception:  # noqa: BLE001
+        shown = None
+    current = (int(config.fee_terms_version), Decimal(str(config.member_fee_cap_percent)),
+               Decimal(str(config.member_fee_cap_usd)))
+    if shown != current:
+        db.rollback()
+        raise CashoutError("FEE_TERMS_CHANGED", "The network fee terms have changed. Review them and accept again.")
+    existing = active_fee_consent(db, locked.id, config, now)
+    if existing is not None and (Decimal(str(existing.cap_percent)), Decimal(str(existing.cap_usd))) == current[1:]:
+        db.rollback()
+        return existing                             # already accepted: nothing new
+    (db.query(CashoutFeeConsent)
+     .filter(CashoutFeeConsent.user_id == locked.id, CashoutFeeConsent.revoked_at.is_(None))
+     .update({CashoutFeeConsent.revoked_at: now, CashoutFeeConsent.revoked_reason: "REPLACED"},
+             synchronize_session=False))
+    days = int(config.fee_consent_valid_days)
+    consent = CashoutFeeConsent(user_id=locked.id, terms_version=current[0], cap_percent=current[1],
+                                cap_usd=current[2], accepted_at=now,
+                                expires_at=now + timedelta(days=days) if days > 0 else None, ip_address=ip)
+    db.add(consent)
+    db.flush()
+    _audit(db, record_id=locked.id, action="CASHOUT_FEE_TERMS_ACCEPTED", actor_id=locked.id, table="users", ip=ip,
+           old=None, new={"consent_id": int(consent.id), "terms_version": current[0],
+                          "cap_percent": _exact(current[1]), "cap_usd": _exact(current[2]),
+                          "expires_at": consent.expires_at.isoformat() if consent.expires_at else None})
+    db.commit()
+    db.refresh(consent)
+    return consent
+
+
+def withdraw_fee_consent(db: Session, user: User, *, ip: Optional[str] = None,
+                         now: Optional[datetime] = None) -> bool:
+    """The member withdraws their acceptance: no further crypto payout is
+    created for them until they accept again. A payout already handed to the
+    provider is not affected. Commits. True when there was one to withdraw."""
+    now = now or datetime.utcnow()
+    locked = db.query(User).filter(User.id == user.id).with_for_update().one()
+    changed = (db.query(CashoutFeeConsent)
+               .filter(CashoutFeeConsent.user_id == locked.id, CashoutFeeConsent.revoked_at.is_(None))
+               .update({CashoutFeeConsent.revoked_at: now, CashoutFeeConsent.revoked_reason: "WITHDRAWN"},
+                       synchronize_session=False))
+    if changed:
+        _audit(db, record_id=locked.id, action="CASHOUT_FEE_TERMS_WITHDRAWN", actor_id=locked.id, table="users",
+               ip=ip, old=None, new={"consents": int(changed)})
+    db.commit()
+    return bool(changed)
+
+
+def member_fee_applies(cashout: AffiliateCashoutRequest) -> bool:
+    return (cashout.cashout_method == METHOD_CRYPTO and cashout.status == CashoutStatus.COMPLETED.value
+            and cashout.network_fee_policy == payment_config.FEE_MEMBER_PAYS)
+
+
+def record_member_fee(db: Session, cashout: AffiliateCashoutRequest, *, amount, charged_to: str, source: str,
+                      actor_id: Optional[int], now: datetime, reference: Optional[str] = None,
+                      reported_by: Optional[str] = None) -> Optional[str]:
+    """Record the ACTUAL network fee of one completed beneficiary-paid payout
+    and what the beneficiary therefore received. Posts NO journal entry and
+    takes nothing more from anyone. Returns the flag raised (None = it adds
+    up). Once per cashout. No commit; the cashout row is locked by the caller.
+
+    `charged_to` says where the provider took the fee from. PAYOUT_AMOUNT is
+    the configured behaviour. PROVIDER_BALANCE means the provider charged
+    MyHigh5 instead: the beneficiary received the whole amount, the fee is
+    recorded and flagged, and the treasury account is overstated by it until
+    accounting decides, with the owner, how to book it."""
+    if not member_fee_applies(cashout):
+        raise CashoutError("NOT_COMPLETED",
+                           "An actual network fee is recorded only for a completed beneficiary-paid crypto payout.")
+    if cashout.network_fee_actual is not None:
+        raise CashoutError("FEE_ALREADY_RECORDED", "The network fee of this payout has already been recorded.")
+    if charged_to not in (CHARGED_TO_PAYOUT, CHARGED_TO_BALANCE):
+        raise CashoutError("CHARGED_TO_REQUIRED",
+                           "Say where the provider took the fee from: PAYOUT_AMOUNT or PROVIDER_BALANCE.")
+    exact = _provider_number(amount, "network fee")
+    gross = money(cashout.gross_amount)
+    currency = payment_config.SUPPORTED_PAYOUT_CURRENCIES.get(str(cashout.payout_currency or ""))
+    if currency is None or currency.get("currency") != "USDT":
+        raise CashoutError("FEE_CURRENCY_UNSUPPORTED",
+                           "This payout was not made in a US-dollar stablecoin; its fee cannot be recorded here.")
+    if exact >= gross:
+        raise CashoutError("INVALID_FEE", "The network fee cannot be as large as the payout itself.")
+    flag: Optional[str] = None
+    if charged_to == CHARGED_TO_BALANCE:
+        received = gross
+        flag = FLAG_MODE_MISMATCH if exact > 0 else None
+    else:
+        received = gross - exact
+        if cashout.fee_cap is not None and exact > Decimal(str(cashout.fee_cap)):
+            flag = FLAG_CAP_EXCEEDED
+    cashout.network_fee_actual = exact
+    cashout.net_received = received
+    cashout.network_fee_source = source
+    cashout.fee_flag = flag or cashout.fee_flag
+    db.flush()
+    _audit(db, record_id=cashout.id, action="CASHOUT_MEMBER_FEE_RECORDED", actor_id=actor_id, old=None,
+           new={"source": source, "charged_to": charged_to, "gross": str(gross), "network_fee": _exact(exact),
+                "net_received": _exact(received), "estimate": _exact(cashout.network_fee_estimate),
+                "fee_cap": _exact(cashout.fee_cap), "amount_sent": _exact(cashout.amount_sent),
+                "flag": cashout.fee_flag, "fee_paid_by": reported_by,
+                "reference": (str(reference).strip()[:200] or None) if reference else None,
+                "payout_currency": cashout.payout_currency,
+                "valuation": "1 USDT = 1 USD (ledger convention, no market rate applied)"})
+    return cashout.fee_flag
+
+
+def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, details: dict,
+                               now: datetime) -> str:
+    """Apply what the PROVIDER reports about a beneficiary-paid payout that
+    has just been completed. Runs in a savepoint and never raises: a payout is
+    completed whether or not its fee can be recorded.
+
+    The provider documents neither the values of `fee_paid_by` nor the unit of
+    `fee`, so nothing is recorded unless the payer value is one that was
+    confirmed with it (NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES / ..._COMPANY_
+    VALUES). Until then the payout stays listed as "actual fee not recorded"
+    for an administrator."""
+    if not member_fee_applies(cashout):
+        return FEE_NOT_APPLICABLE
+    reported, payer = details.get("fee"), str(details.get("fee_paid_by") or "").strip().lower()
+    try:
+        with db.begin_nested():
+            sent = Decimal(str(cashout.amount_sent)) if cashout.amount_sent is not None else None
+            try:
+                paid = Decimal(str(details.get("amount"))) if details.get("amount") not in (None, "") else None
+            except Exception:  # noqa: BLE001
+                paid = None
+            if sent is not None and paid is not None and paid.is_finite() and paid > sent:
+                # More left than was asked for: whatever the cause, it is not the configured behaviour.
+                cashout.fee_flag = FLAG_AMOUNT_MISMATCH
+                db.flush()
+                _audit(db, record_id=cashout.id, action="CASHOUT_FEE_FLAGGED", actor_id=None, old=None,
+                       new={"flag": FLAG_AMOUNT_MISMATCH, "amount_sent": _exact(sent), "provider_amount": _exact(paid)})
+            if payer and payer in payment_config.company_fee_payer_values():
+                if reported in (None, ""):
+                    cashout.fee_flag = FLAG_MODE_MISMATCH
+                    db.flush()
+                    _audit(db, record_id=cashout.id, action="CASHOUT_FEE_FLAGGED", actor_id=None, old=None,
+                           new={"flag": FLAG_MODE_MISMATCH, "fee_paid_by": payer})
+                    return FLAG_MODE_MISMATCH
+                record_member_fee(db, cashout, amount=reported, charged_to=CHARGED_TO_BALANCE,
+                                  source=FEE_SOURCE_PROVIDER, actor_id=None, now=now,
+                                  reference=cashout.provider_batch_id, reported_by=payer)
+                return cashout.fee_flag or FEE_POSTED
+            if reported in (None, ""):
+                return "NOT_REPORTED"
+            if not payer or payer not in payment_config.receiver_fee_payer_values():
+                return "PAYER_NOT_CONFIRMED"
+            record_member_fee(db, cashout, amount=reported, charged_to=CHARGED_TO_PAYOUT,
+                              source=FEE_SOURCE_PROVIDER, actor_id=None, now=now,
+                              reference=cashout.provider_batch_id, reported_by=payer)
+            return cashout.fee_flag or "RECORDED"
+    except CashoutError as exc:
+        logger.warning("Cashout %s: the provider's network fee was not recorded (%s)", cashout.id, exc.code)
+        return exc.code
+    except Exception:  # noqa: BLE001
+        logger.exception("Cashout %s: the provider's network fee could not be recorded", cashout.id)
+        return "ERROR"
+
+
+def record_member_fee_by_admin(db: Session, cashout: AffiliateCashoutRequest, *, admin: User, amount,
+                               charged_to: Optional[str], reference: str,
+                               now: Optional[datetime] = None) -> AffiliateCashoutRequest:
+    """An authorised administrator records the actual network fee of a
+    beneficiary-paid payout from the provider's statement, and where the
+    provider took it from. Commits. A fee that does not add up stops further
+    payouts (the provider fee behaviour goes back to UNVERIFIED)."""
+    now = now or datetime.utcnow()
+    _require_processor(admin)
+    reference = str(reference or "").strip()
+    if len(reference) < 3:
+        raise CashoutError("REFERENCE_REQUIRED", "Say where the fee was read (the provider's payout id or statement).")
+    locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
+              .with_for_update().one())
+    try:
+        flag = record_member_fee(db, locked, amount=amount, charged_to=str(charged_to or "").strip().upper(),
+                                 source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now, reference=reference)
+        if flag in SUSPENDING_FLAGS:
+            payment_config.suspend_fee_mode(db, reason=flag, cashout_id=int(locked.id))
+    except Exception:
+        db.rollback()
+        raise
+    db.commit()
+    return locked
+
+
+def member_fee_view(cashout: AffiliateCashoutRequest) -> dict:
+    """Gross, estimate, actual fee and amount received of one payout, exact."""
+    paid_by_member = cashout.network_fee_policy == payment_config.FEE_MEMBER_PAYS
+    recorded = cashout.network_fee_actual is not None
+    return {"applies": bool(paid_by_member and cashout.cashout_method == METHOD_CRYPTO),
+            "provider_fee_mode": cashout.provider_fee_mode,
+            "gross": str(money(cashout.gross_amount)), "amount_sent": _exact(cashout.amount_sent),
+            "estimate": _exact(cashout.network_fee_estimate), "actual": _exact(cashout.network_fee_actual),
+            "net_received": _exact(cashout.net_received), "fee_cap": _exact(cashout.fee_cap),
+            "source": cashout.network_fee_source, "flag": cashout.fee_flag,
+            "status": (FEE_NOT_APPLICABLE if not member_fee_applies(cashout)
+                       else "RECORDED" if recorded else FEE_NOT_RECORDED)}
+
+
+def member_fee_summary(db: Session, *, limit: int = 200) -> dict:
+    """Beneficiary-paid payouts: what was paid out, what the provider kept,
+    what the beneficiaries received, and what is still to record or to look at."""
+    rows = (db.query(AffiliateCashoutRequest)
+            .filter(AffiliateCashoutRequest.cashout_method == METHOD_CRYPTO,
+                    AffiliateCashoutRequest.status == CashoutStatus.COMPLETED.value,
+                    AffiliateCashoutRequest.network_fee_policy == payment_config.FEE_MEMBER_PAYS)
+            .order_by(AffiliateCashoutRequest.id.desc()).limit(2000).all())
+    recorded = [r for r in rows if r.network_fee_actual is not None]
+    zero = Decimal("0")
+    return {"completed_count": len(rows),
+            "gross_total": format(sum((money(r.gross_amount) for r in rows), zero), "f"),
+            "recorded_count": len(recorded),
+            "fee_total": _exact(sum((Decimal(str(r.network_fee_actual)) for r in recorded), zero)),
+            "received_total": _exact(sum((Decimal(str(r.net_received)) for r in recorded), zero)),
+            "not_recorded_count": len(rows) - len(recorded),
+            "not_recorded": [{"cashout_id": r.id, "user_id": r.user_id, "estimate": _exact(r.network_fee_estimate)}
+                             for r in rows if r.network_fee_actual is None][:limit],
+            "flagged": [{"cashout_id": r.id, "user_id": r.user_id, "flag": r.fee_flag,
+                         "actual": _exact(r.network_fee_actual), "fee_cap": _exact(r.fee_cap)}
+                        for r in rows if r.fee_flag][:limit],
+            "automatic_recording": bool(payment_config.receiver_fee_payer_values())}
+
+
+# ---------------------------------------------------------------------------
 # USD cashout (member request; settlement is recorded by an administrator)
 # ---------------------------------------------------------------------------
 
@@ -1038,6 +1399,7 @@ def cashout_dict(cashout: AffiliateCashoutRequest, *, admin: bool = False) -> di
         "reference": cashout.settlement_reference or cashout.provider_batch_id,
         "requested_at": cashout.requested_at.isoformat() if cashout.requested_at else None,
         "processed_at": cashout.processed_at.isoformat() if cashout.processed_at else None,
+        "beneficiary_fee": member_fee_view(cashout),
     }
     if admin:
         out.update({"user_id": cashout.user_id, "provider_status": cashout.provider_status,
@@ -1073,7 +1435,9 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
 
     from app.services.cashout_engine import engine_enabled
 
-    engine_on = engine_enabled(db, config=config)
+    engine_on = engine_enabled(db, config=config) and config.fee_gate() is None
+    terms = fee_terms(config)
+    consent = active_fee_consent(db, user.id, config, now)
     if open_cashout is not None:
         status = "IN_PROGRESS"
     elif not eligibility.allowed:
@@ -1086,6 +1450,8 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         status = "WALLET_CONFIRMATION_PENDING" if pending is not None else "WALLET_REQUIRED"
     elif method == METHOD_CRYPTO and wallet.status == WALLET_ON_HOLD:
         status = "WALLET_ON_HOLD"
+    elif method == METHOD_CRYPTO and terms["available"] and consent is None:
+        status = "FEE_TERMS_REQUIRED"
     elif payable < minimum:
         status = "BELOW_MINIMUM"
     elif method == METHOD_CRYPTO:
@@ -1117,9 +1483,14 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         },
         "fees": {
             "CRYPTO": {"platform_fee": 0.0, "network_fee_policy": config.network_fee_policy,
-                       "note": ("No MyHigh5 fee. The blockchain network fee is deducted from the amount sent."
+                       "note": ("No MyHigh5 fee. The blockchain network fee is taken out of the amount sent: "
+                                "you receive the payout less that fee."
                                 if member_pays else
-                                "No MyHigh5 fee. The blockchain network fee is paid by MyHigh5.")},
+                                "No MyHigh5 fee. The blockchain network fee is paid by MyHigh5."),
+                       "terms": {**terms, "accepted": consent is not None,
+                                 "accepted_at": consent.accepted_at.isoformat() if consent is not None else None,
+                                 "expires_at": (consent.expires_at.isoformat()
+                                                if consent is not None and consent.expires_at else None)}},
             "USD": {"rule": config.usd_fee_rule(),
                     "fee": float(usd_fee[0]) if usd_fee else None,
                     "net_amount": float(usd_fee[1]) if usd_fee else None},

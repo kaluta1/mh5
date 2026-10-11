@@ -2,7 +2,7 @@
 Payment API Endpoints — NOWPayments crypto checkout.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -482,3 +482,62 @@ async def get_invoice(
         include_print_script=True,
     )
     return HTMLResponse(content=invoice_html)
+
+
+# ---------------------------------------------------------------------------
+# Crypto Cashout: the member's acceptance of the network fee terms
+#
+# The network fee of a crypto payout is paid by the beneficiary (the provider
+# takes it out of the amount). A member is paid automatically only after
+# accepting that, together with the highest fee they accept. Both calls answer
+# with the member's cashout summary; neither moves money or starts a payout.
+# ---------------------------------------------------------------------------
+
+class CashoutFeeTermsAccept(BaseModel):
+    # The terms exactly as they were shown to the member; a mismatch is refused.
+    version: int = Field(..., ge=1, le=100000)
+    cap_percent: Decimal = Field(..., ge=0, le=100, max_digits=6, decimal_places=3)
+    cap_usd: Decimal = Field(..., ge=0, le=100000, max_digits=12, decimal_places=2)
+    accept: bool = False
+
+
+FEE_TERMS_LIMIT, FEE_TERMS_WINDOW = 10, 600            # changes per member per 10 minutes
+
+
+def _fee_terms_guard(user: User) -> None:
+    if _is_rate_limited(f"payments-fee-terms:{user.id}", FEE_TERMS_LIMIT, FEE_TERMS_WINDOW):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Too many requests. Please try again in a few minutes.")
+
+
+@router.post("/cashout-fee-terms/accept")
+def accept_cashout_fee_terms(body: CashoutFeeTermsAccept, request: Request, db: Session = Depends(deps.get_db),
+                             current_user: User = Depends(deps.get_current_user)):
+    from app.core.client_ip import client_ip
+    from app.services import cashout_service
+
+    _fee_terms_guard(current_user)
+    if body.accept is not True:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail={"code": "ACCEPTANCE_REQUIRED", "message": "Confirm that you accept the terms."})
+    try:
+        cashout_service.accept_fee_terms(db, current_user, version=body.version, cap_percent=body.cap_percent,
+                                         cap_usd=body.cap_usd, ip=client_ip(request))
+    except cashout_service.CashoutError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail={"code": exc.code, "message": str(exc)}) from None
+    db.refresh(current_user)
+    return cashout_service.summary(db, current_user)
+
+
+@router.post("/cashout-fee-terms/withdraw")
+def withdraw_cashout_fee_terms(request: Request, db: Session = Depends(deps.get_db),
+                               current_user: User = Depends(deps.get_current_user)):
+    from app.core.client_ip import client_ip
+    from app.services import cashout_service
+
+    _fee_terms_guard(current_user)
+    cashout_service.withdraw_fee_consent(db, current_user, ip=client_ip(request))
+    db.refresh(current_user)
+    return cashout_service.summary(db, current_user)

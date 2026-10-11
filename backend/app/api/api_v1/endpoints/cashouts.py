@@ -13,9 +13,11 @@ every rule and limit and is a no-op while the engine is off.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.api_v1.endpoints.admin import require_admin
@@ -23,14 +25,14 @@ from app.core.client_ip import client_ip
 from app.db.session import get_db
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission
 from app.models.user import User
-from app.schemas.wallet import CashoutCancel, CashoutNetworkFee, CashoutResolve, CashoutSettle
+from app.schemas.wallet import CashoutCancel, CashoutResolve, CashoutSettle
 from app.services import cashout_engine, payment_config
 from app.services import cashout_service as service
 from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 
 admin_router = APIRouter()
 
-_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE")
+_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE", "CHARGED_TO_REQUIRED")
 
 
 def _error(exc: service.CashoutError) -> HTTPException:
@@ -179,15 +181,32 @@ def resolve(cashout_id: int, body: CashoutResolve, db: Session = Depends(get_db)
         raise _error(exc) from exc
 
 
+class NetworkFeeRecord(BaseModel):
+    # The fee read from the provider's statement, in the payout currency. Zero = none was charged.
+    amount: Decimal = Field(..., ge=0, max_digits=18, decimal_places=8)
+    reference: str = Field(..., min_length=3, max_length=200)
+    # Beneficiary-paid payouts only: where the provider took the fee from.
+    charged_to: Optional[str] = Field(default=None, max_length=20, description="PAYOUT_AMOUNT or PROVIDER_BALANCE")
+
+
 @admin_router.post("/{cashout_id}/network-fee")
-def network_fee(cashout_id: int, body: CashoutNetworkFee, db: Session = Depends(get_db),
+def network_fee(cashout_id: int, body: NetworkFeeRecord, db: Session = Depends(get_db),
                 admin: User = Depends(require_processor)):
-    """Record the network fee MyHigh5 paid for a completed crypto payout, read
-    from the provider's statement (Dr 5005 / Cr the treasury account). Never an
-    estimate, once per payout. Sends nothing to the provider."""
+    """Record the ACTUAL network fee of a completed crypto payout, read from
+    the provider's statement. Never an estimate, once per payout. Sends
+    nothing to the provider.
+
+    Beneficiary-paid payout: the fee and the amount received are recorded and
+    no journal entry is posted. Legacy company-paid payout: Dr 5005 / Cr the
+    treasury account."""
+    cashout = _get(db, cashout_id)
     try:
-        cashout = service.record_network_fee_by_admin(db, _get(db, cashout_id), admin=admin, amount=body.amount,
-                                                      reference=body.reference)
+        if cashout.network_fee_policy == payment_config.FEE_MEMBER_PAYS:
+            cashout = service.record_member_fee_by_admin(db, cashout, admin=admin, amount=body.amount,
+                                                         charged_to=body.charged_to, reference=body.reference)
+        else:
+            cashout = service.record_network_fee_by_admin(db, cashout, admin=admin, amount=body.amount,
+                                                          reference=body.reference)
     except service.CashoutError as exc:
         db.rollback()
         raise _error(exc) from exc

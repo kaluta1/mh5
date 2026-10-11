@@ -36,11 +36,13 @@ One cycle
 3. For each member who chose CRYPTO, under a lock on the member row:
      payable wallet (verified, hold elapsed), financial eligibility, no open
      cashout, no recent failed payout and not too many of them, the minimum
-     interval since the member's last payout, whole available rows >= the
-     configured minimum and <= the maximum single payout, the daily amount and
-     count limits, the amount sent >= the provider's minimum, the network fee
-     within its allowed share, provider balance less the configured reserve
-     >= amount + network fee, the provider accepts the address
+     interval since the member's last payout, the member's acceptance of the
+     network fee terms, whole available rows >= the configured minimum and
+     <= the maximum single payout, the daily amount and count limits, the
+     provider's fee estimate for this payout within the member's limit, the
+     amount received >= the configured and the provider's minimum, provider
+     balance less the configured reserve >= amount + network fee, the
+     provider accepts the address
    -> reserve the rows and COMMIT the intent
    -> re-check the same conditions, mark it processing, COMMIT
    -> ask the provider to create the payout (once).
@@ -58,12 +60,21 @@ Provider answers
                               the engine; resolved by the provider's status
                               (when a payout id is known) or by an administrator
 
-MyHigh5 charges no fee on a crypto cashout. Network fee policy COMPANY_PAYS:
-the member receives the full commission amount and the fee is paid from the
-provider balance. MEMBER_PAYS: the provider's fee estimate is deducted from
-the amount sent. Whether the provider adds its fee on top of the amount or
-takes it out of it is an account setting at the provider that has NOT been
-verified; the balance check always assumes the more expensive case.
+MyHigh5 charges no fee on a crypto cashout. The network fee is paid by the
+BENEFICIARY (owner decision): the whole commission amount is handed to the
+provider, which takes its fee out of it, and the beneficiary receives the
+rest. This engine never subtracts the fee itself, so it is taken once.
+
+Whether the provider takes its fee out of the amount or from the MyHigh5
+balance is a setting of the provider account, NOT verifiable from here. So no
+payout is created unless an administrator recorded that it was confirmed
+(provider fee behaviour DEDUCTED_BY_PROVIDER), the member fee limits are set
+and approved, and the member accepted the fee terms. The provider's estimate
+for each payout is checked against that member's limit before anything is
+reserved; the balance check assumes the more expensive case. When a finished
+payout shows that the provider behaved otherwise, the behaviour goes back to
+UNVERIFIED and nothing more is sent. A payout under the retired COMPANY_PAYS
+policy is never created.
 
 A row here says what is OWED. reconciliation_report() compares that with the
 balance the provider reports; it does not assume the money is there.
@@ -308,8 +319,15 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
                        "network_fee_estimate": (str(money(cashout.network_fee))
                                                 if cashout.network_fee is not None else None),
                        "network_fee_policy": cashout.network_fee_policy})
-        # Books the fee only when the provider reported it AND said it came from our balance.
+        # Legacy company-paid payout: books the fee only when the provider reported
+        # it AND said it came from our balance.
         cs.record_provider_network_fee(db, cashout, details, now)
+        # Beneficiary-paid payout: records the actual fee (no entry is posted) and
+        # checks that the provider behaved as configured. If it did not, no further
+        # payout is created until a person has looked.
+        cs.record_provider_member_fee(db, cashout, details, now)
+        if cashout.fee_flag in cs.SUSPENDING_FLAGS:
+            payment_config.suspend_fee_mode(db, reason=cashout.fee_flag, cashout_id=cashout_id)
         db.commit()
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:
@@ -423,14 +441,16 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     cs.release_pending(db, user, now=now, config=config)
     rows = cs.available_rows(db, user.id)
     amount = cs.rows_total(rows)
-    fee = money(facts["network_fee"])
-    member_pays = config.network_fee_policy == payment_config.FEE_MEMBER_PAYS
-    send = money(amount - fee) if member_pays else amount
 
     def stop(code: str) -> str:
         db.commit()                                 # keeps PENDING -> APPROVED; reserves nothing
         return code
 
+    gate = config.fee_gate()
+    if gate is not None:
+        return stop(gate)                           # fail closed: the network fee rules are not in force
+    if cs.active_fee_consent(db, user.id, config, now) is None:
+        return stop("FEE_TERMS_REQUIRED")           # the member has not accepted the fee and its limit
     if "day_count" not in facts:                    # a caller outside run_cycle
         facts["day_total"], facts["day_count"] = day_usage(db, now)
     if amount < cs.crypto_minimum(config=config):
@@ -440,19 +460,22 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     if (facts["day_count"] >= int(config.max_daily_payout_count)
             or money(facts["day_total"] + amount) > money(config.max_daily_payout_usd)):
         return stop("DAILY_LIMIT_REACHED")
-    if send <= 0 or fee > money(amount * Decimal(config.max_network_fee_percent) / Decimal("100")):
-        return stop("NETWORK_FEE_TOO_HIGH")
-    if send < facts["minimum"]:
-        return stop("BELOW_PROVIDER_MINIMUM")
-    if facts["balance"] - money(config.provider_balance_reserve_usd) < amount + fee:
-        return stop("INSUFFICIENT_PROVIDER_BALANCE")
 
+    # Ask the provider about THIS payout (its fee for this amount, and the
+    # address). Nothing is reserved yet and no lock is held while waiting.
     wallet = cs.wallet_state(user, now, config=config)
+    target, target_currency = str(wallet.address), str(wallet.currency)
+    db.commit()
+    try:
+        estimate = Decimal(str(provider.network_fee(target_currency, amount)))
+        if not estimate.is_finite() or estimate < 0:
+            raise ValueError("unusable fee estimate")
+    except Exception:  # noqa: BLE001 - no estimate: the member's limit cannot be checked
+        logger.warning("Cashout cycle: no network fee estimate for member %s's payout", user_id)
+        return "FEE_ESTIMATE_UNAVAILABLE"
     validate = getattr(provider, "validate_address", None)
     if validate is not None:
-        # The provider's own recommended first step. Nothing is reserved yet.
-        target, target_currency = str(wallet.address), str(wallet.currency)
-        db.commit()
+        # The provider's own recommended first step.
         try:
             accepted = bool(validate(target, target_currency))
         except Exception:  # noqa: BLE001 - no answer: do not send to an unchecked address
@@ -460,19 +483,34 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             return "ADDRESS_CHECK_UNAVAILABLE"
         if not accepted:
             return "PROVIDER_ADDRESS_INVALID"
-        user = db.query(User).filter(User.id == user_id).with_for_update().one()
-        wallet = cs.wallet_state(user, now, config=config)
-        if (wallet.address, wallet.currency) != (target, target_currency) or cs.active_cashout(db, user.id):
-            db.rollback()
-            return "WALLET_CHANGED"
-        rows = cs.available_rows(db, user.id)
-        if cs.rows_total(rows) != amount:
-            db.rollback()
-            return "BALANCE_CHANGED"
+    user = db.query(User).filter(User.id == user_id).with_for_update().one()
+    wallet = cs.wallet_state(user, now, config=config)
+    if (wallet.address, wallet.currency) != (target, target_currency) or cs.active_cashout(db, user.id):
+        db.rollback()
+        return "WALLET_CHANGED"
+    rows = cs.available_rows(db, user.id)
+    if cs.rows_total(rows) != amount:
+        db.rollback()
+        return "BALANCE_CHANGED"
+    consent = cs.active_fee_consent(db, user.id, config, now)
+    if consent is None:
+        return stop("FEE_TERMS_REQUIRED")
+    problem, plan = cs.beneficiary_fee_plan(config, consent, amount, estimate)
+    if problem is not None:
+        return stop(problem)
+    send = plan["amount_sent"]
+    expected = amount - estimate
+    # Whether the provider's minimum applies before or after its fee is not
+    # documented; both checks below assume the stricter reading.
+    if expected < facts["minimum"]:
+        return stop("BELOW_PROVIDER_MINIMUM")
+    if facts["balance"] - money(config.provider_balance_reserve_usd) < amount + estimate:
+        return stop("INSUFFICIENT_PROVIDER_BALANCE")
     intent_ref = _intent_reference(user.id, None)
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
-                         now=now, wallet=wallet.address, currency=wallet.currency, net=send, network_fee=fee,
-                         network_fee_policy=config.network_fee_policy)
+                         now=now, wallet=wallet.address, currency=wallet.currency, net=money(expected),
+                         network_fee=money(estimate), network_fee_policy=config.network_fee_policy,
+                         beneficiary_fee=plan)
     if cashout is None:
         return "CASHOUT_IN_PROGRESS"                # another worker reserved first
     cashout_id = int(cashout.id)
@@ -483,7 +521,11 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
                .with_for_update().one())
     current = payment_config.load(db)
     blocker = None if engine_enabled(db, config=current) else "ENGINE_DISABLED"
-    blocker = blocker or _blocker(db, user, now, current)
+    blocker = blocker or current.fee_gate() or _blocker(db, user, now, current)
+    if blocker is None:
+        still = cs.active_fee_consent(db, user.id, current, now)
+        if still is None or int(still.id) != int(cashout.fee_consent_id or 0):
+            blocker = "FEE_TERMS_REQUIRED"          # withdrawn or replaced since it was reserved
     if blocker is None and cs.wallet_state(user, now, config=current).address != cashout.wallet_snapshot:
         blocker = "WALLET_CHANGED"
     if blocker is not None:
@@ -580,6 +622,10 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
               "reconciled": dict(reconcile_open(db, provider, now=now)), "members": {}}
     if not report["enabled"]:
         return report
+    config = payment_config.load(db)                # reconciliation may have suspended the fee behaviour
+    if config.fee_gate() is not None:
+        report["stopped"] = config.fee_gate()       # fail closed: nothing new is reserved or sent
+        return report
     user_ids = candidate_user_ids(db, int(limit or settings.CASHOUT_ENGINE_BATCH_LIMIT))
     db.rollback()
     if not user_ids:
@@ -594,10 +640,10 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             report["stopped"] = "PROVIDER_AUTH_FAILED"
             return report
     try:
-        facts = {"balance": Decimal(provider.balance(currency)), "minimum": Decimal(provider.minimum(currency)),
-                 "network_fee": money(provider.network_fee(currency, cs.crypto_minimum(config=config)))}
+        # The network fee is asked for each payout, for its own amount (process_member).
+        facts = {"balance": Decimal(provider.balance(currency)), "minimum": Decimal(provider.minimum(currency))}
     except Exception:  # noqa: BLE001 - without the provider's facts nothing is reserved
-        logger.warning("Cashout cycle stopped: provider balance / minimum / fee could not be read")
+        logger.warning("Cashout cycle stopped: provider balance / minimum could not be read")
         report["stopped"] = "PROVIDER_FACTS_UNAVAILABLE"
         return report
     facts["day_total"], facts["day_count"] = day_usage(db, now)
@@ -616,11 +662,11 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             break
         if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
             # Assume the money left (or may have): never count it for the next member.
-            sent = (db.query(AffiliateCashoutRequest.gross_amount)
+            sent = (db.query(AffiliateCashoutRequest.gross_amount, AffiliateCashoutRequest.network_fee_estimate)
                     .filter(AffiliateCashoutRequest.user_id == user_id)
                     .order_by(AffiliateCashoutRequest.id.desc()).first())
             gross = money(sent[0] if sent else 0)
-            facts["balance"] -= gross + facts["network_fee"]
+            facts["balance"] -= gross + Decimal(str(sent[1] if sent and sent[1] is not None else 0))
             facts["day_total"] = money(facts["day_total"] + gross)
             facts["day_count"] += 1
             db.rollback()
@@ -756,7 +802,35 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
         items.append({"type": "NETWORK_FEE_NOT_RECORDED", "severity": "warning",
                       "message": f"{fees['not_recorded_count'] - len(fees['not_recorded'])} more completed payouts "
                                  "have no network fee recorded."})
+    # Beneficiary-paid payouts: the actual fee is data, not a journal entry, but a
+    # payout is not reconciled until it is known and adds up.
+    member_fees = cs.member_fee_summary(db)
+    flag_text = {
+        cs.FLAG_MODE_MISMATCH: "the provider charged its network fee to the MyHigh5 balance instead of taking it "
+                               "out of the payout: the treasury account is overstated by that fee and no entry was "
+                               "posted for it",
+        cs.FLAG_AMOUNT_MISMATCH: "the provider reports a larger amount than the one it was asked to send",
+        cs.FLAG_CAP_EXCEEDED: "the network fee the provider took is higher than the limit the member accepted",
+    }
+    for row in member_fees["flagged"]:
+        items.append({"type": row["flag"], "severity": "critical",
+                      "message": f"Cashout #{row['cashout_id']}: {flag_text.get(row['flag'], row['flag'])}. "
+                                 "New payouts are stopped until the provider's fee behaviour is confirmed again.",
+                      "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
+    for row in member_fees["not_recorded"]:
+        items.append({"type": "MEMBER_FEE_NOT_RECORDED", "severity": "warning",
+                      "message": f"Cashout #{row['cashout_id']} is completed but the network fee the provider took "
+                                 "from it is not recorded: what the member received is not known yet.",
+                      "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
+    if member_fees["not_recorded_count"] > len(member_fees["not_recorded"]):
+        items.append({"type": "MEMBER_FEE_NOT_RECORDED", "severity": "warning",
+                      "message": f"{member_fees['not_recorded_count'] - len(member_fees['not_recorded'])} more "
+                                 "completed payouts have no actual network fee recorded."})
+    gate = config.fee_gate()
     return {
+        "beneficiary_fees": member_fees,
+        "network_fee_gate": ({"code": gate, "message": payment_config.FEE_GATE_MESSAGES[gate]}
+                             if gate is not None else None),
         "owed": {k: float(v) for k, v in owed.items()},
         "owed_total": float(unpaid),
         "owed_to_crypto_cashout_members": float(crypto_members),

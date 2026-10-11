@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import dataclass, fields as dataclass_fields
+from dataclasses import dataclass, fields as dataclass_fields, replace
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -56,6 +56,17 @@ PROVIDER = "nowpayments"
 
 SOURCE_ENVIRONMENT, SOURCE_DATABASE = "ENVIRONMENT", "DATABASE"
 FEE_COMPANY_PAYS, FEE_MEMBER_PAYS = "COMPANY_PAYS", "MEMBER_PAYS"
+# Where the PROVIDER takes the network fee of a payout from. It is a setting of
+# the provider account, outside this application, so it is never assumed:
+#   UNVERIFIED            not confirmed with the provider: no payout is created
+#   DEDUCTED_BY_PROVIDER  the provider takes its fee out of the amount it is
+#                         asked to send; the full amount is handed to it and
+#                         the beneficiary receives that amount less the fee
+#   CHARGED_TO_BALANCE    the provider takes its fee from the MyHigh5 balance.
+#                         Defined so that it can be told apart; it cannot be
+#                         selected and no payout is created under it.
+FEE_MODE_UNVERIFIED, FEE_MODE_DEDUCTED, FEE_MODE_CHARGED = "UNVERIFIED", "DEDUCTED_BY_PROVIDER", "CHARGED_TO_BALANCE"
+PROVIDER_FEE_MODES = (FEE_MODE_UNVERIFIED, FEE_MODE_DEDUCTED, FEE_MODE_CHARGED)
 # Ledger account for the network fee MyHigh5 pays on a crypto payout
 # (approved by the owner 2026-10-10).
 NETWORK_FEE_EXPENSE_ACCOUNT = "5005"
@@ -72,6 +83,19 @@ def company_fee_payer_values() -> frozenset:
 
     raw = os.getenv("NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES", "")
     return frozenset(v.strip().lower() for v in raw.split(",") if v.strip())
+
+
+def receiver_fee_payer_values() -> frozenset:
+    """The values of the provider's `fee_paid_by` field that mean "the fee was
+    taken out of the amount sent to the beneficiary". Not documented by the
+    provider, so empty until confirmed with it and set in
+    NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES (comma separated). While it is
+    empty the actual fee of a payout is never recorded automatically; an
+    administrator records it from the provider's statement."""
+    import os
+
+    raw = os.getenv("NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES", "")
+    return frozenset(v.strip().lower() for v in raw.split(",") if v.strip())
 USD_POLICY_MANUAL = "MANUAL_REVIEW"
 
 # The only payout asset the ledger has a treasury account for (1001).
@@ -81,6 +105,17 @@ SUPPORTED_PAYOUT_CURRENCIES: Dict[str, Dict[str, str]] = {
 
 CONFIRM_AUTO_PAYOUT = "ENABLE AUTOMATIC PAYOUTS"
 CONFIRM_USD_SETTLEMENT = "ENABLE USD SETTLEMENT"
+CONFIRM_FEE_MODE = "PROVIDER FEE BEHAVIOUR VERIFIED"
+CONFIRM_FEE_LIMITS = "APPROVE NETWORK FEE LIMITS"
+# A change to any of these withdraws the approval of the network fee limits.
+_FEE_TERMS_FIELDS = ("provider_fee_mode", "member_fee_cap_percent", "member_fee_cap_usd", "min_net_payout_usd",
+                     "fee_terms_version", "fee_consent_valid_days", "network_fee_policy")
+FEE_GATE_MESSAGES = {
+    "FEE_POLICY_NOT_BENEFICIARY_PAID": "The network fee policy must be MEMBER_PAYS: the beneficiary bears the fee.",
+    "PROVIDER_FEE_MODE_UNVERIFIED": "The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.",
+    "FEE_LIMITS_NOT_CONFIGURED": "No member network fee limit is set.",
+    "FEE_LIMITS_NOT_APPROVED": "The network fee limits have not been approved.",
+}
 # Automatic payouts can only be switched on with a successful connection test this recent.
 CONNECTION_TEST_MAX_AGE = timedelta(hours=24)
 
@@ -154,9 +189,34 @@ _FIELDS: List[Field] = [
     Field("crypto_payout_currency", "crypto", "choice", "Payout currency and network",
           "Asset and network of crypto payouts.", _const("usdtbsc"), choices=tuple(SUPPORTED_PAYOUT_CURRENCIES)),
     Field("network_fee_policy", "crypto", "choice", "Network fee policy",
-          "COMPANY_PAYS: the member receives the full amount. MEMBER_PAYS: the estimated network fee is "
-          "deducted from the amount sent.", _const(FEE_COMPANY_PAYS), choices=(FEE_COMPANY_PAYS, FEE_MEMBER_PAYS),
-          approval="Default for development. Awaiting the business owner's approval."),
+          "MEMBER_PAYS: the beneficiary bears the network fee and receives the payout net of it (owner "
+          "decision). COMPANY_PAYS is retired: it cannot be selected and no payout is created under it.",
+          _const(FEE_MEMBER_PAYS), choices=(FEE_COMPANY_PAYS, FEE_MEMBER_PAYS)),
+    Field("provider_fee_mode", "crypto", "choice", "Provider fee behaviour",
+          "Where the provider takes its network fee from, as CONFIRMED with the provider. UNVERIFIED: no payout "
+          "is created. DEDUCTED_BY_PROVIDER: the full amount is handed to the provider, which takes its fee out "
+          "of it. CHARGED_TO_BALANCE cannot be selected.", _const(FEE_MODE_UNVERIFIED), choices=PROVIDER_FEE_MODES),
+    Field("member_fee_cap_percent", "crypto", "percent", "Member network fee limit (share of the payout)",
+          "Highest network fee a member accepts, as a share of the payout. 0 = this limit is not set. No payout "
+          "is created while neither limit is set.", _const(_D("0")), minimum=_D("0"), maximum=_D("100"), unit="%",
+          approval="Not set. Awaiting the business owner's decision."),
+    Field("member_fee_cap_usd", "crypto", "money", "Member network fee limit (amount)",
+          "Highest network fee a member accepts, as an amount per payout. 0 = this limit is not set. When both "
+          "limits are set the lower one applies.", _const(_D("0.00")), minimum=_D("0"), maximum=_D("100000"),
+          unit="USD", approval="Not set. Awaiting the business owner's decision."),
+    Field("min_net_payout_usd", "crypto", "money", "Minimum amount received",
+          "A payout is not attempted when the member would receive less than this after the estimated network "
+          "fee.", _const(_D("0.01")), minimum=_D("0.01"), maximum=_D("100000"), unit="USD"),
+    Field("fee_terms_version", "crypto", "int", "Network fee terms version",
+          "Raising it makes every member accept the network fee terms again before the next payout.", _const(1),
+          minimum=_D(1), maximum=_D(100000)),
+    Field("fee_consent_valid_days", "crypto", "int", "Member acceptance lifetime",
+          "A member's acceptance of the network fee terms expires after this long. 0 = it does not expire by "
+          "time.", _const(0), minimum=_D(0), maximum=_D(3650), unit="days"),
+    Field("fee_terms_approved", "crypto", "bool", "Network fee limits approved",
+          "The limits above were approved for use. Withdrawn automatically whenever one of them, the provider "
+          "fee behaviour or the terms version changes. While it is off no payout is created and no member can "
+          "accept the terms.", _const(False)),
     Field("max_network_fee_percent", "crypto", "percent", "Maximum network fee share",
           "A payout is not attempted when the network fee exceeds this share of it.", _const(_D("25.00")),
           minimum=_D("0.10"), maximum=_D("100"), unit="%"),
@@ -247,6 +307,13 @@ class PaymentConfig:
     crypto_min_usd: Decimal
     crypto_payout_currency: str
     network_fee_policy: str
+    provider_fee_mode: str
+    member_fee_cap_percent: Decimal
+    member_fee_cap_usd: Decimal
+    min_net_payout_usd: Decimal
+    fee_terms_version: int
+    fee_consent_valid_days: int
+    fee_terms_approved: bool
     max_network_fee_percent: Decimal
     payout_interval_seconds: int
     max_single_payout_usd: Decimal
@@ -296,6 +363,21 @@ class PaymentConfig:
     def usd_fee_rule(self) -> str:
         return (f"{_plain(self.usd_fee_percent)}% of the amount, minimum {_dollars(self.usd_fee_min)}, "
                 f"maximum {_dollars(self.usd_fee_max)}")
+
+    def fee_gate(self) -> Optional[str]:
+        """Why NO crypto payout may be created under the network fee rules
+        (None = one may). Fail closed: the beneficiary-paid policy, a provider
+        fee behaviour confirmed as deducted from the amount, at least one
+        member fee limit, and the approval of those limits are all required."""
+        if self.network_fee_policy != FEE_MEMBER_PAYS:
+            return "FEE_POLICY_NOT_BENEFICIARY_PAID"
+        if self.provider_fee_mode != FEE_MODE_DEDUCTED:
+            return "PROVIDER_FEE_MODE_UNVERIFIED"
+        if Decimal(self.member_fee_cap_percent) <= 0 and Decimal(self.member_fee_cap_usd) <= 0:
+            return "FEE_LIMITS_NOT_CONFIGURED"
+        if not self.fee_terms_approved:
+            return "FEE_LIMITS_NOT_APPROVED"
+        return None
 
     @property
     def auto_payout_allowed(self) -> bool:
@@ -744,10 +826,33 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
             raise refuse("CONFIRMATION_REQUIRED", f'Type "{CONFIRM_USD_SETTLEMENT}" to confirm.',
                          "usd_settlement_enabled")
 
+    if changed.get("network_fee_policy") == FEE_COMPANY_PAYS:
+        raise refuse("POLICY_RETIRED", "Network fees are paid by the beneficiary. COMPANY_PAYS is retired and "
+                                       "cannot be selected.", "network_fee_policy")
+    if changed.get("provider_fee_mode") == FEE_MODE_CHARGED:
+        raise refuse("NOT_AVAILABLE", "CHARGED_TO_BALANCE is not available: under it MyHigh5 would bear the "
+                                      "network fee.", "provider_fee_mode")
+    if changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED and (confirmation or "").strip() != CONFIRM_FEE_MODE:
+        raise refuse("CONFIRMATION_REQUIRED",
+                     "Select this only after the provider confirmed that it takes its fee out of the amount "
+                     f'sent. Type "{CONFIRM_FEE_MODE}" to confirm.', "provider_fee_mode")
+    if changed.get("fee_terms_approved") is True:
+        field = "fee_terms_approved"
+        if any(name in changed for name in _FEE_TERMS_FIELDS):
+            raise refuse("UNSAFE_ACTIVATION", "Save the network fee settings first, then approve them in a "
+                                              "separate change.", field)
+        gate = replace(config, fee_terms_approved=True).fee_gate()
+        if gate is not None:
+            raise refuse("UNSAFE_ACTIVATION", FEE_GATE_MESSAGES[gate], field)
+        if (confirmation or "").strip() != CONFIRM_FEE_LIMITS:
+            raise refuse("CONFIRMATION_REQUIRED", f'Type "{CONFIRM_FEE_LIMITS}" to confirm.', field)
+
     if changed.get("crypto_auto_payout_enabled") is True:
         field = "crypto_auto_payout_enabled"
         if not merged["provider_enabled"] or not merged["crypto_cashout_enabled"]:
             raise refuse("UNSAFE_ACTIVATION", "Enable the provider and Crypto Cashout first.", field)
+        if config.fee_gate() is not None:
+            raise refuse("UNSAFE_ACTIVATION", FEE_GATE_MESSAGES[config.fee_gate()], field)
         credentials = resolve_credentials(db, config)
         if not credentials.payout_ready:
             raise refuse("UNSAFE_ACTIVATION", "Payout credentials are incomplete: "
@@ -778,6 +883,10 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     if not changed:
         db.rollback()
         return load(db)
+    if (current["fee_terms_approved"] and "fee_terms_approved" not in changed
+            and any(name in changed for name in _FEE_TERMS_FIELDS)):
+        # The approval covered the values as they were; changed values need a new one.
+        changed["fee_terms_approved"] = False
     merged = {**current, **changed}
     try:
         _validate_combination(db, row, merged, changed, confirmation, now)
@@ -795,6 +904,26 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     db.commit()
     invalidate_runtime()
     return load(db)
+
+
+def suspend_fee_mode(db: Session, *, reason: str, cashout_id: Optional[int] = None) -> bool:
+    """A finished payout showed that the provider does NOT behave as
+    configured, or took more than the member accepted. Put the provider fee
+    behaviour back to UNVERIFIED and withdraw the approval of the limits, so
+    that no further payout is created until a person has looked. No commit:
+    it is part of the caller's transaction. True when something changed."""
+    row = _row_for_update(db)
+    old = {"provider_fee_mode": row.provider_fee_mode, "fee_terms_approved": bool(row.fee_terms_approved)}
+    if old == {"provider_fee_mode": FEE_MODE_UNVERIFIED, "fee_terms_approved": False}:
+        return False
+    row.provider_fee_mode = FEE_MODE_UNVERIFIED
+    row.fee_terms_approved = False
+    row.version = int(row.version) + 1
+    _audit(db, row, actor_id=None, action="PROVIDER_FEE_MODE_SUSPENDED", old=old,
+           new={"provider_fee_mode": FEE_MODE_UNVERIFIED, "fee_terms_approved": False, "reason": reason,
+                "cashout_id": cashout_id})
+    logger.error("Crypto payouts suspended: %s (cashout %s)", reason, cashout_id)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -1186,7 +1315,11 @@ def settings_view(db: Session) -> dict:
         "usd_fee_rule": config.usd_fee_rule(),
         "supported_payout_currencies": [{"code": code, **meta} for code, meta in SUPPORTED_PAYOUT_CURRENCIES.items()],
         "confirmations": {"crypto_auto_payout_enabled": CONFIRM_AUTO_PAYOUT,
-                          "usd_settlement_enabled": CONFIRM_USD_SETTLEMENT},
+                          "usd_settlement_enabled": CONFIRM_USD_SETTLEMENT,
+                          "provider_fee_mode": CONFIRM_FEE_MODE,
+                          "fee_terms_approved": CONFIRM_FEE_LIMITS},
+        "network_fee_gate": ({"code": config.fee_gate(), "message": FEE_GATE_MESSAGES[config.fee_gate()]}
+                             if config.fee_gate() is not None else None),
     }
 
 
@@ -1336,6 +1469,8 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
         payouts, detail = "DISABLED", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off."
     elif not (config.provider_enabled and config.crypto_cashout_enabled and config.crypto_auto_payout_enabled):
         payouts, detail = "DISABLED", "Automatic payouts are switched off in Crypto Cashout."
+    elif config.fee_gate() is not None:
+        payouts, detail = "UNVERIFIED", FEE_GATE_MESSAGES[config.fee_gate()]
     elif not credentials_ready:
         payouts, detail = "UNVERIFIED", "A payout credential is missing."
     elif "BLOCKED" in (custody, login, whitelist):
@@ -1347,6 +1482,13 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
         payouts, detail = "CONFIGURED", "The payout credentials are present but have not been tested."
     item("automatic_payouts", "Automatic crypto payouts", payouts, detail)
 
+    gate = config.fee_gate()
+    item("network_fee_terms", "Network fee paid by the beneficiary", "CONFIGURED" if gate is None else "UNVERIFIED",
+         "An administrator confirmed the provider fee behaviour and the member fee limits are approved. Neither "
+         "can be checked from here." if gate is None else FEE_GATE_MESSAGES[gate])
+    if gate is not None:
+        todo.append("Confirm with the provider that it takes its network fee out of the amount sent, set the "
+                    "member network fee limits and have them approved (Crypto Cashout).")
     todo.append("Provider side, cannot be checked from here: custody enabled on the account, the payout "
                 "wallet addresses whitelisted (or address whitelisting switched off by the provider), and "
                 "the custody balance funded in the payout currency.")

@@ -401,7 +401,9 @@ def test_the_fee_the_provider_reports_is_recorded_and_the_ledger_shows_only_the_
     assert run(db, provider_)["reconciled"] == {"COMPLETED": 1}
     recorded = evidence(db, row.id)
     assert recorded["provider_fee"] == reported and recorded["provider_fee_paid_by"] == paid_by   # never invented
-    assert recorded["network_fee_estimate"] == "0.02" and recorded["network_fee_policy"] == "COMPANY_PAYS"
+    assert recorded["network_fee_estimate"] == "0.02" and recorded["network_fee_policy"] == "MEMBER_PAYS"
+    # Neither payer value was confirmed with the provider, so nothing is recorded as the actual fee.
+    assert cashouts(db, user)[0].network_fee_actual is None
     entry = db.query(JournalEntry).filter(JournalEntry.description == f"Affiliate Cashout #{row.id}").one()
     assert Decimal(str(entry.total_debit)) == Decimal(str(entry.total_credit)) == Decimal("5.00")   # balanced
     assert get_commission_balance(db, user.id).paid_lifetime == Decimal("5.00")           # the liability, in full

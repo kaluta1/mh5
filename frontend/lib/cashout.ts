@@ -9,6 +9,7 @@ export type CashoutStatus =
   | 'WALLET_REQUIRED'
   | 'WALLET_CONFIRMATION_PENDING'
   | 'WALLET_ON_HOLD'
+  | 'FEE_TERMS_REQUIRED'
   | 'METHOD_UNAVAILABLE'
   | 'BELOW_MINIMUM'
   | 'AUTOMATIC_PAYOUT_PENDING'
@@ -16,6 +17,34 @@ export type CashoutStatus =
   | 'READY_TO_REQUEST'
   | 'IN_PROGRESS'
   | 'ACCOUNT_HOLD'
+
+/** The network fee of a crypto payout the member bears. Exact figures, sent as text. */
+export type BeneficiaryFee = {
+  applies: boolean
+  gross: string
+  estimate: string | null
+  /** Known only once the provider has sent the payout. Never an estimate. */
+  actual: string | null
+  net_received: string | null
+  fee_cap: string | null
+  status: 'NOT_APPLICABLE' | 'NOT_RECORDED' | 'RECORDED'
+  flag?: string | null
+}
+
+/** The network fee terms a member accepts before automatic crypto payouts. */
+export type FeeTerms = {
+  available: boolean
+  version: number
+  /** Highest fee as a share of the payout, in percent ("0" = this limit is not set). */
+  cap_percent: string
+  /** Highest fee as an amount per payout ("0" = this limit is not set). */
+  cap_usd: string
+  valid_days: number
+  minimum_received: number
+  accepted: boolean
+  accepted_at: string | null
+  expires_at: string | null
+}
 
 export type CashoutRecord = {
   id: number
@@ -27,6 +56,7 @@ export type CashoutRecord = {
   /** Crypto: the network fee estimate, and who bears it. */
   network_fee?: number | null
   network_fee_policy?: 'COMPANY_PAYS' | 'MEMBER_PAYS' | null
+  beneficiary_fee?: BeneficiaryFee | null
   destination?: string | null
   payout_currency?: string | null
   reference?: string | null
@@ -47,7 +77,12 @@ export type CashoutSummary = {
     USD: { available: boolean; destination_required: boolean; destination_note: string | null; cancellation_allowed: boolean }
   }
   fees: {
-    CRYPTO: { platform_fee: number; note: string; network_fee_policy?: 'COMPANY_PAYS' | 'MEMBER_PAYS' }
+    CRYPTO: {
+      platform_fee: number
+      note: string
+      network_fee_policy?: 'COMPANY_PAYS' | 'MEMBER_PAYS'
+      terms?: FeeTerms
+    }
     USD: { rule: string; fee: number | null; net_amount: number | null }
   }
   destination: {
@@ -91,6 +126,8 @@ export function cashoutStatusText(summary: CashoutSummary): string {
       return `Your payout wallet was changed recently. For your security, payouts to it start on ${formatDate(
         summary.destination.payable_from,
       )}.`
+    case 'FEE_TERMS_REQUIRED':
+      return 'Accept the network fee terms below to receive automatic crypto payouts. Your balance is kept in full until you do.'
     case 'BELOW_MINIMUM':
       return `Your balance is below the ${minimum} minimum for ${methodLabel(summary.cashout_method)}.`
     case 'AUTOMATIC_PAYOUT_PENDING':
@@ -131,6 +168,37 @@ export function recordStatusLabel(status: CashoutRecord['status']): string {
     default:
       return status
   }
+}
+
+/** An exact amount sent as text ("0.2874"), shown without rounding it away. */
+export function formatExact(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '-'
+  const [whole, fraction = ''] = value.split('.')
+  return `$${whole}.${fraction.padEnd(2, '0')}`
+}
+
+/** The highest network fee the terms allow, in words. Empty when no limit is set. */
+export function feeLimitText(terms: Pick<FeeTerms, 'cap_percent' | 'cap_usd'>): string {
+  const percent = Number(terms.cap_percent) > 0 ? `${terms.cap_percent}% of the payout` : ''
+  const amount = Number(terms.cap_usd) > 0 ? formatExact(terms.cap_usd) : ''
+  if (percent && amount) return `${percent} or ${amount}, whichever is lower`
+  return percent || amount
+}
+
+/** What the network fee column of a crypto payout shows. */
+export function networkFeeText(record: CashoutRecord): string | null {
+  const fee = record.beneficiary_fee
+  if (!fee?.applies) return null
+  if (fee.actual !== null) return `${formatExact(fee.actual)} network fee`
+  if (fee.estimate !== null) return `about ${formatExact(fee.estimate)} network fee (estimate)`
+  return null
+}
+
+/** What the member received, once the provider's actual fee is known; otherwise the expected amount. */
+export function receivedText(record: CashoutRecord): string {
+  const fee = record.beneficiary_fee
+  if (fee?.applies && fee.net_received !== null) return formatExact(fee.net_received)
+  return formatUsd(record.net_amount)
 }
 
 export function methodAvailable(summary: CashoutSummary, method: CashoutMethod): boolean {

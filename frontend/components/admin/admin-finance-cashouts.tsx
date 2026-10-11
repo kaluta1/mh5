@@ -8,12 +8,15 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   CASHOUTS_BASE,
   CASHOUT_STATUS_LABEL,
+  FEE_CHARGED_TO,
+  FEE_FLAG_LABEL,
   FINANCE_BASE,
   NETWORK_FEE_LABEL,
   dateTime,
   financeErrorText,
   humanize,
   usd,
+  validMemberFee,
   validNetworkFee,
   type AdminCashout,
   type NetworkFeeRecord,
@@ -54,6 +57,7 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
   const [reference, setReference] = useState('')
   const [reason, setReason] = useState('')
   const [feeAmount, setFeeAmount] = useState('')
+  const [chargedTo, setChargedTo] = useState('')
   const [destination, setDestination] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -78,6 +82,7 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
     setReference('')
     setReason('')
     setFeeAmount('')
+    setChargedTo('')
     const res = await api.get(`${CASHOUTS_BASE}/${id}`)
     if (res.status === 200) setDetail(res.data)
     else setError(financeErrorText(res, 'The cashout could not be loaded.'))
@@ -210,6 +215,25 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                       {detail.network_fee_record.reported ? ` · exact figure ${detail.network_fee_record.reported}` : ''}
                     </span>} />
                 )}
+                {c.beneficiary_fee?.applies && (<>
+                  <Row label="Handed to the provider" value={
+                    <span data-testid="member-fee-sent">{c.beneficiary_fee.amount_sent ?? '-'} ({humanize(c.beneficiary_fee.provider_fee_mode)})</span>} />
+                  <Row label="Fee estimate for this payout" value={c.beneficiary_fee.estimate ?? '-'} />
+                  <Row label="Member's fee limit for this payout" value={c.beneficiary_fee.fee_cap ?? '-'} />
+                  <Row label="Actual network fee (paid by the member)" value={
+                    <span data-testid="member-fee-actual">
+                      {c.beneficiary_fee.actual !== null
+                        ? `${c.beneficiary_fee.actual} (${humanize(c.beneficiary_fee.source)})`
+                        : c.status === 'completed' ? 'Not recorded yet' : 'Known once the payout is complete'}
+                    </span>} />
+                  <Row label="Received by the member" value={<span data-testid="member-fee-received">{c.beneficiary_fee.net_received ?? '-'}</span>} />
+                  {c.beneficiary_fee.flag && (
+                    <Row label="Needs attention" value={
+                      <span className="text-red-700 dark:text-red-300" data-testid="member-fee-flag">
+                        {FEE_FLAG_LABEL[c.beneficiary_fee.flag] ?? humanize(c.beneficiary_fee.flag)}
+                      </span>} />
+                  )}
+                </>)}
                 <Row label="Destination wallet" value={<span className="font-mono">{c.destination ?? '-'}</span>} />
                 <Row label="Provider payout ID" value={<span className="font-mono text-xs">{c.provider_batch_id ?? '-'}</span>} />
                 <Row label="Provider status" value={c.provider_status ?? '-'} />
@@ -302,6 +326,47 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                 <Button disabled={busy || !validNetworkFee(feeAmount, c.gross_amount) || reference.trim().length < 3}
                   onClick={() => void act('network-fee', { amount: feeAmount.trim(), reference: reference.trim() }, 'Network fee recorded.')}>
                   Record network fee
+                </Button>
+              </div>
+            )}
+            {canProcess && c.method === 'CRYPTO' && c.status === 'completed'
+              && c.beneficiary_fee?.applies && c.beneficiary_fee.status === 'NOT_RECORDED' && (
+              <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3" data-testid="member-fee-form">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  The member bears the network fee of this payout: {usd(c.gross_amount)} was handed to the provider,
+                  which takes its fee out of it. Enter the fee exactly as the provider&apos;s statement shows it for
+                  this payout (0 if it charged none) and where the provider took it from. The estimate above is not
+                  the fee and is never recorded. Nothing is posted to the ledger and nothing is sent.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label htmlFor="member-fee-amount" className="block text-sm font-medium">Actual network fee ({c.payout_currency ?? 'payout currency'})</label>
+                    <input id="member-fee-amount" className={inputClass} inputMode="decimal" value={feeAmount}
+                      maxLength={20} onChange={(e) => setFeeAmount(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="member-fee-charged-to" className="block text-sm font-medium">Where the provider took it from</label>
+                    <select id="member-fee-charged-to" className={inputClass} value={chargedTo}
+                      onChange={(e) => setChargedTo(e.target.value)}>
+                      <option value="">Choose...</option>
+                      {FEE_CHARGED_TO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label htmlFor="member-fee-reference" className="block text-sm font-medium">Where it was read (provider payout ID or statement)</label>
+                    <input id="member-fee-reference" className={inputClass} value={reference} maxLength={200}
+                      onChange={(e) => setReference(e.target.value)} />
+                  </div>
+                </div>
+                {chargedTo === 'PROVIDER_BALANCE' && (
+                  <p className="text-sm text-red-700 dark:text-red-300" data-testid="member-fee-mismatch-warning">
+                    That is not the configured behaviour. Recording it stops all new crypto payouts until the
+                    provider&apos;s fee behaviour is confirmed again, and leaves the fee for accounting to book.
+                  </p>
+                )}
+                <Button disabled={busy || !chargedTo || !validMemberFee(feeAmount, c.gross_amount) || reference.trim().length < 3}
+                  onClick={() => void act('network-fee', { amount: feeAmount.trim(), reference: reference.trim(), charged_to: chargedTo }, 'Actual network fee recorded.')}>
+                  Record actual network fee
                 </Button>
               </div>
             )}
@@ -402,9 +467,33 @@ export function ReconciliationAndAudit({ canManage }: { canManage: boolean }) {
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => void loadReport(true)}>Read provider balance (read-only)</Button>
             )}
+            {report.network_fee_gate && (
+              <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="network-fee-gate">
+                No crypto payout can be created: {report.network_fee_gate.message}
+              </p>
+            )}
+            {report.beneficiary_fees && (
+              <div data-testid="beneficiary-fees">
+                <h3 className="text-sm font-semibold pt-2">Network fees paid by beneficiaries (no ledger entry)</h3>
+                <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                  <Row label="Completed payouts (gross handed to the provider)" value={`${report.beneficiary_fees.completed_count} · ${report.beneficiary_fees.gross_total}`} />
+                  <Row label="Actual fees recorded" value={`${report.beneficiary_fees.fee_total} · ${report.beneficiary_fees.recorded_count} payouts`} />
+                  <Row label="Received by members (recorded payouts)" value={report.beneficiary_fees.received_total} />
+                  <Row label="Payouts whose actual fee is not recorded yet" value={report.beneficiary_fees.not_recorded_count} />
+                  <Row label="Payouts that need attention" value={report.beneficiary_fees.flagged.length} />
+                </dl>
+                {report.beneficiary_fees.not_recorded_count > 0 && (
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    Record each from the provider&apos;s statement in Cashout Transactions: cashout{' '}
+                    {report.beneficiary_fees.not_recorded.map((row) => `#${row.cashout_id}`).join(', ')}.
+                    {!report.beneficiary_fees.automatic_recording && ' Fees are not recorded automatically until the provider has confirmed how it reports them.'}
+                  </p>
+                )}
+              </div>
+            )}
             {report.network_fees && (
               <div data-testid="network-fees">
-                <h3 className="text-sm font-semibold pt-2">Crypto payout network fees (account {report.network_fees.expense_account})</h3>
+                <h3 className="text-sm font-semibold pt-2">Network fees MyHigh5 paid on earlier payouts (account {report.network_fees.expense_account})</h3>
                 <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
                   <Row label="Recorded as expense" value={`${usd(report.network_fees.posted_total)} · ${report.network_fees.posted_count} payouts`} />
                   <Row label="Exact fees reported (difference from rounding to cents)" value={`${report.network_fees.reported_total} (${report.network_fees.rounding_difference})`} />

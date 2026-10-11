@@ -43,6 +43,24 @@ pytestmark = pytest.mark.unit
 PAYER_ENV = "NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES"
 
 
+@pytest.fixture(autouse=True)
+def legacy_company_paid(monkeypatch):
+    """These tests are about payouts written while MyHigh5 bore the network
+    fee (policy COMPANY_PAYS, since retired: the beneficiary pays). The engine
+    no longer creates such a payout, so every crypto payout it creates here is
+    stored as that legacy kind. Yields the real function for a test that wants
+    today's behaviour."""
+    real = cs.reserve
+
+    def reserve(db, user, rows, **kwargs):
+        if kwargs.get("method") == cs.METHOD_CRYPTO:
+            kwargs.update(network_fee_policy="COMPANY_PAYS", net=None)
+        return real(db, user, rows, **kwargs)
+
+    monkeypatch.setattr(cs, "reserve", reserve)
+    return real
+
+
 @pytest.fixture
 def books(ledger):
     """The cashout ledger plus the approved expense account."""
@@ -229,11 +247,13 @@ def test_an_unknown_outcome_carries_no_fee_until_it_is_settled_as_sent(books, en
     assert _balance(db, "5005") == Decimal("0.25")
 
 
-def test_when_the_member_pays_the_fee_there_is_no_expense(books, engine_on, payer_confirmed):
+def test_when_the_member_pays_the_fee_there_is_no_expense(books, engine_on, payer_confirmed, legacy_company_paid,
+                                                          monkeypatch):
+    monkeypatch.setattr(cs, "reserve", legacy_company_paid)        # today's rule: the beneficiary pays
     db = books
     user = paid_member(db)
     admin = member(db, "boss", admin=True)
-    row, _ = finished(db, user, fee="0.25", network_fee_policy="MEMBER_PAYS")
+    row, _ = finished(db, user, fee="0.25", paid_by="receiver")
     assert row.network_fee_policy == "MEMBER_PAYS" and Decimal(str(row.net_amount)) == Decimal("4.98")
     assert fee_entries(db, row.id) == [] and _balance(db, "5005") == 0
     assert _balance(db, "1001") == Decimal("-5.00")                                # the whole gross left the treasury

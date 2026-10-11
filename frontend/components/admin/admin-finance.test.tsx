@@ -28,9 +28,13 @@ const settings = (over: Record<string, unknown> = {}) => ({
       value: 'ENVIRONMENT', choices: ['ENVIRONMENT', 'DATABASE'], unit: '' }),
     field({ name: 'crypto_auto_payout_enabled', group: 'crypto', kind: 'bool', label: 'Automatic payouts', value: false, unit: '' }),
     field({ name: 'crypto_min_usd', group: 'crypto', label: 'Minimum crypto cashout', value: '1.00' }),
-    field({ name: 'network_fee_policy', group: 'crypto', kind: 'choice', label: 'Network fee policy', value: 'COMPANY_PAYS',
-      choices: ['COMPANY_PAYS', 'MEMBER_PAYS'], unit: '',
-      approval_note: "Default for development. Awaiting the business owner's approval." }),
+    field({ name: 'network_fee_policy', group: 'crypto', kind: 'choice', label: 'Network fee policy', value: 'MEMBER_PAYS',
+      choices: ['COMPANY_PAYS', 'MEMBER_PAYS'], unit: '' }),
+    field({ name: 'provider_fee_mode', group: 'crypto', kind: 'choice', label: 'Provider fee behaviour', value: 'UNVERIFIED',
+      choices: ['UNVERIFIED', 'DEDUCTED_BY_PROVIDER', 'CHARGED_TO_BALANCE'], unit: '' }),
+    field({ name: 'member_fee_cap_usd', group: 'crypto', label: 'Member network fee limit (amount)', value: '0.00',
+      minimum: '0', approval_note: "Not set. Awaiting the business owner's decision." }),
+    field({ name: 'fee_terms_approved', group: 'crypto', kind: 'bool', label: 'Network fee limits approved', value: false, unit: '' }),
     field({ name: 'usd_min_usd', group: 'usd', label: 'Minimum USD cashout', value: '100.00' }),
     field({ name: 'usd_settlement_enabled', group: 'usd', kind: 'bool', label: 'USD settlement', value: false, unit: '' }),
     field({ name: 'wallet_hold_hours', group: 'security', kind: 'int', label: 'Wallet security hold', value: 72,
@@ -40,7 +44,8 @@ const settings = (over: Record<string, unknown> = {}) => ({
   effective: { automatic_crypto_payouts: false, usd_settlement: false },
   usd_fee_rule: '1% of the amount, minimum $20, maximum $1,000',
   supported_payout_currencies: [{ code: 'usdtbsc', currency: 'USDT', network: 'BSC (BEP20)' }],
-  confirmations: { crypto_auto_payout_enabled: 'ENABLE AUTOMATIC PAYOUTS', usd_settlement_enabled: 'ENABLE USD SETTLEMENT' },
+  confirmations: { crypto_auto_payout_enabled: 'ENABLE AUTOMATIC PAYOUTS', usd_settlement_enabled: 'ENABLE USD SETTLEMENT',
+    provider_fee_mode: 'PROVIDER FEE BEHAVIOUR VERIFIED', fee_terms_approved: 'APPROVE NETWORK FEE LIMITS' },
   ...over,
 })
 
@@ -233,7 +238,9 @@ describe('AdminFinance', () => {
     render(<AdminFinance section="crypto-cashout" />)
     const save = await screen.findByRole('button', { name: 'Save changes' })
     expect(save).toBeDisabled()
-    expect(screen.getByTestId('approval-network_fee_policy')).toHaveTextContent("Awaiting the business owner's approval")
+    // The member fee limit is not a decided policy yet, and the screen says so.
+    expect(screen.getByTestId('approval-member_fee_cap_usd')).toHaveTextContent("Awaiting the business owner's decision")
+    expect(screen.queryByTestId('approval-network_fee_policy')).toBeNull()                 // decided: the beneficiary pays
     expect(screen.getByText(/Server master switch: Off/)).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Minimum crypto cashout'), { target: { value: '2.50' } })
@@ -253,6 +260,27 @@ describe('AdminFinance', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', expect.objectContaining({
       changes: expect.objectContaining({ crypto_auto_payout_enabled: true }), confirmation: 'ENABLE AUTOMATIC PAYOUTS' })))
+  })
+
+  it('asks for a phrase before the provider fee behaviour is declared confirmed, and before the limits are approved', async () => {
+    setup()
+    render(<AdminFinance section="crypto-cashout" />)
+    const save = await screen.findByRole('button', { name: 'Save changes' })
+    fireEvent.change(screen.getByLabelText('Provider fee behaviour'), { target: { value: 'DEDUCTED_BY_PROVIDER' } })
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    const phrase = screen.getByLabelText(/to confirm/)
+    expect(save).toBeDisabled()
+    fireEvent.change(phrase, { target: { value: 'PROVIDER FEE BEHAVIOUR VERIFIED' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', {
+      changes: { provider_fee_mode: 'DEDUCTED_BY_PROVIDER' }, current_password: PASSWORD,
+      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED' }))
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Network fee limits approved' }))
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'APPROVE NETWORK FEE LIMITS' } })
+    expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled()
   })
 
   it('shows the server refusal of an unsafe or invalid change', async () => {
@@ -356,6 +384,97 @@ describe('AdminFinance', () => {
     expect(within(detail).queryByRole('button', { name: 'Record USD settlement' })).toBeNull()
     expect(within(detail).queryByRole('button', { name: 'Cancel request' })).toBeNull()
     expect(within(detail).getByText(/process_cashouts/)).toBeInTheDocument()
+  })
+
+  it('records the actual fee a beneficiary bore, asks where it was taken from, and posts nothing to the ledger', async () => {
+    const fee = { applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5', estimate: '0.02',
+      actual: null, net_received: null, fee_cap: '0.5', source: null, flag: null, status: 'NOT_RECORDED' }
+    const row = cashout({ id: 12, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.98,
+      network_fee: 0.02, network_fee_policy: 'MEMBER_PAYS', payout_currency: 'usdtbsc', provider_batch_id: '5000000714',
+      beneficiary_fee: fee })
+    setup({ rows: [row] })
+    getMock.mockImplementation(((original) => (url: string, config?: unknown) => {
+      if (/\/cashouts\/12$/.test(url)) {
+        return Promise.resolve({ status: 200, data: {
+          cashout: row, network_fee_record: { status: 'NOT_APPLICABLE', amount: null, source: null, reported: null, estimate: '0.02' },
+          member: { id: 42, username: 'synthetic_member', cashout_method: 'CRYPTO', wallet: '0xaaaa...aaaa', wallet_status: 'VERIFIED' },
+          commissions: [], attempts: [row] } })
+      }
+      return original(url, config)
+    })(getMock.getMockImplementation()!))
+    render(<AdminFinance section="transactions" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
+    const form = await screen.findByTestId('member-fee-form')
+    expect(screen.queryByTestId('network-fee-form')).toBeNull()                             // no expense form: 5005 is not used
+    expect(screen.queryByTestId('network-fee-record')).toBeNull()
+    expect(screen.getByTestId('member-fee-sent')).toHaveTextContent('5 (Deducted by provider)')   // the whole amount was sent
+    expect(screen.getByTestId('member-fee-actual')).toHaveTextContent('Not recorded yet')
+    const button = within(form).getByRole('button', { name: 'Record actual network fee' })
+    const amount = within(form).getByLabelText(/Actual network fee/) as HTMLInputElement
+    expect(amount.value).toBe('')                                                           // the estimate is not pre-filled
+    fireEvent.change(within(form).getByLabelText(/Where it was read/), { target: { value: 'payout 5000000714' } })
+    fireEvent.change(amount, { target: { value: '0.0234' } })
+    expect(button).toBeDisabled()                                                           // where it was taken from is required
+    fireEvent.change(within(form).getByLabelText(/Where the provider took it from/), { target: { value: 'PROVIDER_BALANCE' } })
+    expect(screen.getByTestId('member-fee-mismatch-warning')).toHaveTextContent('stops all new crypto payouts')
+    fireEvent.change(within(form).getByLabelText(/Where the provider took it from/), { target: { value: 'PAYOUT_AMOUNT' } })
+    expect(screen.queryByTestId('member-fee-mismatch-warning')).toBeNull()
+    for (const bad of ['-1', 'abc', '5', '5.01', '0.123456789', '']) {                      // never the whole payout
+      fireEvent.change(amount, { target: { value: bad } })
+      expect(button).toBeDisabled()
+    }
+    fireEvent.change(amount, { target: { value: '0.0234' } })
+    fireEvent.click(button)
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/12/network-fee',
+      { amount: '0.0234', reference: 'payout 5000000714', charged_to: 'PAYOUT_AMOUNT' }))
+    expect(postMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a recorded beneficiary fee, what was received and a flag that needs attention', async () => {
+    const row = cashout({ id: 13, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.6,
+      network_fee: 0.4, network_fee_policy: 'MEMBER_PAYS', payout_currency: 'usdtbsc',
+      beneficiary_fee: { applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5',
+        estimate: '0.4', actual: '0.75', net_received: '4.25', fee_cap: '0.5', source: 'PROVIDER_REPORTED',
+        flag: 'FEE_CAP_EXCEEDED', status: 'RECORDED' } })
+    setup({ rows: [row] })
+    render(<AdminFinance section="transactions" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
+    await screen.findByTestId('cashout-detail')
+    expect(screen.getByTestId('member-fee-actual')).toHaveTextContent('0.75 (Provider reported)')
+    expect(screen.getByTestId('member-fee-received')).toHaveTextContent('4.25')
+    expect(screen.getByTestId('member-fee-flag')).toHaveTextContent('above the limit the member accepted')
+    expect(screen.queryByTestId('member-fee-form')).toBeNull()                              // recorded once
+  })
+
+  it('reports beneficiary-paid fees apart from the ledger and says why no payout can be created', async () => {
+    setup()
+    getMock.mockImplementation(((original) => (url: string, config?: unknown) => {
+      if (url.endsWith('/finance/reconciliation')) {
+        return Promise.resolve({ status: 200, data: {
+          owed: { pending: 0, available: 0, reserved: 0 }, owed_total: 0, owed_to_crypto_cashout_members: 0,
+          open_cashouts: {}, provider_balance_state: 'NOT_VERIFIED', provider_balance: null,
+          provider_covers_crypto_members: null,
+          last_24_hours: { crypto_payout_amount: 0, crypto_payout_count: 0, amount_limit: 5000, count_limit: 100 },
+          discrepancies: [{ type: 'MEMBER_FEE_NOT_RECORDED', severity: 'warning', cashout_id: 12,
+            message: 'Cashout #12 is completed but the network fee the provider took from it is not recorded.' }],
+          network_fee_gate: { code: 'PROVIDER_FEE_MODE_UNVERIFIED',
+            message: 'The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.' },
+          beneficiary_fees: { completed_count: 2, gross_total: '12.00', recorded_count: 1, fee_total: '0.0234',
+            received_total: '4.9766', not_recorded_count: 1, not_recorded: [{ cashout_id: 12, user_id: 42, estimate: '0.03' }],
+            flagged: [], automatic_recording: false },
+        } })
+      }
+      return original(url, config)
+    })(getMock.getMockImplementation()!))
+    render(<AdminFinance section="reconciliation" />)
+    const fees = await screen.findByTestId('beneficiary-fees')
+    expect(fees).toHaveTextContent('no ledger entry')
+    expect(fees).toHaveTextContent('0.0234 · 1 payouts')
+    expect(fees).toHaveTextContent('4.9766')
+    expect(fees).toHaveTextContent('cashout #12')
+    expect(fees).toHaveTextContent('not recorded automatically')
+    expect(screen.getByTestId('network-fee-gate')).toHaveTextContent('not confirmed as DEDUCTED_BY_PROVIDER')
+    expect(screen.getByTestId('discrepancies')).toHaveTextContent('Cashout #12')
   })
 
   it('shows what is owed, the discrepancies and the configuration history without claiming provider funds', async () => {

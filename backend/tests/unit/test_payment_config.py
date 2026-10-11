@@ -42,6 +42,7 @@ from app.services import payment_crypto
 from app.services.financial_balances import get_commission_balance
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_dual_cashout import (  # noqa: F401
+    FEE_RULES,
     NOW,
     OTHER_WALLET,
     PASSWORD,
@@ -149,7 +150,12 @@ def test_defaults_are_the_owner_rules_and_every_money_switch_is_off(db):
     assert (config.usd_fee_percent, config.usd_fee_min, config.usd_fee_max) == (Decimal("1"), Decimal("20"),
                                                                                 Decimal("1000"))
     assert (config.wallet_hold_hours, config.crypto_payout_currency) == (72, "usdtbsc")
-    assert config.network_fee_policy == "COMPANY_PAYS" and pc.FIELDS["network_fee_policy"].approval
+    # The beneficiary pays the network fee (owner decision). Everything else about
+    # it fails closed: behaviour unverified, no limit set, nothing approved.
+    assert config.network_fee_policy == "MEMBER_PAYS" and config.provider_fee_mode == "UNVERIFIED"
+    assert (config.member_fee_cap_percent, config.member_fee_cap_usd, config.fee_terms_approved) == (0, 0, False)
+    assert config.fee_gate() == "PROVIDER_FEE_MODE_UNVERIFIED"
+    assert pc.FIELDS["member_fee_cap_percent"].approval and pc.FIELDS["member_fee_cap_usd"].approval
     assert config.crypto_auto_payout_enabled is False and config.usd_settlement_enabled is False
     assert config.auto_payout_allowed is False and config.usd_settlement_allowed is False
     assert config.wallet_email_verification_required is True
@@ -576,6 +582,10 @@ def test_automatic_payouts_cannot_be_switched_on_until_everything_is_proven(db, 
         assert pc.load(db).crypto_auto_payout_enabled is False
         return error.value.code
 
+    with pytest.raises(pc.PaymentConfigError) as gate:                                     # network fee rules not in force
+        pc.update_settings(db, admin, change, password=PASSWORD, now=NOW, confirmation=pc.CONFIRM_AUTO_PAYOUT)
+    assert gate.value.code == "UNSAFE_ACTIVATION" and "provider fee behaviour" in str(gate.value)
+    configure(db, **FEE_RULES)
     assert refused(confirmation=pc.CONFIRM_AUTO_PAYOUT) == "UNSAFE_ACTIVATION"             # no credentials
     env_payout_credentials(monkeypatch)
     assert refused(confirmation=pc.CONFIRM_AUTO_PAYOUT) == "UNSAFE_ACTIVATION"             # no connection test
@@ -898,15 +908,16 @@ def test_minimum_interval_between_payouts_and_the_retry_limit(ledger, engine_on)
     assert len(refuse.created) == 2 and get_commission_balance(db, failing.id).available == Decimal("5.00")
 
 
-def test_member_pays_deducts_the_network_fee_from_what_is_sent_and_the_ledger_balances(ledger, engine_on):
+def test_the_beneficiary_pays_the_network_fee_once_and_the_ledger_balances(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "10.00")
-    configure(db, network_fee_policy="MEMBER_PAYS")
     provider = FakeProvider(fee="0.25", statuses={"batch-1": "FINISHED"})
     run(db, provider)
     row = cashouts(db, user)[0]
-    assert provider.created[0]["amount"] == Decimal("9.75")
+    # The WHOLE amount is handed to the provider, which takes its fee out of it.
+    # Sending 9.75 as well would make the member pay the fee twice.
+    assert provider.created[0]["amount"] == Decimal("10.00")
     assert (row.gross_amount, row.fee, row.net_amount, row.network_fee, row.network_fee_policy) == (
         Decimal("10.00"), Decimal("0.00"), Decimal("9.75"), Decimal("0.25"), "MEMBER_PAYS")
     run(db, provider)
@@ -917,16 +928,19 @@ def test_member_pays_deducts_the_network_fee_from_what_is_sent_and_the_ledger_ba
     assert cs.summary(db, user)["fees"]["CRYPTO"]["network_fee_policy"] == "MEMBER_PAYS"
 
 
-def test_company_pays_sends_the_full_amount(ledger, engine_on):
+def test_the_retired_company_pays_policy_cannot_be_selected_and_creates_no_payout(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
+    admin = member(db, "boss", admin=True)
     commission(db, user, "10.00")
+    with pytest.raises(pc.PaymentConfigError) as error:
+        pc.update_settings(db, admin, {"network_fee_policy": "COMPANY_PAYS"}, password=PASSWORD, now=NOW)
+    assert error.value.code == "POLICY_RETIRED" and pc.load(db).network_fee_policy == "MEMBER_PAYS"
+    configure(db, network_fee_policy="COMPANY_PAYS")              # a row written before the rule changed
     provider = FakeProvider(fee="0.25")
-    run(db, provider)
-    row = cashouts(db, user)[0]
-    assert provider.created[0]["amount"] == Decimal("10.00")
-    assert (row.net_amount, row.network_fee, row.network_fee_policy) == (Decimal("10.00"), Decimal("0.25"),
-                                                                         "COMPANY_PAYS")
+    assert run(db, provider) == {"enabled": True, "reconciled": {}, "members": {},
+                                 "stopped": "FEE_POLICY_NOT_BENEFICIARY_PAID"}
+    assert provider.created == [] and cashouts(db) == []
 
 
 def test_pausing_automatic_payouts_still_reconciles_what_was_already_sent(ledger, engine_on):

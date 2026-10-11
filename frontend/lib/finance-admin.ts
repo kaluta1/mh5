@@ -162,6 +162,56 @@ export type AdminCashout = {
   failure_code: string | null
   reviewed_by: number | null
   has_destination_details: boolean
+  beneficiary_fee?: BeneficiaryFeeRecord
+}
+
+/** The network fee a beneficiary bore on one crypto payout. Exact figures, as text. */
+export type BeneficiaryFeeRecord = {
+  applies: boolean
+  provider_fee_mode: string | null
+  gross: string
+  /** What was handed to the provider: the whole amount, because the provider takes its fee out of it. */
+  amount_sent: string | null
+  estimate: string | null
+  /** The provider's actual fee. Null until it is known; never an estimate. */
+  actual: string | null
+  net_received: string | null
+  /** The highest fee the member accepted for this payout. */
+  fee_cap: string | null
+  source: 'PROVIDER_REPORTED' | 'ADMIN_RECORDED' | null
+  flag: string | null
+  status: 'NOT_APPLICABLE' | 'NOT_RECORDED' | 'RECORDED'
+}
+
+export type BeneficiaryFeeSummary = {
+  completed_count: number
+  gross_total: string
+  recorded_count: number
+  fee_total: string
+  received_total: string
+  not_recorded_count: number
+  not_recorded: { cashout_id: number; user_id: number; estimate: string | null }[]
+  flagged: { cashout_id: number; user_id: number; flag: string; actual: string | null; fee_cap: string | null }[]
+  automatic_recording: boolean
+}
+
+export const FEE_FLAG_LABEL: Record<string, string> = {
+  PROVIDER_FEE_MODE_MISMATCH: 'The provider charged the fee to the MyHigh5 balance, not to the payout',
+  PROVIDER_AMOUNT_MISMATCH: 'The provider reports a larger amount than it was asked to send',
+  FEE_CAP_EXCEEDED: 'The fee taken is above the limit the member accepted',
+}
+
+/** Where the provider took the network fee of a beneficiary-paid payout from. */
+export const FEE_CHARGED_TO = [
+  { value: 'PAYOUT_AMOUNT', label: 'Taken out of the payout (the member received less)' },
+  { value: 'PROVIDER_BALANCE', label: 'Charged to the MyHigh5 provider balance (not expected)' },
+] as const
+
+/** An actual fee of a beneficiary-paid payout: a plain number smaller than the payout itself. */
+export function validMemberFee(text: string, gross: number): boolean {
+  const value = text.trim()
+  if (!/^\d+(\.\d{1,8})?$/.test(value)) return false
+  return Number(value) < gross
 }
 
 /** What the books say about the network fee MyHigh5 paid for one crypto payout. */
@@ -211,6 +261,9 @@ export type Reconciliation = {
   last_24_hours: { crypto_payout_amount: number; crypto_payout_count: number; amount_limit: number; count_limit: number }
   discrepancies: { type: string; severity: 'critical' | 'warning'; message: string; cashout_id?: number; user_id?: number }[]
   network_fees?: NetworkFeeSummary
+  beneficiary_fees?: BeneficiaryFeeSummary
+  /** Why no crypto payout can be created under the network fee rules (null = one can). */
+  network_fee_gate?: { code: string; message: string } | null
 }
 
 export const CASHOUT_STATUS_LABEL: Record<AdminCashout['status'], string> = {

@@ -26,7 +26,7 @@ from app.models.affiliate import (
     CommissionType,
     PayoutWalletChange,
 )
-from app.models.payment_config import PaymentSettings
+from app.models.payment_config import CashoutFeeConsent, PaymentSettings
 from app.models.user import Permission, Role, User
 from app.services import cashout_engine as engine
 from app.services import payment_config
@@ -134,7 +134,23 @@ def engine_on(monkeypatch, db):
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
     for name, value in PAYOUT_ENV.items():
         monkeypatch.setattr(settings, name, value)
-    configure(db, crypto_auto_payout_enabled=True)
+    configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
+
+
+# The network fee rules in force in these tests: the beneficiary pays, the
+# provider's behaviour was confirmed, and SYNTHETIC limits were approved.
+FEE_RULES = dict(network_fee_policy="MEMBER_PAYS", provider_fee_mode="DEDUCTED_BY_PROVIDER",
+                 member_fee_cap_percent=Decimal("10.000"), member_fee_cap_usd=Decimal("1.00"),
+                 fee_terms_approved=True)
+
+
+def accept_terms(db, user, *, version=1, cap_percent="10.000", cap_usd="1.00", at=None, expires_at=None):
+    """The member accepted the network fee terms (written directly: test set-up only)."""
+    row = CashoutFeeConsent(user_id=user.id, terms_version=version, cap_percent=Decimal(cap_percent),
+                            cap_usd=Decimal(cap_usd), accepted_at=at or LONG_AGO, expires_at=expires_at)
+    db.add(row)
+    db.commit()
+    return row
 
 
 @pytest.fixture
@@ -148,7 +164,9 @@ def ledger(world):
 
 
 def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponsor=None, admin=False,
-           dob=datetime(1990, 1, 1)) -> User:
+           dob=datetime(1990, 1, 1), terms=True) -> User:
+    """A synthetic member. One who chose Crypto Cashout has accepted the
+    network fee terms unless `terms=False`."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=name.upper(),
@@ -157,6 +175,8 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
                payout_wallet_verified_at=verified_at if wallet else None)
     db.add(row)
     db.commit()
+    if method == "CRYPTO" and terms:
+        accept_terms(db, row)
     return row
 
 
@@ -253,8 +273,11 @@ def test_crypto_minimum_is_one_dollar(ledger, engine_on, amounts, paid):
     assert provider.created == [{"address": WALLET, "amount": total, "currency": "usdtbsc",
                                  "external_id": provider.created[0]["external_id"]}]
     row = cashouts(db, user)[0]
+    # The whole amount is handed to the provider, which takes its fee (estimated
+    # at 0.02) out of it: no MyHigh5 fee, and the member expects the rest.
     assert (row.status, row.cashout_method, row.gross_amount, row.fee, row.net_amount) == (
-        "processing", "CRYPTO", total, Decimal("0.00"), total)       # the member receives the full amount
+        "processing", "CRYPTO", total, Decimal("0.00"), total - Decimal("0.02"))
+    assert (row.amount_sent, row.network_fee_estimate, row.network_fee_actual) == (total, Decimal("0.02"), None)
     balance = get_commission_balance(db, user.id)
     assert (balance.available, balance.reserved, balance.paid_lifetime) == (0, total, 0)   # reserved, not yet paid
 

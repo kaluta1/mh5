@@ -12,11 +12,14 @@ import {
   canCancel,
   canRequestUsd,
   cashoutStatusText,
+  feeLimitText,
   formatDate,
   formatUsd,
   methodAvailable,
   methodLabel,
   needsAttention,
+  networkFeeText,
+  receivedText,
   recordStatusLabel,
   walletStatusLabel,
   type CashoutMethod,
@@ -44,6 +47,8 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<CashoutMethod | null>(null)
   const [cancelling, setCancelling] = useState<number | null>(null)
+  const [termsChecked, setTermsChecked] = useState(false)
+  const [termsBusy, setTermsBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +90,32 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
     }
   }
 
+  const changeFeeTerms = async (action: 'accept' | 'withdraw') => {
+    const terms = summary?.fees.CRYPTO.terms
+    if (!terms) return
+    setTermsBusy(true)
+    try {
+      const res = await fetch(`${getEffectiveApiUrl()}/api/v1/payments/cashout-fee-terms/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        // The terms exactly as shown: the server refuses them if they changed meanwhile.
+        body: action === 'accept'
+          ? JSON.stringify({ version: terms.version, cap_percent: terms.cap_percent, cap_usd: terms.cap_usd, accept: true })
+          : undefined,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(apiErrorText(data.detail, 'Could not save your choice'))
+      setSummary(data as CashoutSummary)
+      setTermsChecked(false)
+      addToast(action === 'accept' ? 'Network fee terms accepted.' : 'Acceptance withdrawn. No crypto payout will be sent.', 'success')
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : t('common.error') || 'Error', 'error')
+      await load()
+    } finally {
+      setTermsBusy(false)
+    }
+  }
+
   const cancel = async (record: CashoutRecord) => {
     setCancelling(record.id)
     try {
@@ -122,6 +153,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
     ['Paid', b.paid],
   ]
   const method = summary.cashout_method
+  const feeTerms = summary.fees.CRYPTO.terms
   const attention = !['AUTOMATIC_PAYOUT_PENDING', 'READY_TO_REQUEST'].includes(summary.status)
 
   return (
@@ -299,6 +331,58 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
         </dl>
       )}
 
+      {method === 'CRYPTO' && feeTerms?.available && (
+        <div
+          data-testid="fee-terms"
+          className="space-y-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
+        >
+          <h3 className="font-semibold text-gray-900 dark:text-white">Network fee terms</h3>
+          <ul className="list-disc space-y-1 pl-5 text-gray-600 dark:text-gray-300">
+            <li>The blockchain network fee of each payout is paid by you. It is taken out of the amount sent, so you receive your balance less that fee.</li>
+            <li>MyHigh5 charges no fee of its own and keeps no part of the network fee.</li>
+            <li>
+              The fee is set by the network at the moment of payment. A payout is not sent when the estimated fee is
+              above your limit: <span className="font-medium text-gray-900 dark:text-white">{feeLimitText(feeTerms)}</span>.
+              Your balance then stays available.
+            </li>
+            <li>The exact fee and the amount you received are shown in your cashout history once the payout is complete.</li>
+          </ul>
+          {feeTerms.accepted ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-green-700 dark:text-green-300" data-testid="fee-terms-accepted">
+                Accepted on {formatDate(feeTerms.accepted_at)}
+                {feeTerms.expires_at ? `, valid until ${formatDate(feeTerms.expires_at)}` : ''}.
+              </p>
+              <Button variant="outline" size="sm" disabled={termsBusy} onClick={() => void changeFeeTerms('withdraw')}>
+                {termsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Withdraw acceptance'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-gray-900 dark:text-white">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={termsChecked}
+                  disabled={termsBusy}
+                  onChange={(e) => setTermsChecked(e.target.checked)}
+                />
+                <span>
+                  I accept that the network fee is taken out of my crypto payouts, up to {feeLimitText(feeTerms)} per payout.
+                </span>
+              </label>
+              <Button
+                disabled={!termsChecked || termsBusy}
+                onClick={() => void changeFeeTerms('accept')}
+                className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+              >
+                {termsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Accept network fee terms'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {method === 'USD' && (
         <div>
           <Button
@@ -348,11 +432,11 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                     <td className="py-2 pr-3 text-right tabular-nums">{formatUsd(row.gross_amount)}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">
                       {formatUsd(row.fee)}
-                      {row.network_fee_policy === 'MEMBER_PAYS' && row.network_fee ? (
-                        <span className="block text-xs text-gray-500">+ {formatUsd(row.network_fee)} network</span>
+                      {networkFeeText(row) ? (
+                        <span className="block text-xs text-gray-500">{networkFeeText(row)}</span>
                       ) : null}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{formatUsd(row.net_amount)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{receivedText(row)}</td>
                     <td className="py-2 pr-3 text-gray-700 dark:text-gray-200">
                       {recordStatusLabel(row.status)}
                       {row.reference ? <span className="block font-mono text-xs text-gray-500">{row.reference}</span> : null}
