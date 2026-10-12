@@ -7,6 +7,9 @@ import {
   financeErrorText,
   isFinanceSection,
   readinessTone,
+  expectedReceived,
+  sameAmount,
+  validMemberFee,
   validNetworkFee,
   tone,
   type SettingField,
@@ -71,5 +74,38 @@ describe('validNetworkFee', () => {
     for (const bad of ['', ' ', '-0.01', 'abc', '1e-2', '0.123456789', '5.01', '0,02', '.5', '5.']) {
       expect(validNetworkFee(bad, 5)).toBe(false)
     }
+  })
+})
+
+describe('verifying an actual network fee', () => {
+  it('works out the amount received exactly, never with floating-point subtraction', () => {
+    expect(expectedReceived(5, '0.0234', 'PAYOUT_AMOUNT')).toBe('4.9766')
+    expect(expectedReceived(5, '0.1', 'PAYOUT_AMOUNT')).toBe('4.9')
+    expect(expectedReceived(0.3, '0.1', 'PAYOUT_AMOUNT')).toBe('0.2')                     // 0.3 - 0.1 is not 0.2 in binary
+    expect(expectedReceived(1234.56, '0.00000001', 'PAYOUT_AMOUNT')).toBe('1234.55999999')
+    expect(expectedReceived(5, '0', 'PAYOUT_AMOUNT')).toBe('5')
+    expect(expectedReceived(5, '0.25', 'PROVIDER_BALANCE')).toBe('5')                     // the member received all of it
+  })
+
+  it('has no expected amount for a fee that is not a usable number or leaves nothing', () => {
+    for (const bad of ['', 'abc', '-1', '0.123456789', '1e-2', '5', '5.01']) {
+      expect(expectedReceived(5, bad, 'PAYOUT_AMOUNT')).toBeNull()
+    }
+  })
+
+  it('compares amounts as numbers, not as text', () => {
+    expect(sameAmount('4.9766', '4.9766')).toBe(true)
+    expect(sameAmount('4.97660', '4.9766')).toBe(true)
+    expect(sameAmount('04.9766', '4.9766')).toBe(true)
+    expect(sameAmount('5.00', '5')).toBe(true)
+    for (const [typed, expected] of [['4.98', '4.9766'], ['4.9765', '4.9766'], ['', '4.9766'], ['abc', '4.9766']]) {
+      expect(sameAmount(typed, expected)).toBe(false)
+    }
+    expect(sameAmount('4.98', null)).toBe(false)
+  })
+
+  it('never accepts a fee as large as the payout itself', () => {
+    for (const ok of ['0', '0.02', '4.99999999']) expect(validMemberFee(ok, 5)).toBe(true)
+    for (const bad of ['5', '5.00', '5.01', '-0.01', 'abc', '', '0.123456789']) expect(validMemberFee(bad, 5)).toBe(false)
   })
 })

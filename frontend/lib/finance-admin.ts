@@ -53,6 +53,10 @@ export type FinanceSettings = {
   usd_fee_rule: string
   supported_payout_currencies: { code: string; currency: string; network: string }[]
   confirmations: Record<string, string>
+  /** Why no crypto payout can be created (null = one can). */
+  network_fee_gate?: { code: string; message: string } | null
+  /** Set by the engine when a payout did not add up; lifted only by an explicit reactivation. */
+  payout_suspension?: PayoutSuspension | null
 }
 
 export type CredentialStatus = {
@@ -173,8 +177,15 @@ export type BeneficiaryFeeRecord = {
   /** What was handed to the provider: the whole amount, because the provider takes its fee out of it. */
   amount_sent: string | null
   estimate: string | null
+  /** The estimate raised by the safety margin: what was compared with the member's limit. Still an estimate. */
+  estimate_adjusted?: string | null
+  margin_percent?: string | null
   /** The provider's actual fee. Null until it is known; never an estimate. */
   actual: string | null
+  /** How far the actual fee was verified. Only the two VERIFIED values count as a reconciliation. */
+  reconciliation?: 'PROVIDER_VERIFIED' | 'ADMIN_VERIFIED' | 'PROVIDER_UNVERIFIED' | 'ADMIN_UNVERIFIED' | null
+  evidence?: string | null
+  reconciled?: boolean
   net_received: string | null
   /** The highest fee the member accepted for this payout. */
   fee_cap: string | null
@@ -193,6 +204,11 @@ export type BeneficiaryFeeSummary = {
   not_recorded: { cashout_id: number; user_id: number; estimate: string | null }[]
   flagged: { cashout_id: number; user_id: number; flag: string; actual: string | null; fee_cap: string | null }[]
   automatic_recording: boolean
+  /** Payouts whose actual fee is not verified: still on their way, or completed without it. */
+  exposure?: { in_flight: number; completed_unreconciled: number; total: number }
+  verified_count?: number
+  not_verified?: { cashout_id: number; user_id: number; reconciliation: string | null; actual: string | null }[]
+  amount_meaning_confirmed?: boolean
 }
 
 export const FEE_FLAG_LABEL: Record<string, string> = {
@@ -206,6 +222,57 @@ export const FEE_CHARGED_TO = [
   { value: 'PAYOUT_AMOUNT', label: 'Taken out of the payout (the member received less)' },
   { value: 'PROVIDER_BALANCE', label: 'Charged to the MyHigh5 provider balance (not expected)' },
 ] as const
+
+/** Where an administrator read the figures. "Other" is recorded but can never verify a payout. */
+export const FEE_EVIDENCE = [
+  { value: 'PROVIDER_STATEMENT', label: "The provider's statement or dashboard for this payout", verifies: true },
+  { value: 'BLOCKCHAIN_EXPLORER', label: 'A blockchain explorer (the transaction itself)', verifies: true },
+  { value: 'PROVIDER_SUPPORT', label: "A written answer from the provider's support", verifies: true },
+  { value: 'OTHER', label: 'Other (cannot be marked verified)', verifies: false },
+] as const
+
+export const RECONCILIATION_LABEL: Record<string, string> = {
+  PROVIDER_VERIFIED: 'Verified from the provider report',
+  ADMIN_VERIFIED: 'Verified by an administrator against evidence',
+  PROVIDER_UNVERIFIED: 'Reported by the provider, not verified',
+  ADMIN_UNVERIFIED: 'Entered by an administrator, not verified',
+}
+
+/** Why crypto payouts are suspended, and what must be resolved before they can be reactivated. */
+export type PayoutSuspension = {
+  reason: string
+  message: string
+  since: string | null
+  cashout_id: number | null
+  /** The network fee rule that is not in force (null = the rules are in force again). */
+  rules_gate: string | null
+}
+
+/** The amount received that a verified record must state: the payout less the fee, or all of it. */
+export function expectedReceived(gross: number, fee: string, chargedTo: string): string | null {
+  const value = fee.trim()
+  if (!/^\d+(\.\d{1,8})?$/.test(value)) return null
+  // Integer arithmetic at 8 decimals: never a floating-point subtraction of money.
+  const units = (text: string) => {
+    const [whole, fraction = ''] = text.split('.')
+    return BigInt(whole) * BigInt(100000000) + BigInt(fraction.padEnd(8, '0'))
+  }
+  const net = chargedTo === 'PROVIDER_BALANCE' ? units(gross.toFixed(2)) : units(gross.toFixed(2)) - units(value)
+  if (net <= BigInt(0)) return null
+  const text = net.toString().padStart(9, '0')
+  const fraction = text.slice(-8).replace(/0+$/, '')
+  return fraction ? `${text.slice(0, -8)}.${fraction}` : text.slice(0, -8)
+}
+
+/** Two amounts typed as text are the same number ("4.98" and "4.980"). */
+export function sameAmount(a: string, b: string | null): boolean {
+  if (b === null || !/^\d+(\.\d{1,8})?$/.test(a.trim())) return false
+  const norm = (text: string) => {
+    const [whole, fraction = ''] = text.trim().split('.')
+    return `${BigInt(whole)}.${fraction.padEnd(8, '0')}`
+  }
+  return norm(a) === norm(b)
+}
 
 /** An actual fee of a beneficiary-paid payout: a plain number smaller than the payout itself. */
 export function validMemberFee(text: string, gross: number): boolean {
@@ -264,6 +331,9 @@ export type Reconciliation = {
   beneficiary_fees?: BeneficiaryFeeSummary
   /** Why no crypto payout can be created under the network fee rules (null = one can). */
   network_fee_gate?: { code: string; message: string } | null
+  payout_suspension?: PayoutSuspension | null
+  /** No further payout while more than `limit` are outstanding without a verified actual fee. */
+  recording_gate?: { limit: number; in_flight: number; completed_unreconciled: number; total: number; blocked: boolean }
 }
 
 export const CASHOUT_STATUS_LABEL: Record<AdminCashout['status'], string> = {

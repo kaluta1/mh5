@@ -189,6 +189,12 @@ class AffiliateCashoutRequest(Base):
     fee_consent_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("cashout_fee_consents.id"),
                                                           nullable=True)
     fee_flag: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)          # what did not add up
+    # The estimate raised by the safety margin (what was compared with the member's
+    # limit), the margin used, and how far the ACTUAL fee has been verified.
+    fee_estimate_adjusted: Mapped[Optional[Decimal]] = mapped_column(Numeric(24, 8), nullable=True)
+    fee_margin_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 3), nullable=True)
+    fee_reconciliation: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    fee_evidence: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     # USD: the member's payout destination details, AES-256-GCM ciphertext only.
     destination_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

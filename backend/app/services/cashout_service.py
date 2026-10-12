@@ -62,9 +62,10 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_UP, Decimal
 from typing import Iterable, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 
@@ -840,11 +841,28 @@ def network_fee_summary(db: Session, *, limit: int = 200) -> dict:
 # what is handed over and it refuses every other provider fee behaviour.
 #
 # A member is paid only after accepting the network fee terms, which state the
-# highest fee they accept. The estimate for THEIR payout is checked against it
-# before anything is reserved. The actual fee is known only once the provider
-# has sent the payout: it is recorded then (never the estimate), compared with
-# the member's limit, and anything that does not add up is flagged and stops
-# further payouts. Nothing more is ever taken from the member.
+# highest ESTIMATE they accept. The provider's estimate for THEIR payout, raised
+# by the configured safety margin, is checked against it before anything is
+# reserved. That is a check on an estimate: the actual fee is decided by the
+# provider when it sends, is known only afterwards, and CAN be higher. Nothing
+# here guarantees the actual fee of a payout, including the first one.
+#
+# So the exposure is kept small instead, by two different things:
+#
+#   The recording gate (temporary). A payout's actual fee counts as reconciled
+#   only when the fee, who bore it and the amount are VERIFIED (by the
+#   provider's own report once its values are confirmed, or by an administrator
+#   against named evidence). No further payout is created while more payouts
+#   than the configured number (default 0) are still at the provider or
+#   completed without that. A missing fee is never taken to be zero. Nothing is
+#   wrong yet: the gate lifts by itself as soon as the fee is verified.
+#
+#   The suspension (persistent). A CONFIRMED inconsistency (the fee charged to
+#   MyHigh5, an amount that does not agree, a fee above the member's limit)
+#   stops all payouts and stays until an administrator reviews it and
+#   reactivates them. Recording a fee afterwards never lifts it.
+#
+# Nothing more is ever taken from the member.
 #
 # Books: the cashout's own entry (Dr 2001 / Cr 1001, the whole amount) is the
 # only one. No entry is posted for the fee and account 5005 is not used.
@@ -856,6 +874,18 @@ FLAG_MODE_MISMATCH, FLAG_AMOUNT_MISMATCH, FLAG_CAP_EXCEEDED = (
 # A flag that means the provider did not behave as configured: no further payout until a person has looked.
 SUSPENDING_FLAGS = (FLAG_MODE_MISMATCH, FLAG_AMOUNT_MISMATCH, FLAG_CAP_EXCEEDED)
 _EXACT = Decimal("0.00000001")
+
+# How far the ACTUAL fee of a completed payout has been verified. Only the two
+# VERIFIED values count as a reconciliation; everything else, and nothing at
+# all, keeps the payout among the unreconciled ones.
+RECONCILED_BY_PROVIDER, RECONCILED_BY_ADMIN = "PROVIDER_VERIFIED", "ADMIN_VERIFIED"
+UNVERIFIED_PROVIDER, UNVERIFIED_ADMIN = "PROVIDER_UNVERIFIED", "ADMIN_UNVERIFIED"
+VERIFIED_RECONCILIATIONS = (RECONCILED_BY_PROVIDER, RECONCILED_BY_ADMIN)
+# Where an administrator read the figures. OTHER is recorded but never verifies.
+EVIDENCE_STATEMENT, EVIDENCE_EXPLORER, EVIDENCE_SUPPORT, EVIDENCE_OTHER, EVIDENCE_PROVIDER_API = (
+    "PROVIDER_STATEMENT", "BLOCKCHAIN_EXPLORER", "PROVIDER_SUPPORT", "OTHER", "PROVIDER_API")
+ADMIN_EVIDENCE = (EVIDENCE_STATEMENT, EVIDENCE_EXPLORER, EVIDENCE_SUPPORT, EVIDENCE_OTHER)
+_VERIFYING_EVIDENCE = (EVIDENCE_STATEMENT, EVIDENCE_EXPLORER, EVIDENCE_SUPPORT)
 
 
 def _exact(value) -> Optional[str]:
@@ -891,10 +921,13 @@ def amount_to_send(mode: Optional[str], gross: Decimal) -> Decimal:
 
 def fee_terms(config: PaymentConfig) -> dict:
     """The network fee terms a member is asked to accept."""
-    return {"available": config.fee_gate() is None, "version": int(config.fee_terms_version),
+    return {"available": config.fee_rules_gate() is None, "version": int(config.fee_terms_version),
             "cap_percent": _exact(config.member_fee_cap_percent), "cap_usd": _exact(config.member_fee_cap_usd),
             "valid_days": int(config.fee_consent_valid_days),
-            "minimum_received": float(money(config.min_net_payout_usd))}
+            "minimum_received": float(money(config.min_net_payout_usd)),
+            "provider": config.provider_display_name,
+            # What the limit is, and what it is not: said by the server so every screen says the same.
+            "limit_applies_to": "ESTIMATE", "actual_fee_guaranteed": False}
 
 
 def active_fee_consent(db: Session, user_id: int, config: PaymentConfig,
@@ -924,23 +957,97 @@ def member_fee_cap(config: PaymentConfig, consent: CashoutFeeConsent, gross: Dec
     return min(limits).quantize(_EXACT)
 
 
+def adjusted_estimate(estimate: Decimal, margin_percent) -> Decimal:
+    """The provider's estimate raised by the safety margin: estimate x (1 +
+    margin / 100), rounded UP at the provider's precision so that rounding
+    never works against the member. Decimal only. Still an estimate."""
+    if margin_percent is None:
+        raise CashoutError("FEE_SAFETY_MARGIN_NOT_SET", "The safety margin on the fee estimate is not set.")
+    margin = Decimal(str(margin_percent))
+    if not margin.is_finite() or margin < 0:
+        raise CashoutError("FEE_SAFETY_MARGIN_NOT_SET", "The safety margin on the fee estimate is not usable.")
+    raised = Decimal(str(estimate)) * (Decimal("100") + margin) / Decimal("100")
+    return raised.quantize(_EXACT, rounding=ROUND_UP)
+
+
 def beneficiary_fee_plan(config: PaymentConfig, consent: CashoutFeeConsent, gross: Decimal,
                          estimate: Decimal) -> tuple[Optional[str], dict]:
-    """Check the provider's estimate for THIS payout against every limit.
-    Returns (why it may not be sent or None, the figures to store)."""
+    """Check the provider's estimate for THIS payout, raised by the safety
+    margin, against every limit. Returns (why it may not be sent or None, the
+    figures to store). Three different figures, never mixed: the provider's
+    ESTIMATE, the ADJUSTED estimate that is compared with the limits, and
+    (later, from the provider) the ACTUAL fee. The margin changes what is
+    checked, never what is sent: the whole amount is handed to the provider."""
     gross, estimate = money(gross), Decimal(str(estimate))
     cap = member_fee_cap(config, consent, gross)
-    expected = gross - estimate
+    adjusted = adjusted_estimate(estimate, config.fee_estimate_margin_percent)
     plan = {"provider_fee_mode": config.provider_fee_mode, "network_fee_estimate": estimate.quantize(_EXACT),
+            "fee_estimate_adjusted": adjusted,
+            "fee_margin_percent": Decimal(str(config.fee_estimate_margin_percent)),
             "fee_cap": cap, "fee_consent_id": int(consent.id)}
-    if expected <= 0 or estimate > gross * Decimal(config.max_network_fee_percent) / Decimal("100"):
+    if gross - adjusted <= 0 or adjusted > gross * Decimal(config.max_network_fee_percent) / Decimal("100"):
         return "NETWORK_FEE_TOO_HIGH", plan
-    if estimate > cap:
+    if adjusted > cap:
         return "NETWORK_FEE_ABOVE_MEMBER_LIMIT", plan
-    if expected < money(config.min_net_payout_usd):
+    if gross - adjusted < money(config.min_net_payout_usd):
         return "BELOW_MINIMUM_RECEIVED", plan
     plan["amount_sent"] = amount_to_send(config.provider_fee_mode, gross)
     return None, plan
+
+
+def fee_reconciled(cashout: AffiliateCashoutRequest) -> bool:
+    """Has the ACTUAL fee of this payout been verified? A missing fee is never
+    taken to be zero, and a figure nobody verified does not count."""
+    return (cashout.network_fee_actual is not None and cashout.net_received is not None
+            and cashout.fee_reconciliation in VERIFIED_RECONCILIATIONS)
+
+
+def reconciliation_exposure(db: Session) -> dict:
+    """Beneficiary-paid crypto payouts whose actual fee is NOT verified yet:
+    those still on their way (reserved, at the provider, or of unknown outcome)
+    and those completed without a verified fee. An unknown reconciliation
+    state counts as unreconciled."""
+    paid_by_member = (AffiliateCashoutRequest.cashout_method == METHOD_CRYPTO,
+                      AffiliateCashoutRequest.network_fee_policy == payment_config.FEE_MEMBER_PAYS)
+    in_flight = (db.query(AffiliateCashoutRequest.id)
+                 .filter(*paid_by_member, AffiliateCashoutRequest.status.in_(ACTIVE_CASHOUT_STATUSES)).count())
+    # Spelled out with IS NULL on purpose: "NOT (x IN (...))" is neither true nor
+    # false for a row whose reconciliation was never recorded, and such a row
+    # would silently drop out of the count.
+    unverified = or_(AffiliateCashoutRequest.fee_reconciliation.is_(None),
+                     AffiliateCashoutRequest.fee_reconciliation.notin_(VERIFIED_RECONCILIATIONS),
+                     AffiliateCashoutRequest.network_fee_actual.is_(None),
+                     AffiliateCashoutRequest.net_received.is_(None))
+    completed = (db.query(AffiliateCashoutRequest.id)
+                 .filter(*paid_by_member, AffiliateCashoutRequest.status == CashoutStatus.COMPLETED.value,
+                         unverified).count())
+    return {"in_flight": int(in_flight), "completed_unreconciled": int(completed),
+            "total": int(in_flight) + int(completed)}
+
+
+def recording_gate(db: Session, config: PaymentConfig) -> Optional[str]:
+    """Why no FURTHER payout may be created because of earlier ones (None =
+    one may). The caller holds the settings lock (payment_config.lock_settings),
+    so two workers cannot both pass it for different members."""
+    if reconciliation_exposure(db)["total"] > int(config.max_unreconciled_payouts):
+        return "FEE_RECONCILIATION_PENDING"
+    return None
+
+
+def suspend_if_inconsistent(db: Session, cashout: AffiliateCashoutRequest) -> Optional[str]:
+    """Called when a beneficiary-paid payout has just been completed. A
+    CONFIRMED inconsistency (the fee charged to MyHigh5, an amount that does
+    not agree, a fee above the member's limit) suspends all payouts until an
+    administrator reactivates them. Returns the suspension reason, if any.
+
+    A fee that is only missing or not verified yet is NOT a suspension: the
+    payout stays among the unreconciled ones and the recording gate blocks
+    further payouts until it is verified, then lets them go again by itself.
+    No commit."""
+    if not member_fee_applies(cashout) or cashout.fee_flag not in SUSPENDING_FLAGS:
+        return None
+    payment_config.suspend_payouts(db, reason=cashout.fee_flag, cashout_id=int(cashout.id))
+    return cashout.fee_flag
 
 
 def accept_fee_terms(db: Session, user: User, *, version: int, cap_percent, cap_usd,
@@ -951,7 +1058,7 @@ def accept_fee_terms(db: Session, user: User, *, version: int, cap_percent, cap_
     now = now or datetime.utcnow()
     locked = db.query(User).filter(User.id == user.id).with_for_update().one()
     config = payment_config.load(db)
-    if config.fee_gate() is not None:
+    if config.fee_rules_gate() is not None:
         db.rollback()
         raise CashoutError("FEE_TERMS_UNAVAILABLE", "The network fee terms cannot be accepted at the moment.")
     try:
@@ -1010,26 +1117,36 @@ def member_fee_applies(cashout: AffiliateCashoutRequest) -> bool:
 
 
 def record_member_fee(db: Session, cashout: AffiliateCashoutRequest, *, amount, charged_to: str, source: str,
-                      actor_id: Optional[int], now: datetime, reference: Optional[str] = None,
+                      actor_id: Optional[int], now: datetime, evidence: str, verified: bool = False,
+                      received=None, reference: Optional[str] = None,
                       reported_by: Optional[str] = None) -> Optional[str]:
     """Record the ACTUAL network fee of one completed beneficiary-paid payout
     and what the beneficiary therefore received. Posts NO journal entry and
     takes nothing more from anyone. Returns the flag raised (None = it adds
-    up). Once per cashout. No commit; the cashout row is locked by the caller.
+    up). No commit; the cashout row is locked by the caller.
 
     `charged_to` says where the provider took the fee from. PAYOUT_AMOUNT is
     the configured behaviour. PROVIDER_BALANCE means the provider charged
     MyHigh5 instead: the beneficiary received the whole amount, the fee is
     recorded and flagged, and the treasury account is overstated by it until
-    accounting decides, with the owner, how to book it."""
+    accounting decides, with the owner, how to book it.
+
+    `evidence` names where the figures were read. `verified` says that the
+    fee, who bore it AND the amount received (`received`, required then) were
+    each checked against that evidence; only then does the payout count as
+    reconciled. A figure recorded without that stays UNVERIFIED and may be
+    replaced once by a verified one; a verified figure is never changed."""
     if not member_fee_applies(cashout):
         raise CashoutError("NOT_COMPLETED",
                            "An actual network fee is recorded only for a completed beneficiary-paid crypto payout.")
-    if cashout.network_fee_actual is not None:
+    replacing = cashout.network_fee_actual is not None
+    if replacing and (fee_reconciled(cashout) or not verified):
         raise CashoutError("FEE_ALREADY_RECORDED", "The network fee of this payout has already been recorded.")
     if charged_to not in (CHARGED_TO_PAYOUT, CHARGED_TO_BALANCE):
         raise CashoutError("CHARGED_TO_REQUIRED",
                            "Say where the provider took the fee from: PAYOUT_AMOUNT or PROVIDER_BALANCE.")
+    if evidence not in (*ADMIN_EVIDENCE, EVIDENCE_PROVIDER_API):
+        raise CashoutError("EVIDENCE_REQUIRED", "Say where the figures were read: " + ", ".join(ADMIN_EVIDENCE) + ".")
     exact = _provider_number(amount, "network fee")
     gross = money(cashout.gross_amount)
     currency = payment_config.SUPPORTED_PAYOUT_CURRENCIES.get(str(cashout.payout_currency or ""))
@@ -1040,26 +1157,53 @@ def record_member_fee(db: Session, cashout: AffiliateCashoutRequest, *, amount, 
         raise CashoutError("INVALID_FEE", "The network fee cannot be as large as the payout itself.")
     flag: Optional[str] = None
     if charged_to == CHARGED_TO_BALANCE:
-        received = gross
+        net = gross
         flag = FLAG_MODE_MISMATCH if exact > 0 else None
     else:
-        received = gross - exact
+        net = gross - exact
         if cashout.fee_cap is not None and exact > Decimal(str(cashout.fee_cap)):
             flag = FLAG_CAP_EXCEEDED
+    by_provider = source == FEE_SOURCE_PROVIDER
+    if verified:
+        if not by_provider and evidence not in _VERIFYING_EVIDENCE:
+            raise CashoutError("EVIDENCE_REQUIRED",
+                               "A verified figure needs the provider's statement, a blockchain explorer or the "
+                               "provider's support as its evidence.")
+        if received in (None, ""):
+            raise CashoutError("RECEIVED_REQUIRED",
+                               "A verified figure needs the amount the beneficiary received, read from the evidence.")
+        if _provider_number(received, "amount received") != net:
+            raise CashoutError("AMOUNTS_DO_NOT_ADD_UP",
+                               "The amount received does not equal the payout less the fee. Check the evidence; "
+                               "if it really differs, record the figures as not verified and review the payout.")
+    old = ({"network_fee": _exact(cashout.network_fee_actual), "net_received": _exact(cashout.net_received),
+            "reconciliation": cashout.fee_reconciliation, "evidence": cashout.fee_evidence} if replacing else None)
     cashout.network_fee_actual = exact
-    cashout.net_received = received
+    cashout.net_received = net
     cashout.network_fee_source = source
+    cashout.fee_evidence = evidence
+    cashout.fee_reconciliation = ((RECONCILED_BY_PROVIDER if by_provider else RECONCILED_BY_ADMIN) if verified
+                                  else (UNVERIFIED_PROVIDER if by_provider else UNVERIFIED_ADMIN))
     cashout.fee_flag = flag or cashout.fee_flag
     db.flush()
-    _audit(db, record_id=cashout.id, action="CASHOUT_MEMBER_FEE_RECORDED", actor_id=actor_id, old=None,
+    _audit(db, record_id=cashout.id, action="CASHOUT_MEMBER_FEE_RECORDED", actor_id=actor_id, old=old,
            new={"source": source, "charged_to": charged_to, "gross": str(gross), "network_fee": _exact(exact),
-                "net_received": _exact(received), "estimate": _exact(cashout.network_fee_estimate),
+                "net_received": _exact(net), "estimate": _exact(cashout.network_fee_estimate),
+                "estimate_adjusted": _exact(cashout.fee_estimate_adjusted),
                 "fee_cap": _exact(cashout.fee_cap), "amount_sent": _exact(cashout.amount_sent),
+                "reconciliation": cashout.fee_reconciliation, "evidence": evidence, "verified": bool(verified),
                 "flag": cashout.fee_flag, "fee_paid_by": reported_by,
                 "reference": (str(reference).strip()[:200] or None) if reference else None,
                 "payout_currency": cashout.payout_currency,
                 "valuation": "1 USDT = 1 USD (ledger convention, no market rate applied)"})
     return cashout.fee_flag
+
+
+def _flag(db: Session, cashout: AffiliateCashoutRequest, flag: str, **details) -> None:
+    cashout.fee_flag = flag
+    db.flush()
+    _audit(db, record_id=cashout.id, action="CASHOUT_FEE_FLAGGED", actor_id=None, old=None,
+           new={"flag": flag, **details})
 
 
 def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, details: dict,
@@ -1068,11 +1212,14 @@ def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, de
     has just been completed. Runs in a savepoint and never raises: a payout is
     completed whether or not its fee can be recorded.
 
-    The provider documents neither the values of `fee_paid_by` nor the unit of
-    `fee`, so nothing is recorded unless the payer value is one that was
+    The provider documents neither the values of `fee_paid_by`, nor the unit
+    of `fee`, nor whether `amount` is what it was asked to send or what the
+    beneficiary received. So nothing is recorded unless the payer value was
     confirmed with it (NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES / ..._COMPANY_
-    VALUES). Until then the payout stays listed as "actual fee not recorded"
-    for an administrator."""
+    VALUES), and what is recorded counts as VERIFIED only when the meaning of
+    `amount` was confirmed too (NOWPAYMENTS_PAYOUT_AMOUNT_MEANS) and the
+    reported amount agrees with it. Everything short of that leaves the payout
+    unreconciled for an administrator."""
     if not member_fee_applies(cashout):
         return FEE_NOT_APPLICABLE
     reported, payer = details.get("fee"), str(details.get("fee_paid_by") or "").strip().lower()
@@ -1081,33 +1228,39 @@ def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, de
             sent = Decimal(str(cashout.amount_sent)) if cashout.amount_sent is not None else None
             try:
                 paid = Decimal(str(details.get("amount"))) if details.get("amount") not in (None, "") else None
+                paid = paid if paid is not None and paid.is_finite() else None
             except Exception:  # noqa: BLE001
                 paid = None
-            if sent is not None and paid is not None and paid.is_finite() and paid > sent:
+            if sent is not None and paid is not None and paid > sent:
                 # More left than was asked for: whatever the cause, it is not the configured behaviour.
-                cashout.fee_flag = FLAG_AMOUNT_MISMATCH
-                db.flush()
-                _audit(db, record_id=cashout.id, action="CASHOUT_FEE_FLAGGED", actor_id=None, old=None,
-                       new={"flag": FLAG_AMOUNT_MISMATCH, "amount_sent": _exact(sent), "provider_amount": _exact(paid)})
+                _flag(db, cashout, FLAG_AMOUNT_MISMATCH, amount_sent=_exact(sent), provider_amount=_exact(paid))
             if payer and payer in payment_config.company_fee_payer_values():
                 if reported in (None, ""):
-                    cashout.fee_flag = FLAG_MODE_MISMATCH
-                    db.flush()
-                    _audit(db, record_id=cashout.id, action="CASHOUT_FEE_FLAGGED", actor_id=None, old=None,
-                           new={"flag": FLAG_MODE_MISMATCH, "fee_paid_by": payer})
+                    _flag(db, cashout, FLAG_MODE_MISMATCH, fee_paid_by=payer)
                     return FLAG_MODE_MISMATCH
                 record_member_fee(db, cashout, amount=reported, charged_to=CHARGED_TO_BALANCE,
                                   source=FEE_SOURCE_PROVIDER, actor_id=None, now=now,
-                                  reference=cashout.provider_batch_id, reported_by=payer)
+                                  evidence=EVIDENCE_PROVIDER_API, reference=cashout.provider_batch_id,
+                                  reported_by=payer)
                 return cashout.fee_flag or FEE_POSTED
             if reported in (None, ""):
                 return "NOT_REPORTED"
             if not payer or payer not in payment_config.receiver_fee_payer_values():
                 return "PAYER_NOT_CONFIRMED"
+            fee = _provider_number(reported, "network fee")
+            # Is the amount the provider reports the one its confirmed meaning predicts?
+            meaning = payment_config.payout_amount_semantics()
+            expected = None if sent is None or not meaning else (sent if meaning == "REQUESTED" else sent - fee)
+            agrees = expected is not None and paid is not None and paid == expected
+            if expected is not None and paid is not None and not agrees and cashout.fee_flag is None:
+                _flag(db, cashout, FLAG_AMOUNT_MISMATCH, amount_sent=_exact(sent), provider_amount=_exact(paid),
+                      expected_amount=_exact(expected), amount_means=meaning)
+            verified = bool(agrees and cashout.fee_flag is None and sent is not None and sent > fee)
             record_member_fee(db, cashout, amount=reported, charged_to=CHARGED_TO_PAYOUT,
-                              source=FEE_SOURCE_PROVIDER, actor_id=None, now=now,
+                              source=FEE_SOURCE_PROVIDER, actor_id=None, now=now, evidence=EVIDENCE_PROVIDER_API,
+                              verified=verified, received=(money(cashout.gross_amount) - fee) if verified else None,
                               reference=cashout.provider_batch_id, reported_by=payer)
-            return cashout.fee_flag or "RECORDED"
+            return cashout.fee_flag or ("RECORDED" if verified else "RECORDED_UNVERIFIED")
     except CashoutError as exc:
         logger.warning("Cashout %s: the provider's network fee was not recorded (%s)", cashout.id, exc.code)
         return exc.code
@@ -1117,29 +1270,60 @@ def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, de
 
 
 def record_member_fee_by_admin(db: Session, cashout: AffiliateCashoutRequest, *, admin: User, amount,
-                               charged_to: Optional[str], reference: str,
+                               charged_to: Optional[str], reference: str, evidence: Optional[str] = None,
+                               verified: bool = False, received=None,
                                now: Optional[datetime] = None) -> AffiliateCashoutRequest:
     """An authorised administrator records the actual network fee of a
-    beneficiary-paid payout from the provider's statement, and where the
-    provider took it from. Commits. A fee that does not add up stops further
-    payouts (the provider fee behaviour goes back to UNVERIFIED)."""
+    beneficiary-paid payout, where the provider took it from, and WHERE the
+    figures were read. Commits. Marked verified (with the amount received)
+    the payout counts as reconciled; otherwise the figures are kept as
+    unverified and it does not. A fee that does not add up suspends payouts.
+    Recording a fee never lifts a suspension."""
     now = now or datetime.utcnow()
     _require_processor(admin)
     reference = str(reference or "").strip()
     if len(reference) < 3:
         raise CashoutError("REFERENCE_REQUIRED", "Say where the fee was read (the provider's payout id or statement).")
+    evidence = str(evidence or "").strip().upper()
+    if evidence not in ADMIN_EVIDENCE:
+        raise CashoutError("EVIDENCE_REQUIRED", "Say where the figures were read: " + ", ".join(ADMIN_EVIDENCE) + ".")
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
               .with_for_update().one())
     try:
         flag = record_member_fee(db, locked, amount=amount, charged_to=str(charged_to or "").strip().upper(),
-                                 source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now, reference=reference)
+                                 source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now, evidence=evidence,
+                                 verified=bool(verified), received=received, reference=reference)
         if flag in SUSPENDING_FLAGS:
-            payment_config.suspend_fee_mode(db, reason=flag, cashout_id=int(locked.id))
+            payment_config.suspend_payouts(db, reason=flag, cashout_id=int(locked.id), now=now)
     except Exception:
         db.rollback()
         raise
     db.commit()
     return locked
+
+
+def reactivate_payouts(db: Session, admin: User, *, password: Optional[str], confirmation: Optional[str],
+                       note: Optional[str], ip: Optional[str] = None) -> PaymentConfig:
+    """Lift a payout suspension after an administrator's review. Commits.
+    Refused while a completed payout's actual fee is still missing or
+    unverified beyond what the configuration allows: the payout that caused
+    the suspension has to be reconciled first (the recording gate would hold
+    payouts back anyway). Everything else is checked by payment_config."""
+    # Who is asking comes first: nothing about the payouts is told to anyone else.
+    if not payment_config.has_permission(admin, payment_config.PERMISSION_MANAGE):
+        raise payment_config.PaymentConfigError(
+            "FORBIDDEN", f"The {payment_config.PERMISSION_MANAGE} permission is required.")
+    payment_config.require_reauth(admin, password)
+    config = payment_config.load(db)
+    if config.suspended_reason:
+        pending = reconciliation_exposure(db)["completed_unreconciled"]
+        if pending > int(config.max_unreconciled_payouts):
+            db.rollback()
+            raise payment_config.PaymentConfigError(
+                "UNSAFE_ACTIVATION",
+                f"Resolve this first: {pending} completed payout(s) have no verified actual network fee.")
+    return payment_config.reactivate_payouts(db, admin, password=password, confirmation=confirmation, note=note,
+                                             ip=ip)
 
 
 def member_fee_view(cashout: AffiliateCashoutRequest) -> dict:
@@ -1149,9 +1333,14 @@ def member_fee_view(cashout: AffiliateCashoutRequest) -> dict:
     return {"applies": bool(paid_by_member and cashout.cashout_method == METHOD_CRYPTO),
             "provider_fee_mode": cashout.provider_fee_mode,
             "gross": str(money(cashout.gross_amount)), "amount_sent": _exact(cashout.amount_sent),
-            "estimate": _exact(cashout.network_fee_estimate), "actual": _exact(cashout.network_fee_actual),
+            "estimate": _exact(cashout.network_fee_estimate),
+            "estimate_adjusted": _exact(cashout.fee_estimate_adjusted),
+            "margin_percent": _exact(cashout.fee_margin_percent),
+            "actual": _exact(cashout.network_fee_actual),
             "net_received": _exact(cashout.net_received), "fee_cap": _exact(cashout.fee_cap),
             "source": cashout.network_fee_source, "flag": cashout.fee_flag,
+            "reconciliation": cashout.fee_reconciliation, "evidence": cashout.fee_evidence,
+            "reconciled": fee_reconciled(cashout),
             "status": (FEE_NOT_APPLICABLE if not member_fee_applies(cashout)
                        else "RECORDED" if recorded else FEE_NOT_RECORDED)}
 
@@ -1166,7 +1355,13 @@ def member_fee_summary(db: Session, *, limit: int = 200) -> dict:
             .order_by(AffiliateCashoutRequest.id.desc()).limit(2000).all())
     recorded = [r for r in rows if r.network_fee_actual is not None]
     zero = Decimal("0")
-    return {"completed_count": len(rows),
+    return {"exposure": reconciliation_exposure(db),
+            "verified_count": sum(1 for r in rows if fee_reconciled(r)),
+            "not_verified": [{"cashout_id": r.id, "user_id": r.user_id, "reconciliation": r.fee_reconciliation,
+                              "actual": _exact(r.network_fee_actual)}
+                             for r in recorded if not fee_reconciled(r)][:limit],
+            "amount_meaning_confirmed": bool(payment_config.payout_amount_semantics()),
+            "completed_count": len(rows),
             "gross_total": format(sum((money(r.gross_amount) for r in rows), zero), "f"),
             "recorded_count": len(recorded),
             "fee_total": _exact(sum((Decimal(str(r.network_fee_actual)) for r in recorded), zero)),
@@ -1349,6 +1544,8 @@ def resolve_uncertain(db: Session, cashout: AffiliateCashoutRequest, *, admin: U
     if outcome == "SENT":
         complete(db, locked, settlement_reference=(reference or locked.provider_batch_id or ""),
                  cash_account=payment_config.load(db).treasury_account, actor_id=admin.id, now=now)
+        # Settled by hand: nothing is known about its actual fee yet, so it counts
+        # as unreconciled and the recording gate holds further payouts back.
     elif outcome == "NOT_SENT":
         release_reservation(db, locked, status=CashoutStatus.FAILED.value,
                             failure_code="RESOLVED_NOT_SENT_BY_ADMIN", actor_id=admin.id, now=now)
@@ -1483,8 +1680,9 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         },
         "fees": {
             "CRYPTO": {"platform_fee": 0.0, "network_fee_policy": config.network_fee_policy,
-                       "note": ("No MyHigh5 fee. The blockchain network fee is taken out of the amount sent: "
-                                "you receive the payout less that fee."
+                       "note": (f"No MyHigh5 fee. You pay the blockchain network fee: {config.provider_display_name} "
+                                "deducts it from the amount sent and you receive the rest. The fee shown before "
+                                "a payout is an estimate; the actual fee may differ."
                                 if member_pays else
                                 "No MyHigh5 fee. The blockchain network fee is paid by MyHigh5."),
                        "terms": {**terms, "accepted": consent is not None,

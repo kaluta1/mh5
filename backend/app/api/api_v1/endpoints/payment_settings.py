@@ -75,6 +75,14 @@ class ReauthBody(BaseModel):
     current_password: str = Field(default="", max_length=256)
 
 
+class ReactivationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(default="", max_length=256)
+    confirmation: str = Field(default="", max_length=60)
+    # What the administrator reviewed and how it was resolved. Kept in the configuration history.
+    note: str = Field(default="", max_length=500)
+
+
 # ---------------------------------------------------------------------------
 # Read
 # ---------------------------------------------------------------------------
@@ -212,6 +220,25 @@ def update_settings(body: SettingsBody, request: Request, db: Session = Depends(
     try:
         config.update_settings(db, actor, body.changes, password=body.current_password,
                                confirmation=body.confirmation, ip=client_ip(request))
+    except config.PaymentConfigError as exc:
+        db.rollback()
+        raise _http_error(exc) from None
+    return config.settings_view(db)
+
+
+@router.post("/payouts/reactivate")
+def reactivate_payouts(body: ReactivationBody, request: Request, db: Session = Depends(get_db),
+                       actor: User = Depends(get_current_active_user)):
+    """Lift a crypto payout suspension after an administrator's review. A
+    separate act from every setting: it needs the manage_payment_settings
+    permission, the current password, the typed phrase and a review note, and
+    is refused while the cause is not resolved. It sends nothing and does not
+    switch automatic payouts on."""
+    from app.services import cashout_service
+
+    try:
+        cashout_service.reactivate_payouts(db, actor, password=body.current_password,
+                                           confirmation=body.confirmation, note=body.note, ip=client_ip(request))
     except config.PaymentConfigError as exc:
         db.rollback()
         raise _http_error(exc) from None

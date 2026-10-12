@@ -51,6 +51,9 @@ from tests.unit.test_payment_config import plain_admin
 pytestmark = pytest.mark.unit
 
 RECEIVER_ENV, COMPANY_ENV = "NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES", "NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES"
+AMOUNT_ENV = "NOWPAYMENTS_PAYOUT_AMOUNT_MEANS"
+# An administrator read the figures from the provider's statement but did not verify them.
+STATEMENT = dict(evidence="PROVIDER_STATEMENT")
 
 
 @pytest.fixture
@@ -65,13 +68,21 @@ def books(ledger):
 
 @pytest.fixture
 def payers_confirmed(monkeypatch):
-    """Both of the provider's payer values have been confirmed with it (synthetic values)."""
+    """Both of the provider's payer values and the meaning of its `amount`
+    have been confirmed with it (synthetic values)."""
     monkeypatch.setenv(RECEIVER_ENV, "receiver")
     monkeypatch.setenv(COMPANY_ENV, "sender")
+    monkeypatch.setenv(AMOUNT_ENV, "REQUESTED")
 
 
-def finish(db, provider_, *, fee=None, paid_by=None, amount=None, batch="batch-1", now=NOW):
+def finish(db, provider_, *, fee=None, paid_by=None, amount="sent", batch="batch-1", now=NOW):
+    """The provider reports the payout finished. By default it reports the
+    amount it was asked to send; `amount=None` makes it report none."""
     details = {"status": "FINISHED", "address": WALLET, "fee": fee, "fee_paid_by": paid_by}
+    if amount == "sent":
+        db.expire_all()
+        sent = db.query(AffiliateCashoutRequest.amount_sent).filter_by(provider_batch_id=batch).scalar()
+        amount = str(sent) if sent is not None else None
     if amount is not None:
         details["amount"] = amount
     provider_.details[batch] = details
@@ -100,6 +111,7 @@ def discrepancy_types(db) -> list:
     (dict(network_fee_policy="COMPANY_PAYS"), "FEE_POLICY_NOT_BENEFICIARY_PAID"),
     (dict(member_fee_cap_percent=Decimal("0"), member_fee_cap_usd=Decimal("0")), "FEE_LIMITS_NOT_CONFIGURED"),
     (dict(fee_terms_approved=False), "FEE_LIMITS_NOT_APPROVED"),
+    (dict(fee_estimate_margin_percent=None), "FEE_SAFETY_MARGIN_NOT_SET"),
 ])
 def test_no_payout_is_created_unless_the_network_fee_rules_are_in_force(ledger, engine_on, change, code):
     db = ledger
@@ -211,7 +223,8 @@ def test_a_member_who_has_not_accepted_the_fee_terms_is_not_paid(ledger, engine_
     assert summary["status"] == "FEE_TERMS_REQUIRED"
     assert summary["fees"]["CRYPTO"]["terms"] == {
         "available": True, "version": 1, "cap_percent": "10", "cap_usd": "1", "valid_days": 0,
-        "minimum_received": 0.01, "accepted": False, "accepted_at": None, "expires_at": None}
+        "minimum_received": 0.01, "provider": "NOWPayments", "limit_applies_to": "ESTIMATE",
+        "actual_fee_guaranteed": False, "accepted": False, "accepted_at": None, "expires_at": None}
     cs.accept_fee_terms(db, user, version=1, cap_percent="10", cap_usd="1.00", ip="203.0.113.9", now=NOW)
     assert cs.summary(db, user, now=NOW)["status"] == "AUTOMATIC_PAYOUT_PENDING"
     assert run(db, provider_)["members"] == {"SUBMITTED": 1}
@@ -333,13 +346,13 @@ def test_the_fee_behaviour_suspended_between_reservation_and_sending_cancels_the
 
     def reserve_then_suspend(db_, user_, rows, **kwargs):
         cashout = real_reserve(db_, user_, rows, **kwargs)
-        pc.suspend_fee_mode(db_, reason="PROVIDER_FEE_MODE_MISMATCH", cashout_id=None)
+        pc.suspend_payouts(db_, reason="PROVIDER_FEE_MODE_MISMATCH", cashout_id=None)
         db_.commit()
         return cashout
 
     monkeypatch.setattr(cs, "reserve", reserve_then_suspend)
     provider_ = RichProvider()
-    assert run(db, provider_)["members"] == {"PROVIDER_FEE_MODE_UNVERIFIED": 1}
+    assert run(db, provider_)["members"] == {"PAYOUTS_SUSPENDED": 1}
     assert cashouts(db, user)[0].status == "cancelled" and provider_.created == []
 
 
@@ -428,7 +441,7 @@ def test_an_actual_fee_cannot_leave_the_member_with_nothing(books, engine_on):
     for amount in ("5.00", "5.01", "-0.01", "0.123456789", "abc"):
         with pytest.raises(cs.CashoutError) as error:
             cs.record_member_fee_by_admin(db, row, admin=admin, amount=amount, charged_to="PAYOUT_AMOUNT",
-                                          reference="statement 1", now=NOW)
+                                          reference="statement 1", now=NOW, **STATEMENT)
         assert error.value.code == "INVALID_FEE"
     assert cashouts(db, user)[0].network_fee_actual is None
 
@@ -476,7 +489,8 @@ def test_account_5005_is_never_used_for_a_beneficiary_paid_payout(client, books,
     assert cs.network_fee_state(db, row)["status"] == "NOT_APPLICABLE"
     # Even a fee the provider wrongly charged to MyHigh5 is recorded and flagged, not posted.
     answer = client.post(f"/api/v1/admin/cashouts/{row.id}/network-fee", headers=auth(admin),
-                         json={"amount": "0.25", "reference": "statement 1", "charged_to": "PROVIDER_BALANCE"})
+                         json={"amount": "0.25", "reference": "statement 1", "charged_to": "PROVIDER_BALANCE",
+                               "evidence": "PROVIDER_STATEMENT"})
     assert answer.status_code == 200
     assert _balance(db, "5005") == 0 and db.query(JournalEntry).count() == 1
     assert db.query(AuditTrail).filter(AuditTrail.action.like("CASHOUT_NETWORK_FEE%")).count() == 0
@@ -498,7 +512,7 @@ def test_a_payout_that_did_not_complete_posts_nothing_and_records_no_fee(books, 
     assert row.network_fee_actual is None and row.net_received is None and row.fee_flag is None
     with pytest.raises(cs.CashoutError) as error:
         cs.record_member_fee_by_admin(db, row, admin=admin, amount="0.25", charged_to="PAYOUT_AMOUNT",
-                                      reference="statement 1", now=NOW)
+                                      reference="statement 1", now=NOW, **STATEMENT)
     assert error.value.code == "NOT_COMPLETED"
     balance = get_commission_balance(db, user.id)
     # Rejected: the whole commission is owed again. Otherwise it stays reserved.
@@ -524,7 +538,7 @@ def test_an_unknown_outcome_settled_as_sent_waits_for_its_actual_fee(books, engi
     assert _balance(db, "1001") == Decimal("-5.00") and _balance(db, "5005") == 0
     assert discrepancy_types(db) == [("MEMBER_FEE_NOT_RECORDED", "warning")]
     cs.record_member_fee_by_admin(db, row, admin=admin, amount="0.21", charged_to="PAYOUT_AMOUNT",
-                                  reference="statement 1", now=NOW)
+                                  reference="statement 1", now=NOW, verified=True, received="4.79", **STATEMENT)
     assert cashouts(db, user)[0].net_received == Decimal("4.79") and discrepancy_types(db) == []
 
 
@@ -568,7 +582,7 @@ def test_a_fee_charged_to_the_myhigh5_balance_is_flagged_and_stops_new_payouts(b
     provider_ = RichProvider()
     assert run(db, provider_)["members"] == {"SUBMITTED": 2}
     report = finish(db, provider_, fee="0.25", paid_by="sender")
-    assert report["reconciled"] == {"COMPLETED": 1, "PENDING": 1} and report["stopped"] == "PROVIDER_FEE_MODE_UNVERIFIED"
+    assert report["reconciled"] == {"COMPLETED": 1, "PENDING": 1} and report["stopped"] == "PAYOUTS_SUSPENDED"
     row = cashouts(db, first)[0]
     # The member received the whole amount; nothing is taken from them afterwards.
     assert (row.network_fee_actual, row.net_received, row.fee_flag) == (Decimal("0.25"), Decimal("5.00"),
@@ -576,7 +590,7 @@ def test_a_fee_charged_to_the_myhigh5_balance_is_flagged_and_stops_new_payouts(b
     assert _balance(db, "5005") == 0 and _balance(db, "1001") == Decimal("-5.00")    # not booked by itself
     config = pc.load(db)
     assert (config.provider_fee_mode, config.fee_terms_approved) == ("UNVERIFIED", False)
-    suspended = db.query(PaymentConfigAudit).filter_by(action="PROVIDER_FEE_MODE_SUSPENDED").one()
+    suspended = db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_SUSPENDED").one()
     assert suspended.new_values["reason"] == "PROVIDER_FEE_MODE_MISMATCH" and suspended.new_values["cashout_id"] == row.id
     assert ("PROVIDER_FEE_MODE_MISMATCH", "critical") in discrepancy_types(db)
     # A third member is not paid, and the payout already at the provider is still reconciled.
@@ -593,7 +607,8 @@ def test_the_payer_reported_without_a_fee_still_shows_the_mismatch(books, engine
     row, _ = paid_out(db, user, fee=None, paid_by="sender")
     assert (row.fee_flag, row.network_fee_actual) == ("PROVIDER_FEE_MODE_MISMATCH", None)
     assert pc.load(db).provider_fee_mode == "UNVERIFIED"
-    assert set(discrepancy_types(db)) == {("PROVIDER_FEE_MODE_MISMATCH", "critical"),
+    assert set(discrepancy_types(db)) == {("PAYOUTS_SUSPENDED", "critical"),
+                                          ("PROVIDER_FEE_MODE_MISMATCH", "critical"),
                                           ("MEMBER_FEE_NOT_RECORDED", "warning")}
 
 
@@ -605,13 +620,18 @@ def test_a_provider_that_reports_more_than_it_was_asked_to_send_is_flagged(books
     assert ("PROVIDER_AMOUNT_MISMATCH", "critical") in discrepancy_types(db)
 
 
-@pytest.mark.parametrize("amount", ["5.00", "5", "4.98", "4.7"])
-def test_an_amount_at_or_below_the_one_sent_proves_nothing_and_raises_no_flag(books, engine_on, payers_confirmed,
-                                                                              amount):
+@pytest.mark.parametrize("amount", ["5.00", "5", "4.98", "4.7", None])
+def test_while_the_meaning_of_the_amount_is_not_confirmed_it_proves_nothing(books, engine_on, payers_confirmed,
+                                                                            monkeypatch, amount):
+    """Whether `amount` is what was requested or what was received is not
+    documented. Until it is confirmed, an amount at or below the one sent
+    raises no flag, and the fee it comes with is recorded as NOT verified."""
+    monkeypatch.delenv(AMOUNT_ENV)
     db = books
     user = paid_member(db)
     row, _ = paid_out(db, user, fee="0.02", paid_by="receiver", amount=amount)
     assert row.fee_flag is None and row.net_received == Decimal("4.98")
+    assert row.fee_reconciliation == "PROVIDER_UNVERIFIED" and cs.fee_reconciled(row) is False
     assert pc.load(db).provider_fee_mode == "DEDUCTED_BY_PROVIDER"
 
 
@@ -643,7 +663,7 @@ def test_the_outcome_is_recorded_once_however_often_the_payout_is_looked_at(book
     assert db.query(JournalEntry).count() == 1
     with pytest.raises(cs.CashoutError) as error:
         cs.record_member_fee(db, db.get(AffiliateCashoutRequest, row.id), amount="0.30", charged_to="PAYOUT_AMOUNT",
-                             source=cs.FEE_SOURCE_ADMIN, actor_id=None, now=NOW)
+                             source=cs.FEE_SOURCE_ADMIN, actor_id=None, now=NOW, **STATEMENT)
     db.rollback()
     assert error.value.code == "FEE_ALREADY_RECORDED" and cashouts(db, user)[0].network_fee_actual == Decimal("0.25")
 
@@ -661,20 +681,23 @@ def test_an_administrator_records_the_actual_fee_from_the_providers_statement(cl
     detail = client.get(f"/api/v1/admin/cashouts/{row.id}", headers=auth(admin)).json()
     assert detail["cashout"]["beneficiary_fee"] == {
         "applies": True, "provider_fee_mode": "DEDUCTED_BY_PROVIDER", "gross": "5.00", "amount_sent": "5",
-        "estimate": "0.02", "actual": None, "net_received": None, "fee_cap": "0.5", "source": None, "flag": None,
-        "status": "NOT_RECORDED"}
-    missing = client.post(url, headers=auth(admin), json={"amount": "0.0234", "reference": "payout 5000000713"})
+        "estimate": "0.02", "estimate_adjusted": "0.02", "margin_percent": "0", "actual": None,
+        "net_received": None, "fee_cap": "0.5", "source": None, "flag": None, "reconciliation": None,
+        "evidence": None, "reconciled": False, "status": "NOT_RECORDED"}
+    body = {"amount": "0.0234", "reference": "payout 5000000713", "evidence": "PROVIDER_STATEMENT"}
+    missing = client.post(url, headers=auth(admin), json=body)
     assert missing.status_code == 422 and missing.json()["detail"]["code"] == "CHARGED_TO_REQUIRED"
-    answer = client.post(url, headers=auth(admin), json={"amount": "0.0234", "reference": "payout 5000000713",
-                                                        "charged_to": "PAYOUT_AMOUNT"})
+    no_evidence = client.post(url, headers=auth(admin), json={"amount": "0.0234", "reference": "payout 5000000713",
+                                                             "charged_to": "PAYOUT_AMOUNT"})
+    assert no_evidence.status_code == 422 and no_evidence.json()["detail"]["code"] == "EVIDENCE_REQUIRED"
+    answer = client.post(url, headers=auth(admin), json={**body, "charged_to": "PAYOUT_AMOUNT"})
     assert answer.status_code == 200
     fee = answer.json()["cashout"]["beneficiary_fee"]
     assert (fee["status"], fee["actual"], fee["net_received"], fee["source"], fee["flag"]) == (
         "RECORDED", "0.0234", "4.9766", "ADMIN_RECORDED", None)
     recorded = db.query(AuditTrail).filter_by(action="CASHOUT_MEMBER_FEE_RECORDED", record_id=row.id).one()
     assert recorded.user_id == admin.id and recorded.new_values["reference"] == "payout 5000000713"
-    again = client.post(url, headers=auth(admin), json={"amount": "0.03", "reference": "payout 5000000713",
-                                                       "charged_to": "PAYOUT_AMOUNT"})
+    again = client.post(url, headers=auth(admin), json={**body, "amount": "0.03", "charged_to": "PAYOUT_AMOUNT"})
     assert again.status_code == 409 and again.json()["detail"]["code"] == "FEE_ALREADY_RECORDED"
     assert db.query(JournalEntry).count() == 1 and _balance(db, "5005") == 0
     assert pc.load(db).provider_fee_mode == "DEDUCTED_BY_PROVIDER"
@@ -691,7 +714,7 @@ def test_what_an_administrator_records_can_also_stop_new_payouts(client, books, 
     admin = member(db, "boss", admin=True)
     row, _ = paid_out(db, user)
     answer = client.post(f"/api/v1/admin/cashouts/{row.id}/network-fee", headers=auth(admin),
-                         json={**body, "reference": "statement October"})
+                         json={**body, "reference": "statement October", "evidence": "PROVIDER_STATEMENT"})
     assert answer.status_code == 200 and answer.json()["cashout"]["beneficiary_fee"]["flag"] == flag
     assert pc.load(db).provider_fee_mode == "UNVERIFIED" and pc.load(db).fee_terms_approved is False
     assert (flag, "critical") in discrepancy_types(db)
@@ -703,7 +726,7 @@ def test_a_fee_of_nothing_can_be_confirmed(books, engine_on):
     admin = member(db, "boss", admin=True)
     row, _ = paid_out(db, user)
     cs.record_member_fee_by_admin(db, row, admin=admin, amount="0", charged_to="PAYOUT_AMOUNT",
-                                  reference="statement 1", now=NOW)
+                                  reference="statement 1", now=NOW, verified=True, received="5.00", **STATEMENT)
     row = cashouts(db, user)[0]
     assert (row.network_fee_actual, row.net_received, row.fee_flag) == (0, Decimal("5.00"), None)
     assert discrepancy_types(db) == []
@@ -714,7 +737,8 @@ def test_recording_an_actual_fee_needs_the_process_cashouts_permission(client, b
     user = paid_member(db)
     row, _ = paid_out(db, user)
     url = f"/api/v1/admin/cashouts/{row.id}/network-fee"
-    body = {"amount": "0.25", "reference": "statement 1", "charged_to": "PAYOUT_AMOUNT"}
+    body = {"amount": "0.25", "reference": "statement 1", "charged_to": "PAYOUT_AMOUNT",
+            "evidence": "PROVIDER_STATEMENT"}
     assert client.post(url, json=body).status_code in (401, 403)
     assert client.post(url, headers=auth(user), json=body).status_code == 403                 # a member
     assert client.post(url, headers=auth(plain_admin(db)), json=body).status_code == 403      # an admin without it
@@ -743,6 +767,9 @@ def test_the_fee_behaviour_and_the_limits_need_a_confirmation_and_a_separate_app
     assert refused({"member_fee_cap_usd": "1.00", "fee_terms_approved": True},
                    confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"
     pc.update_settings(db, admin, {"member_fee_cap_usd": "1.00"}, password=PASSWORD, now=NOW)
+    assert pc.load(db).fee_gate() == "FEE_SAFETY_MARGIN_NOT_SET"
+    assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"  # no margin
+    pc.update_settings(db, admin, {"fee_estimate_margin_percent": "0"}, password=PASSWORD, now=NOW)
     assert pc.load(db).fee_gate() == "FEE_LIMITS_NOT_APPROVED"
     assert refused({"fee_terms_approved": True}) == "CONFIRMATION_REQUIRED"
     config = pc.update_settings(db, admin, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
@@ -791,7 +818,7 @@ def test_reconciliation_shows_gross_fee_and_received_and_what_is_still_open(book
     assert report["network_fee_gate"] is None and engine.discrepancies(db) == []
     admin = member(db, "boss", admin=True)
     cs.record_member_fee_by_admin(db, row_b, admin=admin, amount="0.0501", charged_to="PAYOUT_AMOUNT",
-                                  reference="statement 1", now=NOW)
+                                  reference="statement 1", now=NOW, verified=True, received="6.9499", **STATEMENT)
     report = engine.reconciliation_report(db, now=NOW)
     fees = report["beneficiary_fees"]
     assert report["discrepancies"] == [] and fees["not_recorded_count"] == 0

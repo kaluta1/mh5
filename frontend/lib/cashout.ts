@@ -23,6 +23,8 @@ export type BeneficiaryFee = {
   applies: boolean
   gross: string
   estimate: string | null
+  /** The estimate with the safety margin added: what was compared with the limit. Still an estimate. */
+  estimate_adjusted?: string | null
   /** Known only once the provider has sent the payout. Never an estimate. */
   actual: string | null
   net_received: string | null
@@ -41,6 +43,11 @@ export type FeeTerms = {
   cap_usd: string
   valid_days: number
   minimum_received: number
+  /** Who deducts the fee (the payout provider's name). */
+  provider?: string
+  /** The limit is checked against the provider's estimate; the actual fee is not guaranteed. */
+  limit_applies_to?: 'ESTIMATE'
+  actual_fee_guaranteed?: boolean
   accepted: boolean
   accepted_at: string | null
   expires_at: string | null
@@ -127,11 +134,13 @@ export function cashoutStatusText(summary: CashoutSummary): string {
         summary.destination.payable_from,
       )}.`
     case 'FEE_TERMS_REQUIRED':
-      return 'Accept the network fee terms below to receive automatic crypto payouts. Your balance is kept in full until you do.'
+      return 'Read and accept the network fee terms below to receive automatic crypto payouts. You pay the network fee and receive the remaining amount. Your balance is kept in full until you accept.'
     case 'BELOW_MINIMUM':
       return `Your balance is below the ${minimum} minimum for ${methodLabel(summary.cashout_method)}.`
     case 'AUTOMATIC_PAYOUT_PENDING':
-      return 'Your balance will be sent to your wallet automatically in the next payout run.'
+      return summary.fees.CRYPTO.network_fee_policy === 'MEMBER_PAYS'
+        ? 'Your balance will be sent to your wallet automatically in a coming payout run, less the network fee. The fee is estimated before the payout; the actual fee may differ.'
+        : 'Your balance will be sent to your wallet automatically in the next payout run.'
     case 'AUTOMATIC_PAYOUT_NOT_ACTIVE':
       return 'Automatic crypto payouts are not active yet. Your balance is kept in full and will be paid once they start.'
     case 'READY_TO_REQUEST':
@@ -177,7 +186,7 @@ export function formatExact(value: string | null | undefined): string {
   return `$${whole}.${fraction.padEnd(2, '0')}`
 }
 
-/** The highest network fee the terms allow, in words. Empty when no limit is set. */
+/** The limit the fee ESTIMATE is checked against, in words. Empty when none is set. It does not bound the actual fee. */
 export function feeLimitText(terms: Pick<FeeTerms, 'cap_percent' | 'cap_usd'>): string {
   const percent = Number(terms.cap_percent) > 0 ? `${terms.cap_percent}% of the payout` : ''
   const amount = Number(terms.cap_usd) > 0 ? formatExact(terms.cap_usd) : ''

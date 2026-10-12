@@ -326,8 +326,10 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
         # checks that the provider behaved as configured. If it did not, no further
         # payout is created until a person has looked.
         cs.record_provider_member_fee(db, cashout, details, now)
-        if cashout.fee_flag in cs.SUSPENDING_FLAGS:
-            payment_config.suspend_fee_mode(db, reason=cashout.fee_flag, cashout_id=cashout_id)
+        # A confirmed inconsistency suspends ALL payouts until an administrator
+        # reviews it and reactivates them; nothing here ever lifts a suspension.
+        # A fee that is only missing or unverified is left to the recording gate.
+        cs.suspend_if_inconsistent(db, cashout)
         db.commit()
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:
@@ -500,12 +502,21 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         return stop(problem)
     send = plan["amount_sent"]
     expected = amount - estimate
+    adjusted = plan["fee_estimate_adjusted"]        # the estimate raised by the safety margin
     # Whether the provider's minimum applies before or after its fee is not
     # documented; both checks below assume the stricter reading.
-    if expected < facts["minimum"]:
+    if amount - adjusted < facts["minimum"]:
         return stop("BELOW_PROVIDER_MINIMUM")
-    if facts["balance"] - money(config.provider_balance_reserve_usd) < amount + estimate:
+    if facts["balance"] - money(config.provider_balance_reserve_usd) < amount + adjusted:
         return stop("INSUFFICIENT_PROVIDER_BALANCE")
+    # Recording gate. From here until the reservation is committed this worker
+    # holds the settings lock, so the count of payouts whose actual fee is not
+    # verified yet (across ALL members) and the suspension are decided by one
+    # worker at a time: two workers cannot both pass for different members.
+    locked_config = payment_config.lock_settings(db)
+    blocked = locked_config.fee_gate() or cs.recording_gate(db, locked_config)
+    if blocked is not None:
+        return stop(blocked)
     intent_ref = _intent_reference(user.id, None)
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
                          now=now, wallet=wallet.address, currency=wallet.currency, net=money(expected),
@@ -622,9 +633,11 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
               "reconciled": dict(reconcile_open(db, provider, now=now)), "members": {}}
     if not report["enabled"]:
         return report
-    config = payment_config.load(db)                # reconciliation may have suspended the fee behaviour
-    if config.fee_gate() is not None:
-        report["stopped"] = config.fee_gate()       # fail closed: nothing new is reserved or sent
+    config = payment_config.load(db)                # reconciliation may have suspended payouts
+    blocked = config.fee_gate() or cs.recording_gate(db, config)
+    db.rollback()
+    if blocked is not None:
+        report["stopped"] = blocked                 # fail closed: nothing new is reserved or sent
         return report
     user_ids = candidate_user_ids(db, int(limit or settings.CASHOUT_ENGINE_BATCH_LIMIT))
     db.rollback()
@@ -657,7 +670,8 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             logger.exception("Cashout cycle: member %s failed", user_id)
             outcome = "ERROR"
         results[outcome] += 1
-        if outcome in ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED"):
+        if outcome in ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED", "PAYOUTS_SUSPENDED",
+                       "FEE_RECONCILIATION_PENDING"):
             report["stopped"] = outcome             # the same refusal awaits every other member
             break
         if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
@@ -817,6 +831,18 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
                       "message": f"Cashout #{row['cashout_id']}: {flag_text.get(row['flag'], row['flag'])}. "
                                  "New payouts are stopped until the provider's fee behaviour is confirmed again.",
                       "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
+    suspension = payment_config.suspension_view(db)
+    if suspension is not None:
+        items.insert(0, {"type": "PAYOUTS_SUSPENDED", "severity": "critical",
+                         "message": f"Crypto payouts are suspended: {suspension['message']} No payout is created "
+                                    "until an administrator has reviewed it and reactivated payouts explicitly.",
+                         "cashout_id": suspension["cashout_id"]})
+    for row in member_fees["not_verified"]:
+        items.append({"type": "MEMBER_FEE_NOT_VERIFIED", "severity": "warning",
+                      "message": f"Cashout #{row['cashout_id']}: an actual network fee is recorded but was not "
+                                 "verified (who bore it and the amount received were not confirmed against "
+                                 "evidence). It does not count as reconciled.",
+                      "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
     for row in member_fees["not_recorded"]:
         items.append({"type": "MEMBER_FEE_NOT_RECORDED", "severity": "warning",
                       "message": f"Cashout #{row['cashout_id']} is completed but the network fee the provider took "
@@ -829,6 +855,9 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
     gate = config.fee_gate()
     return {
         "beneficiary_fees": member_fees,
+        "payout_suspension": suspension,
+        "recording_gate": {"limit": int(config.max_unreconciled_payouts), **member_fees["exposure"],
+                           "blocked": member_fees["exposure"]["total"] > int(config.max_unreconciled_payouts)},
         "network_fee_gate": ({"code": gate, "message": payment_config.FEE_GATE_MESSAGES[gate]}
                              if gate is not None else None),
         "owed": {k: float(v) for k, v in owed.items()},

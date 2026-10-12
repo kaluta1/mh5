@@ -138,9 +138,13 @@ def engine_on(monkeypatch, db):
 
 
 # The network fee rules in force in these tests: the beneficiary pays, the
-# provider's behaviour was confirmed, and SYNTHETIC limits were approved.
+# provider's behaviour was confirmed, and SYNTHETIC limits were approved. The
+# safety margin is set (to nothing) and the recording gate is wide open, so
+# that tests about other rules are not stopped by them; both have their own
+# tests in test_payout_fee_safety.py, where the real defaults apply.
 FEE_RULES = dict(network_fee_policy="MEMBER_PAYS", provider_fee_mode="DEDUCTED_BY_PROVIDER",
                  member_fee_cap_percent=Decimal("10.000"), member_fee_cap_usd=Decimal("1.00"),
+                 fee_estimate_margin_percent=Decimal("0"), max_unreconciled_payouts=1000,
                  fee_terms_approved=True)
 
 

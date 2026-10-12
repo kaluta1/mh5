@@ -283,6 +283,52 @@ describe('AdminFinance', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled()
   })
 
+  it('shows a payout suspension and reactivates only with a review note, the phrase and the password', async () => {
+    setup({ s: settings({
+      network_fee_gate: { code: 'PAYOUTS_SUSPENDED', message: 'Crypto payouts are suspended.' },
+      payout_suspension: { reason: 'PROVIDER_FEE_MODE_MISMATCH', cashout_id: 12, since: '2026-10-11T09:00:00',
+        rules_gate: 'PROVIDER_FEE_MODE_UNVERIFIED',
+        message: 'The provider charged a network fee to the MyHigh5 balance instead of taking it out of the payout.' },
+      confirmations: { payout_reactivation: 'REACTIVATE CRYPTO PAYOUTS', crypto_auto_payout_enabled: 'ENABLE AUTOMATIC PAYOUTS' },
+    }) })
+    render(<AdminFinance section="crypto-cashout" />)
+    const card = await screen.findByTestId('payout-suspension')
+    expect(card).toHaveTextContent('charged a network fee to the MyHigh5 balance')
+    expect(card).toHaveTextContent('Cashout #12')
+    expect(card).toHaveTextContent('This is a suspension, not the ordinary wait')
+    expect(card).toHaveTextContent('restoring the settings below does not lift it, and neither does recording a fee')
+    expect(card).toHaveTextContent('do not guarantee the actual network fee of any payout, including the first one')
+    expect(screen.getByTestId('suspension-rules-gate')).toHaveTextContent('Provider fee mode unverified')
+    expect(screen.queryByTestId('crypto-fee-gate')).toBeNull()                              // one message, not two
+    const button = within(card).getByRole('button', { name: 'Reactivate crypto payouts' })
+    const note = within(card).getByLabelText(/What was reviewed/)
+    const phrase = within(card).getByLabelText(/to confirm/)
+    const password = within(card).getByLabelText('Your current password')
+    expect(button).toBeDisabled()
+    fireEvent.change(password, { target: { value: PASSWORD } })
+    fireEvent.change(phrase, { target: { value: 'REACTIVATE CRYPTO PAYOUTS' } })
+    fireEvent.change(note, { target: { value: 'looks fine' } })
+    expect(button).toBeDisabled()                                                           // not a review
+    fireEvent.change(note, { target: { value: 'Checked payout 12 against the provider statement.' } })
+    fireEvent.change(phrase, { target: { value: 'ENABLE AUTOMATIC PAYOUTS' } })
+    expect(button).toBeDisabled()                                                           // another switch's phrase
+    fireEvent.change(phrase, { target: { value: 'REACTIVATE CRYPTO PAYOUTS' } })
+    fireEvent.click(button)
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/finance/payouts/reactivate', {
+      current_password: PASSWORD, confirmation: 'REACTIVATE CRYPTO PAYOUTS',
+      note: 'Checked payout 12 against the provider statement.' }))
+    expect(putMock).not.toHaveBeenCalled()                                                  // not a settings change
+  })
+
+  it('says why no payout can be created when nothing is suspended, and offers no reactivation', async () => {
+    setup({ s: settings({ network_fee_gate: { code: 'FEE_SAFETY_MARGIN_NOT_SET',
+      message: 'The safety margin on the network fee estimate is not set.' }, payout_suspension: null }) })
+    render(<AdminFinance section="crypto-cashout" />)
+    expect(await screen.findByTestId('crypto-fee-gate')).toHaveTextContent('safety margin on the network fee estimate is not set')
+    expect(screen.queryByTestId('payout-suspension')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reactivate crypto payouts' })).toBeNull()
+  })
+
   it('shows the server refusal of an unsafe or invalid change', async () => {
     setup()
     putMock.mockResolvedValue({ status: 422, data: { detail: { code: 'INVALID_VALUE', field: 'usd_min_usd',
@@ -386,12 +432,15 @@ describe('AdminFinance', () => {
     expect(within(detail).getByText(/process_cashouts/)).toBeInTheDocument()
   })
 
-  it('records the actual fee a beneficiary bore, asks where it was taken from, and posts nothing to the ledger', async () => {
-    const fee = { applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5', estimate: '0.02',
-      actual: null, net_received: null, fee_cap: '0.5', source: null, flag: null, status: 'NOT_RECORDED' }
+  const memberFee = (over: Record<string, unknown> = {}) => ({
+    applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5', estimate: '0.02',
+    estimate_adjusted: '0.025', margin_percent: '25', actual: null, net_received: null, fee_cap: '0.5', source: null,
+    flag: null, reconciliation: null, evidence: null, reconciled: false, status: 'NOT_RECORDED', ...over })
+
+  const openMemberPaid = async (fee: Record<string, unknown> = {}) => {
     const row = cashout({ id: 12, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.98,
       network_fee: 0.02, network_fee_policy: 'MEMBER_PAYS', payout_currency: 'usdtbsc', provider_batch_id: '5000000714',
-      beneficiary_fee: fee })
+      beneficiary_fee: memberFee(fee) })
     setup({ rows: [row] })
     getMock.mockImplementation(((original) => (url: string, config?: unknown) => {
       if (/\/cashouts\/12$/.test(url)) {
@@ -404,21 +453,31 @@ describe('AdminFinance', () => {
     })(getMock.getMockImplementation()!))
     render(<AdminFinance section="transactions" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
-    const form = await screen.findByTestId('member-fee-form')
+    return screen.findByTestId('member-fee-form')
+  }
+
+  it('records an actual fee as NOT verified unless the administrator vouches for it, and never offers an estimate', async () => {
+    const form = await openMemberPaid()
     expect(screen.queryByTestId('network-fee-form')).toBeNull()                             // no expense form: 5005 is not used
     expect(screen.queryByTestId('network-fee-record')).toBeNull()
     expect(screen.getByTestId('member-fee-sent')).toHaveTextContent('5 (Deducted by provider)')   // the whole amount was sent
+    // Three different figures: the estimate, the estimate with the margin, and the actual fee.
+    expect(screen.getByTestId('member-fee-adjusted')).toHaveTextContent('0.025 (margin 25%)')
     expect(screen.getByTestId('member-fee-actual')).toHaveTextContent('Not recorded yet')
-    const button = within(form).getByRole('button', { name: 'Record actual network fee' })
+    expect(screen.getByTestId('member-fee-reconciliation')).toHaveTextContent('does not count as reconciled')
+    const button = within(form).getByRole('button', { name: 'Record actual fee (not verified)' })
     const amount = within(form).getByLabelText(/Actual network fee/) as HTMLInputElement
-    expect(amount.value).toBe('')                                                           // the estimate is not pre-filled
-    fireEvent.change(within(form).getByLabelText(/Where it was read/), { target: { value: 'payout 5000000714' } })
+    expect(amount.value).toBe('')                                                           // no estimate is pre-filled
+    fireEvent.change(within(form).getByLabelText(/Reference/), { target: { value: 'payout 5000000714' } })
     fireEvent.change(amount, { target: { value: '0.0234' } })
-    expect(button).toBeDisabled()                                                           // where it was taken from is required
+    expect(button).toBeDisabled()                                                           // who bore it is required
     fireEvent.change(within(form).getByLabelText(/Where the provider took it from/), { target: { value: 'PROVIDER_BALANCE' } })
-    expect(screen.getByTestId('member-fee-mismatch-warning')).toHaveTextContent('stops all new crypto payouts')
+    expect(screen.getByTestId('member-fee-mismatch-warning')).toHaveTextContent('a confirmed inconsistency')
+    expect(screen.getByTestId('member-fee-mismatch-warning')).toHaveTextContent('suspends all crypto payouts')
     fireEvent.change(within(form).getByLabelText(/Where the provider took it from/), { target: { value: 'PAYOUT_AMOUNT' } })
     expect(screen.queryByTestId('member-fee-mismatch-warning')).toBeNull()
+    expect(button).toBeDisabled()                                                           // and so is the evidence
+    fireEvent.change(within(form).getByLabelText(/Evidence/), { target: { value: 'PROVIDER_STATEMENT' } })
     for (const bad of ['-1', 'abc', '5', '5.01', '0.123456789', '']) {                      // never the whole payout
       fireEvent.change(amount, { target: { value: bad } })
       expect(button).toBeDisabled()
@@ -426,16 +485,58 @@ describe('AdminFinance', () => {
     fireEvent.change(amount, { target: { value: '0.0234' } })
     fireEvent.click(button)
     await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/12/network-fee',
-      { amount: '0.0234', reference: 'payout 5000000714', charged_to: 'PAYOUT_AMOUNT' }))
+      { amount: '0.0234', reference: 'payout 5000000714', charged_to: 'PAYOUT_AMOUNT', evidence: 'PROVIDER_STATEMENT',
+        verified: false }))
     expect(postMock).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/recorded as NOT verified/)).toBeInTheDocument()
+  })
+
+  it('records a verified fee only with real evidence and an amount received that adds up', async () => {
+    const form = await openMemberPaid()
+    fireEvent.change(within(form).getByLabelText(/Actual network fee/), { target: { value: '0.0234' } })
+    fireEvent.change(within(form).getByLabelText(/Where the provider took it from/), { target: { value: 'PAYOUT_AMOUNT' } })
+    fireEvent.change(within(form).getByLabelText(/Reference/), { target: { value: 'payout 5000000714' } })
+    fireEvent.change(within(form).getByLabelText(/Evidence/), { target: { value: 'OTHER' } })
+    fireEvent.click(within(form).getByRole('checkbox'))
+    const button = within(form).getByRole('button', { name: 'Record verified actual fee' })
+    const received = within(form).getByLabelText(/Amount the member received/)
+    fireEvent.change(received, { target: { value: '4.9766' } })
+    expect(screen.getByTestId('member-fee-evidence-warning')).toHaveTextContent('cannot verify a payout')
+    expect(button).toBeDisabled()                                                           // "other" verifies nothing
+    fireEvent.change(within(form).getByLabelText(/Evidence/), { target: { value: 'BLOCKCHAIN_EXPLORER' } })
+    for (const wrong of ['', '4.98', '5', '4.9765', 'abc']) {
+      fireEvent.change(received, { target: { value: wrong } })
+      expect(button).toBeDisabled()                                                         // 5.00 - 0.0234 = 4.9766
+    }
+    fireEvent.change(received, { target: { value: '4.98' } })
+    expect(screen.getByTestId('member-fee-sum-warning')).toHaveTextContent('4.9766')
+    fireEvent.change(received, { target: { value: '4.97660' } })                            // the same number
+    expect(screen.queryByTestId('member-fee-sum-warning')).toBeNull()
+    fireEvent.click(button)
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/12/network-fee',
+      { amount: '0.0234', reference: 'payout 5000000714', charged_to: 'PAYOUT_AMOUNT', evidence: 'BLOCKCHAIN_EXPLORER',
+        verified: true, received: '4.97660' }))
+  })
+
+  it('lets an unverified figure be replaced only by a verified one', async () => {
+    const form = await openMemberPaid({ actual: '0.05', net_received: '4.95', source: 'ADMIN_RECORDED',
+      reconciliation: 'ADMIN_UNVERIFIED', evidence: 'PROVIDER_STATEMENT', status: 'RECORDED' })
+    expect(screen.getByTestId('member-fee-reconciliation')).toHaveTextContent('Entered by an administrator, not verified')
+    expect(screen.getByTestId('member-fee-reconciliation')).toHaveTextContent('does not count as reconciled')
+    expect(within(form).getByTestId('member-fee-replacing')).toHaveTextContent('0.05')
+    expect(within(form).getByRole('checkbox')).toBeChecked()
+    expect(within(form).getByRole('checkbox')).toBeDisabled()                               // no second unverified guess
+    expect(within(form).queryByRole('button', { name: 'Record actual fee (not verified)' })).toBeNull()
+    expect(within(form).getByRole('button', { name: 'Record verified actual fee' })).toBeDisabled()
   })
 
   it('shows a recorded beneficiary fee, what was received and a flag that needs attention', async () => {
     const row = cashout({ id: 13, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.6,
       network_fee: 0.4, network_fee_policy: 'MEMBER_PAYS', payout_currency: 'usdtbsc',
       beneficiary_fee: { applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5',
-        estimate: '0.4', actual: '0.75', net_received: '4.25', fee_cap: '0.5', source: 'PROVIDER_REPORTED',
-        flag: 'FEE_CAP_EXCEEDED', status: 'RECORDED' } })
+        estimate: '0.4', estimate_adjusted: '0.4', margin_percent: '0', actual: '0.75', net_received: '4.25',
+        fee_cap: '0.5', source: 'PROVIDER_REPORTED', flag: 'FEE_CAP_EXCEEDED', reconciliation: 'PROVIDER_VERIFIED',
+        evidence: 'PROVIDER_API', reconciled: true, status: 'RECORDED' } })
     setup({ rows: [row] })
     render(<AdminFinance section="transactions" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
@@ -443,7 +544,8 @@ describe('AdminFinance', () => {
     expect(screen.getByTestId('member-fee-actual')).toHaveTextContent('0.75 (Provider reported)')
     expect(screen.getByTestId('member-fee-received')).toHaveTextContent('4.25')
     expect(screen.getByTestId('member-fee-flag')).toHaveTextContent('above the limit the member accepted')
-    expect(screen.queryByTestId('member-fee-form')).toBeNull()                              // recorded once
+    expect(screen.getByTestId('member-fee-reconciliation')).toHaveTextContent('Verified from the provider report')
+    expect(screen.queryByTestId('member-fee-form')).toBeNull()                              // verified: never changed
   })
 
   it('reports beneficiary-paid fees apart from the ledger and says why no payout can be created', async () => {
@@ -457,8 +559,11 @@ describe('AdminFinance', () => {
           last_24_hours: { crypto_payout_amount: 0, crypto_payout_count: 0, amount_limit: 5000, count_limit: 100 },
           discrepancies: [{ type: 'MEMBER_FEE_NOT_RECORDED', severity: 'warning', cashout_id: 12,
             message: 'Cashout #12 is completed but the network fee the provider took from it is not recorded.' }],
-          network_fee_gate: { code: 'PROVIDER_FEE_MODE_UNVERIFIED',
-            message: 'The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.' },
+          network_fee_gate: { code: 'PAYOUTS_SUSPENDED',
+            message: 'Crypto payouts are suspended and need an administrator\'s review and an explicit reactivation.' },
+          payout_suspension: { reason: 'FEE_CAP_EXCEEDED', cashout_id: 12, since: '2026-10-11T09:00:00', rules_gate: null,
+            message: 'The network fee the provider took from a payout is higher than the limit the member accepted.' },
+          recording_gate: { limit: 0, in_flight: 0, completed_unreconciled: 1, total: 1, blocked: true },
           beneficiary_fees: { completed_count: 2, gross_total: '12.00', recorded_count: 1, fee_total: '0.0234',
             received_total: '4.9766', not_recorded_count: 1, not_recorded: [{ cashout_id: 12, user_id: 42, estimate: '0.03' }],
             flagged: [], automatic_recording: false },
@@ -473,7 +578,19 @@ describe('AdminFinance', () => {
     expect(fees).toHaveTextContent('4.9766')
     expect(fees).toHaveTextContent('cashout #12')
     expect(fees).toHaveTextContent('not recorded automatically')
-    expect(screen.getByTestId('network-fee-gate')).toHaveTextContent('not confirmed as DEDUCTED_BY_PROVIDER')
+    expect(screen.getByTestId('network-fee-gate')).toHaveTextContent('explicit reactivation')
+    expect(screen.getByTestId('reconciliation-suspension')).toHaveTextContent('cashout #12')
+    expect(screen.getByTestId('reconciliation-suspension')).toHaveTextContent('until an administrator reactivates them')
+    expect(screen.getByTestId('reconciliation-suspension')).toHaveTextContent('confirmed inconsistency')
+    expect(screen.getByTestId('reconciliation-suspension')).toHaveTextContent('recording a fee does not lift it')
+    // The temporary hold is worded as something else entirely.
+    const gate = screen.getByTestId('recording-gate')
+    expect(gate).toHaveTextContent('temporary hold')
+    expect(gate).toHaveTextContent('On hold until these are verified, then released automatically')
+    expect(gate).toHaveTextContent('This hold is not a suspension')
+    expect(gate).toHaveTextContent('no reactivation is needed')
+    expect(gate).toHaveTextContent('never taken to be zero')
+    expect(gate).toHaveTextContent('does not guarantee the actual fee')
     expect(screen.getByTestId('discrepancies')).toHaveTextContent('Cashout #12')
   })
 

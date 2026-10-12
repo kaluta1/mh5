@@ -107,15 +107,51 @@ CONFIRM_AUTO_PAYOUT = "ENABLE AUTOMATIC PAYOUTS"
 CONFIRM_USD_SETTLEMENT = "ENABLE USD SETTLEMENT"
 CONFIRM_FEE_MODE = "PROVIDER FEE BEHAVIOUR VERIFIED"
 CONFIRM_FEE_LIMITS = "APPROVE NETWORK FEE LIMITS"
+CONFIRM_REACTIVATION = "REACTIVATE CRYPTO PAYOUTS"
 # A change to any of these withdraws the approval of the network fee limits.
 _FEE_TERMS_FIELDS = ("provider_fee_mode", "member_fee_cap_percent", "member_fee_cap_usd", "min_net_payout_usd",
-                     "fee_terms_version", "fee_consent_valid_days", "network_fee_policy")
+                     "fee_terms_version", "fee_consent_valid_days", "network_fee_policy",
+                     "fee_estimate_margin_percent", "max_unreconciled_payouts")
 FEE_GATE_MESSAGES = {
     "FEE_POLICY_NOT_BENEFICIARY_PAID": "The network fee policy must be MEMBER_PAYS: the beneficiary bears the fee.",
     "PROVIDER_FEE_MODE_UNVERIFIED": "The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.",
     "FEE_LIMITS_NOT_CONFIGURED": "No member network fee limit is set.",
+    "FEE_SAFETY_MARGIN_NOT_SET": "The safety margin on the network fee estimate is not set.",
     "FEE_LIMITS_NOT_APPROVED": "The network fee limits have not been approved.",
+    "PAYOUTS_SUSPENDED": "Crypto payouts are suspended and need an administrator's review and an explicit "
+                         "reactivation.",
+    "FEE_RECONCILIATION_PENDING": "An earlier payout's actual network fee has not been verified yet. This lifts "
+                                  "by itself once it is verified; it is not a suspension.",
 }
+
+# Why crypto payouts were SUSPENDED: a confirmed financial inconsistency. Each
+# one means the provider did NOT behave as configured, so its fee behaviour goes
+# back to UNVERIFIED as well. A payout whose actual fee is merely missing or not
+# verified yet is NOT one of them: that is the temporary recording gate
+# (FEE_RECONCILIATION_PENDING), which lifts by itself once the fee is verified.
+SUSPEND_MODE_MISMATCH, SUSPEND_AMOUNT_MISMATCH, SUSPEND_CAP_EXCEEDED = (
+    "PROVIDER_FEE_MODE_MISMATCH", "PROVIDER_AMOUNT_MISMATCH", "FEE_CAP_EXCEEDED")
+SUSPENSION_MESSAGES = {
+    SUSPEND_MODE_MISMATCH: "The provider charged a network fee to the MyHigh5 balance instead of taking it out of "
+                           "the payout.",
+    SUSPEND_AMOUNT_MISMATCH: "The amount the provider reports for a payout does not agree with what it was asked "
+                             "to send.",
+    SUSPEND_CAP_EXCEEDED: "The network fee the provider took from a payout is higher than the limit the member "
+                          "accepted.",
+}
+
+
+def payout_amount_semantics() -> str:
+    """What the provider's `amount` on a finished payout means, as CONFIRMED
+    with the provider: "REQUESTED" (the amount it was asked to send) or
+    "RECEIVED" (what the beneficiary received, after its fee). Not documented
+    by the provider, so empty until confirmed and set in
+    NOWPAYMENTS_PAYOUT_AMOUNT_MEANS. While it is empty nothing the provider
+    reports counts as a verified reconciliation of a payout's fee."""
+    import os
+
+    value = os.getenv("NOWPAYMENTS_PAYOUT_AMOUNT_MEANS", "").strip().upper()
+    return value if value in ("REQUESTED", "RECEIVED") else ""
 # Automatic payouts can only be switched on with a successful connection test this recent.
 CONNECTION_TEST_MAX_AGE = timedelta(hours=24)
 
@@ -147,6 +183,7 @@ class Field:
     unit: str = ""
     max_length: int = 0
     approval: str = ""              # non-empty: a business policy awaiting the owner's approval
+    optional: bool = False          # a number that may be left empty (= not set)
 
 
 def _env_int(name: str, fallback: int) -> Callable[[], int]:
@@ -207,6 +244,16 @@ _FIELDS: List[Field] = [
     Field("min_net_payout_usd", "crypto", "money", "Minimum amount received",
           "A payout is not attempted when the member would receive less than this after the estimated network "
           "fee.", _const(_D("0.01")), minimum=_D("0.01"), maximum=_D("100000"), unit="USD"),
+    Field("fee_estimate_margin_percent", "crypto", "percent", "Safety margin on the fee estimate",
+          "The provider's fee estimate is raised by this share before it is compared with the member's limit "
+          "(estimate x (1 + margin)). It allows for the actual fee being higher than the estimate; it does not "
+          "limit the actual fee. Empty = not set: no payout is created.", _const(None), minimum=_D("0"),
+          maximum=_D("500"), unit="% of the estimate", optional=True,
+          approval="Not set. Awaiting the business owner's decision."),
+    Field("max_unreconciled_payouts", "crypto", "int", "Payouts allowed without a verified actual fee",
+          "No further payout is created while more payouts than this are still at the provider or completed "
+          "without a verified actual network fee. 0 = one payout at a time, each verified before the next.",
+          _const(0), minimum=_D(0), maximum=_D(1000)),
     Field("fee_terms_version", "crypto", "int", "Network fee terms version",
           "Raising it makes every member accept the network fee terms again before the next payout.", _const(1),
           minimum=_D(1), maximum=_D(100000)),
@@ -311,6 +358,8 @@ class PaymentConfig:
     member_fee_cap_percent: Decimal
     member_fee_cap_usd: Decimal
     min_net_payout_usd: Decimal
+    fee_estimate_margin_percent: Optional[Decimal]
+    max_unreconciled_payouts: int
     fee_terms_version: int
     fee_consent_valid_days: int
     fee_terms_approved: bool
@@ -342,6 +391,11 @@ class PaymentConfig:
     usd_destination_note: Optional[str]
     version: int = 0
     persisted: bool = False
+    # Not settings: set by the engine when a payout did not add up, cleared only
+    # by an administrator's explicit reactivation.
+    suspended_reason: Optional[str] = None
+    suspended_at: Optional[datetime] = None
+    suspended_cashout_id: Optional[int] = None
 
     # ---- derived ----------------------------------------------------------
     @property
@@ -364,20 +418,30 @@ class PaymentConfig:
         return (f"{_plain(self.usd_fee_percent)}% of the amount, minimum {_dollars(self.usd_fee_min)}, "
                 f"maximum {_dollars(self.usd_fee_max)}")
 
-    def fee_gate(self) -> Optional[str]:
-        """Why NO crypto payout may be created under the network fee rules
-        (None = one may). Fail closed: the beneficiary-paid policy, a provider
-        fee behaviour confirmed as deducted from the amount, at least one
-        member fee limit, and the approval of those limits are all required."""
+    def fee_rules_gate(self) -> Optional[str]:
+        """Why the network fee RULES are not in force (None = they are). Fail
+        closed: the beneficiary-paid policy, a provider fee behaviour confirmed
+        as deducted from the amount, at least one member fee limit, a safety
+        margin on the estimate, and the approval of all of them are required."""
         if self.network_fee_policy != FEE_MEMBER_PAYS:
             return "FEE_POLICY_NOT_BENEFICIARY_PAID"
         if self.provider_fee_mode != FEE_MODE_DEDUCTED:
             return "PROVIDER_FEE_MODE_UNVERIFIED"
         if Decimal(self.member_fee_cap_percent) <= 0 and Decimal(self.member_fee_cap_usd) <= 0:
             return "FEE_LIMITS_NOT_CONFIGURED"
+        if self.fee_estimate_margin_percent is None:
+            return "FEE_SAFETY_MARGIN_NOT_SET"
         if not self.fee_terms_approved:
             return "FEE_LIMITS_NOT_APPROVED"
         return None
+
+    def fee_gate(self) -> Optional[str]:
+        """Why NO crypto payout may be created (None = one may): a suspension
+        that an administrator has not lifted, or rules that are not in force.
+        Restoring the rules never lifts a suspension."""
+        if self.suspended_reason:
+            return "PAYOUTS_SUSPENDED"
+        return self.fee_rules_gate()
 
     @property
     def auto_payout_allowed(self) -> bool:
@@ -391,7 +455,8 @@ class PaymentConfig:
                     and (self.usd_settlement_account or "").strip())
 
 
-_CONFIG_FIELDS = tuple(f.name for f in dataclass_fields(PaymentConfig) if f.name not in ("version", "persisted"))
+_STATE_FIELDS = ("version", "persisted", "suspended_reason", "suspended_at", "suspended_cashout_id")
+_CONFIG_FIELDS = tuple(f.name for f in dataclass_fields(PaymentConfig) if f.name not in _STATE_FIELDS)
 if set(_CONFIG_FIELDS) != set(FIELDS):
     raise RuntimeError("payment configuration registry is inconsistent")
 
@@ -446,6 +511,8 @@ def _coerce(field: Field, value: Any) -> Any:
         if field.name == "provider_display_name" and any(ch in text for ch in "<>\"\n"):
             raise bad("contains characters that are not allowed.")
         return text
+    if field.optional and (value is None or (isinstance(value, str) and not value.strip())):
+        return None
     if isinstance(value, bool) or value is None or (isinstance(value, str) and not value.strip()):
         raise bad("a number is required.")
     try:
@@ -489,7 +556,8 @@ _FALLBACK: Dict[str, Any] = {
 }
 
 
-def _from_values(values: Dict[str, Any], *, version: int, persisted: bool) -> PaymentConfig:
+def _from_values(values: Dict[str, Any], *, version: int, persisted: bool,
+                 state: Optional[Dict[str, Any]] = None) -> PaymentConfig:
     typed = {}
     for name in _CONFIG_FIELDS:
         field, value = FIELDS[name], values[name]
@@ -500,7 +568,7 @@ def _from_values(values: Dict[str, Any], *, version: int, persisted: bool) -> Pa
         elif field.kind == "bool":
             value = bool(value)
         typed[name] = value
-    return PaymentConfig(**typed, version=version, persisted=persisted)
+    return PaymentConfig(**typed, version=version, persisted=persisted, **(state or {}))
 
 
 def default_config() -> PaymentConfig:
@@ -513,7 +581,23 @@ def load(db: Session) -> PaymentConfig:
     if row is None:
         return _from_values(defaults(), version=0, persisted=False)
     return _from_values({name: getattr(row, name) for name in _CONFIG_FIELDS}, version=int(row.version),
-                        persisted=True)
+                        persisted=True, state=_suspension_state(row))
+
+
+def _suspension_state(row: PaymentSettings) -> Dict[str, Any]:
+    return {"suspended_reason": row.payout_suspended_reason or None, "suspended_at": row.payout_suspended_at,
+            "suspended_cashout_id": row.payout_suspended_cashout_id}
+
+
+def lock_settings(db: Session) -> PaymentConfig:
+    """Lock the settings row and return the configuration in force. Engine
+    workers take this lock immediately before they reserve a payout, so the
+    checks that count payouts across ALL members (the recording gate) and the
+    suspension are decided by one worker at a time. Released by the caller's
+    commit or rollback."""
+    row = _row_for_update(db)
+    return _from_values({name: getattr(row, name) for name in _CONFIG_FIELDS}, version=int(row.version),
+                        persisted=True, state=_suspension_state(row))
 
 
 def _row_for_update(db: Session) -> PaymentSettings:
@@ -841,7 +925,7 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
         if any(name in changed for name in _FEE_TERMS_FIELDS):
             raise refuse("UNSAFE_ACTIVATION", "Save the network fee settings first, then approve them in a "
                                               "separate change.", field)
-        gate = replace(config, fee_terms_approved=True).fee_gate()
+        gate = replace(config, fee_terms_approved=True).fee_rules_gate()
         if gate is not None:
             raise refuse("UNSAFE_ACTIVATION", FEE_GATE_MESSAGES[gate], field)
         if (confirmation or "").strip() != CONFIRM_FEE_LIMITS:
@@ -851,8 +935,9 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
         field = "crypto_auto_payout_enabled"
         if not merged["provider_enabled"] or not merged["crypto_cashout_enabled"]:
             raise refuse("UNSAFE_ACTIVATION", "Enable the provider and Crypto Cashout first.", field)
-        if config.fee_gate() is not None:
-            raise refuse("UNSAFE_ACTIVATION", FEE_GATE_MESSAGES[config.fee_gate()], field)
+        gate = replace(config, **_suspension_state(row)).fee_gate()
+        if gate is not None:
+            raise refuse("UNSAFE_ACTIVATION", FEE_GATE_MESSAGES[gate], field)
         credentials = resolve_credentials(db, config)
         if not credentials.payout_ready:
             raise refuse("UNSAFE_ACTIVATION", "Payout credentials are incomplete: "
@@ -906,24 +991,89 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     return load(db)
 
 
-def suspend_fee_mode(db: Session, *, reason: str, cashout_id: Optional[int] = None) -> bool:
-    """A finished payout showed that the provider does NOT behave as
-    configured, or took more than the member accepted. Put the provider fee
-    behaviour back to UNVERIFIED and withdraw the approval of the limits, so
-    that no further payout is created until a person has looked. No commit:
-    it is part of the caller's transaction. True when something changed."""
+def suspend_payouts(db: Session, *, reason: str, cashout_id: Optional[int] = None,
+                    now: Optional[datetime] = None) -> bool:
+    """A payout showed a confirmed financial inconsistency. Stop ALL further
+    crypto payouts and keep the reason until an administrator reviews it and
+    reactivates them explicitly (reactivate_payouts). No commit: it is part of
+    the caller's transaction. True when something changed.
+
+    Every reason shows that the provider did not behave as configured, so the
+    provider fee behaviour also goes back to UNVERIFIED and the approval of the
+    limits is withdrawn. Restoring those never lifts the suspension, and
+    neither does recording a fee afterwards."""
+    if reason not in SUSPENSION_MESSAGES:
+        raise ValueError(f"unknown suspension reason: {reason}")
+    now = now or datetime.utcnow()
     row = _row_for_update(db)
-    old = {"provider_fee_mode": row.provider_fee_mode, "fee_terms_approved": bool(row.fee_terms_approved)}
-    if old == {"provider_fee_mode": FEE_MODE_UNVERIFIED, "fee_terms_approved": False}:
-        return False
+    current = row.payout_suspended_reason or None
+    old = {"payout_suspended_reason": current, "provider_fee_mode": row.provider_fee_mode,
+           "fee_terms_approved": bool(row.fee_terms_approved)}
+    if current is None:                             # the first finding is the one to review first
+        row.payout_suspended_reason = reason
+        row.payout_suspended_at = now
+        row.payout_suspended_cashout_id = cashout_id
     row.provider_fee_mode = FEE_MODE_UNVERIFIED
     row.fee_terms_approved = False
+    new = {"payout_suspended_reason": row.payout_suspended_reason, "provider_fee_mode": row.provider_fee_mode,
+           "fee_terms_approved": bool(row.fee_terms_approved)}
+    if new == old:
+        return False
     row.version = int(row.version) + 1
-    _audit(db, row, actor_id=None, action="PROVIDER_FEE_MODE_SUSPENDED", old=old,
-           new={"provider_fee_mode": FEE_MODE_UNVERIFIED, "fee_terms_approved": False, "reason": reason,
-                "cashout_id": cashout_id})
+    _audit(db, row, actor_id=None, action="PAYOUTS_SUSPENDED", old=old,
+           new={**new, "reason": reason, "cashout_id": cashout_id})
     logger.error("Crypto payouts suspended: %s (cashout %s)", reason, cashout_id)
     return True
+
+
+def suspension_view(db: Session) -> Optional[dict]:
+    row = load_row(db)
+    if row is None or not row.payout_suspended_reason:
+        return None
+    reason = row.payout_suspended_reason
+    return {"reason": reason, "message": SUSPENSION_MESSAGES.get(reason, reason),
+            "since": row.payout_suspended_at.isoformat() if row.payout_suspended_at else None,
+            "cashout_id": row.payout_suspended_cashout_id,
+            "rules_gate": load(db).fee_rules_gate()}
+
+
+def reactivate_payouts(db: Session, actor, *, password: Optional[str], confirmation: Optional[str],
+                       note: Optional[str], ip: Optional[str] = None) -> PaymentConfig:
+    """An administrator who reviewed the suspension lifts it. Commits. A
+    separate, deliberate act: the permission, the current password, the typed
+    phrase and a written note of what was found are all required, and it is
+    refused while the network fee rules are not in force again. It changes no
+    setting, sends nothing, and does not switch automatic payouts on."""
+    _authorize(actor, password)
+    text = " ".join(str(note or "").split())
+    if len(text) < 20:
+        raise PaymentConfigError("REVIEW_NOTE_REQUIRED",
+                                 "Describe what was reviewed and how it was resolved (at least 20 characters).")
+    if any(ord(ch) < 32 for ch in text) or len(text) > 500:
+        raise PaymentConfigError("REVIEW_NOTE_REQUIRED", "The review note may have at most 500 characters.")
+    if (confirmation or "").strip() != CONFIRM_REACTIVATION:
+        raise PaymentConfigError("CONFIRMATION_REQUIRED", f'Type "{CONFIRM_REACTIVATION}" to confirm.')
+    row = _row_for_update(db)
+    reason = row.payout_suspended_reason or None
+    if reason is None:
+        db.rollback()
+        raise PaymentConfigError("NOT_SUSPENDED", "Crypto payouts are not suspended.")
+    gate = _from_values({name: getattr(row, name) for name in _CONFIG_FIELDS}, version=0,
+                        persisted=True).fee_rules_gate()
+    if gate is not None:
+        db.rollback()
+        raise PaymentConfigError("UNSAFE_ACTIVATION", "Resolve this first: " + FEE_GATE_MESSAGES[gate])
+    old = {"payout_suspended_reason": reason, "payout_suspended_cashout_id": row.payout_suspended_cashout_id,
+           "payout_suspended_at": row.payout_suspended_at}
+    row.payout_suspended_reason = None
+    row.payout_suspended_at = None
+    row.payout_suspended_cashout_id = None
+    row.version = int(row.version) + 1
+    row.updated_by = actor.id
+    _audit(db, row, actor_id=actor.id, action="PAYOUTS_REACTIVATED", old=old,
+           new={"payout_suspended_reason": None, "review_note": text}, ip=ip)
+    db.commit()
+    return load(db)
 
 
 # ---------------------------------------------------------------------------
@@ -1317,7 +1467,9 @@ def settings_view(db: Session) -> dict:
         "confirmations": {"crypto_auto_payout_enabled": CONFIRM_AUTO_PAYOUT,
                           "usd_settlement_enabled": CONFIRM_USD_SETTLEMENT,
                           "provider_fee_mode": CONFIRM_FEE_MODE,
-                          "fee_terms_approved": CONFIRM_FEE_LIMITS},
+                          "fee_terms_approved": CONFIRM_FEE_LIMITS,
+                          "payout_reactivation": CONFIRM_REACTIVATION},
+        "payout_suspension": suspension_view(db),
         "network_fee_gate": ({"code": config.fee_gate(), "message": FEE_GATE_MESSAGES[config.fee_gate()]}
                              if config.fee_gate() is not None else None),
     }

@@ -59,6 +59,7 @@ from tests.integration.test_month_end_locking_postgres import _build_schema
 from tests.unit.test_dual_cashout import (
     FEE_RULES,
     NOW,
+    PASSWORD,
     PAYOUT_ENV,
     WALLET,
     FakeProvider,
@@ -83,6 +84,7 @@ DUAL_CASHOUT = "f3a4b5c6d7e8_dual_cashout.py"
 PAYMENT_CONFIGURATION = "a5b6c7d8e9f0_payment_configuration.py"
 FEE_ACCOUNT = "b6c7d8e9f0a1_crypto_payout_network_fee_account.py"
 BENEFICIARY_FEE = "c7d8e9f0a1b2_beneficiary_paid_network_fee.py"
+FEE_SAFETY = "d8e9f0a1b2c3_payout_fee_safety.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -206,6 +208,7 @@ def schema_snapshot(engine) -> dict:
 
 
 def back_to_production_revision(engine) -> None:
+    migrate(engine, FEE_SAFETY, "downgrade")
     migrate(engine, BENEFICIARY_FEE, "downgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "downgrade")
     migrate(engine, DUAL_CASHOUT, "downgrade")
@@ -273,8 +276,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (fourth.revision, fourth.down_revision, fourth.depends_on) == ("c7d8e9f0a1b2", "b6c7d8e9f0a1", None)
     children = [name for name, line in revisions.items() if '"b6c7d8e9f0a1"' in line or "'b6c7d8e9f0a1'" in line]
     assert children == [BENEFICIARY_FEE]                           # one line, no branch
-    heads = [name for name, line in revisions.items() if '"c7d8e9f0a1b2"' in line or "'c7d8e9f0a1b2'" in line]
-    assert heads == []                                             # c7d8e9f0a1b2 is the single head
+    fifth = load_migration(FEE_SAFETY)
+    assert (fifth.revision, fifth.down_revision, fifth.depends_on) == ("d8e9f0a1b2c3", "c7d8e9f0a1b2", None)
+    children = [name for name, line in revisions.items() if '"c7d8e9f0a1b2"' in line or "'c7d8e9f0a1b2'" in line]
+    assert children == [FEE_SAFETY]                                # one line, no branch
+    heads = [name for name, line in revisions.items() if '"d8e9f0a1b2c3"' in line or "'d8e9f0a1b2c3'" in line]
+    assert heads == []                                             # d8e9f0a1b2c3 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -292,6 +299,7 @@ def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
     migrate(engine, DUAL_CASHOUT, "upgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
     assert money_fingerprint(engine) == rows_before                 # no commission, cashout, wallet or journal row changed
     # What the migrations build is exactly what the models expect.
     assert schema_snapshot(engine) == as_models_define_it
@@ -329,6 +337,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
         migrate(engine, DUAL_CASHOUT, "upgrade")
         migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
         migrate(engine, BENEFICIARY_FEE, "upgrade")
+        migrate(engine, FEE_SAFETY, "upgrade")
         assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
     with engine.connect() as c:
         assert c.execute(text("select count(*) from permissions where name in "
@@ -338,6 +347,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
     migrate(engine, DUAL_CASHOUT, "upgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
     assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
 
 
@@ -347,6 +357,7 @@ def test_a_downgrade_keeps_a_permission_that_a_role_already_holds(pg):
     migrate(engine, DUAL_CASHOUT, "upgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")                 # creates the two permissions
+    migrate(engine, FEE_SAFETY, "upgrade")
     with engine.begin() as c:
         c.execute(text("insert into roles (name, is_system, created_at, updated_at) "
                        "values ('finance', false, now(), now())"))
@@ -446,6 +457,7 @@ def test_the_database_itself_enforces_the_cashout_and_configuration_rules(pg):
     migrate(engine, DUAL_CASHOUT, "upgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
     with Session() as db:
         first = member(db, "m1", method="CRYPTO")
         second = member(db, "m2", method="CRYPTO")
@@ -1013,6 +1025,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
     engine, Session = pg
     with Session() as db:
         ids = production_like_rows(db)
+    migrate(engine, FEE_SAFETY, "downgrade")
     migrate(engine, BENEFICIARY_FEE, "downgrade")                  # the schema as deployed before it
     with engine.begin() as c:
         # A settings row saved before the migration, under the retired policy.
@@ -1029,6 +1042,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
 
     for _ in range(2):                                             # a re-run after a partial deployment
         migrate(engine, BENEFICIARY_FEE, "upgrade")
+        migrate(engine, FEE_SAFETY, "upgrade")
     assert money_fingerprint(engine) == rows and account_5005(engine) == journal
     with engine.connect() as c:
         row = c.execute(text(
@@ -1043,16 +1057,20 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
             "select count(*) from affiliate_cashout_requests where amount_sent is not null or fee_flag is not null "
             "or network_fee_estimate is not null or network_fee_actual is not null or net_received is not null "
             "or fee_cap is not null or fee_consent_id is not null or provider_fee_mode is not null")).scalar() == 0
+    migrate(engine, FEE_SAFETY, "upgrade")                         # the models need it to read the row
     with Session() as db:
         config = pc.load(db)
         assert config.fee_gate() == "FEE_POLICY_NOT_BENEFICIARY_PAID" and config.crypto_auto_payout_enabled is True
         assert get_commission_balance(db, ids["sponsor"]).available == Decimal("5.00")
+    migrate(engine, FEE_SAFETY, "downgrade")
 
     migrate(engine, BENEFICIARY_FEE, "downgrade")                  # nothing recorded yet: it can be taken back
     assert money_fingerprint(engine) == rows
     migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
     with Session() as db:
         accept_terms(db, db.get(User, ids["sponsor"]))
+    migrate(engine, FEE_SAFETY, "downgrade")                       # nothing of its own recorded: it can go
     with pytest.raises(DBAPIError) as error:                       # an acceptance exists: never destroyed
         migrate(engine, BENEFICIARY_FEE, "downgrade")
     assert "would destroy" in str(error.value)
@@ -1066,6 +1084,7 @@ def test_the_database_itself_enforces_the_fee_rules(pg):
     migrate(engine, DUAL_CASHOUT, "upgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")                   # holds one acceptance
         db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
@@ -1171,7 +1190,8 @@ def test_concurrent_administrators_record_one_actual_fee_and_suspend_once(pg, en
             try:
                 cs.record_member_fee_by_admin(db, db.get(AffiliateCashoutRequest, cashout_id),
                                               admin=db.get(User, admin_id), amount="0.75",
-                                              charged_to="PAYOUT_AMOUNT", reference=f"statement {i}", now=NOW)
+                                              charged_to="PAYOUT_AMOUNT", reference=f"statement {i}", now=NOW,
+                                              evidence="PROVIDER_STATEMENT", verified=True, received="4.25")
                 return "RECORDED"
             except cs.CashoutError as exc:
                 return exc.code
@@ -1184,7 +1204,9 @@ def test_concurrent_administrators_record_one_actual_fee_and_suspend_once(pg, en
             Decimal("0.75"), Decimal("4.25"), "FEE_CAP_EXCEEDED")   # above the member's 0.50 limit
         config = pc.load(db)
         assert (config.provider_fee_mode, config.fee_terms_approved) == ("UNVERIFIED", False)
-        assert db.query(PaymentConfigAudit).filter_by(action="PROVIDER_FEE_MODE_SUSPENDED").count() == 1
+        assert (config.suspended_reason, config.suspended_cashout_id) == ("FEE_CAP_EXCEEDED", cashout_id)
+        assert row.fee_reconciliation == "ADMIN_VERIFIED"
+        assert db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_SUSPENDED").count() == 1
         assert db.query(PaymentSettings).count() == 1
         assert db.query(JournalEntry).count() == 1                 # the payout's own entry; nothing for the fee
     with engine.connect() as c:
@@ -1229,13 +1251,309 @@ def test_concurrent_workers_send_the_whole_amount_once_and_stop_after_a_mismatch
         assert (row.amount_sent, row.fee_flag, row.net_received) == (Decimal("5.00"), "PROVIDER_FEE_MODE_MISMATCH",
                                                                      Decimal("5.00"))
         assert pc.load(db).provider_fee_mode == "UNVERIFIED"
-        assert db.query(PaymentConfigAudit).filter_by(action="PROVIDER_FEE_MODE_SUSPENDED").count() == 1
+        assert pc.load(db).suspended_reason == "PROVIDER_FEE_MODE_MISMATCH"
+        assert db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_SUSPENDED").count() == 1
         assert db.query(JournalEntry).count() == 1
     # A worker that had already read the configuration may have reserved for the second
     # member; whatever it did, a payout created after the suspension was seen is refused.
     with Session() as db:
         assert engine_service.run_cycle(db, provider=provider, now=NOW + timedelta(days=3))["stopped"] == \
-            "PROVIDER_FEE_MODE_UNVERIFIED"
+            "PAYOUTS_SUSPENDED"
         sent = len(provider.created)
         assert engine_service.run_cycle(db, provider=provider, now=NOW + timedelta(days=4)).get("members") == {}
         assert len(provider.created) == sent
+
+
+# ---------------------------------------------------------------------------
+# Recording gate, safety margin, suspension (migration d8e9f0a1b2c3)
+# ---------------------------------------------------------------------------
+
+def safety_state(engine) -> tuple:
+    with engine.connect() as c:
+        return (tuple(c.execute(text(
+            "select fee_estimate_margin_percent, max_unreconciled_payouts, payout_suspended_reason, "
+            "payout_suspended_at, payout_suspended_cashout_id from payment_settings order by id")).fetchall()),
+                c.execute(text(
+                    "select count(*) from affiliate_cashout_requests where fee_estimate_adjusted is not null "
+                    "or fee_margin_percent is not null or fee_reconciliation is not null "
+                    "or fee_evidence is not null")).scalar())
+
+
+def test_the_safety_migration_is_additive_fails_closed_and_keeps_every_row(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        db.add(PaymentSettings(id=1, version=4, **{**pc.defaults(), **FEE_RULES}))        # approved rules, saved earlier
+        # A beneficiary-paid payout completed BEFORE the gate existed: figures, no verification.
+        db.add(AffiliateCashoutRequest(
+            user_id=user.id, gross_amount=Decimal("5.00"), fee=Decimal("0"), net_amount=Decimal("4.98"),
+            status="completed", payout_reference="intent:old-1;provider:5000000001", cashout_method="CRYPTO",
+            payout_currency="usdtbsc", network_fee_policy="MEMBER_PAYS", amount_sent=Decimal("5"),
+            network_fee_estimate=Decimal("0.02"), network_fee_actual=Decimal("0.0234"),
+            net_received=Decimal("4.9766"), requested_at=NOW, processed_at=NOW))
+        db.commit()
+    migrate(engine, FEE_SAFETY, "downgrade")                       # the schema as deployed before it
+    rows = money_fingerprint(engine)
+    with engine.connect() as c:
+        before = c.execute(text("select version, provider_fee_mode, fee_terms_approved, member_fee_cap_usd, "
+                                "crypto_auto_payout_enabled from payment_settings")).one()
+        figures = c.execute(text("select network_fee_actual, net_received, amount_sent "
+                                 "from affiliate_cashout_requests")).one()
+
+    for _ in range(2):                                             # a re-run after a partial deployment
+        migrate(engine, FEE_SAFETY, "upgrade")
+    assert money_fingerprint(engine) == rows
+    with engine.connect() as c:
+        assert c.execute(text("select version, provider_fee_mode, fee_terms_approved, member_fee_cap_usd, "
+                              "crypto_auto_payout_enabled from payment_settings")).one() == before
+        assert c.execute(text("select network_fee_actual, net_received, amount_sent "
+                              "from affiliate_cashout_requests")).one() == figures
+    # No margin, one payout at a time, not suspended; nothing written on the payout.
+    assert safety_state(engine) == (((None, 0, None, None, None),), 0)
+    with Session() as db:
+        config = pc.load(db)
+        # The rules that were approved before are NOT in force until a margin is set and approved again.
+        assert config.fee_terms_approved is True and config.fee_gate() == "FEE_SAFETY_MARGIN_NOT_SET"
+        # The earlier payout counts as NOT reconciled: an unknown state is never taken as verified.
+        assert cs.reconciliation_exposure(db) == {"in_flight": 0, "completed_unreconciled": 1, "total": 1}
+        assert cs.recording_gate(db, config) == "FEE_RECONCILIATION_PENDING"
+
+    migrate(engine, FEE_SAFETY, "downgrade")                       # nothing recorded yet: it can be taken back
+    assert money_fingerprint(engine) == rows
+    migrate(engine, FEE_SAFETY, "upgrade")
+    with Session() as db:
+        pc.suspend_payouts(db, reason="FEE_CAP_EXCEEDED", cashout_id=1, now=NOW)
+        db.commit()
+    with pytest.raises(DBAPIError) as error:                       # a suspension is recorded: never destroyed
+        migrate(engine, FEE_SAFETY, "downgrade")
+    assert "would destroy" in str(error.value)
+    assert safety_state(engine)[0][0][2] == "FEE_CAP_EXCEEDED"
+
+
+def test_the_database_itself_enforces_the_safety_rules(pg):
+    engine, Session = pg
+    back_to_production_revision(engine)                            # the schema exactly as the migrations build it
+    migrate(engine, DUAL_CASHOUT, "upgrade")
+    migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
+    migrate(engine, BENEFICIARY_FEE, "upgrade")
+    migrate(engine, FEE_SAFETY, "upgrade")
+    with Session() as db:
+        user = member(db, "m1", method="CRYPTO")
+        db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
+        db.add(cashout_row(user.id, "completed", "intent:done-1"))
+        db.commit()
+    for column, value in (("fee_estimate_margin_percent", "-0.001"), ("fee_estimate_margin_percent", "500.001"),
+                          ("max_unreconciled_payouts", "-1"), ("max_unreconciled_payouts", "1001"),
+                          ("payout_suspended_reason", "'BECAUSE'"),
+                          # a fee that is only missing is the gate's business, never a stored suspension
+                          ("payout_suspended_reason", "'FEE_NOT_RECONCILED'")):
+        assert refused(Session, lambda db, c=column, v=value: db.execute(
+            text(f"update payment_settings set {c} = {v} where id = 1"))), (column, value)
+    for column, value in (("fee_estimate_margin_percent", "null"), ("fee_estimate_margin_percent", "12.345"),
+                          ("payout_suspended_reason", "'FEE_CAP_EXCEEDED'"), ("payout_suspended_reason", "null")):
+        assert not refused(Session, lambda db, c=column, v=value: db.execute(
+            text(f"update payment_settings set {c} = {v} where id = 1"))), (column, value)
+    for statement in ("fee_estimate_adjusted = -1", "fee_margin_percent = -1", "fee_reconciliation = 'TRUST_ME'",
+                      # a verified reconciliation without the figures or the evidence it rests on
+                      "fee_reconciliation = 'ADMIN_VERIFIED'",
+                      "fee_reconciliation = 'PROVIDER_VERIFIED', network_fee_actual = 0.02, net_received = 4.98",
+                      "fee_reconciliation = 'ADMIN_VERIFIED', network_fee_actual = 0.02, fee_evidence = 'OTHER'"):
+        assert refused(Session, lambda db, st=statement: db.execute(
+            text(f"update affiliate_cashout_requests set {st}"))), statement
+    assert not refused(Session, lambda db: db.execute(text(
+        "update affiliate_cashout_requests set fee_reconciliation = 'ADMIN_VERIFIED', network_fee_actual = 0.02, "
+        "net_received = 4.98, fee_evidence = 'PROVIDER_STATEMENT', fee_estimate_adjusted = 0.03333334, "
+        "fee_margin_percent = 66.667")))
+    with engine.connect() as c:                                    # the precision survives the round trip
+        assert tuple(c.execute(text("select fee_estimate_adjusted, fee_margin_percent "
+                                    "from affiliate_cashout_requests")).one()) == (Decimal("0.03333334"),
+                                                                                  Decimal("66.667"))
+
+
+def test_concurrent_workers_cannot_both_pass_the_recording_gate_for_different_members(pg, engine_on):
+    """The gate counts payouts across ALL members, so the member lock alone
+    would let every worker pass at once. With the default of zero, one payout
+    leaves, however many workers and members there are."""
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        ids = []
+        for index in range(6):
+            user = member(db, f"m{index}", method="CRYPTO")
+            commission(db, user, "5.00")
+            ids.append(user.id)
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 0})
+    provider = slow_provider()
+    facts = {"balance": Decimal("1000"), "minimum": Decimal("0.10")}
+
+    def pay(i):                                                    # one worker per member, released together
+        with Session() as db:
+            return engine_service.process_member(db, ids[i], provider, facts=dict(facts), now=NOW)
+
+    results = in_threads(6, pay)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert sorted(results) == ["FEE_RECONCILIATION_PENDING"] * 5 + ["SUBMITTED"], results
+    assert len(provider.created) == 1 and provider.created[0]["amount"] == Decimal("5.00")
+
+    def cycle(_i):                                                 # whole cycles, and again: no retry gets through
+        with Session() as db:
+            return engine_service.run_cycle(db, provider=provider, now=NOW)
+
+    for _ in range(2):
+        reports = in_threads(4, cycle)
+        assert not any(isinstance(r, Exception) for r in reports), reports
+    assert len(provider.created) == 1
+    with Session() as db:
+        rows = db.query(AffiliateCashoutRequest).all()
+        assert [r.status for r in rows] == ["processing"]
+        assert cs.reconciliation_exposure(db) == {"in_flight": 1, "completed_unreconciled": 0, "total": 1}
+        assert sum(get_commission_balance(db, i).available for i in ids) == Decimal("25.00")
+
+
+@pytest.mark.parametrize("limit", [1, 2])
+def test_concurrent_workers_send_exactly_as_many_as_the_gate_allows(pg, engine_on, limit):
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        ids = []
+        for index in range(6):
+            user = member(db, f"m{index}", method="CRYPTO")
+            commission(db, user, "5.00")
+            ids.append(user.id)
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": limit})
+    provider = slow_provider()
+
+    def pay(i):
+        with Session() as db:
+            return engine_service.process_member(db, ids[i], provider, now=NOW,
+                                                 facts={"balance": Decimal("1000"), "minimum": Decimal("0.10")})
+
+    results = in_threads(6, pay)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert results.count("SUBMITTED") == limit + 1 and len(provider.created) == limit + 1
+    assert results.count("FEE_RECONCILIATION_PENDING") == 6 - (limit + 1)
+
+
+def test_concurrent_reconciliation_of_an_unverified_payout_holds_every_worker_back_without_a_suspension(pg, engine_on):
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        first, second = member(db, "m1", method="CRYPTO"), member(db, "m2", method="CRYPTO")
+        commission(db, first, "5.00")
+        commission(db, second, "7.00")
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 0})
+        provider = FakeProvider()
+        report = engine_service.run_cycle(db, provider=provider, now=NOW)
+        assert report["members"] == {"SUBMITTED": 1, "FEE_RECONCILIATION_PENDING": 1}
+        second_id = second.id
+    provider.statuses["batch-1"] = "FINISHED"                      # finished; nothing known about its fee
+
+    def cycle(_i):
+        with Session() as db:
+            return engine_service.run_cycle(db, provider=provider, now=NOW + timedelta(days=2))
+
+    for _ in range(2):                                             # and again: no retry gets through
+        reports = in_threads(5, cycle)
+        assert not any(isinstance(r, Exception) for r in reports), reports
+        assert all(r.get("stopped") == "FEE_RECONCILIATION_PENDING" and r["members"] == {} for r in reports), reports
+    assert len(provider.created) == 1                              # the second member was never sent
+    with Session() as db:
+        config = pc.load(db)
+        # Held back, not suspended: nothing was inconsistent and nothing was un-confirmed.
+        assert (config.suspended_reason, config.provider_fee_mode, config.fee_terms_approved) == (
+            None, "DEDUCTED_BY_PROVIDER", True)
+        assert db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_SUSPENDED").count() == 0
+        assert cs.reconciliation_exposure(db) == {"in_flight": 0, "completed_unreconciled": 1, "total": 1}
+        assert db.query(AffiliateCashoutRequest).filter_by(user_id=second_id).count() == 0
+        assert db.query(JournalEntry).count() == 1 and db.query(PaymentSettings).count() == 1
+
+
+def test_a_verified_reconciliation_releases_the_gate_for_exactly_one_of_the_concurrent_workers(pg, engine_on):
+    """An administrator verifies the fee. No reactivation is involved: the gate
+    opens by itself, and it opens for one payout, however many workers race."""
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        ids = []
+        for index in range(4):
+            user = member(db, f"m{index}", method="CRYPTO")
+            commission(db, user, "5.00")
+            ids.append(user.id)
+        admin = member(db, "boss", admin=True)
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 0})
+        provider = slow_provider(statuses={})
+        assert engine_service.run_cycle(db, provider=provider, now=NOW)["members"].get("SUBMITTED") == 1
+        provider.statuses["batch-1"] = "FINISHED"
+        assert engine_service.run_cycle(db, provider=provider, now=NOW)["stopped"] == "FEE_RECONCILIATION_PENDING"
+        cashout = db.query(AffiliateCashoutRequest).one()
+        cs.record_member_fee_by_admin(db, cashout, admin=admin, amount="0.02", charged_to="PAYOUT_AMOUNT",
+                                      reference="payout batch-1", evidence="BLOCKCHAIN_EXPLORER", verified=True,
+                                      received="4.98", now=NOW)
+        assert cs.recording_gate(db, pc.load(db)) is None and pc.load(db).suspended_reason is None
+    later = NOW + timedelta(days=2)
+
+    def cycle(_i):
+        with Session() as db:
+            return engine_service.run_cycle(db, provider=provider, now=later)
+
+    reports = in_threads(5, cycle)
+    assert not any(isinstance(r, Exception) for r in reports), reports
+    assert sum(r["members"].get("SUBMITTED", 0) for r in reports) == 1, reports
+    assert len(provider.created) == 2 and provider.created[1]["amount"] == Decimal("5.00")
+    with Session() as db:
+        assert sorted(r.status for r in db.query(AffiliateCashoutRequest).all()) == ["completed", "processing"]
+        assert cs.reconciliation_exposure(db) == {"in_flight": 1, "completed_unreconciled": 0, "total": 1}
+        assert db.query(PaymentConfigAudit).filter(
+            PaymentConfigAudit.action.in_(["PAYOUTS_SUSPENDED", "PAYOUTS_REACTIVATED"])).count() == 0
+
+
+def test_concurrent_administrators_reactivate_once_and_a_racing_worker_never_pays_before_it(pg, engine_on):
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        first, second = member(db, "m1", method="CRYPTO"), member(db, "m2", method="CRYPTO")
+        admin = member(db, "boss", admin=True)
+        commission(db, first, "5.00")
+        commission(db, second, "7.00")
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 0})
+        provider = FakeProvider(statuses={})
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        provider.statuses["batch-1"] = "FINISHED"
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        cashout = db.query(AffiliateCashoutRequest).filter_by(user_id=first.id).one()
+        cs.record_member_fee_by_admin(db, cashout, admin=admin, amount="0.02", charged_to="PAYOUT_AMOUNT",
+                                      reference="payout batch-1", evidence="PROVIDER_STATEMENT", verified=True,
+                                      received="4.98", now=NOW)
+        assert pc.load(db).suspended_reason is None                # reconciled; nothing was ever suspended
+        # A confirmed inconsistency on that payout, reviewed and the settings put back by an administrator.
+        pc.suspend_payouts(db, reason="PROVIDER_AMOUNT_MISMATCH", cashout_id=cashout.id, now=NOW)
+        db.commit()
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 0})
+        assert pc.load(db).suspended_reason == "PROVIDER_AMOUNT_MISMATCH" and pc.load(db).fee_rules_gate() is None
+        admin_id, second_id = admin.id, second.id
+    later = NOW + timedelta(days=2)
+
+    def work(i):
+        with Session() as db:
+            if i < 3:
+                try:
+                    cs.reactivate_payouts(db, db.get(User, admin_id), password=PASSWORD,
+                                          confirmation=pc.CONFIRM_REACTIVATION,
+                                          note="Checked payout batch-1 against the provider statement.")
+                    return "REACTIVATED"
+                except pc.PaymentConfigError as exc:
+                    return exc.code
+            return engine_service.run_cycle(db, provider=provider, now=later).get("stopped", "RAN")
+
+    results = in_threads(6, work)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert sorted(results[:3]) == ["NOT_SUSPENDED", "NOT_SUSPENDED", "REACTIVATED"], results
+    assert set(results[3:]) <= {"PAYOUTS_SUSPENDED", "RAN", "FEE_RECONCILIATION_PENDING"}, results
+    with Session() as db:
+        assert db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_REACTIVATED").count() == 1
+        assert pc.load(db).suspended_reason is None
+        engine_service.run_cycle(db, provider=provider, now=later)
+        rows = db.query(AffiliateCashoutRequest).filter_by(user_id=second_id).all()
+        assert [r.status for r in rows] == ["processing"]          # paid once, after the reactivation
+    assert len(provider.created) == 2 and provider.created[1]["amount"] == Decimal("7.00")

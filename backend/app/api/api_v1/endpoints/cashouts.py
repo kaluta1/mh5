@@ -32,7 +32,8 @@ from app.services.financial_eligibility import FinancialEligibilityHold, http_er
 
 admin_router = APIRouter()
 
-_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE", "CHARGED_TO_REQUIRED")
+_UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE", "CHARGED_TO_REQUIRED", "EVIDENCE_REQUIRED",
+                  "RECEIVED_REQUIRED", "AMOUNTS_DO_NOT_ADD_UP")
 
 
 def _error(exc: service.CashoutError) -> HTTPException:
@@ -187,6 +188,12 @@ class NetworkFeeRecord(BaseModel):
     reference: str = Field(..., min_length=3, max_length=200)
     # Beneficiary-paid payouts only: where the provider took the fee from.
     charged_to: Optional[str] = Field(default=None, max_length=20, description="PAYOUT_AMOUNT or PROVIDER_BALANCE")
+    # Where the figures were read: PROVIDER_STATEMENT, BLOCKCHAIN_EXPLORER, PROVIDER_SUPPORT or OTHER.
+    evidence: Optional[str] = Field(default=None, max_length=30)
+    # The administrator checked the fee, who bore it and the amount received against that evidence.
+    # Only then does the payout count as reconciled; it needs `received`.
+    verified: bool = False
+    received: Optional[Decimal] = Field(default=None, ge=0, max_digits=18, decimal_places=8)
 
 
 @admin_router.post("/{cashout_id}/network-fee")
@@ -203,7 +210,9 @@ def network_fee(cashout_id: int, body: NetworkFeeRecord, db: Session = Depends(g
     try:
         if cashout.network_fee_policy == payment_config.FEE_MEMBER_PAYS:
             cashout = service.record_member_fee_by_admin(db, cashout, admin=admin, amount=body.amount,
-                                                         charged_to=body.charged_to, reference=body.reference)
+                                                         charged_to=body.charged_to, reference=body.reference,
+                                                         evidence=body.evidence, verified=body.verified,
+                                                         received=body.received)
         else:
             cashout = service.record_network_fee_by_admin(db, cashout, admin=admin, amount=body.amount,
                                                           reference=body.reference)

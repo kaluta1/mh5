@@ -22,6 +22,7 @@ import {
   type FinanceOverview,
   type FinanceSection,
   type FinanceSettings,
+  type PayoutSuspension,
   type ProviderView,
   type SettingField,
   type WebhookHealth,
@@ -147,6 +148,15 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           <SwitchSummary label="Automatic crypto payouts" server={settings.server_switches.crypto_auto_payout}
             effective={settings.effective.automatic_crypto_payouts}
             note="Money is sent only when the server master switch (CRYPTO_AUTO_PAYOUT_ENABLED) and the Admin switch are both on and every payout credential is configured." />
+          {settings.payout_suspension && (
+            <PayoutSuspensionCard suspension={settings.payout_suspension} phrase={settings.confirmations.payout_reactivation}
+              canManage={canManage} busy={busy} change={change} />
+          )}
+          {!settings.payout_suspension && settings.network_fee_gate && (
+            <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="crypto-fee-gate">
+              No crypto payout can be created: {settings.network_fee_gate.message}
+            </p>
+          )}
           <SettingsForm title="Crypto Cashout settings" fields={group('crypto')} settings={settings} canManage={canManage}
             busy={busy} change={change} idPrefix="crypto" />
         </div>
@@ -238,6 +248,79 @@ function SwitchSummary({ label, server, effective, note }: { label: string; serv
           <span className="text-gray-500">Server master switch: {server ? 'On' : 'Off'}</span>
         </div>
         <p className="text-xs text-gray-500">{note}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Crypto payouts are suspended because a payout did not add up. Lifting the
+ * suspension is its own act: it is not a setting, restoring the settings does
+ * not do it, and it needs a written review note, the typed phrase and the
+ * password. It sends nothing and does not switch automatic payouts on.
+ */
+function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change }: {
+  suspension: PayoutSuspension; phrase: string; canManage: boolean; busy: boolean; change: Change
+}) {
+  const [note, setNote] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [password, setPassword] = useState('')
+
+  const reactivate = async () => {
+    const sentPassword = password
+    setPassword('')
+    const ok = await change(() => api.post(`${FINANCE_BASE}/payouts/reactivate`, {
+      current_password: sentPassword, confirmation, note: note.trim(),
+    }), 'Crypto payouts reactivated. Nothing was sent by this; automatic payouts follow their own switch.',
+    'Crypto payouts could not be reactivated.')
+    if (ok) { setNote(''); setConfirmation('') }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3" data-testid="payout-suspension">
+        <h2 className="font-semibold text-red-700 dark:text-red-300">Crypto payouts are suspended</h2>
+        <p className="text-sm text-gray-900 dark:text-white">{suspension.message}</p>
+        <dl className="space-y-2 text-sm">
+          <Row label="Reason" value={humanize(suspension.reason)} />
+          <Row label="Since" value={dateTime(suspension.since)} />
+          <Row label="Payout that caused it" value={suspension.cashout_id ? `Cashout #${suspension.cashout_id}` : '-'} />
+        </dl>
+        <p className="text-xs text-gray-500">
+          This is a suspension, not the ordinary wait for a payout&apos;s fee to be verified: a payout showed a
+          confirmed inconsistency. No payout is created while this is shown. Changing or restoring the settings below
+          does not lift it, and neither does recording a fee. Review the payout in Cashout Transactions, record its
+          actual network fee as verified, resolve what is listed under Reconciliation, then reactivate here. These
+          controls limit the exposure; they do not guarantee the actual network fee of any payout, including the
+          first one after a reactivation.
+        </p>
+        {suspension.rules_gate && (
+          <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="suspension-rules-gate">
+            Before it can be reactivated, the network fee settings must be in force again ({humanize(suspension.rules_gate)}).
+          </p>
+        )}
+        {canManage && (
+          <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="space-y-1">
+              <label htmlFor="reactivation-note" className="block text-sm font-medium">What was reviewed and how it was resolved</label>
+              <textarea id="reactivation-note" className={inputClass} rows={3} maxLength={500} value={note} disabled={busy}
+                onChange={(e) => setNote(e.target.value)} />
+              <p className="text-xs text-gray-500">At least 20 characters. Kept in the configuration history.</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="reactivation-confirmation" className="block text-sm font-medium text-red-700 dark:text-red-300">
+                Type &quot;{phrase}&quot; to confirm
+              </label>
+              <input id="reactivation-confirmation" className={inputClass} value={confirmation} disabled={busy}
+                autoComplete="off" onChange={(e) => setConfirmation(e.target.value)} />
+            </div>
+            <PasswordField id="reactivation-password" value={password} onChange={setPassword} disabled={busy} />
+            <Button variant="outline" onClick={() => void reactivate()}
+              disabled={busy || !password || note.trim().length < 20 || confirmation !== phrase}>
+              Reactivate crypto payouts
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

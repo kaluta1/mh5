@@ -13,7 +13,8 @@ import { CashoutPanel } from './cashout-panel'
 
 // Synthetic limits for the test only; they are not a policy.
 const terms = (over = {}) => ({ available: true, version: 3, cap_percent: '10', cap_usd: '1', valid_days: 0,
-  minimum_received: 0.01, accepted: false, accepted_at: null, expires_at: null, ...over })
+  minimum_received: 0.01, provider: 'NOWPayments', limit_applies_to: 'ESTIMATE' as const, actual_fee_guaranteed: false,
+  accepted: false, accepted_at: null, expires_at: null, ...over })
 
 function summary(over: Partial<CashoutSummary> = {}, termsOver = {}): CashoutSummary {
   return {
@@ -64,11 +65,25 @@ describe('CashoutPanel: network fee terms', () => {
   it('states that the member pays the fee and the limit, and accepts only after an explicit tick', async () => {
     render(<CashoutPanel onRequestUsd={() => undefined} />)
     const block = await screen.findByTestId('fee-terms')
-    expect(block).toHaveTextContent('paid by you')
-    expect(block).toHaveTextContent('taken out of the amount sent')
+    expect(block).toHaveTextContent('You pay the blockchain network fee')                   // who pays
+    expect(block).toHaveTextContent('NOWPayments deducts the fee from the amount sent to you')   // who deducts
+    expect(block).toHaveTextContent('You receive the remaining amount')                     // what arrives
+    expect(block).toHaveTextContent('gives an estimate of the fee')                         // what is shown
     expect(block).toHaveTextContent('MyHigh5 charges no fee of its own')
     expect(block).toHaveTextContent('10% of the payout or $1.00, whichever is lower')
-    expect(screen.getByRole('status')).toHaveTextContent('Accept the network fee terms')
+    // The limit is on the estimate. Nothing here may read as a limit on the actual fee.
+    const caveat = screen.getByTestId('fee-terms-not-guaranteed')
+    expect(caveat).toHaveTextContent('This limit applies to the estimate only')
+    expect(caveat).toHaveTextContent('may differ from the estimate')
+    expect(caveat).toHaveTextContent('can be higher than the limit')
+    expect(caveat).toHaveTextContent('not guaranteed to stay below it')
+    const consent = within(block).getByRole('checkbox').closest('label')!
+    expect(consent).toHaveTextContent('I pay the network fee')
+    expect(consent).toHaveTextContent('NOWPayments deducts it and I receive the remaining amount')
+    expect(consent).toHaveTextContent('is checked against an estimate')
+    expect(consent).toHaveTextContent('not guaranteed to stay below it')
+    expect(block.textContent).not.toMatch(/up to \$|up to 10%|never more than|at most/i)
+    expect(screen.getByRole('status')).toHaveTextContent('accept the network fee terms')
     const accept = within(block).getByRole('button', { name: 'Accept network fee terms' })
     expect(accept).toBeDisabled()                                   // nothing is accepted by default
     fireEvent.click(within(block).getByRole('checkbox'))
@@ -78,7 +93,9 @@ describe('CashoutPanel: network fee terms', () => {
       expect.objectContaining({ method: 'POST',
         body: JSON.stringify({ version: 3, cap_percent: '10', cap_usd: '1', accept: true }) })))
     expect(await screen.findByTestId('fee-terms-accepted')).toHaveTextContent('Accepted on')
-    expect(screen.getByRole('status')).toHaveTextContent('sent to your wallet automatically')
+    expect(addToast).toHaveBeenCalledWith(expect.stringContaining('the actual fee may differ'), 'success')
+    expect(screen.getByRole('status')).toHaveTextContent('less the network fee')
+    expect(screen.getByRole('status')).toHaveTextContent('the actual fee may differ')
   })
 
   it('lets the member withdraw the acceptance', async () => {
@@ -88,6 +105,14 @@ describe('CashoutPanel: network fee terms', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.test/api/v1/payments/cashout-fee-terms/withdraw',
       expect.objectContaining({ method: 'POST' })))
     expect(await screen.findByRole('button', { name: 'Accept network fee terms' })).toBeDisabled()
+  })
+
+  it('names the provider the server names, and falls back to a neutral wording', async () => {
+    current = summary({}, { provider: undefined })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    const block = await screen.findByTestId('fee-terms')
+    expect(block).toHaveTextContent('The payment provider deducts the fee from the amount sent to you')
+    expect(block).not.toHaveTextContent('NOWPayments')
   })
 
   it('offers nothing to accept while the terms are not on offer', async () => {

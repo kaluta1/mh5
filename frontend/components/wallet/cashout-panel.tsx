@@ -107,7 +107,12 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
       if (!res.ok) throw new Error(apiErrorText(data.detail, 'Could not save your choice'))
       setSummary(data as CashoutSummary)
       setTermsChecked(false)
-      addToast(action === 'accept' ? 'Network fee terms accepted.' : 'Acceptance withdrawn. No crypto payout will be sent.', 'success')
+      addToast(
+        action === 'accept'
+          ? 'Network fee terms accepted. The fee shown before a payout is an estimate; the actual fee may differ.'
+          : 'Acceptance withdrawn. No crypto payout will be sent.',
+        'success',
+      )
     } catch (e) {
       addToast(e instanceof Error ? e.message : t('common.error') || 'Error', 'error')
       await load()
@@ -154,6 +159,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
   ]
   const method = summary.cashout_method
   const feeTerms = summary.fees.CRYPTO.terms
+  const providerName = feeTerms?.provider || 'The payment provider'
   const attention = !['AUTOMATIC_PAYOUT_PENDING', 'READY_TO_REQUEST'].includes(summary.status)
 
   return (
@@ -338,14 +344,23 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
         >
           <h3 className="font-semibold text-gray-900 dark:text-white">Network fee terms</h3>
           <ul className="list-disc space-y-1 pl-5 text-gray-600 dark:text-gray-300">
-            <li>The blockchain network fee of each payout is paid by you. It is taken out of the amount sent, so you receive your balance less that fee.</li>
-            <li>MyHigh5 charges no fee of its own and keeps no part of the network fee.</li>
+            <li>You pay the blockchain network fee of each payout. MyHigh5 charges no fee of its own and keeps no part of it.</li>
             <li>
-              The fee is set by the network at the moment of payment. A payout is not sent when the estimated fee is
-              above your limit: <span className="font-medium text-gray-900 dark:text-white">{feeLimitText(feeTerms)}</span>.
-              Your balance then stays available.
+              {providerName} deducts the fee from the amount sent to you. You receive the remaining amount, which is
+              less than your balance.
             </li>
-            <li>The exact fee and the amount you received are shown in your cashout history once the payout is complete.</li>
+            <li>
+              Before a payout, {providerName} gives an <span className="font-medium">estimate</span> of the fee. A
+              payout is not sent when that estimate, with a safety margin added, is above{' '}
+              <span className="font-medium text-gray-900 dark:text-white">{feeLimitText(feeTerms)}</span>. Your
+              balance then stays available.
+            </li>
+            <li data-testid="fee-terms-not-guaranteed">
+              <span className="font-medium text-gray-900 dark:text-white">This limit applies to the estimate only.</span>{' '}
+              The actual fee is set when the payment is made and may differ from the estimate. It can be higher than
+              the limit, and it is not guaranteed to stay below it.
+            </li>
+            <li>The actual fee and the amount you received are shown in your cashout history once the payout is complete.</li>
           </ul>
           {feeTerms.accepted ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -368,7 +383,9 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                   onChange={(e) => setTermsChecked(e.target.checked)}
                 />
                 <span>
-                  I accept that the network fee is taken out of my crypto payouts, up to {feeLimitText(feeTerms)} per payout.
+                  I understand that I pay the network fee, that {providerName} deducts it and I receive the remaining
+                  amount, and that the limit of {feeLimitText(feeTerms)} is checked against an estimate: the actual
+                  fee may differ and is not guaranteed to stay below it.
                 </span>
               </label>
               <Button

@@ -17,11 +17,14 @@ Production today runs `d208c1d` with Alembic revision `e2f3a4b5c6d7`.
 
 | 3 | `b6c7d8e9f0a1` | `a5b6c7d8e9f0` | one row in `chart_of_accounts`: 5005 Crypto payout network fees (paid by MyHigh5), under 5000 |
 | 4 | `c7d8e9f0a1b2` | `b6c7d8e9f0a1` | beneficiary-paid network fee (section 12): 7 columns on `payment_settings` (every default fails closed), 9 nullable columns on `affiliate_cashout_requests`, `cashout_fee_consents` |
+| 5 | `d8e9f0a1b2c3` | `c7d8e9f0a1b2` | payout fee safety (section 13): 5 columns on `payment_settings` (no margin, gate of 0, not suspended), 4 nullable columns on `affiliate_cashout_requests` |
 
-All four are additive, idempotent and run in one transaction each. They read
-and change no commission, deposit, cashout or journal row. `c7d8e9f0a1b2` is
-the single head. Its downgrade refuses to run once a member's acceptance or a
-beneficiary-paid payout has been recorded.
+All five are additive, idempotent and run in one transaction each. They read
+and change no commission, deposit, cashout or journal row. `d8e9f0a1b2c3` is
+the single head. The downgrade of `c7d8e9f0a1b2` refuses to run once a
+member's acceptance or a beneficiary-paid payout has been recorded; the
+downgrade of `d8e9f0a1b2c3` refuses while payouts are suspended or once a fee
+reconciliation has been recorded.
 
 Verified on a disposable local PostgreSQL 16 database with production-like
 rows: upgrade from `e2f3a4b5c6d7`, a second upgrade, downgrade, upgrade again;
@@ -123,8 +126,9 @@ with destination details is open.
 9. Stop the backend (or put it in maintenance) so no request runs across the
    schema change.
 10. `alembic upgrade f3a4b5c6d7e8`, then `alembic upgrade a5b6c7d8e9f0`, then
-    `alembic upgrade b6c7d8e9f0a1`, then `alembic upgrade c7d8e9f0a1b2`.
-    `alembic current` must print `c7d8e9f0a1b2 (head)`, and
+    `alembic upgrade b6c7d8e9f0a1`, then `alembic upgrade c7d8e9f0a1b2`, then
+    `alembic upgrade d8e9f0a1b2c3`.
+    `alembic current` must print `d8e9f0a1b2c3 (head)`, and
     `SELECT account_code, account_name, is_active FROM chart_of_accounts WHERE account_code = '5005';`
     must return one active row, and
     `SELECT count(*) FROM cashout_fee_consents;` must return 0.
@@ -179,8 +183,10 @@ with destination details is open.
 - `affiliate_cashout_requests` has no new row.
 - `Admin > Finance & Payments > Crypto Cashout`: "Provider fee behaviour" reads
   UNVERIFIED, both member fee limits read 0, "Network fee limits approved" is
-  off. Reconciliation states "No crypto payout can be created". Leave all of
-  them as they are (section 12.5).
+  off. "Safety margin on the fee estimate" is empty and "Payouts allowed
+  without a verified actual fee" reads 0. No suspension card is shown.
+  Reconciliation states "No crypto payout can be created". Leave all of them
+  as they are (sections 12.5 and 13.6).
 
 ## 8. Go / no-go
 
@@ -425,9 +431,9 @@ Reconciliation (`MEMBER_FEE_NOT_RECORDED`) and an administrator with
 `process_cashouts` records the fee from the provider's statement, stating where
 the provider took it from.
 
-Each of these is listed as critical, sets the provider fee behaviour back to
-UNVERIFIED and withdraws the approval, so that NO further payout is created
-until a person has looked:
+Each of these is listed as critical, SUSPENDS all payouts (section 13.4), sets
+the provider fee behaviour back to UNVERIFIED and withdraws the approval, so
+that NO further payout is created until a person has looked:
 
 | Flag | Meaning |
 |---|---|
@@ -459,3 +465,185 @@ Before a single payout can be created, in this order:
 A settings row saved before this migration keeps its stored policy. If it
 reads COMPANY_PAYS no payout is created (`FEE_POLICY_NOT_BENEFICIARY_PAID`)
 until an administrator sets MEMBER_PAYS. Production has no settings row yet.
+
+## 13. Payout fee safety (Phase 3.3 Stage A, implemented, not deployed)
+
+**These controls do not guarantee the actual network fee of any payout, and
+in particular not of the first one.** The member's limit is checked against
+the provider's ESTIMATE. The provider decides the actual fee when it sends, and
+it is known only afterwards. What follows keeps the exposure small and makes a
+problem stop payouts; it cannot prevent the first payout's fee from being
+higher than the limit.
+
+### 13.1 What the member is told
+
+The wallet page and the acceptance text now say: the member pays the network
+fee; the provider deducts it; the member receives the remaining amount; the fee
+shown before a payout is an estimate; the limit is checked against that
+estimate (with a safety margin) and is NOT a limit on the actual fee, which may
+differ and can be higher. Nothing reads "up to" a limit any more.
+
+No acceptance record is invalidated by this: nothing was deployed with the
+earlier wording, the terms version stays 1 and no acceptance exists in
+production. If an acceptance had been collected under the earlier wording,
+raising "Network fee terms version" would be the way to ask for it again.
+
+### 13.2 Recording gate (a temporary hold, not a suspension)
+
+No FURTHER payout is created while more payouts than "Payouts allowed without
+a verified actual fee" are outstanding. Outstanding means: reserved, at the
+provider or of unknown outcome, or completed without a VERIFIED actual fee.
+The default is 0: one payout at a time, each verified before the next. It
+does not block the first payout: with nothing outstanding one payout goes.
+
+**Nothing is wrong while the gate holds payouts back.** The fee of an earlier
+payout is simply not verified yet. Nothing is stored, nothing is audited as a
+problem, the provider fee behaviour and the approval stay as they are, and the
+gate lifts BY ITSELF as soon as the fee is verified. No reactivation exists
+for it and none is needed. The engine reports `FEE_RECONCILIATION_PENDING`;
+Reconciliation shows the figures under "temporary hold".
+
+- A missing actual fee is never taken to be zero. A payout that is still at
+  the provider is not a reconciled one. A completed beneficiary-paid payout
+  with no reconciliation recorded (including any written before this
+  migration) counts as NOT reconciled.
+- A payout's fee counts as verified in exactly two ways, and either one
+  releases the gate automatically when the number allows:
+  1. `PROVIDER_VERIFIED`: the provider reported the fee, a payer value that was
+     confirmed with it (`NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES`), and an
+     amount that agrees with the confirmed meaning of `amount`
+     (`NOWPAYMENTS_PAYOUT_AMOUNT_MEANS` = REQUESTED or RECEIVED). All three
+     variables are empty by default, so by default nothing the provider
+     reports verifies anything.
+  2. `ADMIN_VERIFIED`: an administrator with `process_cashouts` records the
+     fee, where the provider took it from, the evidence (provider statement,
+     blockchain explorer or provider support; "other" never verifies) and the
+     amount the member received, and that amount equals the payout less the
+     fee. The record is audited with the evidence and the administrator.
+- A figure entered WITHOUT that is kept as `ADMIN_UNVERIFIED` (or
+  `PROVIDER_UNVERIFIED`), is listed under Reconciliation
+  (`MEMBER_FEE_NOT_VERIFIED`) and does not count: the gate keeps holding. It
+  may be replaced once, by a verified figure; a verified figure is never
+  changed.
+- Workers are serialised for this check (they lock the settings row before
+  reserving), so several workers, a batch, a retry or a manual engine run
+  cannot send more than the gate allows. Tested on PostgreSQL with concurrent
+  workers.
+
+### 13.3 Safety margin on the estimate
+
+"Safety margin on the fee estimate" raises the provider's estimate before it
+is compared with the member's limit: adjusted = estimate x (1 + margin / 100),
+in exact decimal arithmetic, rounded up at eight decimal places. The adjusted
+estimate is also what the minimum amount received, the company's own fee limit
+and the provider balance check use.
+
+- **It is empty by default and no value is a decided policy.** While it is
+  empty no payout is created (`FEE_SAFETY_MARGIN_NOT_SET`) and the limits
+  cannot be approved. 0 is a valid value only once the owner has decided it.
+- Range 0 to 500, at most three decimal places. Changing it, or the gate
+  number, withdraws the approval of the fee settings.
+- It changes what is CHECKED, never what is sent: the whole amount is still
+  handed to the provider and the fee is still taken once, by the provider.
+- Three figures are kept apart on every payout: the provider's estimate, the
+  adjusted estimate (with the margin used), and the actual fee.
+
+### 13.4 Suspension (persistent, for a confirmed inconsistency only)
+
+Payouts are SUSPENDED, with the reason, the time and the payout stored on the
+settings row and an audit event (`PAYOUTS_SUSPENDED`), when a payout shows:
+
+| Reason | When |
+|---|---|
+| `PROVIDER_FEE_MODE_MISMATCH` | the provider charged its fee to the MyHigh5 balance |
+| `PROVIDER_AMOUNT_MISMATCH` | the reported amount is larger than the amount sent, or contradicts the confirmed meaning of `amount` |
+| `FEE_CAP_EXCEEDED` | the actual fee is above the member's limit |
+
+Each also sets the provider fee behaviour back to UNVERIFIED and withdraws the
+approval. The first finding stays the stored reason.
+
+A fee that is only missing or not verified is NOT in this list. That is the
+recording gate (13.2).
+
+While suspended: no payout is reserved or sent, by any worker, the scheduler
+or "run engine"; payouts already at the provider are still reconciled;
+automatic payouts cannot be switched on. **Restoring the provider fee
+behaviour, the approval or any other setting does not lift it. Recording a fee
+afterwards, verified or not, does not lift it.**
+
+| | Recording gate (13.2) | Suspension (13.4) |
+|---|---|---|
+| Cause | an earlier payout's fee is not verified yet | a confirmed inconsistency |
+| Stored | nothing | reason, time, payout; audit event |
+| Settings | unchanged | fee behaviour to UNVERIFIED, approval withdrawn |
+| Ends | by itself, when the fee is verified | only by an administrator's reactivation |
+
+### 13.5 Reactivation by an administrator (after a suspension only)
+
+Admin > Finance & Payments > Crypto Cashout shows the suspension. Lifting it
+is a separate act (`POST /admin/finance/payouts/reactivate`), not a setting:
+
+1. Review the payout named on the card in Cashout Transactions.
+2. Record its actual fee as verified (13.2). A payout that genuinely does not
+   add up stays flagged; decide with the owner what is done about it.
+3. Confirm the provider's behaviour with the provider again, set "Provider fee
+   behaviour" (typed phrase), then approve the fee settings (typed phrase,
+   separate save).
+4. Reactivate: `manage_payment_settings`, the current password, the phrase
+   "REACTIVATE CRYPTO PAYOUTS" and a written note of what was reviewed (at
+   least 20 characters, kept in the configuration history as
+   `PAYOUTS_REACTIVATED`).
+
+It is refused when payouts are not suspended, while a completed payout still
+has no verified fee beyond the gate, or while the fee rules are not in force.
+It changes no setting, sends nothing and does not switch automatic payouts on.
+
+With every default in place (no confirmed provider values, gate of 0) the
+ordinary flow is manual but needs no reactivation: one payout, an
+administrator records its fee as verified, the next payout goes. It becomes
+fully automatic when the provider's values are confirmed and set (13.6).
+
+### 13.6 Prerequisites and provider dependencies
+
+Migration: `d8e9f0a1b2c3` after `c7d8e9f0a1b2`; no data is rewritten. Nothing
+else is needed to deploy; nothing here activates payouts.
+
+Still to be confirmed with the provider before any payout (unchanged from
+12.5, plus the last one): that Receiver applies to API payouts; the unit of
+`fee`; the values of `fee_paid_by`; whether the minimum applies before or after
+the fee; and **what `amount` on a finished payout means**, which decides
+`NOWPAYMENTS_PAYOUT_AMOUNT_MEANS`.
+
+Still to be decided by the owner (nothing is assumed): the member fee limits;
+the safety margin; the gate number if not 0; whether MyHigh5 compensates a
+member for an actual fee above their limit; how a fee the provider charged to
+MyHigh5 is booked.
+
+### 13.7 Remaining financial risks
+
+- The actual fee of the first payout, and of any payout, can exceed the
+  member's limit. The margin lowers the chance; the gate limits how many
+  payouts are exposed before it is noticed; neither prevents it.
+- Until the provider's values are confirmed, an excess is noticed only when an
+  administrator records the fee. With the gate at 0 that is before the next
+  payout; with a higher number, up to that many payouts later.
+- An administrator's verified record releases the next payout without a second
+  step. A wrong figure recorded as verified (for example a fee that was in
+  fact above the limit, entered lower) would therefore let payouts continue.
+  The record is audited with its evidence; there is no second-person check.
+- Nothing is refunded automatically. A member who bore more than their limit
+  is made whole only if the owner decides so, by hand.
+- A fee the provider charged to MyHigh5 leaves the treasury account overstated
+  until accounting books it.
+- "Verified by an administrator" rests on that administrator reading the
+  evidence correctly. The same administrator may hold both permissions; there
+  is no second-person rule.
+
+### 13.8 Rollback limits
+
+Rolling the code back leaves the new columns in place and unused, which is
+safe. But the PREVIOUS code does not know the suspension or the gate: if
+payouts were ever enabled, rolling back to it would let them run without
+either. Before any rollback, switch automatic payouts off (server switch) and
+confirm no payout is at the provider. Do not run the downgrade once a
+suspension or a reconciliation is recorded; it refuses, by design.

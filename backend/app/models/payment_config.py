@@ -57,6 +57,10 @@ class PaymentSettings(Base):
     member_fee_cap_percent: Mapped[Decimal] = mapped_column(Numeric(6, 3), nullable=False)
     member_fee_cap_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     min_net_payout_usd: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Safety: the margin put on the provider's fee estimate (NULL = not set: no
+    # payout), and how many payouts may be outstanding without a verified fee.
+    fee_estimate_margin_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 3), nullable=True)
+    max_unreconciled_payouts: Mapped[int] = mapped_column(Integer, nullable=False)
     fee_terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
     fee_consent_valid_days: Mapped[int] = mapped_column(Integer, nullable=False)
     fee_terms_approved: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -96,6 +100,11 @@ class PaymentSettings(Base):
     last_connection_test_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     last_connection_ok_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_connection_test_detail: Mapped[Optional[dict]] = mapped_column(_JSON, nullable=True)
+
+    # ---- payout suspension (set by the engine, lifted only by an administrator)
+    payout_suspended_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    payout_suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    payout_suspended_cashout_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"),
                                                       **_USER_FK)

@@ -9,12 +9,16 @@ import {
   CASHOUTS_BASE,
   CASHOUT_STATUS_LABEL,
   FEE_CHARGED_TO,
+  FEE_EVIDENCE,
   FEE_FLAG_LABEL,
   FINANCE_BASE,
   NETWORK_FEE_LABEL,
+  RECONCILIATION_LABEL,
   dateTime,
   financeErrorText,
   humanize,
+  expectedReceived,
+  sameAmount,
   usd,
   validMemberFee,
   validNetworkFee,
@@ -58,6 +62,9 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
   const [reason, setReason] = useState('')
   const [feeAmount, setFeeAmount] = useState('')
   const [chargedTo, setChargedTo] = useState('')
+  const [feeEvidence, setFeeEvidence] = useState('')
+  const [feeVerified, setFeeVerified] = useState(false)
+  const [feeReceived, setFeeReceived] = useState('')
   const [destination, setDestination] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -83,6 +90,9 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
     setReason('')
     setFeeAmount('')
     setChargedTo('')
+    setFeeEvidence('')
+    setFeeVerified(false)
+    setFeeReceived('')
     const res = await api.get(`${CASHOUTS_BASE}/${id}`)
     if (res.status === 200) setDetail(res.data)
     else setError(financeErrorText(res, 'The cashout could not be loaded.'))
@@ -218,8 +228,13 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                 {c.beneficiary_fee?.applies && (<>
                   <Row label="Handed to the provider" value={
                     <span data-testid="member-fee-sent">{c.beneficiary_fee.amount_sent ?? '-'} ({humanize(c.beneficiary_fee.provider_fee_mode)})</span>} />
-                  <Row label="Fee estimate for this payout" value={c.beneficiary_fee.estimate ?? '-'} />
-                  <Row label="Member's fee limit for this payout" value={c.beneficiary_fee.fee_cap ?? '-'} />
+                  <Row label="Provider's fee estimate for this payout" value={c.beneficiary_fee.estimate ?? '-'} />
+                  <Row label="Estimate with the safety margin (checked against the limit)" value={
+                    <span data-testid="member-fee-adjusted">
+                      {c.beneficiary_fee.estimate_adjusted ?? '-'}
+                      {c.beneficiary_fee.margin_percent != null ? ` (margin ${c.beneficiary_fee.margin_percent}%)` : ''}
+                    </span>} />
+                  <Row label="Member's limit for the estimate" value={c.beneficiary_fee.fee_cap ?? '-'} />
                   <Row label="Actual network fee (paid by the member)" value={
                     <span data-testid="member-fee-actual">
                       {c.beneficiary_fee.actual !== null
@@ -227,6 +242,17 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                         : c.status === 'completed' ? 'Not recorded yet' : 'Known once the payout is complete'}
                     </span>} />
                   <Row label="Received by the member" value={<span data-testid="member-fee-received">{c.beneficiary_fee.net_received ?? '-'}</span>} />
+                  {c.status === 'completed' && (
+                    <Row label="Actual fee verified" value={
+                      <span data-testid="member-fee-reconciliation"
+                        className={c.beneficiary_fee.reconciled ? '' : 'text-amber-800 dark:text-amber-200'}>
+                        {c.beneficiary_fee.reconciliation
+                          ? `${RECONCILIATION_LABEL[c.beneficiary_fee.reconciliation] ?? humanize(c.beneficiary_fee.reconciliation)}`
+                            + (c.beneficiary_fee.evidence ? ` · evidence: ${humanize(c.beneficiary_fee.evidence)}` : '')
+                          : 'No: nothing recorded'}
+                        {!c.beneficiary_fee.reconciled && ' · does not count as reconciled'}
+                      </span>} />
+                  )}
                   {c.beneficiary_fee.flag && (
                     <Row label="Needs attention" value={
                       <span className="text-red-700 dark:text-red-300" data-testid="member-fee-flag">
@@ -330,14 +356,32 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
               </div>
             )}
             {canProcess && c.method === 'CRYPTO' && c.status === 'completed'
-              && c.beneficiary_fee?.applies && c.beneficiary_fee.status === 'NOT_RECORDED' && (
+              && c.beneficiary_fee?.applies && !c.beneficiary_fee.reconciled && (() => {
+              // A figure already entered without verification can only be replaced by a verified one.
+              const replacing = c.beneficiary_fee.status === 'RECORDED'
+              const mustVerify = replacing
+              const verifying = mustVerify || feeVerified
+              const canVerify = FEE_EVIDENCE.find((e) => e.value === feeEvidence)?.verifies === true
+              const expected = expectedReceived(c.gross_amount, feeAmount, chargedTo)
+              const received = feeReceived.trim()
+              const addsUp = sameAmount(received, expected)
+              const ready = !!chargedTo && !!feeEvidence && validMemberFee(feeAmount, c.gross_amount)
+                && reference.trim().length >= 3 && (!verifying || (canVerify && addsUp))
+              return (
               <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3" data-testid="member-fee-form">
                 <p className="text-sm text-gray-700 dark:text-gray-300">
                   The member bears the network fee of this payout: {usd(c.gross_amount)} was handed to the provider,
-                  which takes its fee out of it. Enter the fee exactly as the provider&apos;s statement shows it for
-                  this payout (0 if it charged none) and where the provider took it from. The estimate above is not
-                  the fee and is never recorded. Nothing is posted to the ledger and nothing is sent.
+                  which takes its fee out of it. Enter the ACTUAL fee exactly as your evidence shows it for this
+                  payout (0 if none was charged), where the provider took it from, and where you read it. Neither
+                  estimate above is the fee, and neither is ever recorded as it. Nothing is posted to the ledger and
+                  nothing is sent.
                 </p>
+                {replacing && (
+                  <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="member-fee-replacing">
+                    A fee of {c.beneficiary_fee.actual} was entered without being verified. It can be replaced once,
+                    by a verified figure.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label htmlFor="member-fee-amount" className="block text-sm font-medium">Actual network fee ({c.payout_currency ?? 'payout currency'})</label>
@@ -352,24 +396,65 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                       {FEE_CHARGED_TO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <label htmlFor="member-fee-reference" className="block text-sm font-medium">Where it was read (provider payout ID or statement)</label>
+                  <div className="space-y-1">
+                    <label htmlFor="member-fee-evidence" className="block text-sm font-medium">Evidence: where the figures were read</label>
+                    <select id="member-fee-evidence" className={inputClass} value={feeEvidence}
+                      onChange={(e) => setFeeEvidence(e.target.value)}>
+                      <option value="">Choose...</option>
+                      {FEE_EVIDENCE.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="member-fee-reference" className="block text-sm font-medium">Reference (provider payout ID, statement or transaction hash)</label>
                     <input id="member-fee-reference" className={inputClass} value={reference} maxLength={200}
                       onChange={(e) => setReference(e.target.value)} />
                   </div>
                 </div>
+                <label className="flex items-start gap-2 text-sm text-gray-900 dark:text-white">
+                  <input type="checkbox" className="mt-1" checked={verifying} disabled={mustVerify || busy}
+                    onChange={(e) => setFeeVerified(e.target.checked)} />
+                  <span>
+                    I checked the fee, who bore it and the amount the member received against that evidence. Only a
+                    verified record counts as reconciled; without it this payout keeps new payouts on hold. A
+                    verified record that adds up releases them automatically.
+                  </span>
+                </label>
+                {verifying && (
+                  <div className="space-y-1">
+                    <label htmlFor="member-fee-received" className="block text-sm font-medium">Amount the member received, as the evidence shows it</label>
+                    <input id="member-fee-received" className={inputClass} inputMode="decimal" value={feeReceived}
+                      maxLength={20} onChange={(e) => setFeeReceived(e.target.value)} />
+                    {!canVerify && feeEvidence && (
+                      <p className="text-xs text-red-700 dark:text-red-300" data-testid="member-fee-evidence-warning">
+                        This kind of evidence cannot verify a payout. Record the figures as not verified instead.
+                      </p>
+                    )}
+                    {received !== '' && expected !== null && !addsUp && (
+                      <p className="text-xs text-red-700 dark:text-red-300" data-testid="member-fee-sum-warning">
+                        The amount received does not equal the payout less the fee ({expected}). Check the evidence.
+                        If it really differs, record the figures as not verified and review the payout.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {chargedTo === 'PROVIDER_BALANCE' && (
                   <p className="text-sm text-red-700 dark:text-red-300" data-testid="member-fee-mismatch-warning">
-                    That is not the configured behaviour. Recording it stops all new crypto payouts until the
-                    provider&apos;s fee behaviour is confirmed again, and leaves the fee for accounting to book.
+                    That is not the configured behaviour: a confirmed inconsistency. Recording it suspends all
+                    crypto payouts until an administrator has reviewed it and reactivated them, and leaves the fee
+                    for accounting to book.
                   </p>
                 )}
-                <Button disabled={busy || !chargedTo || !validMemberFee(feeAmount, c.gross_amount) || reference.trim().length < 3}
-                  onClick={() => void act('network-fee', { amount: feeAmount.trim(), reference: reference.trim(), charged_to: chargedTo }, 'Actual network fee recorded.')}>
-                  Record actual network fee
+                <Button disabled={busy || !ready}
+                  onClick={() => void act('network-fee', {
+                    amount: feeAmount.trim(), reference: reference.trim(), charged_to: chargedTo, evidence: feeEvidence,
+                    verified: verifying, ...(verifying ? { received } : {}),
+                  }, verifying ? 'Actual network fee recorded as verified.'
+                    : 'Actual network fee recorded as NOT verified: this payout is not reconciled yet.')}>
+                  {verifying ? 'Record verified actual fee' : 'Record actual fee (not verified)'}
                 </Button>
               </div>
-            )}
+              )
+            })()}
             {canProcess && c.method === 'CRYPTO' && c.status === 'unknown' && (
               <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -467,10 +552,37 @@ export function ReconciliationAndAudit({ canManage }: { canManage: boolean }) {
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => void loadReport(true)}>Read provider balance (read-only)</Button>
             )}
+            {report.payout_suspension && (
+              <p className="text-sm text-red-700 dark:text-red-300" data-testid="reconciliation-suspension">
+                Crypto payouts are suspended ({humanize(report.payout_suspension.reason)}
+                {report.payout_suspension.cashout_id ? `, cashout #${report.payout_suspension.cashout_id}` : ''}):{' '}
+                {report.payout_suspension.message} This is a confirmed inconsistency. They stay suspended until an
+                administrator reactivates them in Crypto Cashout; recording a fee does not lift it.
+              </p>
+            )}
             {report.network_fee_gate && (
               <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="network-fee-gate">
                 No crypto payout can be created: {report.network_fee_gate.message}
               </p>
+            )}
+            {report.recording_gate && (
+              <div data-testid="recording-gate">
+                <h3 className="text-sm font-semibold pt-2">Payouts without a verified actual fee (temporary hold)</h3>
+                <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                  <Row label="Still on their way (reserved, at the provider, unknown outcome)" value={report.recording_gate.in_flight} />
+                  <Row label="Completed without a verified actual fee" value={report.recording_gate.completed_unreconciled} />
+                  <Row label="Allowed before new payouts stop" value={report.recording_gate.limit} />
+                  <Row label="New payouts" value={report.recording_gate.blocked
+                    ? 'On hold until these are verified, then released automatically' : 'Not held by this'} />
+                </dl>
+                <p className="text-xs text-gray-500">
+                  This hold is not a suspension: nothing is wrong, the fee of an earlier payout is just not verified
+                  yet. It lifts by itself once that fee is recorded as verified in Cashout Transactions; no
+                  reactivation is needed. A missing fee is never taken to be zero, and a figure nobody verified does
+                  not count. This limits how many payouts are exposed at once; it does not guarantee the actual fee
+                  of any of them.
+                </p>
+              </div>
             )}
             {report.beneficiary_fees && (
               <div data-testid="beneficiary-fees">

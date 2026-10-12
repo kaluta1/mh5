@@ -84,8 +84,20 @@ describe('network fee paid by the member', () => {
 
   it('asks for the fee terms before promising a payout', () => {
     const text = cashoutStatusText(summary({ status: 'FEE_TERMS_REQUIRED' }))
-    expect(text).toContain('Accept the network fee terms')
+    expect(text).toContain('accept the network fee terms')
+    expect(text).toContain('You pay the network fee and receive the remaining amount')
     expect(text).toContain('kept in full')
+  })
+
+  it('never words a pending payout as the full balance or a guaranteed fee', () => {
+    const memberPays = summary({ status: 'AUTOMATIC_PAYOUT_PENDING', fees: {
+      CRYPTO: { platform_fee: 0, note: '', network_fee_policy: 'MEMBER_PAYS' },
+      USD: { rule: '', fee: null, net_amount: null } } })
+    const text = cashoutStatusText(memberPays)
+    expect(text).toContain('less the network fee')
+    expect(text).toContain('estimated')
+    expect(text).toContain('the actual fee may differ')
+    for (const promise of ['guarantee', 'at most', 'never more', 'up to']) expect(text.toLowerCase()).not.toContain(promise)
   })
 
   it('states the limit exactly as it was configured, whichever kinds are set', () => {
