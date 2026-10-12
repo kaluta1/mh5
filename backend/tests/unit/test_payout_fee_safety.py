@@ -90,6 +90,11 @@ def reactivate(db, admin, **overrides):
                                                "note": NOTE, **overrides})
 
 
+def review(db, row, admin, **overrides):
+    """An administrator records that they reviewed a flagged payout (Phase 3.3 B)."""
+    return cs.review_fee_exception(db, row, admin=admin, now=NOW, **{"password": PASSWORD, "note": NOTE, **overrides})
+
+
 def suspension(db):
     db.expire_all()
     config = pc.load(db)
@@ -99,8 +104,10 @@ def suspension(db):
 def restore_rules(db, admin):
     """Put back what a provider mismatch took away: the confirmed fee behaviour and the approval."""
     pc.update_settings(db, admin, {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, password=PASSWORD, now=NOW,
+                       expected_version=pc.load(db).version,
                        confirmation=pc.CONFIRM_FEE_MODE)
     pc.update_settings(db, admin, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
+                       expected_version=pc.load(db).version,
                        confirmation=pc.CONFIRM_FEE_LIMITS)
 
 
@@ -671,6 +678,8 @@ def test_a_fee_recorded_afterwards_never_lifts_a_suspension(strict, payers_confi
     assert run(db, provider_, now=later) == {"enabled": True, "reconciled": {}, "members": {},
                                              "stopped": "PAYOUTS_SUSPENDED"}
     assert len(provider_.created) == 1 and cashouts(db, second) == []
+    review(db, cashouts(db, first)[0], admin)                      # the flagged payout was looked at ...
+    assert suspension(db) == ("PROVIDER_FEE_MODE_MISMATCH", row.id)        # ... which lifts nothing either
     reactivate(db, admin)                                          # only this does
     assert run(db, provider_, now=later)["members"] == {"SUBMITTED": 1}
 
@@ -737,6 +746,8 @@ def test_reactivation_is_a_separate_deliberate_act(strict, payers_confirmed):
     verify(db, cashouts(db, first)[0], admin, fee="0.25", charged_to="PROVIDER_BALANCE", received="5.00")
     assert refused() == "UNSAFE_ACTIVATION"                        # the provider's behaviour is not confirmed again
     restore_rules(db, admin)
+    assert refused() == "UNSAFE_ACTIVATION"                        # the flagged payout has not been reviewed
+    review(db, cashouts(db, first)[0], admin)
     assert refused(plain_admin(db)) == "FORBIDDEN"                 # an administrator without the permission
     assert refused(first) == "FORBIDDEN"                           # a member
     assert refused(password="wrong") == "REAUTH_REQUIRED"
@@ -775,6 +786,7 @@ def test_reactivation_does_not_switch_automatic_payouts_on(strict, payers_confir
     finish(db, provider_, fee="0.25", paid_by="sender")
     verify(db, cashouts(db, user)[0], admin, fee="0.25", charged_to="PROVIDER_BALANCE", received="5.00")
     restore_rules(db, admin)
+    review(db, cashouts(db, user)[0], admin)
     configure(db, crypto_auto_payout_enabled=False)                # an administrator paused payouts meanwhile
     config = reactivate(db, admin)
     assert config.suspended_reason is None

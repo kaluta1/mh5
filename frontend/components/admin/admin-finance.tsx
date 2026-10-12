@@ -18,7 +18,9 @@ import {
   financeErrorText,
   humanize,
   readinessTone,
+  sectionFields,
   webhookStatusLabel,
+  type CryptoPayoutStatus,
   type FinanceOverview,
   type FinanceSection,
   type FinanceSettings,
@@ -28,6 +30,7 @@ import {
   type WebhookHealth,
 } from '@/lib/finance-admin'
 import { CashoutTransactions, ReconciliationAndAudit } from './admin-finance-cashouts'
+import { FlaggedPayoutReview } from './admin-finance-review'
 import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
 
 /**
@@ -59,21 +62,24 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
   const [provider, setProvider] = useState<ProviderView | null>(null)
   const [settings, setSettings] = useState<FinanceSettings | null>(null)
   const [webhook, setWebhook] = useState<WebhookHealth | null>(null)
+  const [payoutStatus, setPayoutStatus] = useState<CryptoPayoutStatus | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    const [o, p, s, w] = await Promise.all([
+    const [o, p, s, w, st] = await Promise.all([
       api.get(`${FINANCE_BASE}/overview`), api.get(`${FINANCE_BASE}/provider`),
       api.get(`${FINANCE_BASE}/settings`), api.get(`${FINANCE_BASE}/webhook`),
+      section === 'crypto-cashout' ? api.get(`${FINANCE_BASE}/payout-status`) : Promise.resolve(null),
     ])
     if (o.status === 200) setOverview(o.data)
     else setError(o.status === 403 ? 'You are not allowed to view Finance & Payments.' : 'Finance & Payments could not be loaded.')
     if (p.status === 200) setProvider(p.data)
     if (s.status === 200) setSettings(s.data)
     if (w.status === 200) setWebhook(w.data)
-  }, [])
+    setPayoutStatus(st && st.status === 200 ? st.data : null)
+  }, [section])
 
   useEffect(() => { void load() }, [load])
 
@@ -148,17 +154,38 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           <SwitchSummary label="Automatic crypto payouts" server={settings.server_switches.crypto_auto_payout}
             effective={settings.effective.automatic_crypto_payouts}
             note="Money is sent only when the server master switch (CRYPTO_AUTO_PAYOUT_ENABLED) and the Admin switch are both on and every payout credential is configured." />
-          {settings.payout_suspension && (
-            <PayoutSuspensionCard suspension={settings.payout_suspension} phrase={settings.confirmations.payout_reactivation}
-              canManage={canManage} busy={busy} change={change} />
-          )}
-          {!settings.payout_suspension && settings.network_fee_gate && (
+          {payoutStatus && <CryptoPayoutStatusCard status={payoutStatus} />}
+          {!payoutStatus && !settings.payout_suspension && settings.network_fee_gate && (
             <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="crypto-fee-gate">
               No crypto payout can be created: {settings.network_fee_gate.message}
             </p>
           )}
-          <SettingsForm title="Crypto Cashout settings" fields={group('crypto')} settings={settings} canManage={canManage}
-            busy={busy} change={change} idPrefix="crypto" />
+          {settings.crypto_sections?.length
+            ? settings.crypto_sections.map((s) => (
+              <SettingsForm key={s.key} title={s.title} note={s.note} fields={sectionFields(settings.fields, s)}
+                settings={settings} canManage={canManage} busy={busy} change={change} idPrefix={`crypto-${s.key}`}
+                attention={payoutStatus?.blockers.filter((b) => b.section === s.key)} />
+            ))
+            : (
+              <SettingsForm title="Crypto Cashout settings" fields={group('crypto')} settings={settings} canManage={canManage}
+                busy={busy} change={change} idPrefix="crypto" />
+            )}
+          {settings.payout_suspension ? (
+            <PayoutSuspensionCard suspension={settings.payout_suspension} phrase={settings.confirmations.payout_reactivation}
+              canManage={canManage} busy={busy} change={change} pendingReview={payoutStatus?.flagged_payouts.pending_review} />
+          ) : (
+            <Card>
+              <CardContent className="p-4 space-y-2" data-testid="no-suspension">
+                <h2 className="font-semibold text-gray-900 dark:text-white">E. Suspension and reactivation</h2>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Crypto payouts are not suspended. They are suspended automatically when a completed payout shows a
+                  confirmed inconsistency (the fee charged to MyHigh5, an amount that does not agree, or a fee above
+                  the member&apos;s limit), and only an explicit reactivation here lifts that. There is nothing to
+                  reactivate now.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
       {section === 'usd-cashout' && settings && (
@@ -179,7 +206,12 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           busy={busy} change={change} idPrefix="security" />
       )}
       {section === 'transactions' && overview && <CashoutTransactions canProcess={canProcess} />}
-      {section === 'reconciliation' && overview && <ReconciliationAndAudit canManage={canManage} />}
+      {section === 'reconciliation' && overview && (
+        <div className="space-y-4">
+          <FlaggedPayoutReview canProcess={canProcess} />
+          <ReconciliationAndAudit canManage={canManage} />
+        </div>
+      )}
     </div>
   )
 }
@@ -253,14 +285,101 @@ function SwitchSummary({ label, server, effective, note }: { label: string; serv
   )
 }
 
+const yesNo = (value: boolean, yes = 'Yes', no = 'No') => (
+  <TonePill tone={value ? 'green' : 'amber'}>{value ? yes : no}</TonePill>
+)
+
+/**
+ * Whether a crypto payout can be created right now and, if not, every reason
+ * with what an administrator has to do. Display only: the server builds it from
+ * the rules the payout engine applies, and nothing here changes anything.
+ */
+function CryptoPayoutStatusCard({ status }: { status: CryptoPayoutStatus }) {
+  const semantics = status.provider_semantics
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3" data-testid="crypto-payout-status">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Current configuration status</h2>
+          <TonePill tone={status.can_create_payouts ? 'green' : status.suspension ? 'red' : 'amber'}>
+            {status.can_create_payouts ? 'Payouts can be created' : status.suspension ? 'Suspended' : 'No payout is created'}
+          </TonePill>
+          <span className="text-xs text-gray-500">Configuration version {status.configuration_version}</span>
+        </div>
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <Row label="Provider fee behaviour confirmed" value={
+            <span data-testid="status-fee-mode">{yesNo(semantics.fee_mode_confirmed, 'Confirmed', 'Not confirmed')}</span>} />
+          <Row label="Network fee limits approved" value={
+            <span data-testid="status-approval">{yesNo(status.approval.approved, 'Approved', 'Not approved')}</span>} />
+          <Row label="Financial suspension" value={
+            <span data-testid="status-suspension">
+              <TonePill tone={status.suspension ? 'red' : 'green'}>{status.suspension ? 'Active' : 'None'}</TonePill>
+            </span>} />
+          <Row label="Earlier payouts without a verified actual fee" value={
+            <span data-testid="status-gate">
+              {status.recording_gate.total} outstanding, {status.recording_gate.limit} allowed
+              {status.recording_gate.blocked ? ' · new payouts on hold' : ''}
+            </span>} />
+          <Row label="How the provider reports who bore the fee"
+            value={yesNo(semantics.receiver_fee_values_confirmed, 'Confirmed', 'Not confirmed')} />
+          <Row label="Meaning of the amount the provider reports"
+            value={semantics.amount_meaning ? humanize(semantics.amount_meaning) : yesNo(false, '', 'Not confirmed')} />
+          <Row label="Automatic payouts switch" value={status.switches.automatic_payouts ? 'On' : 'Off'} />
+          <Row label="Server master switch" value={status.switches.server ? 'On' : 'Off'} />
+        </dl>
+        {!semantics.automatic_verification && (
+          <p className="text-xs text-gray-500" data-testid="status-semantics-note">
+            Until the provider has confirmed how it reports a payout&apos;s fee and amount (set on the server), its
+            report does not verify the actual fee: an administrator verifies each payout against evidence.
+          </p>
+        )}
+        {status.blockers.length > 0 ? (
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Why no payout is created, and what to do</h3>
+            <ol className="list-decimal pl-5 text-sm space-y-1" data-testid="payout-blockers">
+              {status.blockers.map((b) => (
+                <li key={b.code} data-testid={`blocker-${b.code}`}>
+                  <span className={b.code === 'PAYOUTS_SUSPENDED' ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-white'}>
+                    {b.message}
+                  </span>{' '}
+                  {b.temporary && <TonePill tone="gray">Temporary: lifts by itself</TonePill>}{' '}
+                  <span className="text-gray-600 dark:text-gray-300">{b.action}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="text-sm text-green-700 dark:text-green-400" data-testid="payout-no-blockers">
+            Nothing stops a payout from being created. The member&apos;s limit is still checked against the
+            provider&apos;s estimate for each payout; the actual fee is not guaranteed by it.
+          </p>
+        )}
+        {status.missing_settings.length > 0 && (
+          <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="payout-missing-settings">
+            Required settings that are not set: {status.missing_settings.map((m) => m.label).join('; ')}.
+          </p>
+        )}
+        {!status.approval.approved && (
+          <p className="text-xs text-gray-500" data-testid="status-approval-note">
+            {status.approval.can_approve
+              ? 'The settings can be approved now, in section D.'
+              : `They cannot be approved yet: ${status.approval.blocked_by?.message ?? ''}`}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /**
  * Crypto payouts are suspended because a payout did not add up. Lifting the
  * suspension is its own act: it is not a setting, restoring the settings does
  * not do it, and it needs a written review note, the typed phrase and the
  * password. It sends nothing and does not switch automatic payouts on.
  */
-function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change }: {
+function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change, pendingReview }: {
   suspension: PayoutSuspension; phrase: string; canManage: boolean; busy: boolean; change: Change
+  pendingReview?: number
 }) {
   const [note, setNote] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -279,7 +398,8 @@ function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change }: {
   return (
     <Card>
       <CardContent className="p-4 space-y-3" data-testid="payout-suspension">
-        <h2 className="font-semibold text-red-700 dark:text-red-300">Crypto payouts are suspended</h2>
+        <h2 className="font-semibold text-gray-900 dark:text-white">E. Suspension and reactivation</h2>
+        <p className="font-semibold text-red-700 dark:text-red-300">Crypto payouts are suspended</p>
         <p className="text-sm text-gray-900 dark:text-white">{suspension.message}</p>
         <dl className="space-y-2 text-sm">
           <Row label="Reason" value={humanize(suspension.reason)} />
@@ -288,7 +408,7 @@ function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change }: {
         </dl>
         <p className="text-xs text-gray-500">
           This is a suspension, not the ordinary wait for a payout&apos;s fee to be verified: a payout showed a
-          confirmed inconsistency. No payout is created while this is shown. Changing or restoring the settings below
+          confirmed inconsistency. No payout is created while this is shown. Changing or restoring the settings above
           does not lift it, and neither does recording a fee. Review the payout in Cashout Transactions, record its
           actual network fee as verified, resolve what is listed under Reconciliation, then reactivate here. These
           controls limit the exposure; they do not guarantee the actual network fee of any payout, including the
@@ -297,6 +417,14 @@ function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change }: {
         {suspension.rules_gate && (
           <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="suspension-rules-gate">
             Before it can be reactivated, the network fee settings must be in force again ({humanize(suspension.rules_gate)}).
+          </p>
+        )}
+        {!!pendingReview && (
+          <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="suspension-pending-review">
+            {pendingReview} flagged payout{pendingReview === 1 ? ' has' : 's have'} not been reviewed. Review{' '}
+            {pendingReview === 1 ? 'it' : 'them'} under{' '}
+            <Link href="/dashboard/admin/finance/reconciliation" className="underline">Reconciliation &amp; Audit Logs</Link>{' '}
+            first; payouts cannot be reactivated before that. A review does not reactivate anything by itself.
           </p>
         )}
         {canManage && (
@@ -348,9 +476,13 @@ function ProviderSettingsCard({ provider }: { provider: ProviderView }) {
   )
 }
 
-export function SettingsForm({ title, fields, settings, canManage, busy, change, idPrefix }: {
+export function SettingsForm({ title, note, fields, settings, canManage, busy, change, idPrefix, attention }: {
   title: string; fields: SettingField[]; settings: FinanceSettings; canManage: boolean; busy: boolean
   change: Change; idPrefix: string
+  /** What the section is for (shown under its title). */
+  note?: string
+  /** Reasons no payout is created that are resolved in this section. */
+  attention?: CryptoPayoutStatus['blockers']
 }) {
   const initial = useMemo(() => Object.fromEntries(fields.map((f) =>
     [f.name, f.kind === 'bool' ? Boolean(f.value) : String(f.value ?? '')])), [fields])
@@ -371,8 +503,10 @@ export function SettingsForm({ title, fields, settings, canManage, busy, change,
   const save = async () => {
     const sentPassword = password
     setPassword('')
+    // The version this page shows: the server refuses the change if the configuration has changed since.
     const ok = await change(() => api.put(`${FINANCE_BASE}/settings`, {
       changes, current_password: sentPassword, confirmation: phrase ? confirmation : undefined,
+      expected_version: settings.version,
     }), `${title} saved. Nothing was paid or released by this change.`, `${title} could not be saved.`)
     if (ok) setConfirmation('')
   }
@@ -381,8 +515,15 @@ export function SettingsForm({ title, fields, settings, canManage, busy, change,
     <Card>
       <CardContent className="p-4 space-y-4">
         <h2 className="font-semibold text-gray-900 dark:text-white">{title}</h2>
+        {note && <p className="text-xs text-gray-500">{note}</p>}
+        {!!attention?.length && (
+          <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200" data-testid={`${idPrefix}-attention`}>
+            {attention.map((b) => <li key={b.code}><strong>{b.message}</strong> {b.action}</li>)}
+          </ul>
+        )}
         {fields.map((f) => {
           const id = `${idPrefix}-${f.name}`
+          const unsupported = f.disabled_choices ?? []
           return (
             <div key={f.name} className="space-y-1">
               <div className="flex items-start justify-between gap-3">
@@ -395,9 +536,17 @@ export function SettingsForm({ title, fields, settings, canManage, busy, change,
               {f.kind === 'choice' && (
                 <select id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled}
                   onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })}>
-                  {f.choices.map((c) => <option key={c} value={c}>{humanize(c)}</option>)}
+                  {f.choices.map((c) => {
+                    const off = unsupported.some((u) => u.value === c)
+                    return <option key={c} value={c} disabled={off}>{humanize(c)}{off ? ' (not available)' : ''}</option>
+                  })}
                 </select>
               )}
+              {unsupported.map((u) => (
+                <p key={u.value} className="text-xs text-gray-500" data-testid={`unsupported-${f.name}-${u.value}`}>
+                  {humanize(u.value)}: {u.reason}
+                </p>
+              ))}
               {!['bool', 'choice'].includes(f.kind) && (
                 <div className="flex items-center gap-2">
                   <input id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled}

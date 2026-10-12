@@ -18,13 +18,15 @@ Production today runs `d208c1d` with Alembic revision `e2f3a4b5c6d7`.
 | 3 | `b6c7d8e9f0a1` | `a5b6c7d8e9f0` | one row in `chart_of_accounts`: 5005 Crypto payout network fees (paid by MyHigh5), under 5000 |
 | 4 | `c7d8e9f0a1b2` | `b6c7d8e9f0a1` | beneficiary-paid network fee (section 12): 7 columns on `payment_settings` (every default fails closed), 9 nullable columns on `affiliate_cashout_requests`, `cashout_fee_consents` |
 | 5 | `d8e9f0a1b2c3` | `c7d8e9f0a1b2` | payout fee safety (section 13): 5 columns on `payment_settings` (no margin, gate of 0, not suspended), 4 nullable columns on `affiliate_cashout_requests` |
+| 6 | `e9f0a1b2c3d4` | `d8e9f0a1b2c3` | review of a flagged payout (section 14): 4 nullable columns on `affiliate_cashout_requests` (all NULL: an existing flagged payout counts as not reviewed) and one check constraint |
 
-All five are additive, idempotent and run in one transaction each. They read
-and change no commission, deposit, cashout or journal row. `d8e9f0a1b2c3` is
+All six are additive, idempotent and run in one transaction each. They read
+and change no commission, deposit, cashout or journal row. `e9f0a1b2c3d4` is
 the single head. The downgrade of `c7d8e9f0a1b2` refuses to run once a
 member's acceptance or a beneficiary-paid payout has been recorded; the
 downgrade of `d8e9f0a1b2c3` refuses while payouts are suspended or once a fee
-reconciliation has been recorded.
+reconciliation has been recorded; the downgrade of `e9f0a1b2c3d4` refuses once
+a review has been recorded.
 
 Verified on a disposable local PostgreSQL 16 database with production-like
 rows: upgrade from `e2f3a4b5c6d7`, a second upgrade, downgrade, upgrade again;
@@ -589,7 +591,10 @@ is a separate act (`POST /admin/finance/payouts/reactivate`), not a setting:
 3. Confirm the provider's behaviour with the provider again, set "Provider fee
    behaviour" (typed phrase), then approve the fee settings (typed phrase,
    separate save).
-4. Reactivate: `manage_payment_settings`, the current password, the phrase
+4. Record the review of the flagged payout (section 14.2). Reactivation is
+   refused while a flagged payout is not reviewed; the review itself lifts
+   nothing.
+5. Reactivate: `manage_payment_settings`, the current password, the phrase
    "REACTIVATE CRYPTO PAYOUTS" and a written note of what was reviewed (at
    least 20 characters, kept in the configuration history as
    `PAYOUTS_REACTIVATED`).
@@ -647,3 +652,160 @@ payouts were ever enabled, rolling back to it would let them run without
 either. Before any rollback, switch automatic payouts off (server switch) and
 confirm no payout is at the provider. Do not run the downgrade once a
 suspension or a reconciliation is recorded; it refuses, by design.
+
+## 14. Admin workflow and stale configuration (Phase 3.3 Stage B, implemented, not deployed)
+
+Stage B adds no financial rule and no number. It changes how an administrator
+sees and works with what Stage A enforces, records the review of a flagged
+payout, and closes two ways of acting on values that are no longer in force.
+**Nothing here guarantees the actual network fee of a payout** (section 13),
+and nothing here activates payouts.
+
+### 14.1 Crypto Cashout page
+
+Admin > Finance & Payments > Crypto Cashout Settings is grouped:
+
+- A. Provider configuration
+- B. Network fee estimates and limits
+- C. Safety margin and recording gate
+- D. Approval and activation
+- E. Suspension and reactivation
+- Payout limits and schedule (amounts, daily limits, intervals, retries)
+
+Each section is saved on its own, with the password. At the top, "Current
+configuration status" (`GET /admin/finance/payout-status`, read-only, the
+provider is not asked) lists EVERY reason no payout is created, not only the
+first, each with what to do and the section it is resolved in, and shows:
+whether the provider fee behaviour is confirmed, whether the limits are
+approved, whether a suspension is active, the recording gate, the required
+settings that are not set, and whether the provider's reporting values are
+confirmed on the server (`NOWPAYMENTS_FEE_PAID_BY_RECEIVER_VALUES`,
+`NOWPAYMENTS_FEE_PAID_BY_COMPANY_VALUES`, `NOWPAYMENTS_PAYOUT_AMOUNT_MEANS`).
+The temporary hold of the recording gate is marked as temporary; a suspension
+is not. The list is built from the same rules the engine applies and is
+covered by a test that the engine pays if and only if the list is empty.
+
+`COMPANY_PAYS` and `CHARGED_TO_BALANCE` are shown as not available, with the
+reason, and cannot be selected. They remain as values because rows written
+before the owner's decision carry them; the server refuses them whatever a
+client sends (unchanged from section 12).
+
+### 14.2 Review of a flagged payout
+
+A completed beneficiary-paid payout that did not add up carries a flag
+(`PROVIDER_FEE_MODE_MISMATCH`, `PROVIDER_AMOUNT_MISMATCH`, `FEE_CAP_EXCEEDED`).
+Admin > Finance & Payments > Reconciliation & Audit Logs > "Flagged Payout
+Review" lists them (`GET /admin/cashouts/fee-exceptions`) with: why it was
+flagged, what was expected (amount handed over, the estimate, the estimate with
+the margin, the member's limit, what the member was expected to receive), what
+happened (actual fee, amount received, how far above the estimate and the
+limit), the evidence and the reconciliation state, what the provider reported
+when the flag was raised, and the history of the payout's fee from the audit
+trail.
+
+An administrator records a review with `POST /admin/cashouts/{id}/fee-review`:
+
+- needs the `process_cashouts` permission and the current password;
+- needs a written note of what was checked and found (20 to 500 characters);
+- is stored on the cashout (`fee_review_flag`, `fee_review_note`,
+  `fee_reviewed_by`, `fee_reviewed_at`) and in the audit trail as
+  `CASHOUT_FEE_EXCEPTION_REVIEWED` with the administrator, the time, the
+  address and the state of the payout at that moment;
+- is recorded once per flag. The same review sent again changes nothing; a
+  different note or another administrator is refused (`ALREADY_REVIEWED`). If
+  the payout is later flagged for something else, the earlier review no longer
+  covers it, it is pending again, and both reviews stay in the audit trail.
+
+**A review is a record and nothing else.** It does not clear the flag. It does
+not verify the payout's actual fee: the recording gate still counts the payout
+until its fee is verified (13.2). It does not lift a suspension: only the
+reactivation of 13.5 does. It allows no payout. It changes no amount, no
+commission and no journal entry.
+
+One thing changed in 13.5: **reactivation is now also refused while a flagged
+payout has not been reviewed.** The order is therefore: verify the actual fee,
+restore and approve the settings, review the flagged payout, then reactivate.
+The reactivation itself is unchanged (permission, password, phrase, note).
+
+The existing `reviewed_by` / `reviewed_at` columns are not reused: they record
+who cancelled, settled or resolved the cashout itself.
+
+### 14.3 A cycle never pays under values that are no longer in force
+
+Before Stage B a payout cycle read the configuration once and checked every
+payout of that cycle against it. A change that withdrew the approval was
+caught, but a limit that was changed AND approved again while the cycle was
+running, or a change to a setting that needs no approval (the maximum single
+payout, the daily limits), was not: the payout could still be reserved and
+sent under the earlier values.
+
+Now the cycle compares the configuration version it read with the one in
+force, under the lock on the settings row:
+
+1. immediately before a payout is reserved: if the version differs, nothing is
+   reserved (`CONFIGURATION_CHANGED`);
+2. again immediately before the payout is handed to the provider: if it
+   differs, the reservation is released (the cashout is closed as cancelled
+   with `CONFIGURATION_CHANGED`, the commissions are available again) and the
+   provider is not called. It does not count as a failed attempt of the
+   member's.
+
+Either way the cycle stops; the next cycle starts from the configuration in
+force. Because the second check holds the settings lock until the payout is
+marked as handed over, a change is either seen by it or waits until after it:
+it cannot fall in between. The version a payout was reserved under is written
+to its `CASHOUT_RESERVED` audit record (`settings_version`). A suspension that
+arrives during a cycle is still reported as `PAYOUTS_SUSPENDED`.
+
+### 14.4 Nobody approves values they were not shown
+
+`PUT /admin/finance/settings` accepts `expected_version`, the configuration
+version the page was showing; the Admin Panel always sends it. If the
+configuration has changed since, nothing is stored (`STALE_CONFIGURATION`,
+"reload and review"). A change that approves or switches something on (the
+approval of the fee settings, the confirmation of the provider fee behaviour,
+automatic payouts, USD settlement) is refused without it (`VERSION_REQUIRED`).
+Before this, administrator A could approve limits that administrator B had
+changed after A loaded the page.
+
+### 14.5 An action is decided on the row as it is under the lock
+
+Found while testing Stage B on PostgreSQL, in code that was already there:
+the administrator actions on a cashout (record a fee, settle, resolve, cancel)
+locked the row but kept the values of the copy loaded before the lock. Two
+administrators with the same cashout open could therefore both pass a check
+that only one of them should pass; for example a fee already recorded as
+VERIFIED could be replaced by a second verified figure. Each of these actions,
+and the new review, now re-reads the row under the lock. Nothing was deployed
+with this, and no payout was ever created, so no stored record is affected.
+
+The same pattern exists for the member's own row in the member-facing calls
+(change the payout wallet, choose the cashout method, request a USD cashout,
+accept the fee terms). It was NOT changed in Stage B (outside its scope); the
+database's unique rules and the existing tests cover the money-moving cases.
+It should be reviewed before payouts are activated.
+
+### 14.6 Deployment and rollback
+
+Migration: `e9f0a1b2c3d4` after `d8e9f0a1b2c3`; four nullable columns and one
+check constraint; no row is rewritten. The frontend and the backend must be
+deployed together: the new page needs `payout-status`, `fee-exceptions` and
+`crypto_sections`, and the backend refuses an approval without
+`expected_version`, which only the new page sends.
+
+Rolling the code back leaves the columns in place and unused, which is safe.
+The previous code does not have the version checks of 14.3 and 14.4. Do not
+run the downgrade once a review is recorded; it refuses, by design.
+
+### 14.7 Still open
+
+For the owner (nothing is assumed, and Stage B decided none of them): the
+member fee limits; the safety margin; the gate number; whether MyHigh5
+compensates a member for a fee above their limit; how a fee charged to MyHigh5
+is booked; whether an approval, a verified fee record, a review or a
+reactivation needs a second person. Today one administrator who holds both
+permissions can do all four; Stage B did not introduce a two-person rule.
+
+With the provider (unchanged from 13.6): that Receiver applies to API payouts;
+the unit of `fee`; the values of `fee_paid_by`; what `amount` means; whether
+the minimum applies before or after the fee.

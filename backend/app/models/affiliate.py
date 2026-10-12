@@ -195,6 +195,14 @@ class AffiliateCashoutRequest(Base):
     fee_margin_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 3), nullable=True)
     fee_reconciliation: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     fee_evidence: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # An administrator's review of a flagged payout (fee_flag). All four are set
+    # together, once per flag: the flag that was reviewed, by whom, when, and
+    # their note. A review changes nothing else: not the flag, not the
+    # reconciliation, not a suspension.
+    fee_review_flag: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    fee_review_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    fee_reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    fee_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # USD: the member's payout destination details, AES-256-GCM ciphertext only.
     destination_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

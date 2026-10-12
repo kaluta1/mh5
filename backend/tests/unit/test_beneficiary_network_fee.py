@@ -761,6 +761,7 @@ def test_the_fee_behaviour_and_the_limits_need_a_confirmation_and_a_separate_app
     assert refused({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}) == "CONFIRMATION_REQUIRED"
     assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"
     pc.update_settings(db, admin, {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, password=PASSWORD, now=NOW,
+                       expected_version=pc.load(db).version,
                        confirmation=pc.CONFIRM_FEE_MODE)
     assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"  # no limit
     # The limits and their approval cannot arrive in one change.
@@ -773,6 +774,7 @@ def test_the_fee_behaviour_and_the_limits_need_a_confirmation_and_a_separate_app
     assert pc.load(db).fee_gate() == "FEE_LIMITS_NOT_APPROVED"
     assert refused({"fee_terms_approved": True}) == "CONFIRMATION_REQUIRED"
     config = pc.update_settings(db, admin, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
+                                expected_version=pc.load(db).version,
                                 confirmation=pc.CONFIRM_FEE_LIMITS)
     assert config.fee_gate() is None
     # Any later change to what was approved withdraws the approval.

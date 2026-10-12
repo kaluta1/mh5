@@ -12,8 +12,14 @@ only reconciles payouts that were already handed to the provider (so nothing
 stays reserved for ever) and starts no new one.
 
 Every limit below is read from app.services.payment_config at the start of a
-cycle. Changing a setting never releases a reservation and never sends
-anything by itself.
+cycle. Changing a setting never sends anything by itself. A cycle never pays
+under values that are no longer in force: the configuration version it read is
+compared with the one in force, under the settings lock, immediately before a
+payout is reserved and again immediately before it is handed to the provider.
+If the configuration changed in between (even if it was changed and approved
+again), nothing more is reserved, a reservation not yet handed over is
+released, and the cycle stops (CONFIGURATION_CHANGED); the next cycle starts
+from the new configuration.
 
 One cycle
 ---------
@@ -514,14 +520,22 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     # verified yet (across ALL members) and the suspension are decided by one
     # worker at a time: two workers cannot both pass for different members.
     locked_config = payment_config.lock_settings(db)
-    blocked = locked_config.fee_gate() or cs.recording_gate(db, locked_config)
+    blocked = locked_config.fee_gate()
+    if blocked is None and int(locked_config.version) != int(config.version):
+        # Every figure above (the member's limit, the margin, the minimums, the
+        # daily limits) was checked against `config`. The configuration has been
+        # changed since, possibly changed AND approved again, so those checks say
+        # nothing about the values now in force. Nothing is reserved; the next
+        # cycle starts from the new configuration.
+        blocked = "CONFIGURATION_CHANGED"
+    blocked = blocked or cs.recording_gate(db, locked_config)
     if blocked is not None:
         return stop(blocked)
     intent_ref = _intent_reference(user.id, None)
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
                          now=now, wallet=wallet.address, currency=wallet.currency, net=money(expected),
                          network_fee=money(estimate), network_fee_policy=config.network_fee_policy,
-                         beneficiary_fee=plan)
+                         beneficiary_fee=plan, audit_extra={"settings_version": int(locked_config.version)})
     if cashout is None:
         return "CASHOUT_IN_PROGRESS"                # another worker reserved first
     cashout_id = int(cashout.id)
@@ -530,9 +544,15 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     user = db.query(User).filter(User.id == user_id).with_for_update().one()
     cashout = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout_id)
                .with_for_update().one())
-    current = payment_config.load(db)
+    # Under the settings lock, so a configuration change is either seen here (and
+    # the reservation is released) or waits until this payout has been marked as
+    # handed over: it can never slip in between this check and that mark.
+    current = payment_config.lock_settings(db)
     blocker = None if engine_enabled(db, config=current) else "ENGINE_DISABLED"
-    blocker = blocker or current.fee_gate() or _blocker(db, user, now, current)
+    blocker = blocker or current.fee_gate()
+    if blocker is None and int(current.version) != int(config.version):
+        blocker = "CONFIGURATION_CHANGED"           # reserved under values that are no longer in force
+    blocker = blocker or _blocker(db, user, now, current)
     if blocker is None:
         still = cs.active_fee_consent(db, user.id, current, now)
         if still is None or int(still.id) != int(cashout.fee_consent_id or 0):
@@ -671,7 +691,7 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             outcome = "ERROR"
         results[outcome] += 1
         if outcome in ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED", "PAYOUTS_SUSPENDED",
-                       "FEE_RECONCILIATION_PENDING"):
+                       "FEE_RECONCILIATION_PENDING", "CONFIGURATION_CHANGED"):
             report["stopped"] = outcome             # the same refusal awaits every other member
             break
         if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
@@ -829,8 +849,10 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
     for row in member_fees["flagged"]:
         items.append({"type": row["flag"], "severity": "critical",
                       "message": f"Cashout #{row['cashout_id']}: {flag_text.get(row['flag'], row['flag'])}. "
-                                 "New payouts are stopped until the provider's fee behaviour is confirmed again.",
-                      "cashout_id": row["cashout_id"], "user_id": row["user_id"]})
+                                 "New payouts are stopped until the provider's fee behaviour is confirmed again."
+                                 + ("" if row.get("review") == cs.REVIEW_DONE
+                                    else " Not reviewed yet (Flagged Payout Review)."),
+                      "cashout_id": row["cashout_id"], "user_id": row["user_id"], "review": row.get("review")})
     suspension = payment_config.suspension_view(db)
     if suspension is not None:
         items.insert(0, {"type": "PAYOUTS_SUSPENDED", "severity": "critical",
@@ -873,6 +895,113 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
         "discrepancies": items,
         "network_fees": fees,
         "engine": engine_status(db),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Why crypto payouts are (not) being created: one answer for the Admin Panel
+# ---------------------------------------------------------------------------
+
+def crypto_payout_status(db: Session) -> dict:
+    """EVERYTHING that currently stops a crypto payout from being created, each
+    with the section of the Crypto Cashout page it belongs to and what an
+    administrator has to do about it. Read-only: it calls nobody and changes
+    nothing. The engine itself decides with payment_config.fee_gate() and
+    cashout_service.recording_gate(); this only explains them, and lists every
+    reason instead of the first."""
+    from dataclasses import replace
+
+    config = payment_config.load(db)
+    credentials = payment_config.resolve_credentials(db, config)
+    exposure = cs.reconciliation_exposure(db)
+    limit = int(config.max_unreconciled_payouts)
+    suspension = payment_config.suspension_view(db)
+    blockers: list[dict] = []
+    missing: list[dict] = []
+
+    def block(code: str, section: str, message: str, action: str, *, temporary: bool = False) -> None:
+        blockers.append({"code": code, "section": section, "message": message, "action": action,
+                         "temporary": temporary})
+
+    def need(field: str, section: str) -> None:
+        missing.append({"field": field, "label": payment_config.FIELDS[field].label, "section": section})
+
+    messages = payment_config.FEE_GATE_MESSAGES
+    if suspension is not None:
+        block("PAYOUTS_SUSPENDED", "suspension", f"Crypto payouts are suspended: {suspension['message']}",
+              "Review the flagged payout, verify its actual network fee, restore the settings below, then "
+              "reactivate explicitly in section E.")
+    if not payment_config.crypto_master_switch():
+        block("SERVER_SWITCH_OFF", "activation", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off.",
+              "It is set on the server by the operator and cannot be changed here.")
+    if not config.provider_enabled:
+        block("PROVIDER_DISABLED", "provider", "The payment provider is switched off.",
+              "Switch it on in NOWPayments Configuration.")
+    if not credentials.payout_ready:
+        block("PAYOUT_CREDENTIALS_MISSING", "provider",
+              "Payout credentials are incomplete: " + ", ".join(credentials.payout_missing) + ".",
+              "Configure them in NOWPayments Configuration and run the connection test.")
+    if config.network_fee_policy != payment_config.FEE_MEMBER_PAYS:
+        need("network_fee_policy", "provider")
+        block("FEE_POLICY_NOT_BENEFICIARY_PAID", "provider", messages["FEE_POLICY_NOT_BENEFICIARY_PAID"],
+              "Select MEMBER_PAYS in section A.")
+    if config.provider_fee_mode != payment_config.FEE_MODE_DEDUCTED:
+        need("provider_fee_mode", "provider")
+        block("PROVIDER_FEE_MODE_UNVERIFIED", "provider", messages["PROVIDER_FEE_MODE_UNVERIFIED"],
+              "Confirm with the provider that it takes its network fee out of the amount sent. Only then select "
+              "DEDUCTED_BY_PROVIDER in section A and type the confirmation.")
+    if Decimal(config.member_fee_cap_percent) <= 0 and Decimal(config.member_fee_cap_usd) <= 0:
+        need("member_fee_cap_percent", "fee_limits")
+        need("member_fee_cap_usd", "fee_limits")
+        block("FEE_LIMITS_NOT_CONFIGURED", "fee_limits", messages["FEE_LIMITS_NOT_CONFIGURED"],
+              "Set at least one member network fee limit in section B. The value is the business owner's decision.")
+    if config.fee_estimate_margin_percent is None:
+        need("fee_estimate_margin_percent", "safety")
+        block("FEE_SAFETY_MARGIN_NOT_SET", "safety", messages["FEE_SAFETY_MARGIN_NOT_SET"],
+              "Set the safety margin in section C. The value is the business owner's decision.")
+    if not config.fee_terms_approved:
+        block("FEE_LIMITS_NOT_APPROVED", "activation", messages["FEE_LIMITS_NOT_APPROVED"],
+              "Save the settings of sections A to C first, then approve them in section D in a change of its own.")
+    if not config.crypto_cashout_enabled:
+        block("CRYPTO_CASHOUT_DISABLED", "activation", "Crypto Cashout is switched off.",
+              "Switch it on in section D.")
+    if not config.crypto_auto_payout_enabled:
+        block("AUTOMATIC_PAYOUTS_OFF", "activation", "Automatic payouts are switched off.",
+              "Switch them on in section D only when nothing else is listed here. It needs a successful "
+              "connection test in the last 24 hours and the typed confirmation.")
+    if exposure["total"] > limit:
+        block("FEE_RECONCILIATION_PENDING", "safety", messages["FEE_RECONCILIATION_PENDING"],
+              "Record the actual network fee of the earlier payout as verified in Cashout Transactions. No "
+              "reactivation is needed.", temporary=True)
+
+    approvable = replace(config, fee_terms_approved=True).fee_rules_gate()
+    receiver, company = payment_config.receiver_fee_payer_values(), payment_config.company_fee_payer_values()
+    meaning = payment_config.payout_amount_semantics()
+    return {
+        "can_create_payouts": not blockers,
+        "configuration_version": int(config.version),
+        "blockers": blockers,
+        "missing_settings": missing,
+        "provider_semantics": {
+            "fee_mode": config.provider_fee_mode,
+            "fee_mode_confirmed": config.provider_fee_mode == payment_config.FEE_MODE_DEDUCTED,
+            # Set on the server once the provider has confirmed them; never assumed.
+            "receiver_fee_values_confirmed": bool(receiver),
+            "company_fee_values_confirmed": bool(company),
+            "amount_meaning": meaning or None,
+            # Only with all of these does the provider's own report verify a payout's actual fee.
+            "automatic_verification": bool(receiver and meaning),
+        },
+        "approval": {"approved": bool(config.fee_terms_approved), "can_approve": approvable is None,
+                     "blocked_by": ({"code": approvable, "message": messages[approvable]}
+                                    if approvable is not None else None)},
+        "suspension": suspension,
+        "recording_gate": {"limit": limit, **exposure, "blocked": exposure["total"] > limit},
+        "flagged_payouts": {"pending_review": cs.unreviewed_flagged_count(db)},
+        "switches": {"server": payment_config.crypto_master_switch(), "provider": bool(config.provider_enabled),
+                     "crypto_cashout": bool(config.crypto_cashout_enabled),
+                     "automatic_payouts": bool(config.crypto_auto_payout_enabled),
+                     "credentials_ready": credentials.payout_ready},
     }
 
 

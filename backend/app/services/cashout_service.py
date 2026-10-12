@@ -151,6 +151,12 @@ def _audit(db: Session, *, record_id: int, action: str, actor_id: Optional[int],
                       user_id=actor_id, ip_address=ip))
 
 
+# Every administrator action below locks the cashout row with
+# populate_existing(): the copy the caller loaded may be older than the lock
+# (two administrators with the same cashout open), and without it SQLAlchemy
+# keeps the older values of an object it already holds. The decision is made on
+# the row as it is under the lock.
+
 def _require_processor(actor: User) -> None:
     if not payment_config.has_permission(actor, PERMISSION_PROCESS):
         raise CashoutError("FORBIDDEN", f"The {PERMISSION_PROCESS} permission is required.")
@@ -487,7 +493,8 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
             intent_ref: str, now: datetime, wallet: Optional[str] = None, currency: Optional[str] = None,
             network_fee: Optional[Decimal] = None, network_fee_policy: Optional[str] = None,
             net: Optional[Decimal] = None, destination_ciphertext: Optional[str] = None,
-            beneficiary_fee: Optional[dict] = None) -> Optional[AffiliateCashoutRequest]:
+            beneficiary_fee: Optional[dict] = None,
+            audit_extra: Optional[dict] = None) -> Optional[AffiliateCashoutRequest]:
     """Reserve these whole rows for ONE new cashout and commit. Returns None
     (after a rollback, with nothing reserved) when the database refused it
     because the member already has an open cashout or the intent exists.
@@ -495,7 +502,8 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
     `fee` is the MyHigh5 fee. `net` is what the member receives; it defaults
     to gross - fee and may only be lower (a network fee the member bears).
     `beneficiary_fee` carries the full-precision figures of a payout whose
-    network fee the beneficiary bears (see beneficiary_fee_plan)."""
+    network fee the beneficiary bears (see beneficiary_fee_plan). `audit_extra`
+    is added to the audit record only (e.g. the configuration version)."""
     gross = rows_total(rows)
     fee = money(fee)
     net = money(gross - fee) if net is None else money(net)
@@ -517,7 +525,7 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
         _audit(db, record_id=cashout.id, action="CASHOUT_RESERVED", actor_id=user.id, old=None,
                new={"method": method, "gross": str(gross), "fee": str(fee), "net": str(net),
                     "commission_ids": [int(r.id) for r in rows], "wallet": mask_address(wallet),
-                    "network_fee_policy": network_fee_policy,
+                    "network_fee_policy": network_fee_policy, **(audit_extra or {}),
                     **{name: (_exact(value) if isinstance(value, Decimal) else value)
                        for name, value in (beneficiary_fee or {}).items()}})
         db.commit()
@@ -791,7 +799,7 @@ def record_network_fee_by_admin(db: Session, cashout: AffiliateCashoutRequest, *
     if len(reference) < 3:
         raise CashoutError("REFERENCE_REQUIRED", "Say where the fee was read (the provider's payout id or statement).")
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
-              .with_for_update().one())
+              .populate_existing().with_for_update().one())
     try:
         record_network_fee(db, locked, amount=amount, source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now,
                            reference=reference)
@@ -1288,7 +1296,7 @@ def record_member_fee_by_admin(db: Session, cashout: AffiliateCashoutRequest, *,
     if evidence not in ADMIN_EVIDENCE:
         raise CashoutError("EVIDENCE_REQUIRED", "Say where the figures were read: " + ", ".join(ADMIN_EVIDENCE) + ".")
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
-              .with_for_update().one())
+              .populate_existing().with_for_update().one())
     try:
         flag = record_member_fee(db, locked, amount=amount, charged_to=str(charged_to or "").strip().upper(),
                                  source=FEE_SOURCE_ADMIN, actor_id=admin.id, now=now, evidence=evidence,
@@ -1322,8 +1330,226 @@ def reactivate_payouts(db: Session, admin: User, *, password: Optional[str], con
             raise payment_config.PaymentConfigError(
                 "UNSAFE_ACTIVATION",
                 f"Resolve this first: {pending} completed payout(s) have no verified actual network fee.")
+        unreviewed = unreviewed_flagged_count(db)
+        if unreviewed:
+            db.rollback()
+            raise payment_config.PaymentConfigError(
+                "UNSAFE_ACTIVATION",
+                f"Resolve this first: {unreviewed} flagged payout(s) have not been reviewed (Flagged Payout Review).")
     return payment_config.reactivate_payouts(db, admin, password=password, confirmation=confirmation, note=note,
                                              ip=ip)
+
+
+# ---------------------------------------------------------------------------
+# Review of a flagged payout (a reconciliation exception)
+#
+# A completed beneficiary-paid payout that did not add up carries a flag. An
+# administrator who may process cashouts looks at it and records that they
+# did: who, when, and a written note of what they found. That is ALL a review
+# is. It does not clear the flag, does not verify the payout's actual fee (the
+# recording gate still counts it until the fee is verified), does not lift a
+# payout suspension (only an explicit reactivation does, and that is refused
+# while a flagged payout is unreviewed) and does not allow a new payout. The
+# cashout's amounts, its journal entry and its earlier audit records are not
+# touched.
+#
+# One review per flag. Sending the same review again changes nothing; a
+# different one is refused. If the payout is later flagged for something else,
+# the earlier review no longer covers it and it is pending again.
+# ---------------------------------------------------------------------------
+
+REVIEW_NOT_REQUIRED, REVIEW_PENDING, REVIEW_DONE = "NOT_REQUIRED", "PENDING", "REVIEWED"
+REVIEW_NOTE_MIN, REVIEW_NOTE_MAX = 20, 500
+FLAG_MESSAGES = {
+    FLAG_MODE_MISMATCH: "The provider charged its network fee to the MyHigh5 balance instead of taking it out of "
+                        "the payout.",
+    FLAG_AMOUNT_MISMATCH: "The amount the provider reports for this payout does not agree with what it was asked "
+                          "to send.",
+    FLAG_CAP_EXCEEDED: "The network fee the provider took is higher than the limit the member accepted.",
+}
+# What happened to the fee of one payout, oldest first (shown with a flagged payout).
+_FEE_EVENT_ACTIONS = ("CASHOUT_RESERVED", "CASHOUT_COMPLETED", "CASHOUT_PROVIDER_EVIDENCE", "CASHOUT_FEE_FLAGGED",
+                      "CASHOUT_MEMBER_FEE_RECORDED", "CASHOUT_FEE_EXCEPTION_REVIEWED")
+
+
+def fee_review_state(cashout: AffiliateCashoutRequest) -> str:
+    """NOT_REQUIRED (no flag), REVIEWED (the CURRENT flag was reviewed) or PENDING."""
+    if not cashout.fee_flag:
+        return REVIEW_NOT_REQUIRED
+    if cashout.fee_reviewed_at is not None and cashout.fee_review_flag == cashout.fee_flag:
+        return REVIEW_DONE
+    return REVIEW_PENDING
+
+
+def fee_review_view(cashout: AffiliateCashoutRequest) -> dict:
+    state = fee_review_state(cashout)
+    recorded = cashout.fee_reviewed_at is not None
+    return {"state": state, "flag": cashout.fee_flag,
+            "message": FLAG_MESSAGES.get(cashout.fee_flag or "", cashout.fee_flag),
+            "reviewed_flag": cashout.fee_review_flag if recorded else None,
+            "reviewed_by": cashout.fee_reviewed_by if recorded else None,
+            "reviewed_at": cashout.fee_reviewed_at.isoformat() if recorded else None,
+            "note": cashout.fee_review_note if recorded else None,
+            # An earlier review exists but the payout has been flagged for something else since.
+            "superseded": bool(recorded and state == REVIEW_PENDING)}
+
+
+def _flagged(db: Session):
+    return db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.cashout_method == METHOD_CRYPTO,
+                                                    AffiliateCashoutRequest.fee_flag.isnot(None))
+
+
+# Spelled out with IS NULL: "a <> b" is neither true nor false when a is NULL.
+_REVIEW_PENDING = or_(AffiliateCashoutRequest.fee_reviewed_at.is_(None),
+                      AffiliateCashoutRequest.fee_review_flag.is_(None),
+                      AffiliateCashoutRequest.fee_review_flag != AffiliateCashoutRequest.fee_flag)
+
+
+def unreviewed_flagged_count(db: Session) -> int:
+    return int(_flagged(db).filter(_REVIEW_PENDING).count())
+
+
+def _review_note(note: Optional[str]) -> str:
+    text = " ".join(str(note or "").split())
+    if len(text) < REVIEW_NOTE_MIN:
+        raise CashoutError("REVIEW_NOTE_REQUIRED",
+                           "Describe what you checked and what you found "
+                           f"(at least {REVIEW_NOTE_MIN} characters).")
+    if len(text) > REVIEW_NOTE_MAX or any(ord(ch) < 32 for ch in text):
+        raise CashoutError("REVIEW_NOTE_REQUIRED", f"The review note may have at most {REVIEW_NOTE_MAX} characters.")
+    if len(set(text.lower().replace(" ", ""))) < 5:
+        raise CashoutError("REVIEW_NOTE_REQUIRED", "The review note does not say what was found.")
+    return text
+
+
+def review_fee_exception(db: Session, cashout: AffiliateCashoutRequest, *, admin: User, password: Optional[str],
+                         note: Optional[str], ip: Optional[str] = None,
+                         now: Optional[datetime] = None) -> AffiliateCashoutRequest:
+    """An authorised administrator records that they reviewed a flagged
+    payout. Commits. Needs the process_cashouts permission, the
+    administrator's current password and a written note.
+
+    It records the review and nothing else: the flag, the reconciliation of
+    the actual fee, a payout suspension, the recording gate, the cashout's
+    amounts and its journal entry are all left exactly as they are, and no
+    payout is created or allowed by it."""
+    now = now or datetime.utcnow()
+    _require_processor(admin)
+    try:
+        payment_config.require_reauth(admin, password)
+    except payment_config.PaymentConfigError as exc:
+        raise CashoutError("REAUTH_REQUIRED", "Enter your current password to confirm this review.") from exc
+    text = _review_note(note)
+    # populate_existing: the caller's copy of the row may be older than the lock.
+    locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
+              .populate_existing().with_for_update().one())
+    state = fee_review_state(locked)
+    if state == REVIEW_NOT_REQUIRED:
+        db.rollback()
+        raise CashoutError("NOT_FLAGGED", "This payout is not flagged; there is nothing to review.")
+    if state == REVIEW_DONE:
+        same = int(locked.fee_reviewed_by or 0) == int(admin.id) and locked.fee_review_note == text
+        db.rollback()
+        if same:
+            return locked                           # the same review sent again: nothing new is recorded
+        raise CashoutError("ALREADY_REVIEWED",
+                           f"This payout was already reviewed by administrator #{locked.fee_reviewed_by}. "
+                           "A review is recorded once and is not replaced.")
+    previous = ({"reviewed_flag": locked.fee_review_flag, "reviewed_by": locked.fee_reviewed_by,
+                 "reviewed_at": locked.fee_reviewed_at.isoformat(), "note": locked.fee_review_note}
+                if locked.fee_reviewed_at is not None else None)
+    locked.fee_review_flag = locked.fee_flag
+    locked.fee_review_note = text
+    locked.fee_reviewed_by = admin.id
+    locked.fee_reviewed_at = now
+    db.flush()
+    _audit(db, record_id=locked.id, action="CASHOUT_FEE_EXCEPTION_REVIEWED", actor_id=admin.id, old=previous, ip=ip,
+           new={"flag": locked.fee_flag, "note": text, "reviewed_at": now.isoformat(),
+                # The state of the payout WHEN it was reviewed; the review changed none of it.
+                "reconciliation": locked.fee_reconciliation, "fee_reconciled": fee_reconciled(locked),
+                "network_fee": _exact(locked.network_fee_actual), "net_received": _exact(locked.net_received),
+                "fee_cap": _exact(locked.fee_cap), "amount_sent": _exact(locked.amount_sent),
+                "payouts_suspended": bool(payment_config.load(db).suspended_reason),
+                "effect": "RECORD_ONLY"})
+    db.commit()
+    return locked
+
+
+def fee_exception_view(cashout: AffiliateCashoutRequest, *, flagged: Optional[dict] = None,
+                       username: Optional[str] = None, suspended_by: Optional[int] = None) -> dict:
+    """One flagged payout: what was expected, what happened, what the evidence
+    is and whether it was reviewed. Exact figures, as text."""
+    fee = member_fee_view(cashout)
+    sent = Decimal(str(cashout.amount_sent)) if cashout.amount_sent is not None else None
+    estimate = Decimal(str(cashout.network_fee_estimate)) if cashout.network_fee_estimate is not None else None
+    actual = Decimal(str(cashout.network_fee_actual)) if cashout.network_fee_actual is not None else None
+    cap = Decimal(str(cashout.fee_cap)) if cashout.fee_cap is not None else None
+    received = Decimal(str(cashout.net_received)) if cashout.net_received is not None else None
+    expected = sent - estimate if sent is not None and estimate is not None else None
+    return {
+        "cashout_id": cashout.id, "user_id": cashout.user_id, "username": username, "status": cashout.status,
+        "processed_at": cashout.processed_at.isoformat() if cashout.processed_at else None,
+        "payout_currency": cashout.payout_currency, "destination": mask_address(cashout.wallet_snapshot),
+        "provider_batch_id": cashout.provider_batch_id, "provider_status": cashout.provider_status,
+        "flag": cashout.fee_flag, "flag_message": FLAG_MESSAGES.get(cashout.fee_flag or "", cashout.fee_flag),
+        # What the provider reported when the flag was raised (amounts as it sent them).
+        "flag_details": {k: v for k, v in (flagged or {}).items() if k != "flag"},
+        "caused_suspension": suspended_by is not None and int(suspended_by) == int(cashout.id),
+        "expected": {"amount_sent": fee["amount_sent"], "network_fee_estimate": fee["estimate"],
+                     "network_fee_estimate_adjusted": fee["estimate_adjusted"], "fee_cap": fee["fee_cap"],
+                     "received": _exact(expected)},
+        "actual": {"network_fee": fee["actual"], "received": fee["net_received"],
+                   "fee_above_estimate": _exact(actual - estimate) if actual is not None and estimate is not None
+                   and actual > estimate else None,
+                   "fee_above_cap": _exact(actual - cap) if actual is not None and cap is not None and actual > cap
+                   else None,
+                   "received_difference": _exact(received - expected) if received is not None and expected is not None
+                   and received != expected else None},
+        "evidence": {"source": fee["source"], "evidence": fee["evidence"], "reconciliation": fee["reconciliation"],
+                     "reconciled": fee["reconciled"], "recorded": fee["status"] == "RECORDED"},
+        "provider_fee_mode": fee["provider_fee_mode"], "gross": fee["gross"],
+        "review": fee_review_view(cashout),
+    }
+
+
+def fee_exceptions(db: Session, *, state: Optional[str] = None, skip: int = 0, limit: int = 50) -> dict:
+    """Flagged payouts, newest first, with the counts by review state. Read-only."""
+    query = _flagged(db)
+    pending = unreviewed_flagged_count(db)
+    total = int(query.count())
+    wanted = str(state or "").strip().upper()
+    if wanted == REVIEW_PENDING:
+        query = query.filter(_REVIEW_PENDING)
+    elif wanted == REVIEW_DONE:
+        query = query.filter(AffiliateCashoutRequest.fee_reviewed_at.isnot(None),
+                             AffiliateCashoutRequest.fee_review_flag == AffiliateCashoutRequest.fee_flag)
+    matching = int(query.count())
+    rows = query.order_by(AffiliateCashoutRequest.id.desc()).offset(skip).limit(limit).all()
+    ids = [int(r.id) for r in rows]
+    names = dict(db.query(User.id, User.username).filter(User.id.in_({r.user_id for r in rows})).all()) if rows else {}
+    flagged: dict = {}
+    if ids:
+        for record_id, values in (db.query(AuditTrail.record_id, AuditTrail.new_values)
+                                  .filter(AuditTrail.table_name == "affiliate_cashout_requests",
+                                          AuditTrail.record_id.in_(ids), AuditTrail.action == "CASHOUT_FEE_FLAGGED")
+                                  .order_by(AuditTrail.id.asc()).all()):
+            flagged[int(record_id)] = values or {}      # the latest one wins
+    suspended_by = payment_config.load(db).suspended_cashout_id
+    return {"total": matching, "flagged_count": total, "pending_count": pending,
+            "reviewed_count": total - pending,
+            "payout_suspension": payment_config.suspension_view(db),
+            "items": [fee_exception_view(r, flagged=flagged.get(int(r.id)), username=names.get(r.user_id),
+                                         suspended_by=suspended_by) for r in rows]}
+
+
+def fee_exception_events(db: Session, cashout_id: int) -> List[dict]:
+    """The audit records about one payout's fee, oldest first. Read-only."""
+    rows = (db.query(AuditTrail)
+            .filter(AuditTrail.table_name == "affiliate_cashout_requests", AuditTrail.record_id == cashout_id,
+                    AuditTrail.action.in_(_FEE_EVENT_ACTIONS)).order_by(AuditTrail.id.asc()).all())
+    return [{"id": r.id, "action": r.action, "actor_id": r.user_id,
+             "created_at": r.created_at.isoformat() if r.created_at else None,
+             "old_values": r.old_values or {}, "new_values": r.new_values or {}} for r in rows]
 
 
 def member_fee_view(cashout: AffiliateCashoutRequest) -> dict:
@@ -1370,8 +1596,10 @@ def member_fee_summary(db: Session, *, limit: int = 200) -> dict:
             "not_recorded": [{"cashout_id": r.id, "user_id": r.user_id, "estimate": _exact(r.network_fee_estimate)}
                              for r in rows if r.network_fee_actual is None][:limit],
             "flagged": [{"cashout_id": r.id, "user_id": r.user_id, "flag": r.fee_flag,
-                         "actual": _exact(r.network_fee_actual), "fee_cap": _exact(r.fee_cap)}
+                         "actual": _exact(r.network_fee_actual), "fee_cap": _exact(r.fee_cap),
+                         "review": fee_review_state(r)}
                         for r in rows if r.fee_flag][:limit],
+            "flagged_unreviewed_count": unreviewed_flagged_count(db),
             "automatic_recording": bool(payment_config.receiver_fee_payer_values())}
 
 
@@ -1456,7 +1684,7 @@ def cancel_request(db: Session, cashout: AffiliateCashoutRequest, *, actor: User
     switched that off); an authorized administrator may cancel any."""
     now = now or datetime.utcnow()
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
-              .with_for_update().one())
+              .populate_existing().with_for_update().one())
     own = locked.user_id == actor.id
     privileged = payment_config.has_permission(actor, PERMISSION_PROCESS)
     if not own and not privileged:
@@ -1505,7 +1733,7 @@ def settle_usd_cashout(db: Session, cashout: AffiliateCashoutRequest, *, admin: 
         raise CashoutError("REFERENCE_REQUIRED", "Enter the external payment reference "
                            f"(at least {config.usd_reference_min_length} characters).")
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
-              .with_for_update().one())
+              .populate_existing().with_for_update().one())
     if locked.cashout_method != METHOD_USD or locked.status != CashoutStatus.REQUESTED.value:
         db.rollback()
         raise CashoutError("NOT_SETTLEABLE", "Only an open USD cashout request can be settled.")
@@ -1536,7 +1764,7 @@ def resolve_uncertain(db: Session, cashout: AffiliateCashoutRequest, *, admin: U
     now = now or datetime.utcnow()
     _require_processor(admin)
     locked = (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.id == cashout.id)
-              .with_for_update().one())
+              .populate_existing().with_for_update().one())
     if locked.cashout_method != METHOD_CRYPTO or locked.status != CashoutStatus.UNKNOWN.value:
         db.rollback()
         raise CashoutError("NOT_UNCERTAIN", "Only a crypto cashout with an unknown outcome can be resolved here.")
@@ -1604,7 +1832,8 @@ def cashout_dict(cashout: AffiliateCashoutRequest, *, admin: bool = False) -> di
                     "last_checked_at": cashout.last_checked_at.isoformat() if cashout.last_checked_at else None,
                     "reviewed_by": cashout.reviewed_by,
                     "reviewed_at": cashout.reviewed_at.isoformat() if cashout.reviewed_at else None,
-                    "has_destination_details": bool(cashout.destination_ciphertext)})
+                    "has_destination_details": bool(cashout.destination_ciphertext),
+                    "fee_review": fee_review_view(cashout)})
     return out
 
 

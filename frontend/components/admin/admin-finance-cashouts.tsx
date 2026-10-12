@@ -259,6 +259,16 @@ export function CashoutTransactions({ canProcess }: { canProcess: boolean }) {
                         {FEE_FLAG_LABEL[c.beneficiary_fee.flag] ?? humanize(c.beneficiary_fee.flag)}
                       </span>} />
                   )}
+                  {c.fee_review && c.fee_review.state !== 'NOT_REQUIRED' && (
+                    <Row label="Review of the flag" value={
+                      <span data-testid="member-fee-review"
+                        className={c.fee_review.state === 'REVIEWED' ? '' : 'text-red-700 dark:text-red-300'}>
+                        {c.fee_review.state === 'REVIEWED'
+                          ? `Reviewed by administrator #${c.fee_review.reviewed_by} on ${dateTime(c.fee_review.reviewed_at)}`
+                          : 'Not reviewed yet: review it under Reconciliation & Audit Logs'}
+                        {' · a review does not clear the flag or lift a suspension'}
+                      </span>} />
+                  )}
                 </>)}
                 <Row label="Destination wallet" value={<span className="font-mono">{c.destination ?? '-'}</span>} />
                 <Row label="Provider payout ID" value={<span className="font-mono text-xs">{c.provider_batch_id ?? '-'}</span>} />

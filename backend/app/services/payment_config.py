@@ -155,6 +155,42 @@ def payout_amount_semantics() -> str:
 # Automatic payouts can only be switched on with a successful connection test this recent.
 CONNECTION_TEST_MAX_AGE = timedelta(hours=24)
 
+# Choices that still exist as stored values (rows written before the owner's
+# decision) but can no longer be selected. The Admin Panel shows them disabled
+# with the reason; update_settings refuses them whatever the client sends.
+UNSUPPORTED_CHOICES: Dict[str, Dict[str, str]] = {
+    "network_fee_policy": {
+        FEE_COMPANY_PAYS: "Retired: the beneficiary bears the network fee. No payout is created under it."},
+    "provider_fee_mode": {
+        FEE_MODE_CHARGED: "Not available: under it MyHigh5 would bear the network fee. No payout is created "
+                          "under it."},
+}
+
+# How the Crypto Cashout page of the Admin Panel groups its settings. Every
+# crypto setting is in exactly one section (checked below the registry).
+CRYPTO_SECTIONS: Tuple[Tuple[str, str, str, Tuple[str, ...]], ...] = (
+    ("provider", "A. Provider configuration",
+     "What is paid out, who bears the network fee, and where the provider takes that fee from.",
+     ("crypto_payout_currency", "network_fee_policy", "provider_fee_mode", "provider_balance_reserve_usd")),
+    ("fee_limits", "B. Network fee estimates and limits",
+     "The limits a member accepts. They are compared with the provider's ESTIMATE for the payout; the actual "
+     "fee is known only afterwards and is not guaranteed by them.",
+     ("member_fee_cap_percent", "member_fee_cap_usd", "max_network_fee_percent", "min_net_payout_usd",
+      "fee_terms_version", "fee_consent_valid_days")),
+    ("safety", "C. Safety margin and recording gate",
+     "How far the estimate is raised before it is checked, and how many payouts may be outstanding without a "
+     "verified actual fee.",
+     ("fee_estimate_margin_percent", "max_unreconciled_payouts")),
+    ("activation", "D. Approval and activation",
+     "The approval of the settings above, and the switches. Approve in a change of its own, after the values "
+     "were saved.",
+     ("fee_terms_approved", "crypto_cashout_enabled", "crypto_auto_payout_enabled")),
+    ("limits", "Payout limits and schedule",
+     "Amounts, daily limits, intervals and retries of the payout engine.",
+     ("crypto_min_usd", "max_single_payout_usd", "max_daily_payout_usd", "max_daily_payout_count",
+      "min_hours_between_payouts", "payout_interval_seconds", "retry_backoff_hours", "retry_max_attempts")),
+)
+
 
 class PaymentConfigError(ValueError):
     """A configuration action that was refused. Nothing was changed."""
@@ -459,6 +495,9 @@ _STATE_FIELDS = ("version", "persisted", "suspended_reason", "suspended_at", "su
 _CONFIG_FIELDS = tuple(f.name for f in dataclass_fields(PaymentConfig) if f.name not in _STATE_FIELDS)
 if set(_CONFIG_FIELDS) != set(FIELDS):
     raise RuntimeError("payment configuration registry is inconsistent")
+_SECTIONED = [name for _key, _title, _note, names in CRYPTO_SECTIONS for name in names]
+if sorted(_SECTIONED) != sorted(f.name for f in _FIELDS if f.group == "crypto"):
+    raise RuntimeError("the Crypto Cashout sections do not cover every crypto setting exactly once")
 
 
 def _dollars(value: Decimal) -> str:
@@ -950,11 +989,25 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
             raise refuse("CONFIRMATION_REQUIRED", f'Type "{CONFIRM_AUTO_PAYOUT}" to confirm.', field)
 
 
+def _activates(changed: Dict[str, Any]) -> bool:
+    """Does this change approve or switch on something on the strength of the
+    OTHER values in force? Such a change must name the configuration version
+    the administrator was looking at."""
+    return (changed.get("fee_terms_approved") is True or changed.get("crypto_auto_payout_enabled") is True
+            or changed.get("usd_settlement_enabled") is True
+            or changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED)
+
+
 def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Optional[str],
                     confirmation: Optional[str] = None, ip: Optional[str] = None,
-                    now: Optional[datetime] = None) -> PaymentConfig:
+                    now: Optional[datetime] = None, expected_version: Optional[int] = None) -> PaymentConfig:
     """Validate and store a set of setting changes. Commits. Reserves, releases
-    and sends nothing: the engine reads the new values on its next run."""
+    and sends nothing: the engine reads the new values on its next run.
+
+    `expected_version` is the configuration version the administrator was
+    shown. When it is given and the configuration has changed since, nothing is
+    stored (STALE_CONFIGURATION). An approval or an activation is refused
+    without it, so nobody approves values they were not shown."""
     now = now or datetime.utcnow()
     _authorize(actor, password)
     unknown = sorted(set(changes) - set(FIELDS))
@@ -968,6 +1021,11 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     if not changed:
         db.rollback()
         return load(db)
+    if expected_version is not None and int(expected_version) != int(row.version):
+        db.rollback()
+        raise PaymentConfigError("STALE_CONFIGURATION",
+                                 "The configuration was changed by someone else since this page was loaded. "
+                                 "Nothing was saved. Reload, review the values in force and try again.")
     if (current["fee_terms_approved"] and "fee_terms_approved" not in changed
             and any(name in changed for name in _FEE_TERMS_FIELDS)):
         # The approval covered the values as they were; changed values need a new one.
@@ -975,6 +1033,10 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     merged = {**current, **changed}
     try:
         _validate_combination(db, row, merged, changed, confirmation, now)
+        if expected_version is None and _activates(changed):
+            raise PaymentConfigError("VERSION_REQUIRED",
+                                     "An approval or an activation must name the configuration version it was "
+                                     "decided on. Reload the page and try again.")
     except PaymentConfigError:
         db.rollback()
         raise
@@ -1439,6 +1501,9 @@ def _field_view(field: Field, value: Any, default: Any) -> dict:
         "maximum": _plain(field.maximum) if field.maximum is not None else None,
         "choices": list(field.choices), "unit": field.unit, "max_length": field.max_length or None,
         "approval_note": field.approval or None,
+        "disabled_choices": [{"value": choice, "reason": reason}
+                             for choice, reason in UNSUPPORTED_CHOICES.get(field.name, {}).items()],
+        "optional": bool(field.optional),
     }
 
 
@@ -1472,6 +1537,8 @@ def settings_view(db: Session) -> dict:
         "payout_suspension": suspension_view(db),
         "network_fee_gate": ({"code": config.fee_gate(), "message": FEE_GATE_MESSAGES[config.fee_gate()]}
                              if config.fee_gate() is not None else None),
+        "crypto_sections": [{"key": key, "title": title, "note": note, "fields": list(names)}
+                            for key, title, note, names in CRYPTO_SECTIONS],
     }
 
 

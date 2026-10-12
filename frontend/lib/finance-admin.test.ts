@@ -9,7 +9,9 @@ import {
   readinessTone,
   expectedReceived,
   sameAmount,
+  sectionFields,
   validMemberFee,
+  validReviewNote,
   validNetworkFee,
   tone,
   type SettingField,
@@ -107,5 +109,21 @@ describe('verifying an actual network fee', () => {
   it('never accepts a fee as large as the payout itself', () => {
     for (const ok of ['0', '0.02', '4.99999999']) expect(validMemberFee(ok, 5)).toBe(true)
     for (const bad of ['5', '5.00', '5.01', '-0.01', 'abc', '', '0.123456789']) expect(validMemberFee(bad, 5)).toBe(false)
+  })
+
+  it('accepts a review note only when it says something', () => {
+    expect(validReviewNote('Compared the payout with the provider statement.')).toBe(true)
+    expect(validReviewNote('  Compared   the payout\nwith the statement.  ')).toBe(true)
+    for (const bad of ['', 'ok', 'looked at it', '                              ', 'a'.repeat(40), 'ab '.repeat(30),
+      'x'.repeat(501)]) {
+      expect(validReviewNote(bad)).toBe(false)
+    }
+  })
+
+  it('lays a section out in the order the server gives and skips names it does not know', () => {
+    const fields = [field('member_fee_cap_usd', 'money', '0.00'), field('provider_fee_mode', 'choice', 'UNVERIFIED'),
+      field('crypto_min_usd', 'money', '1.00')]
+    const section = { key: 'provider', title: 'A', note: '', fields: ['provider_fee_mode', 'not_a_setting', 'member_fee_cap_usd'] }
+    expect(sectionFields(fields, section).map((f) => f.name)).toEqual(['provider_fee_mode', 'member_fee_cap_usd'])
   })
 })

@@ -36,7 +36,14 @@ export type SettingField = {
   unit: string
   max_length: number | null
   approval_note: string | null
+  /** Choices that exist as stored values but can no longer be selected, with the reason. */
+  disabled_choices?: { value: string; reason: string }[]
+  /** A number that may be left empty (= not set). */
+  optional?: boolean
 }
+
+/** One group of settings on the Crypto Cashout page (decided by the server). */
+export type CryptoSection = { key: string; title: string; note: string; fields: string[] }
 
 export type FinanceSettings = {
   version: number
@@ -57,6 +64,37 @@ export type FinanceSettings = {
   network_fee_gate?: { code: string; message: string } | null
   /** Set by the engine when a payout did not add up; lifted only by an explicit reactivation. */
   payout_suspension?: PayoutSuspension | null
+  crypto_sections?: CryptoSection[]
+}
+
+/**
+ * Everything that currently stops a crypto payout from being created, each
+ * with what an administrator has to do about it. Built by the server from the
+ * same rules the payout engine applies; this page only displays it.
+ */
+export type CryptoPayoutStatus = {
+  can_create_payouts: boolean
+  configuration_version: number
+  blockers: { code: string; section: string; message: string; action: string; temporary: boolean }[]
+  missing_settings: { field: string; label: string; section: string }[]
+  provider_semantics: {
+    fee_mode: string
+    fee_mode_confirmed: boolean
+    receiver_fee_values_confirmed: boolean
+    company_fee_values_confirmed: boolean
+    amount_meaning: string | null
+    automatic_verification: boolean
+  }
+  approval: { approved: boolean; can_approve: boolean; blocked_by: { code: string; message: string } | null }
+  suspension: PayoutSuspension | null
+  recording_gate: { limit: number; in_flight: number; completed_unreconciled: number; total: number; blocked: boolean }
+  flagged_payouts: { pending_review: number }
+  switches: { server: boolean; provider: boolean; crypto_cashout: boolean; automatic_payouts: boolean; credentials_ready: boolean }
+}
+
+/** The settings of one section, in the server's order. Unknown names are skipped. */
+export function sectionFields(fields: SettingField[], section: CryptoSection): SettingField[] {
+  return section.fields.map((name) => fields.find((f) => f.name === name)).filter((f): f is SettingField => !!f)
 }
 
 export type CredentialStatus = {
@@ -167,6 +205,82 @@ export type AdminCashout = {
   reviewed_by: number | null
   has_destination_details: boolean
   beneficiary_fee?: BeneficiaryFeeRecord
+  fee_review?: FeeReview
+}
+
+/** An administrator's review of a flagged payout. A record only: it changes nothing else. */
+export type FeeReview = {
+  state: 'NOT_REQUIRED' | 'PENDING' | 'REVIEWED'
+  flag: string | null
+  message: string | null
+  reviewed_flag: string | null
+  reviewed_by: number | null
+  reviewed_at: string | null
+  note: string | null
+  /** An earlier review exists, but the payout has been flagged for something else since. */
+  superseded: boolean
+}
+
+/** One flagged payout: what was expected, what happened, the evidence and its review. Exact figures, as text. */
+export type FeeException = {
+  cashout_id: number
+  user_id: number
+  username: string | null
+  status: string
+  processed_at: string | null
+  payout_currency: string | null
+  destination: string | null
+  provider_batch_id: string | null
+  provider_status: string | null
+  flag: string
+  flag_message: string
+  flag_details: Record<string, string | null>
+  caused_suspension: boolean
+  gross: string
+  provider_fee_mode: string | null
+  expected: {
+    amount_sent: string | null; network_fee_estimate: string | null; network_fee_estimate_adjusted: string | null
+    fee_cap: string | null; received: string | null
+  }
+  actual: {
+    network_fee: string | null; received: string | null; fee_above_estimate: string | null
+    fee_above_cap: string | null; received_difference: string | null
+  }
+  evidence: { source: string | null; evidence: string | null; reconciliation: string | null; reconciled: boolean; recorded: boolean }
+  review: FeeReview
+}
+
+export type FeeExceptionList = {
+  total: number
+  flagged_count: number
+  pending_count: number
+  reviewed_count: number
+  payout_suspension: PayoutSuspension | null
+  items: FeeException[]
+}
+
+export type FeeEvent = {
+  id: number; action: string; actor_id: number | null; created_at: string | null
+  old_values: Record<string, unknown>; new_values: Record<string, unknown>
+}
+
+export const REVIEW_NOTE_MIN = 20
+export const REVIEW_NOTE_MAX = 500
+
+/** A review note that says something: long enough, and not one character repeated. The server decides. */
+export function validReviewNote(text: string): boolean {
+  const note = text.trim().split(/s+/).join(' ')
+  if (note.length < REVIEW_NOTE_MIN || note.length > REVIEW_NOTE_MAX) return false
+  return new Set(note.toLowerCase().replace(/ /g, '')).size >= 5
+}
+
+export const FEE_EVENT_LABEL: Record<string, string> = {
+  CASHOUT_RESERVED: 'Payout reserved (estimate and limit checked)',
+  CASHOUT_COMPLETED: 'Payout completed',
+  CASHOUT_PROVIDER_EVIDENCE: 'Provider report received',
+  CASHOUT_FEE_FLAGGED: 'Flagged',
+  CASHOUT_MEMBER_FEE_RECORDED: 'Actual network fee recorded',
+  CASHOUT_FEE_EXCEPTION_REVIEWED: 'Reviewed by an administrator',
 }
 
 /** The network fee a beneficiary bore on one crypto payout. Exact figures, as text. */
@@ -202,7 +316,8 @@ export type BeneficiaryFeeSummary = {
   received_total: string
   not_recorded_count: number
   not_recorded: { cashout_id: number; user_id: number; estimate: string | null }[]
-  flagged: { cashout_id: number; user_id: number; flag: string; actual: string | null; fee_cap: string | null }[]
+  flagged: { cashout_id: number; user_id: number; flag: string; actual: string | null; fee_cap: string | null; review?: string }[]
+  flagged_unreviewed_count?: number
   automatic_recording: boolean
   /** Payouts whose actual fee is not verified: still on their way, or completed without it. */
   exposure?: { in_flight: number; completed_unreconciled: number; total: number }

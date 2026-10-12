@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.api_v1.endpoints.admin import require_admin
@@ -33,11 +33,11 @@ from app.services.financial_eligibility import FinancialEligibilityHold, http_er
 admin_router = APIRouter()
 
 _UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE", "CHARGED_TO_REQUIRED", "EVIDENCE_REQUIRED",
-                  "RECEIVED_REQUIRED", "AMOUNTS_DO_NOT_ADD_UP")
+                  "RECEIVED_REQUIRED", "AMOUNTS_DO_NOT_ADD_UP", "REVIEW_NOTE_REQUIRED")
 
 
 def _error(exc: service.CashoutError) -> HTTPException:
-    code = (status.HTTP_403_FORBIDDEN if exc.code == "FORBIDDEN"
+    code = (status.HTTP_403_FORBIDDEN if exc.code in ("FORBIDDEN", "REAUTH_REQUIRED")
             else status.HTTP_422_UNPROCESSABLE_ENTITY if exc.code in _UNPROCESSABLE
             else status.HTTP_409_CONFLICT)
     return HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)})
@@ -100,6 +100,15 @@ def run_engine(db: Session = Depends(get_db), _: User = Depends(require_processo
     return cashout_engine.run_cycle(db)
 
 
+@admin_router.get("/fee-exceptions")
+def fee_exceptions(state: Optional[str] = Query(None, pattern="^(PENDING|REVIEWED)$"), skip: int = Query(0, ge=0),
+                   limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db),
+                   _: User = Depends(require_admin)):
+    """Flagged payouts (reconciliation exceptions): what was expected, what the
+    provider did, the evidence, and whether an administrator reviewed each."""
+    return service.fee_exceptions(db, state=state, skip=skip, limit=limit)
+
+
 @admin_router.get("/{cashout_id}")
 def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """One cashout with the commissions it holds and the member's other
@@ -128,6 +137,10 @@ def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(req
                          "transaction_date": c.transaction_date.isoformat() if c.transaction_date else None}
                         for c in commissions],
         "attempts": [service.cashout_dict(a, admin=True) for a in attempts],
+        "fee_exception": (service.fee_exception_view(
+            cashout, username=member.username if member else None,
+            suspended_by=payment_config.load(db).suspended_cashout_id) if cashout.fee_flag else None),
+        "fee_events": service.fee_exception_events(db, cashout.id) if cashout.fee_flag else [],
     }
 
 
@@ -221,3 +234,31 @@ def network_fee(cashout_id: int, body: NetworkFeeRecord, db: Session = Depends(g
         raise _error(exc) from exc
     return {"cashout": service.cashout_dict(cashout, admin=True),
             "network_fee_record": service.network_fee_state(db, cashout)}
+
+
+class FeeExceptionReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # What the administrator checked and what they found. Kept on the cashout and in the audit trail.
+    note: str = Field(default="", max_length=500)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.post("/{cashout_id}/fee-review")
+def fee_review(cashout_id: int, body: FeeExceptionReview, request: Request, db: Session = Depends(get_db),
+               admin: User = Depends(require_processor)):
+    """Record that an administrator reviewed a flagged payout. Needs the
+    process_cashouts permission, the current password and a written note.
+
+    A record only: it does not clear the flag, does not verify the payout's
+    actual fee, does not lift a payout suspension and does not allow a new
+    payout. Once per flag; the same review sent again changes nothing."""
+    try:
+        cashout = service.review_fee_exception(db, _get(db, cashout_id), admin=admin,
+                                               password=body.current_password, note=body.note,
+                                               ip=client_ip(request))
+    except service.CashoutError as exc:
+        db.rollback()
+        raise _error(exc) from exc
+    return {"cashout": service.cashout_dict(cashout, admin=True),
+            "fee_exception": service.fee_exception_view(
+                cashout, suspended_by=payment_config.load(db).suspended_cashout_id)}

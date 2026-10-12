@@ -85,6 +85,7 @@ PAYMENT_CONFIGURATION = "a5b6c7d8e9f0_payment_configuration.py"
 FEE_ACCOUNT = "b6c7d8e9f0a1_crypto_payout_network_fee_account.py"
 BENEFICIARY_FEE = "c7d8e9f0a1b2_beneficiary_paid_network_fee.py"
 FEE_SAFETY = "d8e9f0a1b2c3_payout_fee_safety.py"
+FEE_REVIEW = "e9f0a1b2c3d4_payout_fee_review.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -208,6 +209,7 @@ def schema_snapshot(engine) -> dict:
 
 
 def back_to_production_revision(engine) -> None:
+    migrate(engine, FEE_REVIEW, "downgrade")
     migrate(engine, FEE_SAFETY, "downgrade")
     migrate(engine, BENEFICIARY_FEE, "downgrade")
     migrate(engine, PAYMENT_CONFIGURATION, "downgrade")
@@ -280,8 +282,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (fifth.revision, fifth.down_revision, fifth.depends_on) == ("d8e9f0a1b2c3", "c7d8e9f0a1b2", None)
     children = [name for name, line in revisions.items() if '"c7d8e9f0a1b2"' in line or "'c7d8e9f0a1b2'" in line]
     assert children == [FEE_SAFETY]                                # one line, no branch
-    heads = [name for name, line in revisions.items() if '"d8e9f0a1b2c3"' in line or "'d8e9f0a1b2c3'" in line]
-    assert heads == []                                             # d8e9f0a1b2c3 is the single head
+    sixth = load_migration(FEE_REVIEW)
+    assert (sixth.revision, sixth.down_revision, sixth.depends_on) == ("e9f0a1b2c3d4", "d8e9f0a1b2c3", None)
+    children = [name for name, line in revisions.items() if '"d8e9f0a1b2c3"' in line or "'d8e9f0a1b2c3'" in line]
+    assert children == [FEE_REVIEW]                                # one line, no branch
+    heads = [name for name, line in revisions.items() if '"e9f0a1b2c3d4"' in line or "'e9f0a1b2c3d4'" in line]
+    assert heads == []                                             # e9f0a1b2c3d4 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -300,6 +306,7 @@ def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     assert money_fingerprint(engine) == rows_before                 # no commission, cashout, wallet or journal row changed
     # What the migrations build is exactly what the models expect.
     assert schema_snapshot(engine) == as_models_define_it
@@ -338,6 +345,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
         migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
         migrate(engine, BENEFICIARY_FEE, "upgrade")
         migrate(engine, FEE_SAFETY, "upgrade")
+        migrate(engine, FEE_REVIEW, "upgrade")
         assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
     with engine.connect() as c:
         assert c.execute(text("select count(*) from permissions where name in "
@@ -348,6 +356,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
 
 
@@ -358,6 +367,7 @@ def test_a_downgrade_keeps_a_permission_that_a_role_already_holds(pg):
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")                 # creates the two permissions
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     with engine.begin() as c:
         c.execute(text("insert into roles (name, is_system, created_at, updated_at) "
                        "values ('finance', false, now(), now())"))
@@ -458,6 +468,7 @@ def test_the_database_itself_enforces_the_cashout_and_configuration_rules(pg):
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     with Session() as db:
         first = member(db, "m1", method="CRYPTO")
         second = member(db, "m2", method="CRYPTO")
@@ -1043,6 +1054,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
     for _ in range(2):                                             # a re-run after a partial deployment
         migrate(engine, BENEFICIARY_FEE, "upgrade")
         migrate(engine, FEE_SAFETY, "upgrade")
+        migrate(engine, FEE_REVIEW, "upgrade")
     assert money_fingerprint(engine) == rows and account_5005(engine) == journal
     with engine.connect() as c:
         row = c.execute(text(
@@ -1058,6 +1070,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
             "or network_fee_estimate is not null or network_fee_actual is not null or net_received is not null "
             "or fee_cap is not null or fee_consent_id is not null or provider_fee_mode is not null")).scalar() == 0
     migrate(engine, FEE_SAFETY, "upgrade")                         # the models need it to read the row
+    migrate(engine, FEE_REVIEW, "upgrade")
     with Session() as db:
         config = pc.load(db)
         assert config.fee_gate() == "FEE_POLICY_NOT_BENEFICIARY_PAID" and config.crypto_auto_payout_enabled is True
@@ -1068,6 +1081,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
     assert money_fingerprint(engine) == rows
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     with Session() as db:
         accept_terms(db, db.get(User, ids["sponsor"]))
     migrate(engine, FEE_SAFETY, "downgrade")                       # nothing of its own recorded: it can go
@@ -1085,6 +1099,7 @@ def test_the_database_itself_enforces_the_fee_rules(pg):
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")                   # holds one acceptance
         db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
@@ -1338,6 +1353,7 @@ def test_the_database_itself_enforces_the_safety_rules(pg):
     migrate(engine, PAYMENT_CONFIGURATION, "upgrade")
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
+    migrate(engine, FEE_REVIEW, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")
         db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
@@ -1557,3 +1573,387 @@ def test_concurrent_administrators_reactivate_once_and_a_racing_worker_never_pay
         rows = db.query(AffiliateCashoutRequest).filter_by(user_id=second_id).all()
         assert [r.status for r in rows] == ["processing"]          # paid once, after the reactivation
     assert len(provider.created) == 2 and provider.created[1]["amount"] == Decimal("7.00")
+
+
+# ---------------------------------------------------------------------------
+# Flagged payout review and stale configuration (migration e9f0a1b2c3d4)
+# ---------------------------------------------------------------------------
+
+REVIEW_NOTE = "Compared payout batch-1 with the provider statement: the fee was charged to our balance."
+REVIEW_COLUMNS = ("fee_review_flag", "fee_review_note", "fee_reviewed_by", "fee_reviewed_at")
+
+
+def review_columns(engine) -> list:
+    with engine.connect() as c:
+        return [r[0] for r in c.execute(text(
+            "select column_name from information_schema.columns where table_name = 'affiliate_cashout_requests' "
+            "and column_name = any(:n) order by 1"), {"n": list(REVIEW_COLUMNS)}).fetchall()]
+
+
+def flagged_cashout(db, user, *, flag="PROVIDER_FEE_MODE_MISMATCH", reference="intent:flagged-1") -> int:
+    """A completed beneficiary-paid payout that carries a flag (written directly: test set-up only)."""
+    row = AffiliateCashoutRequest(
+        user_id=user.id, gross_amount=Decimal("5.00"), fee=Decimal("0"), net_amount=Decimal("4.98"),
+        status="completed", payout_reference=f"{reference};provider:batch-1", cashout_method="CRYPTO",
+        payout_currency="usdtbsc", network_fee_policy="MEMBER_PAYS", provider_fee_mode="DEDUCTED_BY_PROVIDER",
+        amount_sent=Decimal("5"), network_fee_estimate=Decimal("0.02"), fee_cap=Decimal("0.5"), fee_flag=flag,
+        provider_batch_id="batch-1", requested_at=NOW, processed_at=NOW)
+    db.add(row)
+    db.commit()
+    return int(row.id)
+
+
+def test_the_review_migration_is_additive_and_keeps_every_row(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        admin = member(db, "boss", admin=True)
+        db.add(PaymentSettings(id=1, version=4, **{**pc.defaults(), **FEE_RULES}))
+        cashout_id = flagged_cashout(db, user)                     # flagged before reviews existed
+        admin_id = admin.id
+    migrate(engine, FEE_REVIEW, "downgrade")                       # the schema as deployed before it
+    assert review_columns(engine) == []
+    rows, safety = money_fingerprint(engine), safety_state(engine)
+    with engine.connect() as c:
+        figures = c.execute(text("select fee_flag, amount_sent, network_fee_estimate, fee_cap, fee_reconciliation, "
+                                 "reviewed_by, reviewed_at from affiliate_cashout_requests")).one()
+        settings_row = c.execute(text("select version, provider_fee_mode, fee_terms_approved, "
+                                      "crypto_auto_payout_enabled from payment_settings")).one()
+
+    for _ in range(2):                                             # a re-run after a partial deployment
+        migrate(engine, FEE_REVIEW, "upgrade")
+    assert review_columns(engine) == sorted(REVIEW_COLUMNS)
+    assert money_fingerprint(engine) == rows and safety_state(engine) == safety
+    with engine.connect() as c:
+        assert c.execute(text("select fee_flag, amount_sent, network_fee_estimate, fee_cap, fee_reconciliation, "
+                              "reviewed_by, reviewed_at from affiliate_cashout_requests")).one() == figures
+        assert c.execute(text("select version, provider_fee_mode, fee_terms_approved, crypto_auto_payout_enabled "
+                              "from payment_settings")).one() == settings_row
+        assert tuple(c.execute(text("select fee_review_flag, fee_review_note, fee_reviewed_by, fee_reviewed_at "
+                                    "from affiliate_cashout_requests")).one()) == (None, None, None, None)
+    with Session() as db:
+        # The earlier flagged payout counts as NOT reviewed: an unknown state is never taken as reviewed.
+        assert cs.unreviewed_flagged_count(db) == 1
+        assert cs.fee_review_state(db.get(AffiliateCashoutRequest, cashout_id)) == "PENDING"
+
+    migrate(engine, FEE_REVIEW, "downgrade")                       # nothing recorded yet: it can be taken back
+    assert review_columns(engine) == [] and money_fingerprint(engine) == rows
+    migrate(engine, FEE_REVIEW, "upgrade")
+    with Session() as db:
+        cs.review_fee_exception(db, db.get(AffiliateCashoutRequest, cashout_id), admin=db.get(User, admin_id),
+                                password=PASSWORD, note=REVIEW_NOTE, now=NOW)
+    with pytest.raises(DBAPIError) as error:                       # a review is recorded: never destroyed
+        migrate(engine, FEE_REVIEW, "downgrade")
+    assert "would destroy" in str(error.value)
+    assert review_columns(engine) == sorted(REVIEW_COLUMNS) and money_fingerprint(engine) == rows
+    with Session() as db:
+        row = db.get(AffiliateCashoutRequest, cashout_id)
+        assert (row.fee_review_flag, row.fee_reviewed_by, row.fee_review_note) == (
+            "PROVIDER_FEE_MODE_MISMATCH", admin_id, REVIEW_NOTE)
+
+
+def test_the_whole_chain_from_the_production_revision_reaches_the_review_columns_and_back(pg):
+    engine, _Session = pg
+    back_to_production_revision(engine)
+    chain = (DUAL_CASHOUT, PAYMENT_CONFIGURATION, BENEFICIARY_FEE, FEE_SAFETY, FEE_REVIEW)
+    for filename in chain:
+        migrate(engine, filename, "upgrade")
+    built = schema_snapshot(engine)
+    assert review_columns(engine) == sorted(REVIEW_COLUMNS)
+    for filename in reversed(chain):
+        migrate(engine, filename, "downgrade")
+    for filename in chain:                                         # and up again, to the same schema
+        migrate(engine, filename, "upgrade")
+    assert schema_snapshot(engine) == built
+
+
+def test_the_database_itself_enforces_the_review_rules(pg):
+    engine, Session = pg
+    back_to_production_revision(engine)                            # the schema exactly as the migrations build it
+    for filename in (DUAL_CASHOUT, PAYMENT_CONFIGURATION, BENEFICIARY_FEE, FEE_SAFETY, FEE_REVIEW):
+        migrate(engine, filename, "upgrade")
+    with Session() as db:
+        user = member(db, "m1", method="CRYPTO")
+        reviewer = member(db, "boss")                              # the database only asks that the reviewer exists
+        db.add(cashout_row(user.id, "completed", "intent:done-1"))
+        db.commit()
+        admin_id = reviewer.id
+    full = (f"fee_review_flag = 'FEE_CAP_EXCEEDED', fee_review_note = '{REVIEW_NOTE}', "
+            f"fee_reviewed_by = {admin_id}, fee_reviewed_at = now()")
+    for statement in (
+            # a review of a payout that is not flagged
+            full,
+            # half a review: no author, no time, no note, or a note that says nothing
+            "fee_flag = 'FEE_CAP_EXCEEDED', fee_review_flag = 'FEE_CAP_EXCEEDED'",
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_review_note = '{REVIEW_NOTE}'",
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_reviewed_by = {admin_id}, fee_reviewed_at = now()",
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_review_flag = 'FEE_CAP_EXCEEDED', fee_review_note = 'ok', "
+            f"fee_reviewed_by = {admin_id}, fee_reviewed_at = now()",
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_review_flag = 'FEE_CAP_EXCEEDED', "
+            f"fee_review_note = '                              ', fee_reviewed_by = {admin_id}, fee_reviewed_at = now()",
+            # a flag that does not exist, or a reviewer who does not
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_review_flag = 'LOOKS_FINE', fee_review_note = '{REVIEW_NOTE}', "
+            f"fee_reviewed_by = {admin_id}, fee_reviewed_at = now()",
+            f"fee_flag = 'FEE_CAP_EXCEEDED', fee_review_flag = 'FEE_CAP_EXCEEDED', fee_review_note = '{REVIEW_NOTE}', "
+            "fee_reviewed_by = 999999, fee_reviewed_at = now()"):
+        assert refused(Session, lambda db, st=statement: db.execute(
+            text(f"update affiliate_cashout_requests set {st}"))), statement
+    assert not refused(Session, lambda db: db.execute(text(
+        f"update affiliate_cashout_requests set fee_flag = 'FEE_CAP_EXCEEDED', {full}")))
+    # The flag cannot be taken away from under a recorded review.
+    assert refused(Session, lambda db: db.execute(text("update affiliate_cashout_requests set fee_flag = null")))
+
+
+def test_concurrent_administrators_review_a_flagged_payout_once(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        admins = [member(db, f"boss{i}", admin=True).id for i in range(5)]
+        db.add(PaymentSettings(id=1, version=1, **{**pc.defaults(), **FEE_RULES}))
+        cashout_id = flagged_cashout(db, user)
+        pc.suspend_payouts(db, reason="PROVIDER_FEE_MODE_MISMATCH", cashout_id=cashout_id, now=NOW)
+        db.commit()
+    before = money_fingerprint(engine), safety_state(engine)
+
+    def work(i):
+        with Session() as db:
+            try:
+                cs.review_fee_exception(db, db.get(AffiliateCashoutRequest, cashout_id), admin=db.get(User, admins[i]),
+                                        password=PASSWORD, note=f"{REVIEW_NOTE} (administrator {i})", now=NOW)
+                return "REVIEWED"
+            except cs.CashoutError as exc:
+                return exc.code
+
+    results = in_threads(5, work)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert sorted(results) == ["ALREADY_REVIEWED"] * 4 + ["REVIEWED"], results
+    winner = results.index("REVIEWED")
+    with Session() as db:
+        row = db.get(AffiliateCashoutRequest, cashout_id)
+        assert (row.fee_reviewed_by, row.fee_review_note) == (admins[winner], f"{REVIEW_NOTE} (administrator {winner})")
+        events = db.execute(text("select user_id from audit_trails where action = 'CASHOUT_FEE_EXCEPTION_REVIEWED'"
+                                 )).fetchall()
+        assert [e[0] for e in events] == [admins[winner]]         # one audit event, by the one who reviewed
+        # Five reviews at once changed no amount, lifted nothing and released nothing.
+        assert pc.load(db).suspended_reason == "PROVIDER_FEE_MODE_MISMATCH"
+        assert db.query(PaymentConfigAudit).filter_by(action="PAYOUTS_REACTIVATED").count() == 0
+    assert (money_fingerprint(engine), safety_state(engine)) == before
+
+    def again(_i):                                                 # the same review, sent five times at once
+        with Session() as db:
+            cs.review_fee_exception(db, db.get(AffiliateCashoutRequest, cashout_id), admin=db.get(User, admins[winner]),
+                                    password=PASSWORD, note=f"{REVIEW_NOTE} (administrator {winner})", now=NOW)
+            return "SAME"
+
+    assert in_threads(5, again) == ["SAME"] * 5
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from audit_trails where action = 'CASHOUT_FEE_EXCEPTION_REVIEWED'"
+                              )).scalar() == 1
+
+
+def test_a_review_racing_a_worker_never_lets_a_payout_through_a_suspension(pg, engine_on):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        flagged_member, waiting = member(db, "m1", method="CRYPTO"), member(db, "m2", method="CRYPTO")
+        admin = member(db, "boss", admin=True)
+        commission(db, waiting, "7.00")
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "max_unreconciled_payouts": 1000})
+        cashout_id = flagged_cashout(db, flagged_member)
+        pc.suspend_payouts(db, reason="PROVIDER_FEE_MODE_MISMATCH", cashout_id=cashout_id, now=NOW)
+        db.commit()
+        configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)        # the settings were put back
+        assert pc.load(db).fee_rules_gate() is None and pc.load(db).suspended_reason is not None
+        admin_id = admin.id
+    provider = slow_provider()
+
+    def work(i):
+        with Session() as db:
+            if i == 0:
+                cs.review_fee_exception(db, db.get(AffiliateCashoutRequest, cashout_id), admin=db.get(User, admin_id),
+                                        password=PASSWORD, note=REVIEW_NOTE, now=NOW)
+                return "REVIEWED"
+            return engine_service.run_cycle(db, provider=provider, now=NOW).get("stopped", "RAN")
+
+    results = in_threads(6, work)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert results[0] == "REVIEWED" and set(results[1:]) == {"PAYOUTS_SUSPENDED"}, results
+    assert provider.created == []
+    with Session() as db:
+        assert pc.load(db).suspended_reason == "PROVIDER_FEE_MODE_MISMATCH"
+        assert db.query(AffiliateCashoutRequest).count() == 1      # only the flagged one; nothing new was reserved
+        assert cs.fee_review_state(db.get(AffiliateCashoutRequest, cashout_id)) == "REVIEWED"
+
+
+def test_workers_holding_an_older_configuration_never_reserve_after_a_change(pg, engine_on):
+    """The cycle read its configuration, then an administrator saved a change.
+    Under the settings lock every worker sees that the version moved on."""
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        ids = []
+        for index in range(5):
+            user = member(db, f"m{index}", method="CRYPTO")
+            commission(db, user, "5.00")
+            ids.append(user.id)
+        admin = member(db, "boss", admin=True)
+        configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
+        stale = pc.load(db)                                        # what a running cycle is holding
+        pc.update_settings(db, admin, {"max_single_payout_usd": "2.00", "crypto_min_usd": "1.00"}, password=PASSWORD,
+                           now=NOW)
+        assert pc.load(db).version == stale.version + 1 and pc.load(db).fee_gate() is None
+    provider = slow_provider()
+    facts = {"balance": Decimal("1000"), "minimum": Decimal("0.10")}
+
+    def pay(i):
+        with Session() as db:
+            return engine_service.process_member(db, ids[i], provider, facts=dict(facts), config=stale, now=NOW)
+
+    results = in_threads(5, pay)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert results == ["CONFIGURATION_CHANGED"] * 5, results       # 5.00 is above the new limit of 2.00
+    assert provider.created == []
+    with Session() as db:
+        assert db.query(AffiliateCashoutRequest).count() == 0
+        assert sum(get_commission_balance(db, i).available for i in ids) == Decimal("25.00")
+
+
+def test_a_change_racing_the_workers_is_either_before_a_payout_or_after_it_never_inside(pg, engine_on):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        ids = []
+        for index in range(6):
+            user = member(db, f"m{index}", method="CRYPTO")
+            commission(db, user, "5.00")
+            ids.append(user.id)
+        admin = member(db, "boss", admin=True)
+        configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
+        held = pc.load(db)
+        admin_id = admin.id
+    provider = slow_provider()
+    facts = {"balance": Decimal("1000"), "minimum": Decimal("0.10")}
+
+    def work(i):
+        with Session() as db:
+            if i == 6:
+                pc.update_settings(db, db.get(User, admin_id), {"retry_backoff_hours": 48}, password=PASSWORD, now=NOW)
+                return "SAVED"
+            return engine_service.process_member(db, ids[i], provider, facts=dict(facts), config=held, now=NOW)
+
+    results = in_threads(7, work)
+    assert not any(isinstance(r, Exception) for r in results), results
+    assert results[6] == "SAVED" and set(results[:6]) <= {"SUBMITTED", "CONFIGURATION_CHANGED"}, results
+    sent = results[:6].count("SUBMITTED")
+    assert len(provider.created) == sent
+    with Session() as db:
+        rows = db.query(AffiliateCashoutRequest).all()
+        # Whatever was handed over was reserved under the version the worker held; the rest was released or never reserved.
+        assert sorted(r.status for r in rows).count("processing") == sent
+        assert all(r.status in ("processing", "cancelled") for r in rows)
+        assert all(r.failure_code == "CONFIGURATION_CHANGED" for r in rows if r.status == "cancelled")
+        versions = [v[0] for v in db.execute(text(
+            "select new_values->>'settings_version' from audit_trails where action = 'CASHOUT_RESERVED'")).fetchall()]
+        assert set(versions) <= {str(held.version)}
+        reserved = sum(get_commission_balance(db, i).reserved for i in ids)
+        assert reserved == Decimal("5.00") * sent
+    # After the change, a worker still holding the old configuration reserves nothing more.
+    again = in_threads(6, lambda i: work(i))
+    assert set(again) <= {"CONFIGURATION_CHANGED", "CASHOUT_IN_PROGRESS", "PAYOUT_INTERVAL"}, again
+    assert len(provider.created) == sent
+
+
+def test_two_administrators_cannot_both_approve_on_the_same_page(pg):
+    """Both loaded the page at the same version. One changes a limit, the other
+    approves: exactly one of the two changes is stored, never an approval of a
+    limit its administrator was not shown."""
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        first, second = member(db, "boss", admin=True), member(db, "second", admin=True)
+        db.add(PaymentSettings(id=1, version=7, **{**pc.defaults(), **{**FEE_RULES, "fee_terms_approved": False}}))
+        db.commit()
+        ids = (first.id, second.id)
+
+    def work(i):
+        with Session() as db:
+            actor = db.get(User, ids[i])
+            try:
+                if i == 0:
+                    pc.update_settings(db, actor, {"member_fee_cap_usd": "50.00"}, password=PASSWORD, now=NOW,
+                                       expected_version=7)
+                else:
+                    pc.update_settings(db, actor, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
+                                       confirmation=pc.CONFIRM_FEE_LIMITS, expected_version=7)
+                return "SAVED"
+            except pc.PaymentConfigError as exc:
+                return exc.code
+
+    for _ in range(3):
+        with Session() as db:
+            row = db.query(PaymentSettings).one()
+            row.version, row.member_fee_cap_usd, row.fee_terms_approved = 7, Decimal("1.00"), False
+            db.commit()
+        results = in_threads(2, work)
+        assert sorted(results) == ["SAVED", "STALE_CONFIGURATION"], results
+        with Session() as db:
+            config = pc.load(db)
+            assert config.version == 8
+            assert (config.member_fee_cap_usd, config.fee_terms_approved) in ((Decimal("50.00"), False),
+                                                                             (Decimal("1.00"), True))
+
+
+def test_an_administrator_acting_on_an_older_copy_of_a_cashout_is_held_to_the_row_as_it_is_now(pg, engine_on):
+    """Two administrators opened the same cashout. One acts; the other then
+    acts on the copy they loaded before. Each action decides on the row as it
+    is under the lock, never on the older copy."""
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        admin = member(db, "boss", admin=True)
+        commission(db, user, "5.00")
+        configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
+        provider = FakeProvider(statuses={})
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        provider.statuses["batch-1"] = "FINISHED"
+        engine_service.run_cycle(db, provider=provider, now=NOW)
+        cashout_id = db.query(AffiliateCashoutRequest.id).filter_by(user_id=user.id).scalar()
+        admin_id = admin.id
+    fee = dict(charged_to="PAYOUT_AMOUNT", evidence="PROVIDER_STATEMENT", verified=True, now=NOW)
+    with Session() as slow, Session() as fast:
+        older = slow.get(AffiliateCashoutRequest, cashout_id)      # loaded, then left open on the screen
+        assert older.network_fee_actual is None
+        cs.record_member_fee_by_admin(fast, fast.get(AffiliateCashoutRequest, cashout_id),
+                                      admin=fast.get(User, admin_id), amount="0.02", received="4.98",
+                                      reference="statement A", **fee)
+        with pytest.raises(cs.CashoutError) as error:              # a verified figure is never replaced
+            cs.record_member_fee_by_admin(slow, older, admin=slow.get(User, admin_id), amount="0.30",
+                                          received="4.70", reference="statement B", **fee)
+        assert error.value.code == "FEE_ALREADY_RECORDED"
+    with Session() as db:
+        row = db.get(AffiliateCashoutRequest, cashout_id)
+        assert (row.network_fee_actual, row.net_received, row.fee_reconciliation) == (
+            Decimal("0.02"), Decimal("4.98"), "ADMIN_VERIFIED")
+        assert db.execute(text("select count(*) from audit_trails where action = 'CASHOUT_MEMBER_FEE_RECORDED'"
+                               )).scalar() == 1
+
+    # The same for a review: the second administrator's older copy does not let them review again.
+    with Session() as db:
+        row = db.get(AffiliateCashoutRequest, cashout_id)
+        row.fee_flag = "FEE_CAP_EXCEEDED"                          # flagged (written directly: test set-up only)
+        other = member(db, "second", admin=True)
+        db.commit()
+        other_id = other.id
+    with Session() as slow, Session() as fast:
+        older = slow.get(AffiliateCashoutRequest, cashout_id)
+        cs.review_fee_exception(fast, fast.get(AffiliateCashoutRequest, cashout_id), admin=fast.get(User, admin_id),
+                                password=PASSWORD, note=REVIEW_NOTE, now=NOW)
+        with pytest.raises(cs.CashoutError) as error:
+            cs.review_fee_exception(slow, older, admin=slow.get(User, other_id), password=PASSWORD,
+                                    note="Reviewed independently by the second administrator on duty.", now=NOW)
+        assert error.value.code == "ALREADY_REVIEWED"
+    with Session() as db:
+        assert db.get(AffiliateCashoutRequest, cashout_id).fee_reviewed_by == admin_id

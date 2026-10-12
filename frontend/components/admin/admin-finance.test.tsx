@@ -102,8 +102,16 @@ const cashout = (over: Record<string, unknown> = {}) => ({
   failure_code: null, reviewed_by: null, has_destination_details: true, ...over,
 })
 
-function setup({ o = overview(), p = provider(), s = settings(), rows = [cashout()] as any[] } = {}) {
-  getMock.mockImplementation((url: string) => {
+function setup({ o = overview(), p = provider(), s = settings(), rows = [cashout()] as any[],
+  status = null as any, exceptions = null as any, events = [] as any[] } = {}) {
+  getMock.mockImplementation((url: string, options?: any) => {
+    if (url.endsWith('/finance/payout-status')) return Promise.resolve(status ? { status: 200, data: status } : { status: 404, data: {} })
+    if (url.endsWith('/cashouts/fee-exceptions')) {
+      if (!exceptions) return Promise.resolve({ status: 404, data: {} })
+      const wanted = options?.params?.state
+      const items = exceptions.items.filter((i: any) => !wanted || i.review.state === wanted)
+      return Promise.resolve({ status: 200, data: { ...exceptions, total: items.length, items } })
+    }
     if (url.endsWith('/finance/overview')) return Promise.resolve({ status: 200, data: o })
     if (url.endsWith('/finance/provider')) return Promise.resolve({ status: 200, data: p })
     if (url.endsWith('/finance/settings')) return Promise.resolve({ status: 200, data: s })
@@ -126,7 +134,7 @@ function setup({ o = overview(), p = provider(), s = settings(), rows = [cashout
       return Promise.resolve({ status: 200, data: {
         cashout: row, member: { id: 42, username: 'synthetic_member', cashout_method: row.method, wallet: '0xaaaa...aaaa', wallet_status: 'VERIFIED' },
         commissions: [{ id: 1, amount: row.gross_amount, status: 'APPROVED', level: 1, transaction_date: '2026-10-01T00:00:00' }],
-        attempts: [row] } })
+        attempts: [row], fee_events: events } })
     }
     if (url.endsWith('/admin/cashouts')) return Promise.resolve({ status: 200, data: { total: rows.length, items: rows } })
     return Promise.resolve({ status: 404, data: {} })
@@ -134,6 +142,284 @@ function setup({ o = overview(), p = provider(), s = settings(), rows = [cashout
   putMock.mockResolvedValue({ status: 200, data: {} })
   postMock.mockResolvedValue({ status: 200, data: {} })
 }
+
+const SECTIONS = [
+  { key: 'provider', title: 'A. Provider configuration', note: 'Where the provider takes its fee from.',
+    fields: ['network_fee_policy', 'provider_fee_mode'] },
+  { key: 'fee_limits', title: 'B. Network fee estimates and limits', note: 'Compared with the ESTIMATE.',
+    fields: ['member_fee_cap_usd'] },
+  { key: 'safety', title: 'C. Safety margin and recording gate', note: 'Margin and gate.', fields: [] },
+  { key: 'activation', title: 'D. Approval and activation', note: 'Approve in a change of its own.',
+    fields: ['fee_terms_approved', 'crypto_auto_payout_enabled'] },
+  { key: 'limits', title: 'Payout limits and schedule', note: 'Amounts and intervals.', fields: ['crypto_min_usd'] },
+]
+
+const payoutStatus = (over: Record<string, unknown> = {}) => ({
+  can_create_payouts: false, configuration_version: 3,
+  blockers: [
+    { code: 'SERVER_SWITCH_OFF', section: 'activation', temporary: false,
+      message: 'The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off.',
+      action: 'It is set on the server by the operator and cannot be changed here.' },
+    { code: 'PROVIDER_FEE_MODE_UNVERIFIED', section: 'provider', temporary: false,
+      message: 'The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.',
+      action: 'Confirm with the provider that it takes its network fee out of the amount sent.' },
+    { code: 'FEE_LIMITS_NOT_CONFIGURED', section: 'fee_limits', temporary: false,
+      message: 'No member network fee limit is set.',
+      action: "Set at least one member network fee limit in section B. The value is the business owner's decision." },
+  ],
+  missing_settings: [{ field: 'provider_fee_mode', label: 'Provider fee behaviour', section: 'provider' },
+    { field: 'member_fee_cap_usd', label: 'Member network fee limit (amount)', section: 'fee_limits' }],
+  provider_semantics: { fee_mode: 'UNVERIFIED', fee_mode_confirmed: false, receiver_fee_values_confirmed: false,
+    company_fee_values_confirmed: false, amount_meaning: null, automatic_verification: false },
+  approval: { approved: false, can_approve: false,
+    blocked_by: { code: 'PROVIDER_FEE_MODE_UNVERIFIED', message: 'The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.' } },
+  suspension: null,
+  recording_gate: { limit: 0, in_flight: 0, completed_unreconciled: 0, total: 0, blocked: false },
+  flagged_payouts: { pending_review: 0 },
+  switches: { server: false, provider: true, crypto_cashout: true, automatic_payouts: false, credentials_ready: false },
+  ...over,
+})
+
+const feeException = (over: Record<string, unknown> = {}) => ({
+  cashout_id: 12, user_id: 42, username: 'synthetic_member', status: 'completed', processed_at: '2026-10-11T09:00:00',
+  payout_currency: 'usdtbsc', destination: '0xaaaa...aaaa', provider_batch_id: 'batch-12', provider_status: 'FINISHED',
+  flag: 'FEE_CAP_EXCEEDED', flag_message: 'The network fee the provider took is higher than the limit the member accepted.',
+  flag_details: {}, caused_suspension: true, gross: '5.00', provider_fee_mode: 'DEDUCTED_BY_PROVIDER',
+  expected: { amount_sent: '5', network_fee_estimate: '0.02', network_fee_estimate_adjusted: '0.03', fee_cap: '0.5', received: '4.98' },
+  actual: { network_fee: '0.75', received: '4.25', fee_above_estimate: '0.73', fee_above_cap: '0.25', received_difference: '-0.73' },
+  evidence: { source: 'PROVIDER_REPORTED', evidence: 'PROVIDER_API', reconciliation: 'PROVIDER_UNVERIFIED', reconciled: false, recorded: true },
+  review: { state: 'PENDING', flag: 'FEE_CAP_EXCEEDED', message: null, reviewed_flag: null, reviewed_by: null,
+    reviewed_at: null, note: null, superseded: false },
+  ...over,
+})
+
+const exceptionList = (items: any[], over: Record<string, unknown> = {}) => ({
+  total: items.length, flagged_count: items.length,
+  pending_count: items.filter((i) => i.review.state === 'PENDING').length,
+  reviewed_count: items.filter((i) => i.review.state === 'REVIEWED').length,
+  payout_suspension: null, items, ...over,
+})
+
+const NOTE = 'Compared payout batch-12 with the provider statement; the fee is above the limit.'
+
+describe('AdminFinance: Phase 3.3 Stage B', () => {
+  beforeEach(() => { getMock.mockReset(); postMock.mockReset(); putMock.mockReset() })
+
+  it('groups the Crypto Cashout settings into sections and says why no payout is created and what to do', async () => {
+    setup({ s: settings({ crypto_sections: SECTIONS }), status: payoutStatus() })
+    render(<AdminFinance section="crypto-cashout" />)
+    const card = await screen.findByTestId('crypto-payout-status')
+    expect(card).toHaveTextContent('No payout is created')
+    expect(card).toHaveTextContent('Configuration version 3')
+    expect(screen.getByTestId('status-fee-mode')).toHaveTextContent('Not confirmed')
+    expect(screen.getByTestId('status-approval')).toHaveTextContent('Not approved')
+    expect(screen.getByTestId('status-suspension')).toHaveTextContent('None')
+    expect(screen.getByTestId('status-semantics-note')).toHaveTextContent('an administrator verifies each payout against evidence')
+    // Every reason is listed, each with its action.
+    expect(within(screen.getByTestId('payout-blockers')).getAllByRole('listitem')).toHaveLength(3)
+    expect(screen.getByTestId('blocker-FEE_LIMITS_NOT_CONFIGURED')).toHaveTextContent("The value is the business owner's decision")
+    expect(screen.getByTestId('payout-missing-settings')).toHaveTextContent('Provider fee behaviour; Member network fee limit (amount)')
+    expect(screen.getByTestId('status-approval-note')).toHaveTextContent('They cannot be approved yet')
+    expect(screen.queryByTestId('crypto-fee-gate')).toBeNull()                              // one explanation, not two
+    for (const title of ['A. Provider configuration', 'B. Network fee estimates and limits',
+      'C. Safety margin and recording gate', 'D. Approval and activation', 'E. Suspension and reactivation']) {
+      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+    }
+    // Each section repeats the reasons that are resolved in it.
+    expect(screen.getByTestId('crypto-provider-attention')).toHaveTextContent('not confirmed as DEDUCTED_BY_PROVIDER')
+    expect(screen.getByTestId('crypto-fee_limits-attention')).toHaveTextContent('No member network fee limit is set')
+    expect(screen.queryByTestId('crypto-safety-attention')).toBeNull()
+    expect(screen.getByTestId('no-suspension')).toHaveTextContent('Crypto payouts are not suspended')
+    expect(screen.queryByRole('button', { name: 'Reactivate crypto payouts' })).toBeNull()
+  })
+
+  it('shows unsupported company-paid choices as unavailable and cannot select them', async () => {
+    const fields = settings().fields.map((f: SettingField) =>
+      f.name === 'network_fee_policy' ? { ...f, disabled_choices: [{ value: 'COMPANY_PAYS', reason: 'Retired: the beneficiary bears the network fee.' }] }
+        : f.name === 'provider_fee_mode' ? { ...f, disabled_choices: [{ value: 'CHARGED_TO_BALANCE', reason: 'Not available: under it MyHigh5 would bear the network fee.' }] }
+          : f)
+    setup({ s: settings({ fields, crypto_sections: SECTIONS }), status: payoutStatus() })
+    render(<AdminFinance section="crypto-cashout" />)
+    const policy = await screen.findByLabelText('Network fee policy') as HTMLSelectElement
+    const company = within(policy).getByRole('option', { name: /Company pays/ }) as HTMLOptionElement
+    expect(company.disabled).toBe(true)
+    expect(company).toHaveTextContent('not available')
+    expect((within(policy).getByRole('option', { name: 'Member pays' }) as HTMLOptionElement).disabled).toBe(false)
+    const mode = screen.getByLabelText('Provider fee behaviour') as HTMLSelectElement
+    expect((within(mode).getByRole('option', { name: /Charged to balance/ }) as HTMLOptionElement).disabled).toBe(true)
+    expect(screen.getByTestId('unsupported-network_fee_policy-COMPANY_PAYS')).toHaveTextContent('Retired')
+    expect(screen.getByTestId('unsupported-provider_fee_mode-CHARGED_TO_BALANCE')).toHaveTextContent('MyHigh5 would bear the network fee')
+  })
+
+  it('saves one section at a time and names the configuration version it was decided on', async () => {
+    setup({ s: settings({ crypto_sections: SECTIONS }), status: payoutStatus() })
+    putMock.mockResolvedValue({ status: 409, data: { detail: { code: 'STALE_CONFIGURATION',
+      message: 'The configuration was changed by someone else since this page was loaded. Nothing was saved.' } } })
+    render(<AdminFinance section="crypto-cashout" />)
+    const heading = await screen.findByRole('heading', { name: 'B. Network fee estimates and limits' })
+    const section = heading.parentElement as HTMLElement
+    fireEvent.change(within(section).getByLabelText('Member network fee limit (amount)'), { target: { value: '0.75' } })
+    fireEvent.change(within(section).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
+      changes: { member_fee_cap_usd: '0.75' }, current_password: PASSWORD, confirmation: undefined, expected_version: 3 }))
+    expect(putMock).toHaveBeenCalledTimes(1)                                                // only that section's change
+    expect(await screen.findByText(/changed by someone else since this page was loaded/)).toHaveAttribute('role', 'alert')
+  })
+
+  it('tells a suspension from the temporary hold and points to the review before a reactivation', async () => {
+    const suspension = { reason: 'FEE_CAP_EXCEEDED', cashout_id: 12, since: '2026-10-11T09:00:00', rules_gate: null,
+      message: 'The network fee the provider took from a payout is higher than the limit the member accepted.' }
+    setup({
+      s: settings({ crypto_sections: SECTIONS, payout_suspension: suspension,
+        confirmations: { payout_reactivation: 'REACTIVATE CRYPTO PAYOUTS' } }),
+      status: payoutStatus({
+        suspension, flagged_payouts: { pending_review: 1 },
+        recording_gate: { limit: 0, in_flight: 0, completed_unreconciled: 1, total: 1, blocked: true },
+        blockers: [
+          { code: 'PAYOUTS_SUSPENDED', section: 'suspension', temporary: false,
+            message: 'Crypto payouts are suspended: the fee is above the limit.', action: 'Review the flagged payout, then reactivate explicitly in section E.' },
+          { code: 'FEE_RECONCILIATION_PENDING', section: 'safety', temporary: true,
+            message: "An earlier payout's actual network fee has not been verified yet.", action: 'No reactivation is needed.' },
+        ] }),
+    })
+    render(<AdminFinance section="crypto-cashout" />)
+    const card = await screen.findByTestId('crypto-payout-status')
+    expect(card).toHaveTextContent('Suspended')
+    expect(screen.getByTestId('status-suspension')).toHaveTextContent('Active')
+    expect(screen.getByTestId('status-gate')).toHaveTextContent('1 outstanding, 0 allowed · new payouts on hold')
+    expect(screen.getByTestId('blocker-FEE_RECONCILIATION_PENDING')).toHaveTextContent('Temporary: lifts by itself')
+    expect(screen.getByTestId('blocker-PAYOUTS_SUSPENDED')).not.toHaveTextContent('Temporary')
+    const suspended = screen.getByTestId('payout-suspension')
+    expect(within(suspended).getByRole('heading', { name: 'E. Suspension and reactivation' })).toBeInTheDocument()
+    expect(screen.getByTestId('suspension-pending-review')).toHaveTextContent('1 flagged payout has not been reviewed')
+    expect(screen.getByTestId('suspension-pending-review')).toHaveTextContent('A review does not reactivate anything by itself')
+    expect(screen.queryByTestId('no-suspension')).toBeNull()
+  })
+
+  it('shows a flagged payout with what was expected, what happened and why it was flagged', async () => {
+    setup({ exceptions: exceptionList([feeException()], { payout_suspension: { reason: 'FEE_CAP_EXCEEDED', cashout_id: 12,
+      since: null, rules_gate: null, message: 'Above the limit.' } }),
+    events: [{ id: 1, action: 'CASHOUT_RESERVED', actor_id: 42, created_at: '2026-10-11T08:00:00', old_values: {}, new_values: {} },
+      { id: 2, action: 'CASHOUT_MEMBER_FEE_RECORDED', actor_id: null, created_at: '2026-10-11T09:00:00', old_values: {}, new_values: {} }] })
+    render(<AdminFinance section="reconciliation" />)
+    const panel = await screen.findByTestId('flagged-payout-review')
+    await waitFor(() => expect(screen.getByTestId('flagged-counts')).toHaveTextContent('1 to review'))
+    expect(panel).toHaveTextContent('does not lift a suspension and does not allow a new payout')
+    expect(screen.getByTestId('review-suspension')).toHaveTextContent('They stay suspended after a review')
+    const row = screen.getByTestId('flagged-12')
+    expect(row).toHaveTextContent('Cashout #12')
+    expect(row).toHaveTextContent('Caused the suspension')
+    expect(row).toHaveTextContent('Not reviewed')
+    expect(screen.getByTestId('flagged-reason-12')).toHaveTextContent('The fee taken is above the limit the member accepted')
+    fireEvent.click(within(row).getByRole('button', { name: 'Details' }))
+    const detail = await screen.findByTestId('flagged-detail-12')
+    expect(detail).toHaveTextContent("Provider's fee estimate")
+    expect(detail).toHaveTextContent('0.02')
+    expect(within(detail).getByTestId('actual-fee')).toHaveTextContent('0.75')
+    expect(within(detail).getByTestId('actual-received')).toHaveTextContent('4.25')
+    expect(detail).toHaveTextContent('0.25')                                                // above the member's limit
+    expect(within(detail).getByTestId('exception-reconciliation')).toHaveTextContent('Reported by the provider, not verified · not reconciled')
+    expect(within(detail).getByTestId('exception-unreconciled')).toHaveTextContent('A review does not change that')
+    await waitFor(() => expect(within(detail).getByTestId('exception-events')).toHaveTextContent('Actual network fee recorded'))
+    // No control here sends, releases or reactivates anything.
+    for (const name of [/pay now/i, /send payout/i, /reactivate/i, /release/i, /clear/i]) {
+      expect(within(panel).queryByRole('button', { name })).toBeNull()
+    }
+  })
+
+  it('records a review only with a real note and the password, and says that nothing else changed', async () => {
+    setup({ exceptions: exceptionList([feeException()]) })
+    render(<AdminFinance section="reconciliation" />)
+    const row = await screen.findByTestId('flagged-12')
+    fireEvent.click(within(row).getByRole('button', { name: 'Details' }))
+    const form = await screen.findByTestId('review-form')
+    const button = within(form).getByRole('button', { name: 'Mark as reviewed' })
+    const note = within(form).getByLabelText('What you checked and what you found')
+    const password = within(form).getByLabelText('Your current password')
+    expect(button).toBeDisabled()
+    fireEvent.change(note, { target: { value: NOTE } })
+    expect(button).toBeDisabled()                                                           // no password yet
+    fireEvent.change(password, { target: { value: PASSWORD } })
+    fireEvent.change(note, { target: { value: 'looks fine' } })
+    expect(button).toBeDisabled()                                                           // not a review
+    fireEvent.change(note, { target: { value: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa' } })
+    expect(button).toBeDisabled()                                                           // says nothing
+    fireEvent.change(note, { target: { value: `  ${NOTE}  ` } })
+    expect(button).not.toBeDisabled()
+    fireEvent.click(button)
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/api/v1/admin/cashouts/12/fee-review', {
+      note: NOTE, current_password: PASSWORD }))
+    expect(postMock).toHaveBeenCalledTimes(1)
+    expect(putMock).not.toHaveBeenCalled()                                                  // no setting is touched
+    expect(await screen.findByRole('status')).toHaveTextContent('Nothing else was changed')
+  })
+
+  it('shows the server refusal of a duplicate review and keeps the form', async () => {
+    setup({ exceptions: exceptionList([feeException()]) })
+    postMock.mockResolvedValue({ status: 409, data: { detail: { code: 'ALREADY_REVIEWED',
+      message: 'This payout was already reviewed by administrator #5. A review is recorded once and is not replaced.' } } })
+    render(<AdminFinance section="reconciliation" />)
+    fireEvent.click(within(await screen.findByTestId('flagged-12')).getByRole('button', { name: 'Details' }))
+    const form = await screen.findByTestId('review-form')
+    fireEvent.change(within(form).getByLabelText('What you checked and what you found'), { target: { value: NOTE } })
+    fireEvent.change(within(form).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Mark as reviewed' }))
+    expect(await screen.findByText(/already reviewed by administrator #5/)).toHaveAttribute('role', 'alert')
+    expect(within(form).getByLabelText('Your current password')).toHaveValue('')            // the password is not kept
+  })
+
+  it('shows who reviewed a payout and offers no second review, and no review without the permission', async () => {
+    const reviewed = feeException({ cashout_id: 13, review: { state: 'REVIEWED', flag: 'FEE_CAP_EXCEEDED', message: null,
+      reviewed_flag: 'FEE_CAP_EXCEEDED', reviewed_by: 5, reviewed_at: '2026-10-12T10:00:00', note: NOTE, superseded: false } })
+    const again = feeException({ cashout_id: 14, flag: 'PROVIDER_FEE_MODE_MISMATCH', review: { state: 'PENDING',
+      flag: 'PROVIDER_FEE_MODE_MISMATCH', message: null, reviewed_flag: 'PROVIDER_AMOUNT_MISMATCH', reviewed_by: 5,
+      reviewed_at: '2026-10-12T10:00:00', note: NOTE, superseded: true } })
+    setup({ o: overview({ permissions: { can_manage: false, can_process: false }, warnings: [] }),
+      exceptions: exceptionList([reviewed, again]) })
+    render(<AdminFinance section="reconciliation" />)
+    await screen.findByTestId('flagged-14')                                                  // "To review" is shown first
+    expect(screen.queryByTestId('flagged-13')).toBeNull()
+    expect(screen.getByTestId('flagged-superseded-14')).toHaveTextContent('needs a new review')
+    fireEvent.click(within(screen.getByTestId('flagged-14')).getByRole('button', { name: 'Details' }))
+    expect(await screen.findByTestId('flagged-detail-14')).toHaveTextContent('needs the process_cashouts permission')
+    expect(screen.queryByTestId('review-form')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Reviewed' }))
+    const done = await screen.findByTestId('flagged-13')
+    expect(screen.getByTestId('flagged-review-13')).toHaveTextContent(`Reviewed by administrator #5`)
+    expect(screen.getByTestId('flagged-review-13')).toHaveTextContent(NOTE)
+    fireEvent.click(within(done).getByRole('button', { name: 'Details' }))
+    await screen.findByTestId('flagged-detail-13')
+    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
+    expect(postMock).not.toHaveBeenCalled()
+  })
+
+  it('says when no flagged payout is waiting and stays quiet when the list cannot be read', async () => {
+    setup({ exceptions: exceptionList([]) })
+    const { unmount } = render(<AdminFinance section="reconciliation" />)
+    expect(await screen.findByTestId('flagged-empty')).toHaveTextContent('No flagged payout is waiting for a review')
+    unmount()
+    setup()                                                                                 // the endpoint answers 404
+    render(<AdminFinance section="reconciliation" />)
+    expect(await screen.findByText('The flagged payouts could not be loaded.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
+  })
+
+  it('shows the review state of a flagged payout in its cashout details', async () => {
+    const fee = { applies: true, provider_fee_mode: 'DEDUCTED_BY_PROVIDER', gross: '5.00', amount_sent: '5', estimate: '0.02',
+      actual: '0.75', net_received: '4.25', fee_cap: '0.5', source: 'PROVIDER_REPORTED', flag: 'FEE_CAP_EXCEEDED',
+      reconciliation: 'PROVIDER_VERIFIED', evidence: 'PROVIDER_API', reconciled: true, status: 'RECORDED' }
+    setup({ rows: [cashout({ id: 12, method: 'CRYPTO', status: 'completed', gross_amount: 5, fee: 0, net_amount: 4.98,
+      network_fee: 0.02, network_fee_policy: 'MEMBER_PAYS', payout_currency: 'usdtbsc', beneficiary_fee: fee,
+      fee_review: { state: 'PENDING', flag: 'FEE_CAP_EXCEEDED', message: null, reviewed_flag: null, reviewed_by: null,
+        reviewed_at: null, note: null, superseded: false } })] })
+    render(<AdminFinance section="transactions" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }))
+    const review = await screen.findByTestId('member-fee-review')
+    expect(review).toHaveTextContent('Not reviewed yet: review it under Reconciliation & Audit Logs')
+    expect(review).toHaveTextContent('a review does not clear the flag or lift a suspension')
+  })
+})
 
 describe('AdminFinance', () => {
   beforeEach(() => { getMock.mockReset(); postMock.mockReset(); putMock.mockReset() })
@@ -248,7 +534,7 @@ describe('AdminFinance', () => {
     fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
     fireEvent.click(save)
     await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
-      changes: { crypto_min_usd: '2.50' }, current_password: PASSWORD, confirmation: undefined }))
+      changes: { crypto_min_usd: '2.50' }, current_password: PASSWORD, confirmation: undefined, expected_version: 3 }))
 
     fireEvent.click(screen.getByRole('switch', { name: 'Automatic payouts' }))
     fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
@@ -274,7 +560,7 @@ describe('AdminFinance', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', {
       changes: { provider_fee_mode: 'DEDUCTED_BY_PROVIDER' }, current_password: PASSWORD,
-      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED' }))
+      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED', expected_version: 3 }))
 
     fireEvent.click(screen.getByRole('switch', { name: 'Network fee limits approved' }))
     fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
@@ -296,7 +582,7 @@ describe('AdminFinance', () => {
     expect(card).toHaveTextContent('charged a network fee to the MyHigh5 balance')
     expect(card).toHaveTextContent('Cashout #12')
     expect(card).toHaveTextContent('This is a suspension, not the ordinary wait')
-    expect(card).toHaveTextContent('restoring the settings below does not lift it, and neither does recording a fee')
+    expect(card).toHaveTextContent('restoring the settings above does not lift it, and neither does recording a fee')
     expect(card).toHaveTextContent('do not guarantee the actual network fee of any payout, including the first one')
     expect(screen.getByTestId('suspension-rules-gate')).toHaveTextContent('Provider fee mode unverified')
     expect(screen.queryByTestId('crypto-fee-gate')).toBeNull()                              // one message, not two

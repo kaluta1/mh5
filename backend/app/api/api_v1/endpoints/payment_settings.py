@@ -61,6 +61,10 @@ class SettingsBody(BaseModel):
     current_password: str = Field(default="", max_length=256)
     # Required to switch on automatic payouts or USD settlement.
     confirmation: Optional[str] = Field(default=None, max_length=60)
+    # The configuration version the administrator was shown. A change is refused
+    # when the configuration has changed since; an approval or an activation is
+    # refused without it.
+    expected_version: Optional[int] = Field(default=None, ge=0)
 
 
 class CredentialsBody(BaseModel):
@@ -141,6 +145,13 @@ def get_settings(db: Session = Depends(get_db)):
     return config.settings_view(db)
 
 
+@router.get("/payout-status")
+def payout_status(db: Session = Depends(get_db)):
+    """Everything that currently stops a crypto payout from being created, and
+    what to do about each. Read-only; the provider is not asked."""
+    return cashout_engine.crypto_payout_status(db)
+
+
 @router.get("/webhook")
 def webhook(db: Session = Depends(get_db)):
     return config.webhook_health(db)
@@ -219,7 +230,8 @@ def update_settings(body: SettingsBody, request: Request, db: Session = Depends(
                     actor: User = Depends(get_current_active_user)):
     try:
         config.update_settings(db, actor, body.changes, password=body.current_password,
-                               confirmation=body.confirmation, ip=client_ip(request))
+                               confirmation=body.confirmation, ip=client_ip(request),
+                               expected_version=body.expected_version)
     except config.PaymentConfigError as exc:
         db.rollback()
         raise _http_error(exc) from None

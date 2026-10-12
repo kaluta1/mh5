@@ -600,7 +600,8 @@ def test_automatic_payouts_cannot_be_switched_on_until_everything_is_proven(db, 
     assert refused(confirmation=pc.CONFIRM_AUTO_PAYOUT) == "UNSAFE_ACTIVATION"             # provider disabled
     configure(db, provider_enabled=True)
 
-    config = pc.update_settings(db, admin, change, password=PASSWORD, confirmation=pc.CONFIRM_AUTO_PAYOUT, now=NOW)
+    config = pc.update_settings(db, admin, change, password=PASSWORD, confirmation=pc.CONFIRM_AUTO_PAYOUT, now=NOW,
+                                expected_version=pc.load(db).version)
     assert config.crypto_auto_payout_enabled is True
     # ... and still nothing is paid: the server master switch is off.
     assert engine.engine_enabled(db) is False and run(db, FakeProvider()) == {"enabled": False, "reconciled": {},
@@ -619,7 +620,8 @@ def test_usd_settlement_cannot_be_switched_on_without_an_account_and_a_confirmat
     assert refused({"usd_settlement_enabled": True}, confirmation=pc.CONFIRM_USD_SETTLEMENT) == "UNSAFE_ACTIVATION"
     assert refused({"usd_settlement_enabled": True, "usd_settlement_account": "1010"}) == "CONFIRMATION_REQUIRED"
     config = pc.update_settings(db, admin, {"usd_settlement_enabled": True, "usd_settlement_account": "1010"},
-                                password=PASSWORD, confirmation=pc.CONFIRM_USD_SETTLEMENT)
+                                password=PASSWORD, confirmation=pc.CONFIRM_USD_SETTLEMENT,
+                                expected_version=pc.load(db).version)
     assert config.usd_settlement_enabled is True and config.usd_settlement_allowed is False   # server switch off
 
 
