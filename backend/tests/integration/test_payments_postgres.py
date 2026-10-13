@@ -86,6 +86,8 @@ FEE_ACCOUNT = "b6c7d8e9f0a1_crypto_payout_network_fee_account.py"
 BENEFICIARY_FEE = "c7d8e9f0a1b2_beneficiary_paid_network_fee.py"
 FEE_SAFETY = "d8e9f0a1b2c3_payout_fee_safety.py"
 FEE_REVIEW = "e9f0a1b2c3d4_payout_fee_review.py"
+ACTIVATION_PERMISSION = "f0a1b2c3d4e5_activate_financial_operations_permission.py"
+ADMIN_SECURITY = "a2b3c4d5e6f7_administrator_security_permissions.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -287,7 +289,17 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     children = [name for name, line in revisions.items() if '"d8e9f0a1b2c3"' in line or "'d8e9f0a1b2c3'" in line]
     assert children == [FEE_REVIEW]                                # one line, no branch
     heads = [name for name, line in revisions.items() if '"e9f0a1b2c3d4"' in line or "'e9f0a1b2c3d4'" in line]
-    assert heads == []                                             # e9f0a1b2c3d4 is the single head
+    assert heads == [ACTIVATION_PERMISSION]                        # one line, no branch
+    seventh = load_migration(ACTIVATION_PERMISSION)
+    assert (seventh.revision, seventh.down_revision, seventh.depends_on) == ("f0a1b2c3d4e5", "e9f0a1b2c3d4", None)
+    assert seventh.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"f0a1b2c3d4e5"' in line or "'f0a1b2c3d4e5'" in line]
+    assert heads == [ADMIN_SECURITY]                               # one line, no branch
+    eighth = load_migration(ADMIN_SECURITY)
+    assert (eighth.revision, eighth.down_revision, eighth.depends_on) == ("a2b3c4d5e6f7", "f0a1b2c3d4e5", None)
+    assert eighth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"a2b3c4d5e6f7"' in line or "'a2b3c4d5e6f7'" in line]
+    assert heads == []                                             # a2b3c4d5e6f7 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -1957,3 +1969,157 @@ def test_an_administrator_acting_on_an_older_copy_of_a_cashout_is_held_to_the_ro
         assert error.value.code == "ALREADY_REVIEWED"
     with Session() as db:
         assert db.get(AffiliateCashoutRequest, cashout_id).fee_reviewed_by == admin_id
+
+
+# ---------------------------------------------------------------------------
+# f0a1b2c3d4e5: the activate_financial_operations permission (data only)
+# ---------------------------------------------------------------------------
+
+def permission_holders(engine) -> list:
+    with engine.connect() as c:
+        return [tuple(r) for r in c.execute(text(
+            "select p.name, p.category, (select count(*) from role_permissions rp where rp.permission_id = p.id) "
+            "from permissions p where p.name = 'activate_financial_operations'")).fetchall()]
+
+
+def access_fingerprint(engine) -> tuple:
+    """Who holds what: every account's role, every role and every assignment."""
+    with engine.connect() as c:
+        return (tuple(c.execute(text("select id, role_id, is_admin, is_active from users order by id")).fetchall()),
+                tuple(c.execute(text("select id, name, inherit_from_id from roles order by id")).fetchall()),
+                tuple(c.execute(text("select role_id, permission_id from role_permissions order by 1, 2")).fetchall()),
+                c.execute(text("select count(*) from payment_settings")).scalar(),
+                c.execute(text("select count(*) from payment_config_audit")).scalar())
+
+
+def test_the_activation_permission_migration_adds_one_permission_held_by_nobody(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        production_like_rows(db)
+        member(db, "boss", admin=True, permissions=(pc.PERMISSION_MANAGE, pc.PERMISSION_PROCESS))
+        configure(db, usd_min_usd=Decimal("150.00"))
+    with engine.begin() as c:                                      # as the earlier migrations leave it
+        c.execute(text("delete from permissions where name = 'activate_financial_operations'"))
+    schema, money, access = schema_snapshot(engine), money_fingerprint(engine), access_fingerprint(engine)
+    with engine.connect() as c:
+        permissions_before = c.execute(text("select count(*) from permissions")).scalar()
+    assert permission_holders(engine) == []
+
+    for _ in range(2):                                             # applying it twice adds it once
+        migrate(engine, ACTIVATION_PERMISSION, "upgrade")
+        assert permission_holders(engine) == [("activate_financial_operations", "admin", 0)]
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from permissions")).scalar() == permissions_before + 1
+    # No table, column or index; no money row; nobody's role, no role's permissions, no setting.
+    assert schema_snapshot(engine) == schema
+    assert money_fingerprint(engine) == money
+    assert access_fingerprint(engine) == access
+
+    # The administrator who could configure before still can, and cannot activate.
+    with Session() as db:
+        boss = db.query(User).filter(User.username == "boss").one()
+        assert pc.has_permission(boss, pc.PERMISSION_MANAGE) and pc.can_activate(boss) is False
+        with pytest.raises(pc.PaymentConfigError) as error:
+            pc.update_settings(db, boss, {"usd_settlement_enabled": True, "usd_settlement_account": "1010"},
+                               password=PASSWORD, confirmation=pc.CONFIRM_USD_SETTLEMENT,
+                               expected_version=pc.load(db).version)
+        assert error.value.code == "ACTIVATION_PERMISSION_REQUIRED"
+        assert pc.update_settings(db, boss, {"usd_min_usd": "175"}, password=PASSWORD).usd_min_usd == Decimal("175.00")
+
+    migrate(engine, ACTIVATION_PERMISSION, "downgrade")            # held by nobody: removed
+    assert permission_holders(engine) == []
+    assert schema_snapshot(engine) == schema and money_fingerprint(engine) == money
+    migrate(engine, ACTIVATION_PERMISSION, "downgrade")            # and a second downgrade is harmless
+    migrate(engine, ACTIVATION_PERMISSION, "upgrade")
+    assert permission_holders(engine) == [("activate_financial_operations", "admin", 0)]
+
+
+def test_a_downgrade_keeps_the_activation_permission_a_role_holds(pg):
+    engine, _Session = pg
+    migrate(engine, ACTIVATION_PERMISSION, "upgrade")
+    with engine.begin() as c:
+        c.execute(text("insert into roles (name, is_system, created_at, updated_at) "
+                       "values ('finance_manager_ma', false, now(), now())"))
+        c.execute(text("insert into role_permissions (role_id, permission_id) select r.id, p.id from roles r, "
+                       "permissions p where r.name = 'finance_manager_ma' "
+                       "and p.name = 'activate_financial_operations'"))
+    migrate(engine, ACTIVATION_PERMISSION, "downgrade")
+    assert permission_holders(engine) == [("activate_financial_operations", "admin", 1)]
+
+
+def test_the_whole_chain_from_the_production_revision_ends_with_the_activation_permission(pg):
+    engine, _Session = pg
+    back_to_production_revision(engine)
+    chain = (DUAL_CASHOUT, PAYMENT_CONFIGURATION, FEE_ACCOUNT, BENEFICIARY_FEE, FEE_SAFETY, FEE_REVIEW,
+             ACTIVATION_PERMISSION, ADMIN_SECURITY)
+    for filename in chain:
+        migrate(engine, filename, "upgrade")
+    built = schema_snapshot(engine)
+    with engine.connect() as c:
+        held = c.execute(text(
+            "select p.name, (select count(*) from role_permissions rp where rp.permission_id = p.id) "
+            "from permissions p where p.name in ('manage_payment_settings', 'process_cashouts', "
+            "'activate_financial_operations') order by 1")).fetchall()
+    assert [tuple(r) for r in held] == [("activate_financial_operations", 0), ("manage_payment_settings", 0),
+                                        ("process_cashouts", 0)]
+    for filename in reversed(chain):
+        migrate(engine, filename, "downgrade")
+    assert permission_holders(engine) == []
+    for filename in chain:                                         # and up again, to the same schema
+        migrate(engine, filename, "upgrade")
+    assert schema_snapshot(engine) == built
+
+
+# ---------------------------------------------------------------------------
+# a2b3c4d5e6f7: manage_administrators and grant_manual_payments (data only)
+# ---------------------------------------------------------------------------
+
+def security_permissions(engine) -> list:
+    with engine.connect() as c:
+        return [tuple(r) for r in c.execute(text(
+            "select p.name, p.category, (select count(*) from role_permissions rp where rp.permission_id = p.id) "
+            "from permissions p where p.name in ('manage_administrators', 'grant_manual_payments') "
+            "order by 1")).fetchall()]
+
+
+def test_the_administrator_security_migration_adds_two_permissions_held_by_nobody(pg):
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        production_like_rows(db)
+        member(db, "boss", admin=True, permissions=(pc.PERMISSION_MANAGE,))
+    schema, money, access = schema_snapshot(engine), money_fingerprint(engine), access_fingerprint(engine)
+    with engine.connect() as c:
+        before = c.execute(text("select count(*) from permissions")).scalar()
+    assert security_permissions(engine) == []
+
+    for _ in range(2):                                             # applying it twice adds each once
+        migrate(engine, ADMIN_SECURITY, "upgrade")
+        assert security_permissions(engine) == [("grant_manual_payments", "admin", 0),
+                                                ("manage_administrators", "admin", 0)]
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from permissions")).scalar() == before + 2
+    assert schema_snapshot(engine) == schema
+    assert money_fingerprint(engine) == money
+    assert access_fingerprint(engine) == access                   # nobody's role, no role's permissions
+
+    # An existing administrator is still one, and holds neither new permission.
+    from app.services import admin_security
+
+    with Session() as db:
+        boss = db.query(User).filter(User.username == "boss").one()
+        assert admin_security.is_administrator(boss) and pc.has_permission(boss, pc.PERMISSION_MANAGE)
+        assert not admin_security.has_permission(boss, admin_security.PERMISSION_MANAGE_ADMINS)
+        assert not admin_security.has_permission(boss, admin_security.PERMISSION_GRANT_PAYMENTS)
+
+    with engine.begin() as c:                                      # one of the two is granted to a role
+        c.execute(text("insert into roles (name, is_system, created_at, updated_at) "
+                       "values ('finance_manager_r', false, now(), now())"))
+        c.execute(text("insert into role_permissions (role_id, permission_id) select r.id, p.id from roles r, "
+                       "permissions p where r.name = 'finance_manager_r' and p.name = 'manage_administrators'"))
+    migrate(engine, ADMIN_SECURITY, "downgrade")                   # the one nobody holds goes, the other stays
+    assert security_permissions(engine) == [("manage_administrators", "admin", 1)]
+    migrate(engine, ADMIN_SECURITY, "upgrade")
+    assert security_permissions(engine) == [("grant_manual_payments", "admin", 0),
+                                            ("manage_administrators", "admin", 1)]

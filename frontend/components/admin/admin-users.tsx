@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import api from '@/lib/api'
 import { cacheService } from '@/lib/cache-service'
+import { adminErrorText } from '@/lib/admin-security'
+// This client does NOT throw on a 4xx answer: every change below checks the answer itself.
+import { throwIfApiError } from '@/lib/http-error'
 
 interface UserDetails {
   id: number
@@ -98,6 +101,11 @@ export default function AdminUsers() {
   const [loadingAction, setLoadingAction] = useState<'hide' | 'delete' | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // A change to an administrator (the role itself, or switching an administrator's
+  // account on or off) is confirmed with the acting administrator's own password.
+  const [privileged, setPrivileged] = useState<{ kind: 'role' | 'status'; userId: number; current: boolean } | null>(null)
+  const [privilegedPassword, setPrivilegedPassword] = useState('')
+  const [privilegedBusy, setPrivilegedBusy] = useState(false)
 
   const dateLocale =
     language === 'fr' ? 'fr-FR' : language === 'es' ? 'es-ES' : language === 'de' ? 'de-DE' : 'en-US'
@@ -169,26 +177,53 @@ export default function AdminUsers() {
     }
   }
 
-  const handleToggleAdmin = async (userId: number, currentStatus: boolean) => {
+  const handleToggleAdmin = (userId: number, currentStatus: boolean) => {
+    // Never sent without the password: the dialog collects it.
+    setPrivilegedPassword('')
+    setPrivileged({ kind: 'role', userId, current: currentStatus })
+  }
+
+  const confirmPrivileged = async () => {
+    if (!privileged) return
+    const { kind, userId, current } = privileged
+    const sentPassword = privilegedPassword
+    setPrivilegedPassword('')
+    setPrivilegedBusy(true)
     try {
-      await api.put(`/api/v1/admin/users/${userId}/role`, {
-        is_admin: !currentStatus
-      })
-      // Invalider le cache des utilisateurs
+      if (kind === 'role') {
+        throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/role`,
+          { is_admin: !current, current_password: sentPassword }))
+        addToast(t('admin.users.toggle_admin_success') || 'Admin rights updated', 'success')
+      } else {
+        throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/status`,
+          { is_active: !current, current_password: sentPassword }))
+        addToast(current
+          ? t('admin.users.toggle_active_success_deactivate') || 'User deactivated'
+          : t('admin.users.toggle_active_success_activate') || 'User activated', 'success')
+      }
       cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.toggle_admin_success') || 'Admin rights updated', 'success')
+      setPrivileged(null)
       fetchUsers()
     } catch (error) {
-      console.error('Erreur lors de la modification du rôle:', error)
-      addToast(t('admin.users.toggle_admin_error') || 'Error updating admin role', 'error')
+      addToast(adminErrorText(error, kind === 'role'
+        ? t('admin.users.toggle_admin_error') || 'Error updating admin role'
+        : t('admin.users.toggle_active_error') || 'Error updating user status'), 'error')
+    } finally {
+      setPrivilegedBusy(false)
     }
   }
 
   const handleToggleActive = async (userId: number, currentStatus: boolean) => {
+    // An administrator's account is switched only with the password (server rule).
+    if (users.find((u) => u.id === userId)?.is_admin) {
+      setPrivilegedPassword('')
+      setPrivileged({ kind: 'status', userId, current: currentStatus })
+      return
+    }
     try {
-      await api.put(`/api/v1/admin/users/${userId}/status`, {
+      throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/status`, {
         is_active: !currentStatus
-      })
+      }))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
       const message = currentStatus 
@@ -198,7 +233,7 @@ export default function AdminUsers() {
       fetchUsers()
     } catch (error) {
       console.error('Erreur lors de la modification du statut:', error)
-      addToast(t('admin.users.toggle_active_error') || 'Error updating user status', 'error')
+      addToast(adminErrorText(error, t('admin.users.toggle_active_error') || 'Error updating user status'), 'error')
     }
   }
 
@@ -212,7 +247,7 @@ export default function AdminUsers() {
     
     setIsDeleting(true)
     try {
-      await api.delete(`/api/v1/admin/users/${deleteUserId}`)
+      throwIfApiError(await api.delete(`/api/v1/admin/users/${deleteUserId}`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.delete_success') || 'Utilisateur supprimé avec succès', 'success')
@@ -221,7 +256,7 @@ export default function AdminUsers() {
       setDeleteUserId(null)
     } catch (error) {
       console.error('Erreur lors de la suppression:', error)
-      addToast(t('admin.users.delete_error') || 'Erreur lors de la suppression', 'error')
+      addToast(adminErrorText(error, t('admin.users.delete_error') || 'Erreur lors de la suppression'), 'error')
     } finally {
       setIsDeleting(false)
     }
@@ -229,27 +264,27 @@ export default function AdminUsers() {
 
   const handleVerifyKYC = async (userId: number) => {
     try {
-      await api.put(`/api/v1/admin/users/${userId}/kyc/verify`)
+      throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/verify`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.kyc_verify_success') || 'KYC vérifié avec succès', 'success')
       fetchUsers()
     } catch (error) {
       console.error('Erreur lors de la vérification KYC:', error)
-      addToast(t('admin.users.kyc_verify_success') || 'Erreur lors de la vérification KYC', 'error')
+      addToast(adminErrorText(error, t('admin.users.kyc_verify_error') || 'Erreur lors de la vérification KYC'), 'error')
     }
   }
 
   const handleUnverifyKYC = async (userId: number) => {
     try {
-      await api.put(`/api/v1/admin/users/${userId}/kyc/unverify`)
+      throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/unverify`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
       addToast(t('admin.users.kyc_unverify_success') || 'Vérification KYC révoquée', 'success')
       fetchUsers()
     } catch (error) {
       console.error('Erreur lors de la révocation KYC:', error)
-      addToast(t('admin.users.kyc_unverify_success') || 'Erreur lors de la révocation KYC', 'error')
+      addToast(adminErrorText(error, t('admin.users.kyc_unverify_error') || 'Erreur lors de la révocation KYC'), 'error')
     }
   }
 
@@ -831,6 +866,40 @@ export default function AdminUsers() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Password confirmation for a change to an administrator */}
+      {privileged && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"
+          aria-labelledby="privileged-title" data-testid="privileged-dialog">
+          <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-5 space-y-3 shadow-xl">
+            <h2 id="privileged-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+              {privileged.kind === 'role'
+                ? (privileged.current ? t('admin.users.remove_admin') || 'Remove admin' : t('admin.users.make_admin') || 'Make admin')
+                : (privileged.current ? t('admin.users.deactivate') || 'Deactivate' : t('admin.users.activate') || 'Activate')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {t('admin.users.privileged_hint') ||
+                'This changes an administrator. It needs the manage_administrators permission and your current password, cannot be done on your own account, and is recorded in the audit trail.'}
+            </p>
+            <div className="space-y-1">
+              <label htmlFor="privileged-password" className="block text-sm font-medium">
+                {t('admin.users.current_password') || 'Your current password'}
+              </label>
+              <Input id="privileged-password" type="password" autoComplete="current-password" value={privilegedPassword}
+                disabled={privilegedBusy} onChange={(e) => setPrivilegedPassword(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={privilegedBusy}
+                onClick={() => { setPrivilegedPassword(''); setPrivileged(null) }}>
+                {t('admin.users.cancel') || 'Cancel'}
+              </Button>
+              <Button disabled={privilegedBusy || !privilegedPassword} onClick={() => void confirmPrivileged()}>
+                {t('admin.users.confirm') || 'Confirm'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

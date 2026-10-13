@@ -11,7 +11,8 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.token import TokenPayload
 from app.core.security import decode_access_token
-from app.services.auth_security import EMAIL_NOT_VERIFIED_MESSAGE, access_token_is_current, must_verify_email
+from app.services.auth_security import (EMAIL_NOT_VERIFIED_MESSAGE, access_token_is_current, account_is_usable,
+                                        must_verify_email)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
@@ -37,12 +38,25 @@ def get_current_user(
     
     user = db.query(User).filter(User.id == token_data.sub).first()
     if not user:
+        # A token for an account that is not there is not a session: 401, the
+        # one answer on which a client drops the token it holds.
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     # Issued before the last password change / reset: no longer a session.
     if not access_token_is_current(payload, user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    # A deactivated or deleted account has no session, whatever token it
+    # still holds. Checked HERE, in the one dependency every authenticated
+    # route resolves, so a route that asks only for get_current_user (the
+    # administrator routes among them) cannot be used by such an account.
+    if not account_is_usable(user):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide",
@@ -106,7 +120,7 @@ def get_current_active_user_optional(
     
     try:
         user = db.query(User).filter(User.id == token_data.sub).first()
-        if (not user or not user.is_active or not access_token_is_current(payload, user)
+        if (not account_is_usable(user) or not access_token_is_current(payload, user)
                 or must_verify_email(user)):
             return None
         return user

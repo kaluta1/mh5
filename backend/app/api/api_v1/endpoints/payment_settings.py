@@ -3,7 +3,11 @@
 Reading needs an administrator. EVERY configuration change, every credential
 action and the connection test need the explicit `manage_payment_settings`
 permission, which is never implied by is_admin or the 'all' wildcard; a change
-also needs the administrator's current password in the same request.
+also needs the administrator's current password in the same request. A change
+that activates a financial operation (automatic payouts, USD settlement, the
+approval of the network fee limits, the provider fee behaviour, lifting a
+suspension, payout settings while automatic payouts are on) additionally needs
+`activate_financial_operations`; payment_config decides and refuses.
 
 No response carries a secret: not a credential, not its ciphertext, not the
 encryption key. A credential is reported as CONFIGURED / NOT CONFIGURED only.
@@ -42,8 +46,10 @@ MEMBER_FINANCIAL_ACTIONS = ("PAYOUT_WALLET_CHANGED", "PAYOUT_WALLET_CHANGE_REQUE
 
 
 def _http_error(exc: config.PaymentConfigError) -> HTTPException:
-    if exc.code in ("FORBIDDEN", "REAUTH_REQUIRED"):
+    if exc.code in ("FORBIDDEN", "REAUTH_REQUIRED", "ACTIVATION_PERMISSION_REQUIRED"):
         code = status.HTTP_403_FORBIDDEN
+    elif exc.code == "REAUTH_LOCKED":
+        code = status.HTTP_429_TOO_MANY_REQUESTS
     elif exc.code in ("INVALID_VALUE", "INVALID_FIELD"):
         code = status.HTTP_422_UNPROCESSABLE_ENTITY
     else:
@@ -93,7 +99,9 @@ class ReactivationBody(BaseModel):
 
 def _permissions(user: User) -> dict:
     return {"can_manage": config.has_permission(user, config.PERMISSION_MANAGE),
-            "can_process": config.has_permission(user, config.PERMISSION_PROCESS)}
+            "can_process": config.has_permission(user, config.PERMISSION_PROCESS),
+            # Both permissions: activate_financial_operations alone activates nothing.
+            "can_activate": config.can_activate(user)}
 
 
 @router.get("/overview")

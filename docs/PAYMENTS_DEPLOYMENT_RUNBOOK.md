@@ -129,8 +129,8 @@ with destination details is open.
    schema change.
 10. `alembic upgrade f3a4b5c6d7e8`, then `alembic upgrade a5b6c7d8e9f0`, then
     `alembic upgrade b6c7d8e9f0a1`, then `alembic upgrade c7d8e9f0a1b2`, then
-    `alembic upgrade d8e9f0a1b2c3`.
-    `alembic current` must print `d8e9f0a1b2c3 (head)`, and
+    `alembic upgrade d8e9f0a1b2c3`, then `alembic upgrade e9f0a1b2c3d4`.
+    `alembic current` must print `e9f0a1b2c3d4 (head)`, and
     `SELECT account_code, account_name, is_active FROM chart_of_accounts WHERE account_code = '5005';`
     must return one active row, and
     `SELECT count(*) FROM cashout_fee_consents;` must return 0.
@@ -139,9 +139,10 @@ with destination details is open.
     built with the production `NEXT_PUBLIC_*` values).
 13. Start the backend and the frontend; check the health endpoint, the home
     page and a login.
-14. Grant the two permissions to the named administrators only:
-    `python -m app.scripts.grant_payment_permissions --email <admin> ` (dry
-    run), then the same with `--apply`.
+14. Grant permissions to the named administrators only, each permission by
+    name (section 15.3; nothing is granted by default):
+    `python -m app.scripts.grant_payment_permissions --email <admin> --permission manage_payment_settings`
+    (dry run), then the same with `--apply`.
 15. Finance & Payments smoke test (section 5).
 16. Existing pay-in regression check (section 6).
 17. Confirm payouts are disabled (section 7).
@@ -238,7 +239,8 @@ restored from a scrubbed copy or built empty; its own `SECRET_KEY` and its own
 credentials at all; both money switches `false`; outbound email pointed at a
 test inbox.
 
-1. Deploy the candidate commit; run both migrations; `alembic current` = head.
+1. Deploy the candidate commit; run all six migrations (section 1);
+   `alembic current` = `e9f0a1b2c3d4 (head)`.
 2. Run the backend suite on staging's PostgreSQL:
    `RUN_POSTGRES_TESTS=1 POSTGRES_ADMIN_URL=<staging admin URL on localhost> pytest -m postgres tests/integration`.
 3. Create synthetic users (a sponsor, two members) and synthetic commissions.
@@ -594,7 +596,8 @@ is a separate act (`POST /admin/finance/payouts/reactivate`), not a setting:
 4. Record the review of the flagged payout (section 14.2). Reactivation is
    refused while a flagged payout is not reviewed; the review itself lifts
    nothing.
-5. Reactivate: `manage_payment_settings`, the current password, the phrase
+5. Reactivate: `manage_payment_settings` and `activate_financial_operations`
+   (section 15), the current password, the phrase
    "REACTIVATE CRYPTO PAYOUTS" and a written note of what was reviewed (at
    least 20 characters, kept in the configuration history as
    `PAYOUTS_REACTIVATED`).
@@ -809,3 +812,177 @@ permissions can do all four; Stage B did not introduce a two-person rule.
 With the provider (unchanged from 13.6): that Receiver applies to API payouts;
 the unit of `fee`; the values of `fee_paid_by`; what `amount` means; whether
 the minimum applies before or after the fee.
+
+## 15. Configuration and activation are separate permissions (implemented, not deployed)
+
+Until this change `manage_payment_settings` covered everything in Finance &
+Payments, including switching automatic payouts on. They are now two
+authorities, enforced in the service layer (`payment_config.activation_required`,
+`require_activation`); the Admin Panel only reflects it.
+
+### 15.1 Who may do what
+
+| Action | `manage_payment_settings` | plus `activate_financial_operations` |
+|---|---|---|
+| Provider settings, credentials, connection test | yes | - |
+| Crypto Cashout, USD Cashout and Payout Security settings | yes | - |
+| Switch automatic payouts, USD settlement, an approval or a confirmation OFF | yes | - |
+| Switch automatic payouts ON | no | yes |
+| Switch USD settlement ON | no | yes |
+| Approve the network fee limits | no | yes |
+| Confirm the provider fee behaviour (DEDUCTED_BY_PROVIDER) | no | yes |
+| Lift a payout suspension | no | yes |
+| While automatic payouts are on: payout limits and schedule, minimum, maximum network fee share, balance reserve, payout currency, payout credential source | no | yes |
+| While automatic payouts are on: store, replace or delete a payout credential | no | yes |
+| While automatic payouts are on: switch "Provider enabled" or "Crypto Cashout available" back on | no | yes |
+
+`activate_financial_operations` alone opens nothing: every one of these still
+needs `manage_payment_settings`. `process_cashouts` is unchanged and unrelated.
+
+Everything that existed before still applies to an administrator who holds
+both: the two server master switches, the current password, the typed phrases,
+the configuration version, the connection test, the fee gates, the review
+before a reactivation. A refused attempt answers 403
+`ACTIVATION_PERMISSION_REQUIRED`, stores nothing, does not raise the
+configuration version and writes no history entry.
+
+A fee setting (limits, margin, gate, terms) is not on the list on purpose:
+changing one withdraws the approval, which stops payouts; approving again is
+an activation.
+
+### 15.2 Migration
+
+`f0a1b2c3d4e5` after `e9f0a1b2c3d4`: one row in `permissions`, assigned to no
+role and no user. No table, column or index; no user, role, role assignment,
+setting or financial row is read or changed. It can be applied twice. The
+downgrade removes the row only if no role holds it.
+
+After the migration NOBODY can activate anything until the permission is
+granted on purpose. Production has no role holding `manage_payment_settings`
+either, so no existing access changes.
+
+### 15.3 Granting
+
+Every permission is named; there is no default and no "all":
+
+```
+python -m app.scripts.grant_payment_permissions --email <admin> --permission manage_payment_settings
+python -m app.scripts.grant_payment_permissions --email <admin> --permission manage_payment_settings --apply
+```
+
+The dry run prints the role the account would be moved to. That role is named
+after the permissions it holds (`finance_manager_m_...` = manage,
+`a` = activate, `p` = process) and inherits the account's current role, so the
+account keeps what it has. A role is never given a permission after it was
+created: granting something to one administrator cannot reach another who
+happens to share a role. `--revoke --permission <name>` removes one;
+`--revoke` alone removes every permission this tool gave.
+
+Check afterwards (expect exactly the intended accounts):
+
+```sql
+SELECT u.id, r.name AS role, p.name AS permission
+FROM users u JOIN roles r ON r.id = u.role_id
+JOIN role_permissions rp ON rp.role_id IN (r.id, r.inherit_from_id)
+JOIN permissions p ON p.id = rp.permission_id
+WHERE p.name IN ('manage_payment_settings', 'activate_financial_operations', 'process_cashouts')
+ORDER BY u.id, p.name;
+```
+
+### 15.4 Deployment and rollback
+
+Backend and frontend together. With only the new backend, the previous page
+still offers the activation controls and the server refuses them (403 with the
+reason). With only the new page, the previous backend does not send
+`can_activate`, so the page treats every administrator as unable to lift a
+suspension.
+
+Rolling the code back leaves the permission row in place and unused. The
+previous code does NOT make the distinction: under it `manage_payment_settings`
+activates again. Revoke `manage_payment_settings` before a rollback if that
+matters at the time.
+
+### 15.5 Still open
+
+- The role management API (`/rbac`, shared code outside the payment modules,
+  not changed) can add any permission to any role for whoever may use it. On
+  production nobody holds the `admin` role today, so nobody can. If that
+  changes, these three permissions should be excluded from it.
+- Changing the USD settlement ledger account while USD settlement is on needs
+  only `manage_payment_settings`. A settlement itself still needs
+  `process_cashouts`. Not changed; the owner did not list it.
+- No two-person rule: one administrator who holds both permissions can
+  configure and activate alone.
+
+## 16. Administrator security hardening (implemented, not deployed)
+
+Until this release the `is_admin` flag alone allowed an administrator to
+create further administrators and to record payments by hand, with no
+further permission and no confirmation. This release makes each of those a
+separately granted, password-confirmed and audited action. It ships together
+with section 15.
+
+### 16.1 What changed
+
+| Area | Before | Now |
+|---|---|---|
+| Deactivated account with a valid token | accepted by every route that asks only for the token (the old administrator routes among them) | refused (401) on every authenticated route |
+| Deleted account (deletion leaves it marked active) | could still sign in and was accepted everywhere | refused at sign-in and on every path that reads a token; no reset or verification email; deletion ends its sessions |
+| Token for an account that does not exist | 404 | 401, so the client drops the token |
+| Make somebody an administrator / remove it | any `is_admin` | `manage_administrators` + the acting administrator's current password; never on one's own account; only an account that can sign in; removal ends that account's sessions |
+| Activate or deactivate an ADMINISTRATOR's account | any `is_admin` | `manage_administrators` + current password; never one's own account |
+| Deactivate an ordinary member | any `is_admin` | unchanged, and it now ends the member's sessions |
+| Delete an account | any `is_admin` | not one's own, and never an administrator's |
+| Mark identity as verified / revoke | any `is_admin` | unchanged, except never on one's own account |
+| Record a payment by hand ("Mark as paid") | any `is_admin`, also for oneself, no reason | `grant_manual_payments` + current password + a payment reference of at least 10 characters; never for one's own account, an inactive one, or a member anywhere in the administrator's own referral line (the administrator would earn the commission) |
+| Role management API (`/rbac`) | could attach any permission to any role and give any role to anybody | cannot touch the five protected permissions or a role that carries one, and cannot turn a non-administrator into an administrator |
+| Failed sign-in | not kept (the insert was rejected by the database) | kept: `login_logs` for an existing account, `audit_trails` (`AUTH_LOGIN_FAILED`, no identifier) otherwise |
+| Password guessing at sign-in | 10 requests a minute per address, in memory | additionally, durable, counting FAILED attempts only, in windows that end by themselves: 5 per 15 minutes per account from one address (that address is held back from that account; the owner elsewhere is not), 100 per 15 minutes per account from all addresses (a circuit breaker), 30 per 10 minutes per address (429). No daily cap |
+| Password asked by a privileged action | checked, never limited | one check for every such endpoint (`app/services/reauth.py`): 5 wrong passwords in 15 minutes pause that account's privileged actions (429 `REAUTH_LOCKED`), sign-in unaffected; each wrong one is audited as `REAUTH_FAILED` |
+| Deactivated account on the Socket.IO handshake, media requests with a bearer token, `/auth/validate-token` | accepted with a current token | refused, as on every API route |
+| Admin pages after a refusal (frontend) | showed success, and any 403 signed the administrator out | show the server's reason; only a 401 ends the session |
+
+Every refusal of a privileged action is written to `audit_trails` as
+`ADMIN_ACTION_DENIED` (who, which account, what, why).
+
+### 16.2 Migration
+
+`a2b3c4d5e6f7` after `f0a1b2c3d4e5`: two rows in `permissions`
+(`manage_administrators`, `grant_manual_payments`), assigned to no role and no
+user. Nothing else. Production head after sections 15 and 16:
+`a2b3c4d5e6f7`.
+
+### 16.3 What stops working until a permission is granted
+
+Deliberately, and for everybody: making or removing an administrator,
+activating or deactivating an administrator's account, and "Mark as paid".
+Grant them by name to the accounts the owner decides (section 15.3):
+
+```
+python -m app.scripts.grant_payment_permissions --email <owner> --permission manage_administrators
+python -m app.scripts.grant_payment_permissions --email <admin> --permission grant_manual_payments
+```
+
+Whoever holds `manage_administrators` cannot change their own account, so a
+second holder is needed to change the first.
+
+### 16.4 Deployment and rollback
+
+Backend and frontend together: the Admin Users page and "Mark as paid" now
+send the password; with the previous page the server answers 403 with the
+reason. No downtime beyond the usual restart; the migration takes
+milliseconds. Rolling the code back restores the earlier behaviour in full
+(any `is_admin` can again create administrators and record payments), so a
+rollback is itself a security decision. The two permission rows may stay.
+
+### 16.5 Not done by this release
+
+- No account, role, permission or financial record is changed by this
+  release. An account that was switched off stays off; switching an
+  administrator's account back on now needs `manage_administrators` and a
+  password, and should be preceded by a new password for that account.
+- A manual payment still produces the sponsor's commission, as a received
+  payment does. Whether it should is the owner's decision.
+- No two-person rule: one administrator holding a permission acts alone
+  (except on their own account).
+- Sign-in has no second factor.

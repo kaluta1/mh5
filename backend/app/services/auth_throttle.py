@@ -59,6 +59,29 @@ VERIFY_ACCOUNT = (Limit("verify:account", 3, HOUR), Limit("verify:account:day", 
 VERIFY_GLOBAL = (Limit("verify:global", 300, HOUR),)
 # Presenting a credential (guessing is hopeless at 256 bits; this bounds noise).
 CONFIRM_IP = (Limit("confirm:ip", 20, HOUR),)
+# Sign-in. Only FAILED attempts are counted (hit() after a failure, blocked()
+# before the next attempt), so signing in correctly never uses anything up.
+# Short windows only: every one of these ends by itself within minutes, and
+# none can keep a member or an administrator out for a day.
+#
+# Per account AND client address: the limit that actually stops guessing. It
+# is the address that guessed that is held back from that account; the
+# account's owner, on another connection, is not. Somebody who knows an
+# administrator's email address cannot lock that administrator out.
+LOGIN_FAIL_ACCOUNT_ADDRESS = (Limit("login:account-ip", 5, 900),)
+# Per account, from ALL addresses together: a circuit breaker for a guessing
+# run spread over many addresses. Far above anything one person or one
+# address produces (an address is held back after 5), so it trips only under
+# a distributed attack, and then for minutes.
+LOGIN_FAIL_ACCOUNT = (Limit("login:account", 100, 900),)
+# Per client address, across all accounts: bounds trying one password on many
+# accounts. Generous, because many members can share one address (a mobile
+# carrier, an office): it must not trip on their ordinary typing mistakes.
+LOGIN_FAIL_IP = (Limit("login:ip", 30, 600),)
+# Re-authentication (app.services.reauth): wrong passwords given by a signed-in
+# session to an endpoint that asks for the current password, per account,
+# across all such endpoints.
+REAUTH_FAIL = (Limit("reauth:account", 5, 900),)
 
 GLOBAL_KEY = "*"
 _RETENTION = timedelta(days=2)
@@ -126,3 +149,24 @@ def hit(db: Session, rules: Sequence[Limit], key, *, now: Optional[datetime] = N
         db.rollback()
         logger.error("Auth rate limit store unavailable (%s): request refused", type(exc).__name__)
         return False
+
+
+def blocked(db: Session, rules: Sequence[Limit], key, *, now: Optional[datetime] = None) -> bool:
+    """Has this key already used up one of the rules? Reads only; counts
+    nothing. For limits that count failures (sign-in): asked before an attempt
+    is looked at, while hit() is called after an attempt that failed. If the
+    store cannot be read the answer is yes (fail closed), as in hit()."""
+    now = now or datetime.utcnow()
+    try:
+        for rule in rules:
+            at_limit = db.query(AuthRateLimit.id).filter(
+                AuthRateLimit.scope == rule.scope, AuthRateLimit.key_hash == _key_hash(rule.scope, key),
+                AuthRateLimit.window_start == window_start(now, rule.window),
+                AuthRateLimit.count >= rule.limit).first()
+            if at_limit:
+                return True
+        return False
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.error("Auth rate limit store unavailable (%s): request refused", type(exc).__name__)
+        return True

@@ -1,4 +1,13 @@
-"""API endpoints for Role and Permission management."""
+"""API endpoints for Role and Permission management.
+
+Protected permissions (Finance & Payments, administrator management, manual
+payments) and the roles that carry them are NOT managed here: they are granted
+to a named administrator on purpose (app/scripts/grant_payment_permissions.py).
+Nor can this API turn an account that is not an administrator into one; that
+is the administrator endpoint, which asks for an explicit permission and the
+current password. Whoever may manage roles in general cannot use this API to
+give themselves, or anybody else, one of those.
+"""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -13,8 +22,34 @@ from app.schemas.role import (
     UserRoleAssignment, UserRoleResponse
 )
 from app.models.user import User
+from app.services import admin_security
 
 router = APIRouter()
+
+_PROTECTED_NAMES = admin_security.PROTECTED_PERMISSIONS
+
+
+def _refuse_protected(what: str):
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+        "code": "PROTECTED_PERMISSION",
+        "message": f"{what} is not managed through the role management API."})
+
+
+def _protect_permission_name(name: Optional[str]) -> None:
+    if name and name.strip() in _PROTECTED_NAMES:
+        _refuse_protected(f"The permission '{name.strip()}'")
+
+
+def _protect_permission_ids(db: Session, permission_ids) -> None:
+    for permission_id in permission_ids or []:
+        perm = crud_permission.get(db, permission_id)
+        if perm is not None:
+            _protect_permission_name(perm.name)
+
+
+def _protect_role(role_obj) -> None:
+    if role_obj is not None and admin_security.role_has_protected_permission(role_obj):
+        _refuse_protected(f"The role '{role_obj.name}'")
 
 
 # ============== PERMISSIONS ==============
@@ -38,6 +73,7 @@ def create_permission(
     current_user: User = Depends(require_permission("manage_permissions"))
 ):
     """Create a new permission. Requires 'manage_permissions' permission."""
+    _protect_permission_name(permission_in.name)
     existing = crud_permission.get_by_name(db, name=permission_in.name)
     if existing:
         raise HTTPException(
@@ -66,6 +102,8 @@ def update_permission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Permission not found"
         )
+    _protect_permission_name(perm.name)
+    _protect_permission_name(permission_in.name)
     return crud_permission.update(
         db, 
         db_obj=perm,
@@ -88,6 +126,7 @@ def delete_permission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Permission not found"
         )
+    _protect_permission_name(perm.name)
     crud_permission.delete(db, id=permission_id)
     return None
 
@@ -138,6 +177,9 @@ def create_role(
     current_user: User = Depends(require_permission("manage_roles"))
 ):
     """Create a new role. Requires 'manage_roles' permission."""
+    if role_in.inherit_from_id is not None:
+        _protect_role(crud_role.get(db, role_in.inherit_from_id))
+    _protect_permission_ids(db, role_in.permission_ids)
     existing = crud_role.get_by_name(db, name=role_in.name)
     if existing:
         raise HTTPException(
@@ -175,7 +217,13 @@ def update_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    
+    _protect_role(role_obj)
+    if (role_in.name and role_in.name.strip() == admin_security.ADMIN_ROLE_NAME
+            and role_obj.name != admin_security.ADMIN_ROLE_NAME):
+        _refuse_protected("The role name 'admin'")              # renaming a role into the administrator role
+    if role_in.inherit_from_id is not None:
+        _protect_role(crud_role.get(db, role_in.inherit_from_id))
+
     return crud_role.update(
         db,
         db_obj=role_obj,
@@ -198,7 +246,8 @@ def delete_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    
+    _protect_role(role_obj)
+
     if role_obj.is_system:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -232,7 +281,9 @@ def set_role_permissions(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    
+    _protect_role(role_obj)
+    _protect_permission_ids(db, permissions_in.permission_ids)
+
     return crud_role.set_permissions(db, role_id=role_id, permission_ids=permissions_in.permission_ids)
 
 
@@ -257,7 +308,9 @@ def add_permission_to_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Permission not found"
         )
-    
+    _protect_role(role_obj)
+    _protect_permission_name(perm.name)
+
     return crud_role.add_permission(db, role_id=role_id, permission_id=permission_id)
 
 
@@ -275,7 +328,8 @@ def remove_permission_from_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Role not found"
         )
-    
+    _protect_role(role_obj)
+
     return crud_role.remove_permission(db, role_id=role_id, permission_id=permission_id)
 
 
@@ -302,6 +356,15 @@ def assign_role_to_user(
             detail="Role not found"
         )
     
+    # Neither giving nor taking away a role that carries a protected permission ...
+    _protect_role(role_obj)
+    _protect_role(user_obj.role)
+    # ... and no new administrator through here: a role that makes its holder an
+    # administrator (or opens everything) only goes to somebody who already is one.
+    if admin_security.role_is_privileged(role_obj) and not (
+            admin_security.is_administrator(user_obj) or admin_security.role_is_privileged(user_obj.role)):
+        _refuse_protected("Making an account an administrator")
+
     # Update user's role
     user_obj.role_id = assignment.role_id
     db.commit()

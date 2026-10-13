@@ -94,6 +94,14 @@ def set_password(db: Session, user: User, new_password: str, *, action: str, ip:
     return previous + 1
 
 
+def account_is_usable(user: Optional[User]) -> bool:
+    """Can this account hold a session at all? It exists, is active and has
+    not been deleted. A soft-deleted account keeps `is_active`, so that flag
+    alone does not say so. The ONE rule for sign-in and for every path that
+    reads a token."""
+    return bool(user is not None and user.is_active and getattr(user, "is_deleted", False) is not True)
+
+
 def access_token_is_current(payload: Optional[dict], user: Optional[User]) -> bool:
     """Was this (already signature/type checked) access token issued under the
     account's current security_version?"""
@@ -102,8 +110,10 @@ def access_token_is_current(payload: Optional[dict], user: Optional[User]) -> bo
 
 def access_token_user_id(token: Optional[str], db: Optional[Session] = None) -> Optional[int]:
     """Account id proven by an access token, or None. For callers that hold no
-    request-scoped session (Socket.IO handshake, media middleware). Applies the
-    same security_version rule as the API dependencies."""
+    request-scoped session (Socket.IO handshake, media middleware) and for
+    /auth/validate-token. Applies the same rules as the API dependencies: the
+    account exists, is ACTIVE, is not deleted, and the token was issued under
+    its current security_version."""
     payload = decode_access_token(token) if token else {}
     try:
         user_id = int((payload or {}).get("sub"))
@@ -115,7 +125,8 @@ def access_token_user_id(token: Optional[str], db: Optional[Session] = None) -> 
 
         db = session_module.SessionLocal()
     try:
-        current = db.query(User.security_version).filter(User.id == user_id).first()
+        current = (db.query(User.security_version, User.is_active, User.is_deleted)
+                   .filter(User.id == user_id).first())
     except Exception as exc:  # noqa: BLE001 - no identity rather than an unverified one
         logger.error("Access token could not be checked: %s", type(exc).__name__)
         return None
@@ -123,6 +134,8 @@ def access_token_user_id(token: Optional[str], db: Optional[Session] = None) -> 
         if own:
             db.close()
     if current is None or access_token_security_version(payload) != int(current[0] or 0):
+        return None
+    if not current[1] or current[2] is True:            # a deactivated or deleted account is nobody, on every path
         return None
     return user_id
 

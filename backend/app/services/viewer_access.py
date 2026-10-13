@@ -409,7 +409,7 @@ def authorize_protected_media(db: Session, request, owner_id: int, filename: str
     if requester_user_id(request) != grant_viewer:   # Viewer B / logged-out holder of A's URL
         return False
     user = db.query(User).filter(User.id == grant_viewer).first()
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or getattr(user, "is_deleted", False) is True:
         return False
     return entry_access(db, viewer_for(db, user), entry).allowed   # permissions re-checked NOW
 

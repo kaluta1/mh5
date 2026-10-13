@@ -82,7 +82,7 @@ from app.models.affiliate import (
 from app.models.payment_config import CashoutFeeConsent, PayoutWalletVerification
 from app.models.user import User
 from app.services import financial_eligibility as fe
-from app.services import payment_config, payment_crypto
+from app.services import payment_config, payment_crypto, reauth
 from app.services.accounting_service import accounting_service
 from app.services.commission_payout_service import _find_cashout_by_intent, _intent_reference
 from app.services.financial_balances import CommissionBalance, get_commission_balance
@@ -256,8 +256,13 @@ def change_payout_wallet(db: Session, user: User, *, address: str, currency: Opt
     Refused while a crypto payout of the member is in progress."""
     now = now or datetime.utcnow()
     config = payment_config.load(db)
-    if not password or not verify_password(password, user.hashed_password):
-        raise CashoutError("PASSWORD_REQUIRED", "Enter your current password to change the payout wallet.")
+    try:
+        # Counted with every other endpoint that asks for the password (app.services.reauth).
+        reauth.verify(db, user, password)
+    except reauth.ReauthError as exc:
+        if exc.code == reauth.LOCKED:
+            raise CashoutError("PASSWORD_LOCKED", str(exc)) from None
+        raise CashoutError("PASSWORD_REQUIRED", "Enter your current password to change the payout wallet.") from None
     normalized = normalize_payout_currency(currency)
     if normalized != config.crypto_payout_currency:
         raise CashoutError("NETWORK_NOT_ENABLED",
@@ -1321,6 +1326,7 @@ def reactivate_payouts(db: Session, admin: User, *, password: Optional[str], con
     if not payment_config.has_permission(admin, payment_config.PERMISSION_MANAGE):
         raise payment_config.PaymentConfigError(
             "FORBIDDEN", f"The {payment_config.PERMISSION_MANAGE} permission is required.")
+    payment_config.require_activation(admin, "lift a payout suspension")
     payment_config.require_reauth(admin, password)
     config = payment_config.load(db)
     if config.suspended_reason:

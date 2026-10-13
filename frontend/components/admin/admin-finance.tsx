@@ -11,6 +11,8 @@ import { Switch } from '@/components/ui/switch'
 import {
   FINANCE_BASE,
   FINANCE_SECTIONS,
+  activationChanges,
+  activationLock,
   changedValues,
   checkLabel,
   credentialPayload,
@@ -20,6 +22,7 @@ import {
   readinessTone,
   sectionFields,
   webhookStatusLabel,
+  type ActivationRules,
   type CryptoPayoutStatus,
   type FinanceOverview,
   type FinanceSection,
@@ -39,6 +42,11 @@ import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
  * The backend authorizes and validates everything. Reading needs an
  * administrator; a configuration change needs the manage_payment_settings
  * permission and the administrator's current password, sent with the change.
+ * A change that ACTIVATES a financial operation (automatic payouts, USD
+ * settlement, the approval of the network fee limits, the provider fee
+ * behaviour, lifting a suspension, payout settings while automatic payouts are
+ * on) also needs the activation permission. The controls for it are disabled
+ * here without it, with the reason; the server refuses it in any case.
  * No secret is ever received from the API: credential fields are write-only,
  * a blank field keeps the stored value, and they are cleared after saving.
  */
@@ -85,6 +93,9 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
 
   const canManage = !!overview?.permissions.can_manage
   const canProcess = !!overview?.permissions.can_process
+  const canActivate = !!overview?.permissions.can_activate
+  // What an administrator who may configure but not activate is held back from. Null = nothing to hold back.
+  const activation = canManage && !canActivate ? settings?.activation ?? null : null
 
   /** Run one change, then refresh. Returns true when the server accepted it. */
   const change: Change = async (request, ok, failure) => {
@@ -128,6 +139,17 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           permission; acting on a cashout needs the <code>process_cashouts</code> permission.
         </p>
       )}
+      {overview && canManage && (
+        <p className="text-sm text-gray-600 dark:text-gray-400" data-testid="activation-status">
+          {canActivate
+            ? <>Financial activation: your account may activate financial operations (<code>activate_financial_operations</code>).</>
+            : <>Financial activation: your account can change the configuration but cannot activate financial
+              operations. Switching automatic payouts or USD settlement on, approving the network fee limits,
+              confirming the provider fee behaviour, lifting a payout suspension and changing payout settings while
+              automatic payouts are on need the <code>activate_financial_operations</code> permission as well.
+              Switching any of them off does not.</>}
+        </p>
+      )}
       {overview?.warnings.map((w) => (
         <div key={w.code} role="alert" className={`flex gap-2 rounded-lg border p-3 text-sm ${w.level === 'critical'
           ? 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100'
@@ -143,8 +165,10 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           <ProviderSettingsCard provider={provider} />
           {provider.readiness && <ReadinessCard provider={provider} />}
           <SettingsForm title="Provider settings" fields={group('provider')} settings={settings} canManage={canManage}
-            busy={busy} change={change} idPrefix="provider" />
-          <CredentialsCard provider={provider} canManage={canManage} busy={busy} change={change} />
+            activation={activation} busy={busy} change={change} idPrefix="provider" />
+          <CredentialsCard provider={provider} canManage={canManage} busy={busy} change={change}
+            lockedGroup={activation?.automatic_payouts_on ? activation.while_automatic_payouts_on.credential_group : undefined}
+            permission={activation?.permission} />
           <ConnectionCard provider={provider} canManage={canManage} busy={busy} change={change} />
           {webhook && <WebhookCard webhook={webhook} />}
         </div>
@@ -163,16 +187,18 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           {settings.crypto_sections?.length
             ? settings.crypto_sections.map((s) => (
               <SettingsForm key={s.key} title={s.title} note={s.note} fields={sectionFields(settings.fields, s)}
-                settings={settings} canManage={canManage} busy={busy} change={change} idPrefix={`crypto-${s.key}`}
+                settings={settings} canManage={canManage} activation={activation} busy={busy} change={change}
+                idPrefix={`crypto-${s.key}`}
                 attention={payoutStatus?.blockers.filter((b) => b.section === s.key)} />
             ))
             : (
               <SettingsForm title="Crypto Cashout settings" fields={group('crypto')} settings={settings} canManage={canManage}
-                busy={busy} change={change} idPrefix="crypto" />
+                activation={activation} busy={busy} change={change} idPrefix="crypto" />
             )}
           {settings.payout_suspension ? (
             <PayoutSuspensionCard suspension={settings.payout_suspension} phrase={settings.confirmations.payout_reactivation}
-              canManage={canManage} busy={busy} change={change} pendingReview={payoutStatus?.flagged_payouts.pending_review} />
+              canManage={canManage} canActivate={canActivate} busy={busy} change={change}
+              pendingReview={payoutStatus?.flagged_payouts.pending_review} />
           ) : (
             <Card>
               <CardContent className="p-4 space-y-2" data-testid="no-suspension">
@@ -198,12 +224,12 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
             amount of every request are calculated on the server.
           </p>
           <SettingsForm title="USD Cashout settings" fields={group('usd')} settings={settings} canManage={canManage}
-            busy={busy} change={change} idPrefix="usd" />
+            activation={activation} busy={busy} change={change} idPrefix="usd" />
         </div>
       )}
       {section === 'payout-security' && settings && (
         <SettingsForm title="Payout security" fields={group('security')} settings={settings} canManage={canManage}
-          busy={busy} change={change} idPrefix="security" />
+          activation={activation} busy={busy} change={change} idPrefix="security" />
       )}
       {section === 'transactions' && overview && <CashoutTransactions canProcess={canProcess} />}
       {section === 'reconciliation' && overview && (
@@ -377,8 +403,8 @@ function CryptoPayoutStatusCard({ status }: { status: CryptoPayoutStatus }) {
  * not do it, and it needs a written review note, the typed phrase and the
  * password. It sends nothing and does not switch automatic payouts on.
  */
-function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change, pendingReview }: {
-  suspension: PayoutSuspension; phrase: string; canManage: boolean; busy: boolean; change: Change
+function PayoutSuspensionCard({ suspension, phrase, canManage, canActivate, busy, change, pendingReview }: {
+  suspension: PayoutSuspension; phrase: string; canManage: boolean; canActivate: boolean; busy: boolean; change: Change
   pendingReview?: number
 }) {
   const [note, setNote] = useState('')
@@ -427,7 +453,14 @@ function PayoutSuspensionCard({ suspension, phrase, canManage, busy, change, pen
             first; payouts cannot be reactivated before that. A review does not reactivate anything by itself.
           </p>
         )}
-        {canManage && (
+        {canManage && !canActivate && (
+          <p className="text-sm text-gray-700 dark:text-gray-300 pt-3 border-t border-gray-200 dark:border-gray-700"
+            data-testid="reactivation-needs-activation">
+            Lifting a suspension needs the <code>activate_financial_operations</code> permission, which your account
+            does not have. You can still review the payout and correct the settings.
+          </p>
+        )}
+        {canManage && canActivate && (
           <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
             <div className="space-y-1">
               <label htmlFor="reactivation-note" className="block text-sm font-medium">What was reviewed and how it was resolved</label>
@@ -476,9 +509,11 @@ function ProviderSettingsCard({ provider }: { provider: ProviderView }) {
   )
 }
 
-export function SettingsForm({ title, note, fields, settings, canManage, busy, change, idPrefix, attention }: {
+export function SettingsForm({ title, note, fields, settings, canManage, activation, busy, change, idPrefix, attention }: {
   title: string; fields: SettingField[]; settings: FinanceSettings; canManage: boolean; busy: boolean
   change: Change; idPrefix: string
+  /** Set for an administrator who may configure but not activate: what they are held back from. */
+  activation?: ActivationRules | null
   /** What the section is for (shown under its title). */
   note?: string
   /** Reasons no payout is created that are resolved in this section. */
@@ -499,6 +534,8 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
   const phrase = Object.keys(changes).map((name) => needsPhrase(name) ? settings.confirmations[name] : undefined)
     .find(Boolean)
   const disabled = !canManage || busy
+  // Changes in this form that need the activation permission the administrator does not hold.
+  const needsActivation = activationChanges(activation, changes)
 
   const save = async () => {
     const sentPassword = password
@@ -524,20 +561,25 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
         {fields.map((f) => {
           const id = `${idPrefix}-${f.name}`
           const unsupported = f.disabled_choices ?? []
+          const lock = activationLock(activation, f)
+          // A choice whose one value activates: that value is unavailable, the others are not.
+          const lockedChoice = activation && f.kind === 'choice' && f.name in activation.values
+            && f.value !== activation.values[f.name] ? String(activation.values[f.name]) : null
           return (
             <div key={f.name} className="space-y-1">
               <div className="flex items-start justify-between gap-3">
                 <label htmlFor={id} className="text-sm font-medium text-gray-900 dark:text-white">{f.label}</label>
                 {f.kind === 'bool' && (
-                  <Switch id={id} aria-label={f.label} checked={Boolean(draft[f.name])} disabled={disabled}
+                  <Switch id={id} aria-label={f.label} checked={Boolean(draft[f.name])} disabled={disabled || !!lock}
                     onCheckedChange={(v) => setDraft({ ...draft, [f.name]: v })} />
                 )}
               </div>
               {f.kind === 'choice' && (
-                <select id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled}
+                <select id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled || !!lock}
                   onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })}>
                   {f.choices.map((c) => {
                     const off = unsupported.some((u) => u.value === c)
+                    if (c === lockedChoice) return <option key={c} value={c} disabled>{humanize(c)} (needs the activation permission)</option>
                     return <option key={c} value={c} disabled={off}>{humanize(c)}{off ? ' (not available)' : ''}</option>
                   })}
                 </select>
@@ -549,7 +591,7 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
               ))}
               {!['bool', 'choice'].includes(f.kind) && (
                 <div className="flex items-center gap-2">
-                  <input id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled}
+                  <input id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled || !!lock}
                     inputMode={['text', 'account'].includes(f.kind) ? 'text' : 'decimal'} maxLength={f.max_length ?? 20}
                     onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })} />
                   {f.unit && <span className="text-xs text-gray-500 whitespace-nowrap">{f.unit}</span>}
@@ -559,6 +601,11 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
                 {f.help}
                 {f.minimum !== null && f.maximum !== null && ` Allowed: ${f.minimum} to ${f.maximum}.`}
               </p>
+              {(lock || lockedChoice) && (
+                <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`activation-lock-${f.name}`}>
+                  {lock ?? `Selecting ${humanize(lockedChoice ?? '')} needs the ${activation?.permission} permission, which your account does not have.`}
+                </p>
+              )}
               {f.approval_note && (
                 <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`approval-${f.name}`}>{f.approval_note}</p>
               )}
@@ -576,9 +623,16 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
                   autoComplete="off" onChange={(e) => setConfirmation(e.target.value)} />
               </div>
             )}
+            {needsActivation.length > 0 && (
+              <p role="alert" className="text-sm text-amber-800 dark:text-amber-200" data-testid={`${idPrefix}-needs-activation`}>
+                This change needs the <code>{activation?.permission}</code> permission, which your account does not
+                have, so it cannot be saved. Nothing has been changed.
+              </p>
+            )}
             <PasswordField id={`${idPrefix}-password`} value={password} onChange={setPassword} disabled={busy} />
             <Button onClick={() => void save()}
-              disabled={busy || !password || Object.keys(changes).length === 0 || (!!phrase && confirmation !== phrase)}>
+              disabled={busy || !password || Object.keys(changes).length === 0 || (!!phrase && confirmation !== phrase)
+                || needsActivation.length > 0}>
               Save changes
             </Button>
           </div>
@@ -588,8 +642,11 @@ export function SettingsForm({ title, note, fields, settings, canManage, busy, c
   )
 }
 
-function CredentialsCard({ provider, canManage, busy, change }: {
+function CredentialsCard({ provider, canManage, busy, change, lockedGroup, permission }: {
   provider: ProviderView; canManage: boolean; busy: boolean; change: Change
+  /** Credential group that cannot be replaced or deleted without the activation permission (automatic payouts are on). */
+  lockedGroup?: string
+  permission?: string
 }) {
   // Write-only: never pre-filled, cleared as soon as it has been sent.
   const [draft, setDraft] = useState<Record<string, string>>({})
@@ -636,9 +693,15 @@ function CredentialsCard({ provider, canManage, busy, change }: {
             </div>
             <input id={`credential-${c.name}`} type="password" autoComplete="new-password" className={inputClass}
               placeholder={c.stored === 'CONFIGURED' ? 'Leave blank to keep the stored value' : 'Not stored'}
-              value={draft[c.name] ?? ''} disabled={locked}
+              value={draft[c.name] ?? ''} disabled={locked || c.group === lockedGroup}
               onChange={(e) => setDraft({ ...draft, [c.name]: e.target.value })} />
-            {c.stored === 'CONFIGURED' && canManage && (
+            {c.group === lockedGroup && (
+              <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`activation-lock-${c.name}`}>
+                Automatic payouts are on: replacing or deleting this credential needs the {permission} permission,
+                which your account does not have.
+              </p>
+            )}
+            {c.stored === 'CONFIGURED' && canManage && c.group !== lockedGroup && (
               deleting === c.name ? (
                 <span className="flex flex-wrap items-center gap-2 text-xs">
                   Delete this stored credential? Enter your password below, then

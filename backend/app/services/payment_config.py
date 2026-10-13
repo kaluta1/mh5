@@ -26,6 +26,14 @@ implied by is_admin or the 'all' wildcard) AND the administrator's current
 password, is validated here, bumps the configuration version and is written to
 payment_config_audit without any secret value. A change only writes the
 configuration: it reserves nothing, releases nothing and sends nothing.
+
+A change that ACTIVATES a financial operation needs a second explicit
+permission as well, activate_financial_operations (see activation_required):
+switching automatic payouts or USD settlement on, approving the network fee
+limits, confirming the provider fee behaviour, lifting a payout suspension, and
+changing what the payout engine sends while automatic payouts are on. That
+permission never replaces manage_payment_settings, and switching anything OFF
+never needs it.
 """
 from __future__ import annotations
 
@@ -51,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 PERMISSION_MANAGE = "manage_payment_settings"
 PERMISSION_PROCESS = "process_cashouts"
+PERMISSION_ACTIVATE = "activate_financial_operations"
 SETTINGS_ROW_ID = 1
 PROVIDER = "nowpayments"
 
@@ -112,6 +121,17 @@ CONFIRM_REACTIVATION = "REACTIVATE CRYPTO PAYOUTS"
 _FEE_TERMS_FIELDS = ("provider_fee_mode", "member_fee_cap_percent", "member_fee_cap_usd", "min_net_payout_usd",
                      "fee_terms_version", "fee_consent_valid_days", "network_fee_policy",
                      "fee_estimate_margin_percent", "max_unreconciled_payouts")
+# While automatic payouts are on, these settings decide what the payout engine
+# sends, to which network and with which credentials: changing one of them is
+# an activation (activation_required). The fee settings are not listed: a
+# change to one of them withdraws the approval, which stops payouts.
+LIVE_PAYOUT_FIELDS = ("crypto_payout_currency", "payout_credential_source", "provider_balance_reserve_usd",
+                      "crypto_min_usd", "max_network_fee_percent", "max_single_payout_usd", "max_daily_payout_usd",
+                      "max_daily_payout_count", "min_hours_between_payouts", "payout_interval_seconds",
+                      "retry_backoff_hours", "retry_max_attempts")
+# Switched off, each of these stops payouts while the automatic payouts switch
+# stays on; switching it back on makes them resume.
+LIVE_PAYOUT_SWITCHES = ("provider_enabled", "crypto_cashout_enabled")
 FEE_GATE_MESSAGES = {
     "FEE_POLICY_NOT_BENEFICIARY_PAID": "The network fee policy must be MEMBER_PAYS: the beneficiary bears the fee.",
     "PROVIDER_FEE_MODE_UNVERIFIED": "The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.",
@@ -667,14 +687,69 @@ def has_permission(user, permission: str) -> bool:
 
 
 def require_reauth(actor, password: Optional[str]) -> None:
-    """The administrator proves it is them, now, with the account password."""
-    if not password or not verify_password(password, getattr(actor, "hashed_password", "") or ""):
-        raise PaymentConfigError("REAUTH_REQUIRED", "Enter your current password to confirm this change.")
+    """The administrator proves it is them, now, with the account password.
+    Wrong passwords are counted per administrator across every endpoint that
+    asks (app.services.reauth): after a few, REAUTH_LOCKED until the window
+    ends, with the right password too."""
+    from app.services import reauth
+
+    try:
+        reauth.verify(None, actor, password)
+    except reauth.ReauthError as exc:
+        if exc.code == reauth.LOCKED:
+            raise PaymentConfigError(reauth.LOCKED, str(exc)) from None
+        raise PaymentConfigError("REAUTH_REQUIRED", "Enter your current password to confirm this change.") from None
 
 
-def _authorize(actor, password: Optional[str]) -> None:
+def can_activate(user) -> bool:
+    """May this administrator activate a financial operation? BOTH permissions:
+    activate_financial_operations alone opens nothing."""
+    return has_permission(user, PERMISSION_MANAGE) and has_permission(user, PERMISSION_ACTIVATE)
+
+
+def require_activation(actor, what: str, *, field: Optional[str] = None) -> None:
+    """Refuse an activation asked for by somebody who may only configure."""
+    if not can_activate(actor):
+        raise PaymentConfigError(
+            "ACTIVATION_PERMISSION_REQUIRED",
+            f"The {PERMISSION_ACTIVATE} permission is required, in addition to {PERMISSION_MANAGE}, to {what}. "
+            "Nothing was changed.", field=field)
+
+
+def activation_required(current: Dict[str, Any], changed: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """The parts of a settings change that activate a financial operation, as
+    (setting, what it does). Empty for an ordinary configuration change, and
+    for every change that only switches something off.
+
+    `current` is the configuration in force, `changed` the settings that would
+    get a new value."""
+    out: List[Tuple[str, str]] = []
+    if changed.get("crypto_auto_payout_enabled") is True:
+        out.append(("crypto_auto_payout_enabled", "switch automatic payouts on"))
+    if changed.get("usd_settlement_enabled") is True:
+        out.append(("usd_settlement_enabled", "switch USD settlement on"))
+    if changed.get("fee_terms_approved") is True:
+        out.append(("fee_terms_approved", "approve the network fee limits"))
+    if changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED:
+        out.append(("provider_fee_mode", "confirm the provider fee behaviour"))
+    # Automatic payouts are on and stay on: what the engine sends is being changed.
+    if current.get("crypto_auto_payout_enabled") and changed.get("crypto_auto_payout_enabled") is not False:
+        for name in LIVE_PAYOUT_FIELDS:
+            if name in changed:
+                out.append((name, f'change "{FIELDS[name].label}" while automatic payouts are on'))
+        for name in LIVE_PAYOUT_SWITCHES:
+            if changed.get(name) is True:
+                out.append((name, f'switch "{FIELDS[name].label}" back on while automatic payouts are on'))
+    return out
+
+
+def _authorize(actor, password: Optional[str], *, activation: Optional[str] = None) -> None:
+    """Who is asking comes first. `activation` names an act that also needs
+    the activation permission."""
     if not has_permission(actor, PERMISSION_MANAGE):
         raise PaymentConfigError("FORBIDDEN", f"The {PERMISSION_MANAGE} permission is required.")
+    if activation:
+        require_activation(actor, activation)
     require_reauth(actor, password)
 
 
@@ -853,6 +928,13 @@ def set_credentials(db: Session, actor, values: Dict[str, Optional[str]], *, pas
                                  "PAYMENT_SETTINGS_ENCRYPTION_KEY is not configured on the server, so a "
                                  "credential cannot be stored securely.")
     row = _row_for_update(db)
+    if row.crypto_auto_payout_enabled and any(CREDENTIALS[n].group == "payout" for n in cleaned):
+        # The engine would send the next payout with them.
+        try:
+            require_activation(actor, "replace a payout credential while automatic payouts are on")
+        except PaymentConfigError:
+            db.rollback()
+            raise
     stored = _stored(db)
     added, replaced = [], []
     for name, value in cleaned.items():
@@ -883,6 +965,12 @@ def delete_credential(db: Session, actor, name: str, *, password: Optional[str],
     if spec is None:
         raise PaymentConfigError("INVALID_FIELD", "Unknown credential.")
     row = _row_for_update(db)
+    if spec.group == "payout" and row.crypto_auto_payout_enabled:
+        try:
+            require_activation(actor, "delete a payout credential while automatic payouts are on")
+        except PaymentConfigError:
+            db.rollback()
+            raise
     existing = _stored(db).get(spec.name)
     if existing is None:
         db.rollback()
@@ -1021,6 +1109,13 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     if not changed:
         db.rollback()
         return load(db)
+    activating = activation_required(current, changed)
+    if activating:
+        try:
+            require_activation(actor, "; ".join(what for _name, what in activating), field=activating[0][0])
+        except PaymentConfigError:
+            db.rollback()
+            raise
     if expected_version is not None and int(expected_version) != int(row.version):
         db.rollback()
         raise PaymentConfigError("STALE_CONFIGURATION",
@@ -1106,7 +1201,7 @@ def reactivate_payouts(db: Session, actor, *, password: Optional[str], confirmat
     phrase and a written note of what was found are all required, and it is
     refused while the network fee rules are not in force again. It changes no
     setting, sends nothing, and does not switch automatic payouts on."""
-    _authorize(actor, password)
+    _authorize(actor, password, activation="lift a payout suspension")
     text = " ".join(str(note or "").split())
     if len(text) < 20:
         raise PaymentConfigError("REVIEW_NOTE_REQUIRED",
@@ -1507,6 +1602,21 @@ def _field_view(field: Field, value: Any, default: Any) -> dict:
     }
 
 
+def activation_view(config: PaymentConfig) -> dict:
+    """What the Admin Panel needs to tell an administrator, before they try,
+    which changes also need the activation permission. The server decides
+    (activation_required); this only describes it."""
+    return {
+        "permission": PERMISSION_ACTIVATE,
+        # setting -> the value that activates
+        "values": {"crypto_auto_payout_enabled": True, "usd_settlement_enabled": True, "fee_terms_approved": True,
+                   "provider_fee_mode": FEE_MODE_DEDUCTED},
+        "automatic_payouts_on": bool(config.crypto_auto_payout_enabled),
+        "while_automatic_payouts_on": {"fields": list(LIVE_PAYOUT_FIELDS), "switches": list(LIVE_PAYOUT_SWITCHES),
+                                       "credential_group": "payout"},
+    }
+
+
 def settings_view(db: Session) -> dict:
     config = load(db)
     base = defaults()
@@ -1534,6 +1644,7 @@ def settings_view(db: Session) -> dict:
                           "provider_fee_mode": CONFIRM_FEE_MODE,
                           "fee_terms_approved": CONFIRM_FEE_LIMITS,
                           "payout_reactivation": CONFIRM_REACTIVATION},
+        "activation": activation_view(config),
         "payout_suspension": suspension_view(db),
         "network_fee_gate": ({"code": config.fee_gate(), "message": FEE_GATE_MESSAGES[config.fee_gate()]}
                              if config.fee_gate() is not None else None),

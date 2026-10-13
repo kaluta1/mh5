@@ -211,7 +211,7 @@ def test_only_an_administrator_with_the_explicit_permission_and_password_changes
     # An administrator reads everything, but is_admin alone changes nothing.
     assert client.get("/api/v1/admin/finance/settings", headers=auth(plain)).status_code == 200
     overview = client.get("/api/v1/admin/finance/overview", headers=auth(plain)).json()
-    assert overview["permissions"] == {"can_manage": False, "can_process": False}
+    assert overview["permissions"] == {"can_manage": False, "can_process": False, "can_activate": False}
     refused = client.put("/api/v1/admin/finance/settings", headers=auth(plain), json=body)
     assert refused.status_code == 403 and refused.json()["detail"]["code"] == "FORBIDDEN"
     assert client.post("/api/v1/admin/finance/connection-test", headers=auth(plain)).status_code == 403

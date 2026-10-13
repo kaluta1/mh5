@@ -72,8 +72,20 @@ const provider = (over: Record<string, unknown> = {}) => ({
   last_configuration_update: '2026-10-09T10:00:00', configuration_version: 3, ...over,
 })
 
+// What the server says needs the activation permission (settings.activation).
+const ACTIVATION = (on = false) => ({
+  permission: 'activate_financial_operations',
+  values: { crypto_auto_payout_enabled: true, usd_settlement_enabled: true, fee_terms_approved: true,
+    provider_fee_mode: 'DEDUCTED_BY_PROVIDER' },
+  automatic_payouts_on: on,
+  while_automatic_payouts_on: { fields: ['crypto_min_usd', 'payout_credential_source'],
+    switches: ['provider_enabled', 'crypto_cashout_enabled'], credential_group: 'payout' },
+})
+const MANAGE_ONLY = { permissions: { can_manage: true, can_process: false, can_activate: false }, warnings: [] }
+
+// The administrator of most tests may configure, activate and process.
 const overview = (over: Record<string, unknown> = {}) => ({
-  permissions: { can_manage: true, can_process: true },
+  permissions: { can_manage: true, can_process: true, can_activate: true },
   providers: [
     { key: 'nowpayments', name: 'NOWPayments', role: 'Crypto pay-in and payout', enabled: true, environment: 'production',
       payin_status: 'CONFIGURED', payout_status: 'NOT CONFIGURED', custody_status: 'NOT VERIFIED', connection_status: 'NOT_TESTED' },
@@ -893,5 +905,109 @@ describe('AdminFinance', () => {
     await waitFor(() => expect(getMock).toHaveBeenCalledWith('/api/v1/admin/finance/reconciliation',
       { params: { read_provider: true } }))
     expect(postMock).not.toHaveBeenCalled()
+  })
+
+  it('says whether the administrator may activate financial operations', async () => {
+    setup({ s: settings({ activation: ACTIVATION() }) })
+    const { unmount } = render(<AdminFinance section="providers" />)
+    expect(await screen.findByTestId('activation-status')).toHaveTextContent('may activate financial operations')
+    unmount()
+    setup({ o: overview(MANAGE_ONLY), s: settings({ activation: ACTIVATION() }) })
+    render(<AdminFinance section="providers" />)
+    const status = await screen.findByTestId('activation-status')
+    expect(status).toHaveTextContent('cannot activate financial operations')
+    expect(status).toHaveTextContent('activate_financial_operations')
+    expect(status).toHaveTextContent('Switching any of them off does not')
+  })
+
+  it('keeps ordinary configuration open and the activation controls closed for a manage-only administrator', async () => {
+    setup({ o: overview(MANAGE_ONLY), s: settings({ activation: ACTIVATION(), crypto_sections: SECTIONS }),
+      status: payoutStatus() })
+    render(<AdminFinance section="crypto-cashout" />)
+    // Activation-only controls: disabled, each with the reason.
+    expect(await screen.findByRole('switch', { name: 'Automatic payouts' })).toBeDisabled()
+    expect(screen.getByRole('switch', { name: 'Network fee limits approved' })).toBeDisabled()
+    expect(screen.getByTestId('activation-lock-crypto_auto_payout_enabled')).toHaveTextContent('activate_financial_operations')
+    expect(screen.getByTestId('activation-lock-fee_terms_approved')).toHaveTextContent('which your account does not have')
+    // The provider fee behaviour: only the confirming value is unavailable.
+    const mode = screen.getByLabelText('Provider fee behaviour') as HTMLSelectElement
+    expect(mode).not.toBeDisabled()
+    expect(within(mode).getByRole('option', { name: /Deducted by provider/ })).toBeDisabled()
+    expect(screen.getByTestId('activation-lock-provider_fee_mode')).toHaveTextContent('activate_financial_operations')
+    // Ordinary settings stay editable and can be saved.
+    const cap = screen.getByLabelText('Member network fee limit (amount)')
+    expect(cap).not.toBeDisabled()
+    expect(screen.getByLabelText('Minimum crypto cashout')).not.toBeDisabled()               // payouts are off
+    fireEvent.change(cap, { target: { value: '0.75' } })
+    const card = cap.closest('.space-y-4') as HTMLElement
+    fireEvent.change(within(card).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(within(card).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
+      changes: { member_fee_cap_usd: '0.75' }, current_password: PASSWORD, confirmation: undefined, expected_version: 3 }))
+  })
+
+  it('lets a manage-only administrator switch things off but not back on', async () => {
+    const fields = settings().fields.map((f) => ['usd_settlement_enabled'].includes(f.name) ? { ...f, value: true } : f)
+    setup({ o: overview(MANAGE_ONLY), s: settings({ fields, activation: ACTIVATION() }) })
+    render(<AdminFinance section="usd-cashout" />)
+    const toggle = await screen.findByRole('switch', { name: 'USD settlement' })
+    expect(toggle).not.toBeDisabled()                                                       // it is on: off is allowed
+    expect(screen.queryByTestId('activation-lock-usd_settlement_enabled')).toBeNull()
+    fireEvent.click(toggle)
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    expect(screen.queryByTestId('usd-needs-activation')).toBeNull()
+    expect(screen.queryByLabelText(/to confirm/)).toBeNull()                                 // no phrase to switch off
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
+      changes: { usd_settlement_enabled: false }, current_password: PASSWORD, confirmation: undefined, expected_version: 3 }))
+  })
+
+  it('closes the payout settings and credentials to a manage-only administrator while automatic payouts are on', async () => {
+    const fields = settings().fields.map((f) => f.name === 'crypto_auto_payout_enabled' ? { ...f, value: true }
+      : f.name === 'provider_enabled' ? { ...f, value: false } : f)
+    setup({ o: overview(MANAGE_ONLY), s: settings({ fields, activation: ACTIVATION(true), crypto_sections: SECTIONS }),
+      status: payoutStatus() })
+    const { unmount } = render(<AdminFinance section="crypto-cashout" />)
+    expect(await screen.findByLabelText('Minimum crypto cashout')).toBeDisabled()
+    expect(screen.getByTestId('activation-lock-crypto_min_usd')).toHaveTextContent('Automatic payouts are on')
+    expect(screen.getByRole('switch', { name: 'Automatic payouts' })).not.toBeDisabled()     // stopping stays possible
+    expect(screen.getByLabelText('Member network fee limit (amount)')).not.toBeDisabled()    // a fee setting stops payouts
+    unmount()
+
+    render(<AdminFinance section="nowpayments" />)
+    expect(await screen.findByLabelText('Payout credential source')).toBeDisabled()
+    expect(screen.getByRole('switch', { name: 'Provider enabled' })).toBeDisabled()          // off: resuming is an activation
+    expect(screen.getByLabelText('Payout API key')).toBeDisabled()
+    expect(screen.getByLabelText('Payout login password')).toBeDisabled()
+    expect(screen.getByTestId('activation-lock-PAYOUT_API_KEY')).toHaveTextContent('activate_financial_operations')
+    expect(screen.queryByRole('button', { name: /Delete stored payout api key/i })).toBeNull()
+    expect(screen.getByLabelText('Pay-in API key')).not.toBeDisabled()                       // not what payouts are sent with
+    expect(screen.getByRole('button', { name: 'Run connection test' })).not.toBeDisabled()
+  })
+
+  it('offers no reactivation to a manage-only administrator and says why', async () => {
+    setup({ o: overview(MANAGE_ONLY), s: settings({ activation: ACTIVATION(),
+      payout_suspension: { reason: 'PROVIDER_FEE_MODE_MISMATCH', cashout_id: 12, since: '2026-10-11T09:00:00',
+        rules_gate: null, message: 'The provider charged a network fee to the MyHigh5 balance.' },
+      confirmations: { payout_reactivation: 'REACTIVATE CRYPTO PAYOUTS' } }) })
+    render(<AdminFinance section="crypto-cashout" />)
+    const card = await screen.findByTestId('payout-suspension')
+    expect(within(card).getByTestId('reactivation-needs-activation')).toHaveTextContent('activate_financial_operations')
+    expect(within(card).queryByRole('button', { name: 'Reactivate crypto payouts' })).toBeNull()
+    expect(postMock).not.toHaveBeenCalled()
+  })
+
+  it('shows the server refusal when an activation is attempted without the permission', async () => {
+    // An older page, or rules the page was not told about: the server still refuses, and its message is shown.
+    setup({ o: overview(MANAGE_ONLY) })
+    putMock.mockResolvedValue({ status: 403, data: { detail: { code: 'ACTIVATION_PERMISSION_REQUIRED',
+      field: 'usd_settlement_enabled', message: 'The activate_financial_operations permission is required, in addition '
+        + 'to manage_payment_settings, to switch USD settlement on. Nothing was changed.' } } })
+    render(<AdminFinance section="usd-cashout" />)
+    fireEvent.click(await screen.findByRole('switch', { name: 'USD settlement' }))
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'ENABLE USD SETTLEMENT' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText(/activate_financial_operations permission is required/)).toHaveAttribute('role', 'alert')
   })
 })

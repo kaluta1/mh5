@@ -33,7 +33,7 @@ from app.db.session import get_db
 from app.crud import user as crud_user
 from app.api.deps import get_current_active_user, oauth2_scheme
 from app.models.auth_security import PURPOSE_EMAIL_VERIFICATION, PURPOSE_PASSWORD_RESET
-from app.services import auth_security, auth_throttle, auth_tokens
+from app.services import auth_security, auth_throttle, auth_tokens, reauth
 from app.services.email import email_service
 from app.services.email_events import EmailEvent
 from app.services.email_verification import legacy_verify_redirect
@@ -344,9 +344,48 @@ def resend_verification(
     if not auth_throttle.hit(db, auth_throttle.VERIFY_IP, client_ip(request)):
         return rate_limit_response(ROUTE_LIMIT_MESSAGE)
     user = auth_security.find_account(db, body.email)
-    if user is not None and user.is_active and not user.email_verified:
+    if auth_security.account_is_usable(user) and not user.email_verified:
         _queue_verification_email(db, user)
     return PasswordResetResponse(message=VERIFICATION_SENT_MESSAGE)
+
+
+AUDIT_LOGIN_FAILED = "AUTH_LOGIN_FAILED"
+LOGIN_FAILED_MESSAGE = "Email/Username or password incorrect."
+
+
+def _login_account(db: Session, identifier: str):
+    """The account a sign-in identifier names (an email address or a username), if any."""
+    identifier = (identifier or "").strip()
+    if not identifier:
+        return None
+    return crud_user.get_by_email(db=db, email=identifier) or crud_user.get_by_username(db=db, username=identifier)
+
+
+def record_failed_login(db: Session, request: Request, account, reason: str) -> None:
+    """Keep every refused sign-in. For an account that exists: a login_logs
+    row of that account. For an identifier that names nobody there is no
+    account to attach it to, so it goes to the audit trail, WITHOUT the
+    identifier (people type passwords into that field). Bounded by the
+    per-address limit: once an address is blocked nothing more is written.
+    A failure to write never changes the answer the caller gets."""
+    try:
+        info = extract_login_info(request)
+        if account is not None:
+            crud_login_log.create(db, obj_in={
+                "user_id": account.id, "ip_address": info.get("ip_address"), "user_agent": info.get("user_agent"),
+                "device_info": info.get("device_info"), "location_info": {}, "is_successful": False,
+                "failure_reason": reason})
+        else:
+            from app.models.accounting import AuditTrail
+
+            db.add(AuditTrail(table_name="auth", record_id=0, action=AUDIT_LOGIN_FAILED, old_values=None,
+                              new_values={"reason": reason}, user_id=None, ip_address=info.get("ip_address"),
+                              user_agent=(info.get("user_agent") or "")[:500] or None,
+                              timestamp=datetime.utcnow()))
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.error("Could not record a failed sign-in (%s)", type(exc).__name__)
 
 
 def log_login_attempt(
@@ -392,8 +431,28 @@ def login_access_token(
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests.
+
+    Guessing is bounded durably (auth_throttle), in short windows that end by
+    themselves: failed attempts per account from one client address (that
+    address is held back from that account; its owner elsewhere is not), per
+    account from all addresses together (a circuit breaker far above normal
+    use), and per client address across accounts. Every refusal is recorded.
+    An unknown identifier, a wrong password and an account that is held back
+    all get the same answer, after the same work, so the answer says nothing
+    about which accounts exist.
     """
+    ip = client_ip(request)
+    # Too many failed attempts from this address: nothing is looked at.
+    if auth_throttle.blocked(db, auth_throttle.LOGIN_FAIL_IP, ip):
+        return rate_limit_response(ROUTE_LIMIT_MESSAGE)
+
+    account = _login_account(db, form_data.username)
+    pair = f"{account.id}:{ip}" if account is not None else None
+    locked = account is not None and (
+        auth_throttle.blocked(db, auth_throttle.LOGIN_FAIL_ACCOUNT_ADDRESS, pair)
+        or auth_throttle.blocked(db, auth_throttle.LOGIN_FAIL_ACCOUNT, account.id))
     try:
+        # Always performed, so a locked account takes as long as any other.
         user = crud_user.authenticate(
             db, email_or_username=form_data.username, password=form_data.password
         )
@@ -403,31 +462,26 @@ def login_access_token(
         logger.error("Error during authentication: %s", type(e).__name__, exc_info=True)
         # Re-raise to be handled by get_db() dependency or FastAPI error handler
         raise
-    
+    if locked:
+        user = None                                   # even with the right password, until the window ends
+
     if not user:
-        # Log failed login attempt in background (non-blocking)
-        if request and background_tasks:
-            try:
-                background_tasks.add_task(
-                    log_login_attempt,
-                    db=db,
-                    user_id=0,  # No user for a failure
-                    request=request,
-                    is_successful=False,
-                    failure_reason="Email/Username or password incorrect"
-                )
-            except Exception as log_error:
-                # Don't fail login if logging fails
-                logger.warning(f"Failed to log login attempt: {log_error}")
-        
+        auth_throttle.hit(db, auth_throttle.LOGIN_FAIL_IP, ip)
+        if account is not None and not locked:
+            auth_throttle.hit(db, auth_throttle.LOGIN_FAIL_ACCOUNT_ADDRESS, pair)
+            auth_throttle.hit(db, auth_throttle.LOGIN_FAIL_ACCOUNT, account.id)
+        record_failed_login(db, request, account,
+                            "Account temporarily locked" if locked
+                            else "Incorrect password" if account is not None else "Unknown identifier")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email/Username or password incorrect.",
+            detail=LOGIN_FAILED_MESSAGE,
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Check if user is active
-    if not user.is_active:
+
+    # Check if user is active (a deleted account is not, whatever its flag says)
+    if not auth_security.account_is_usable(user):
+        record_failed_login(db, request, user, "Account deactivated")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been deactivated. Please contact support.",
@@ -505,7 +559,7 @@ def request_password_reset(
         return rate_limit_response(ROUTE_LIMIT_MESSAGE)
 
     user = auth_security.find_account(db, password_reset.email)
-    if user is not None and user.is_active:
+    if auth_security.account_is_usable(user):
         if not auth_throttle.hit(db, auth_throttle.RESET_ACCOUNT, user.id):
             logger.info("Password reset email not queued for user %s: account limit reached", user.id)
         elif not auth_throttle.hit(db, auth_throttle.RESET_GLOBAL, auth_throttle.GLOBAL_KEY):
@@ -630,8 +684,14 @@ def change_password(
     device that made the change stays signed in; every other device has to
     sign in again with the new password.
     """
-    # Vérifier le mot de passe actuel
-    if not verify_password(password_data.current_password, current_user.hashed_password):
+    # Vérifier le mot de passe actuel. Counted with every other endpoint that
+    # asks for it (app.services.reauth), so a signed-in session cannot use this
+    # one to guess the password.
+    try:
+        reauth.verify(db, current_user, password_data.current_password, ip=client_ip(request))
+    except reauth.ReauthError as exc:
+        if exc.code == reauth.LOCKED:
+            return rate_limit_response(reauth.LOCKED_MESSAGE)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Mot de passe actuel incorrect"

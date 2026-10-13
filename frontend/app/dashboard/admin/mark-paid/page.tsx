@@ -3,6 +3,9 @@
 import { useLanguage } from '@/contexts/language-context'
 import { useState } from 'react'
 import api from '@/lib/api'
+import { GRANT_REASON_MIN_LENGTH, adminErrorText, validGrantReason } from '@/lib/admin-security'
+// This client does NOT throw on a 4xx answer: every call below says so itself.
+import { throwIfApiError } from '@/lib/http-error'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,6 +60,8 @@ export default function MarkPaidPage() {
   const [statusLoading, setStatusLoading] = useState(false)
   const [product, setProduct] = useState('kyc')
   const [notes, setNotes] = useState('')
+  // The administrator's own password, sent with the request and cleared at once.
+  const [password, setPassword] = useState('')
   const [granting, setGranting] = useState(false)
 
   const handleSearch = async () => {
@@ -65,7 +70,8 @@ export default function MarkPaidPage() {
     try {
       setLoading(true)
       const response = await api.get('/api/v1/admin/users')
-      const all: AdminUser[] = response.data || []
+      throwIfApiError(response, t('admin.mark_paid.search_error') || 'Search failed')
+      const all: AdminUser[] = Array.isArray(response.data) ? response.data : []
       const filtered = all.filter((u) =>
         [u.email, u.username, u.full_name, u.first_name, u.last_name]
           .filter(Boolean)
@@ -76,21 +82,27 @@ export default function MarkPaidPage() {
         addToast(t('admin.mark_paid.no_users') || 'No users found', 'error')
       }
     } catch (error: any) {
-      addToast(error.response?.data?.detail || t('admin.mark_paid.search_error') || 'Search failed', 'error')
+      addToast(adminErrorText(error, t('admin.mark_paid.search_error') || 'Search failed'), 'error')
     } finally {
       setLoading(false)
     }
   }
 
   const selectUser = async (user: AdminUser) => {
+    // A payment reference belongs to one member's payment: it is never carried to the next one.
+    if (user.id !== selectedUser?.id) {
+      setNotes('')
+      setPassword('')
+    }
     setSelectedUser(user)
     setPaymentStatus(null)
     try {
       setStatusLoading(true)
       const response = await api.get(`/api/v1/admin/users/${user.id}/payment-status`)
+      throwIfApiError(response, t('admin.mark_paid.status_error') || 'Failed to load payment status')
       setPaymentStatus(response.data)
     } catch (error: any) {
-      addToast(error.response?.data?.detail || t('admin.mark_paid.status_error') || 'Failed to load payment status', 'error')
+      addToast(adminErrorText(error, t('admin.mark_paid.status_error') || 'Failed to load payment status'), 'error')
     } finally {
       setStatusLoading(false)
     }
@@ -98,13 +110,19 @@ export default function MarkPaidPage() {
 
   const grantPayment = async (verifyIdentity: boolean = false) => {
     if (!selectedUser) return
+    const sentPassword = password
+    setPassword('')
     try {
       setGranting(true)
       const response = await api.post(`/api/v1/admin/users/${selectedUser.id}/grant-payment`, {
         product_code: product,
-        notes: notes.trim() || undefined,
+        notes: notes.trim(),
         verify_identity: verifyIdentity,
+        current_password: sentPassword,
       })
+      // A refusal (permission, password, the member's referral line, a missing reference) stops here:
+      // nothing below runs, so the page never says "paid" for a payment that was not recorded.
+      throwIfApiError(response, t('admin.mark_paid.grant_error') || 'Failed to mark as paid')
       const result = response.data
       if (result.status === 'already_paid') {
         addToast(t('admin.mark_paid.already_paid') || 'User already has a valid credit for this product', 'success')
@@ -125,7 +143,7 @@ export default function MarkPaidPage() {
       )
       setNotes('')
     } catch (error: any) {
-      addToast(error.response?.data?.detail || t('admin.mark_paid.grant_error') || 'Failed to mark as paid', 'error')
+      addToast(adminErrorText(error, t('admin.mark_paid.grant_error') || 'Failed to mark as paid'), 'error')
     } finally {
       setGranting(false)
     }
@@ -303,18 +321,42 @@ export default function MarkPaidPage() {
 
                 {/* Notes */}
                 <div>
-                  <label className="text-sm font-semibold mb-2 block">
-                    {t('admin.mark_paid.notes') || 'Notes (optional)'}
+                  <label htmlFor="grant-reason" className="text-sm font-semibold mb-2 block">
+                    {t('admin.mark_paid.reason') || 'Payment reference (required)'}
                   </label>
                   <Input
+                    id="grant-reason"
                     placeholder={t('admin.mark_paid.notes_placeholder') || 'e.g. Paid via crypto, callback failed'}
                     value={notes}
+                    maxLength={1000}
                     onChange={(e) => setNotes(e.target.value)}
                   />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t('admin.mark_paid.reason_hint') ||
+                      `Which payment this is: a reference to the payment that was received (at least ${GRANT_REASON_MIN_LENGTH} characters). It is kept with the deposit and in the audit trail.`}
+                  </p>
+                </div>
+
+                {/* Re-authentication */}
+                <div>
+                  <label htmlFor="grant-password" className="text-sm font-semibold mb-2 block">
+                    {t('admin.mark_paid.password') || 'Your current password'}
+                  </label>
+                  <Input
+                    id="grant-password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t('admin.mark_paid.password_hint') ||
+                      'Recording a payment needs the grant_manual_payments permission and your password. You cannot record a payment for your own account.'}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Button onClick={() => grantPayment(false)} disabled={granting} className="w-full">
+                  <Button onClick={() => grantPayment(false)} disabled={granting || !password || !validGrantReason(notes)} className="w-full">
                     {granting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -331,7 +373,7 @@ export default function MarkPaidPage() {
                   {product === 'kyc' && (
                     <Button
                       onClick={() => grantPayment(true)}
-                      disabled={granting}
+                      disabled={granting || !password || !validGrantReason(notes)}
                       variant="outline"
                       className="w-full"
                     >

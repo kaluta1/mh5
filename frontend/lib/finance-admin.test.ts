@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   FINANCE_SECTIONS,
+  activationChanges,
+  activationLock,
   changedValues,
   credentialPayload,
   financeErrorText,
@@ -14,6 +16,7 @@ import {
   validReviewNote,
   validNetworkFee,
   tone,
+  type ActivationRules,
   type SettingField,
 } from './finance-admin'
 
@@ -125,5 +128,46 @@ describe('verifying an actual network fee', () => {
       field('crypto_min_usd', 'money', '1.00')]
     const section = { key: 'provider', title: 'A', note: '', fields: ['provider_fee_mode', 'not_a_setting', 'member_fee_cap_usd'] }
     expect(sectionFields(fields, section).map((f) => f.name)).toEqual(['provider_fee_mode', 'member_fee_cap_usd'])
+  })
+
+  const rules = (on: boolean): ActivationRules => ({
+    permission: 'activate_financial_operations',
+    values: { crypto_auto_payout_enabled: true, usd_settlement_enabled: true, fee_terms_approved: true,
+      provider_fee_mode: 'DEDUCTED_BY_PROVIDER' },
+    automatic_payouts_on: on,
+    while_automatic_payouts_on: { fields: ['max_single_payout_usd', 'crypto_payout_currency'],
+      switches: ['provider_enabled'], credential_group: 'payout' },
+  })
+
+  it('names the changes that need the activation permission and never a switch-off', () => {
+    expect(activationChanges(null, { crypto_auto_payout_enabled: true })).toEqual([])        // an older server: it decides
+    expect(activationChanges(rules(false), { crypto_auto_payout_enabled: true, usd_min_usd: '150' }))
+      .toEqual(['crypto_auto_payout_enabled'])
+    expect(activationChanges(rules(false), { provider_fee_mode: 'DEDUCTED_BY_PROVIDER', fee_terms_approved: true }))
+      .toEqual(['provider_fee_mode', 'fee_terms_approved'])
+    for (const off of [{ crypto_auto_payout_enabled: false }, { usd_settlement_enabled: false },
+      { fee_terms_approved: false }, { provider_fee_mode: 'UNVERIFIED' }, { provider_enabled: false }]) {
+      expect(activationChanges(rules(true), off)).toEqual([])
+    }
+    // Payout settings: ordinary while payouts are off, an activation while they are on ...
+    expect(activationChanges(rules(false), { max_single_payout_usd: '500', provider_enabled: true })).toEqual([])
+    expect(activationChanges(rules(true), { max_single_payout_usd: '500', provider_enabled: true, usd_min_usd: '150' }))
+      .toEqual(['max_single_payout_usd', 'provider_enabled'])
+    // ... unless the same change switches them off.
+    expect(activationChanges(rules(true), { max_single_payout_usd: '500', crypto_auto_payout_enabled: false })).toEqual([])
+  })
+
+  it('locks a control only where using it would activate something', () => {
+    const lock = (on: boolean, f: SettingField) => activationLock(rules(on), f)
+    expect(activationLock(null, field('crypto_auto_payout_enabled', 'bool', false))).toBeNull()
+    expect(lock(false, field('crypto_auto_payout_enabled', 'bool', false))).toContain('activate_financial_operations')
+    expect(lock(false, field('crypto_auto_payout_enabled', 'bool', true))).toBeNull()        // on: it can be switched off
+    expect(lock(false, field('usd_min_usd', 'money', '100.00'))).toBeNull()
+    expect(lock(false, field('max_single_payout_usd', 'money', '1000.00'))).toBeNull()
+    expect(lock(true, field('max_single_payout_usd', 'money', '1000.00'))).toContain('Automatic payouts are on')
+    expect(lock(true, field('provider_enabled', 'bool', false))).toContain('activate_financial_operations')
+    expect(lock(true, field('provider_enabled', 'bool', true))).toBeNull()
+    expect(lock(false, field('provider_enabled', 'bool', false))).toBeNull()
+    expect(lock(true, field('provider_fee_mode', 'choice', 'UNVERIFIED'))).toBeNull()        // one value of it, not the field
   })
 })

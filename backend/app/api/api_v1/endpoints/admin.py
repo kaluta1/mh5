@@ -1,7 +1,7 @@
 import logging
 import os
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, inspect, text
@@ -26,6 +26,9 @@ from app.crud.crud_round import round as crud_round
 from app.crud import crud_accounting
 from app.schemas.round import RoundCreate
 from app.models.accounting import AuditTrail
+from app.core.client_ip import client_ip
+from app.services import admin_security
+from app.services.auth_security import must_verify_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,11 +61,48 @@ def _record_admin_audit(db: Session, *, actor_id: int, record_id: int, action: s
 class AdminRoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     is_admin: StrictBool
+    # The acting administrator's own password, checked in the same request.
+    current_password: str = Field(default="", max_length=256)
 
 
 class AdminStatusUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     is_active: StrictBool
+    # Needed only when the account being switched is an administrator's.
+    current_password: str = Field(default="", max_length=256)
+
+
+def _privileged_action(db: Session, http_request: Request, actor: User, *, permission: str, password: str,
+                       target_id: int, attempted: str) -> None:
+    """An explicit permission, the administrator's current password, and never
+    on their own account (app.services.admin_security). A refusal is audited."""
+    try:
+        admin_security.authorize(db, actor, permission=permission, password=password, target_id=target_id,
+                                 attempted=attempted, ip=client_ip(http_request))
+    except admin_security.AdminSecurityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
+
+
+def _refuse_commission_conflict(db: Session, http_request: Request, actor: User, target_id: int) -> None:
+    """The acting administrator would be paid a commission by the payment they
+    are recording. Everything the request started is rolled back (the refusal
+    record does that first), the refusal is audited, and it is refused."""
+    admin_security.record_denial(db, actor=actor, target_id=target_id, attempted="grant payment",
+                                 code="COMMISSION_CONFLICT", ip=client_ip(http_request))
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+        "code": "COMMISSION_CONFLICT",
+        "message": "You cannot record a payment for a member in your own referral line: you would receive a "
+                   "commission from it. Another authorized administrator has to record it."})
+
+
+def _refuse_own_account(db: Session, http_request: Request, actor: User, target_id: int, attempted: str) -> None:
+    """Nobody approves their own account: a second administrator has to."""
+    if int(target_id) == int(actor.id):
+        admin_security.record_denial(db, actor=actor, target_id=target_id, attempted=attempted,
+                                     code="SELF_ACTION_FORBIDDEN", ip=client_ip(http_request))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": "SELF_ACTION_FORBIDDEN",
+            "message": "An administrator cannot perform this action on their own account."})
 
 # Pydantic models
 class ContestCreateRequest(BaseModel):
@@ -180,6 +220,13 @@ class ContestResponse(BaseModel):
 # Helper function to check if user is admin
 def check_admin(current_user: User) -> User:
     """Allow access if user has is_admin=True OR has the admin role."""
+    # get_current_user already refuses a deactivated or deleted account; this
+    # route file does not rely on that alone.
+    if getattr(current_user, 'is_active', True) is False or getattr(current_user, 'is_deleted', False) is True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous n'avez pas les permissions pour accéder à cette ressource"
+        )
     is_admin_flag = getattr(current_user, 'is_admin', False)
     if is_admin_flag:
         return current_user
@@ -3122,25 +3169,47 @@ def get_user_details(
 async def update_user_role(
     user_id: int,
     role_data: AdminRoleUpdate,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Met à jour le rôle admin d'un utilisateur (admin uniquement)
+    Make somebody an administrator, or take that away.
+
+    Being an administrator is not enough: it needs the explicit
+    manage_administrators permission and the acting administrator's current
+    password, is refused on the administrator's own account, and is audited
+    (refusals too). Only an account that can sign in (active, not deleted,
+    email verified where that is required) can be made an administrator.
+    Taking the role away ends that account's sessions.
     """
     check_admin(current_user)
-    
+    _privileged_action(db, http_request, current_user, permission=admin_security.PERMISSION_MANAGE_ADMINS,
+                       password=role_data.current_password, target_id=user_id,
+                       attempted="grant administrator" if role_data.is_admin else "remove administrator")
+
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(User).filter(User.id == user_id).with_for_update().first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
-        
+        if role_data.is_admin and (not user.is_active or getattr(user, "is_deleted", False)
+                                   or must_verify_email(user)):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+                "code": "TARGET_NOT_ELIGIBLE",
+                "message": "Only an active account with a verified email address can be made an administrator."})
+
         old_value = bool(user.is_admin)
-        user.is_admin = role_data.is_admin
-        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_ROLE_UPDATE", old={"is_admin": old_value}, new={"is_admin": bool(user.is_admin)})
+        if old_value != bool(role_data.is_admin):
+            user.is_admin = role_data.is_admin
+            if not role_data.is_admin:
+                # A former administrator's open sessions end with the role.
+                user.security_version = int(user.security_version or 0) + 1
+            admin_security.audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_ROLE_UPDATE",
+                                 old={"is_admin": old_value}, new={"is_admin": bool(user.is_admin)},
+                                 ip=client_ip(http_request))
         db.commit()
         db.refresh(user)
         
@@ -3162,25 +3231,43 @@ async def update_user_role(
 async def update_user_status(
     user_id: int,
     status_data: AdminStatusUpdate,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Met à jour le statut actif d'un utilisateur (admin uniquement)
+    Switch an account on or off (admin only).
+
+    Never the administrator's own account. Switching an ADMINISTRATOR's
+    account (or one whose role carries a protected permission) on or off is a
+    privileged action: manage_administrators and the current password.
+    Switching any account off ends its sessions.
     """
     check_admin(current_user)
-    
+    attempted = "activate account" if status_data.is_active else "deactivate account"
+    _refuse_own_account(db, http_request, current_user, user_id, attempted)
+
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(User).filter(User.id == user_id).with_for_update().first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
-        
+        if admin_security.is_administrator(user) or admin_security.role_is_privileged(user.role):
+            _privileged_action(db, http_request, current_user,
+                               permission=admin_security.PERMISSION_MANAGE_ADMINS,
+                               password=status_data.current_password, target_id=user_id,
+                               attempted=attempted + " (administrator)")
+            user = db.query(User).filter(User.id == user_id).with_for_update().first()
+
         old_value = bool(user.is_active)
         user.is_active = status_data.is_active
-        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_STATUS_UPDATE", old={"is_active": old_value}, new={"is_active": bool(user.is_active)})
+        if old_value and not status_data.is_active:
+            user.security_version = int(user.security_version or 0) + 1
+        admin_security.audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_STATUS_UPDATE",
+                             old={"is_active": old_value}, new={"is_active": bool(user.is_active)},
+                             ip=client_ip(http_request))
         db.commit()
         db.refresh(user)
         
@@ -3201,14 +3288,18 @@ async def update_user_status(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Soft delete un utilisateur (admin uniquement)
+    Soft delete un utilisateur (admin uniquement). Never the administrator's
+    own account, and never an administrator's: the role is removed first, by
+    somebody who may manage administrators.
     """
     check_admin(current_user)
-    
+    _refuse_own_account(db, http_request, current_user, user_id, "delete account")
+
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -3216,9 +3307,18 @@ async def delete_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
-        
+        if admin_security.is_administrator(user) or admin_security.role_is_privileged(user.role):
+            admin_security.record_denial(db, actor=current_user, target_id=user_id,
+                                         attempted="delete account (administrator)",
+                                         code="ADMIN_ACCOUNT_PROTECTED", ip=client_ip(http_request))
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+                "code": "ADMIN_ACCOUNT_PROTECTED",
+                "message": "An administrator account cannot be deleted. Remove the administrator role first."})
+
         old_value = bool(user.is_deleted)
         user.is_deleted = True
+        if not old_value:                                  # a deleted account has no session left
+            user.security_version = int(user.security_version or 0) + 1
         _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_SOFT_DELETE", old={"is_deleted": old_value}, new={"is_deleted": True})
         db.commit()
         
@@ -3779,13 +3879,15 @@ def get_withdrawals_statistics(
 @router.put("/users/{user_id}/kyc/verify")
 async def verify_user_kyc(
     user_id: int,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Vérifie le KYC d'un utilisateur (admin uniquement)
+    Vérifie le KYC d'un utilisateur (admin uniquement). Never on the administrator's own account.
     """
     check_admin(current_user)
+    _refuse_own_account(db, http_request, current_user, user_id, "verify identity")
     
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -3820,13 +3922,15 @@ async def verify_user_kyc(
 @router.put("/users/{user_id}/kyc/unverify")
 async def unverify_user_kyc(
     user_id: int,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Révoque la vérification KYC d'un utilisateur (admin uniquement)
+    Révoque la vérification KYC d'un utilisateur (admin uniquement). Never on the administrator's own account.
     """
     check_admin(current_user)
+    _refuse_own_account(db, http_request, current_user, user_id, "revoke identity verification")
     
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -3873,6 +3977,12 @@ class GrantPaymentRequest(BaseModel):
     amount: Optional[Decimal] = None
     notes: Optional[str] = Field(default=None, max_length=1000)
     verify_identity: bool = False  # Also mark the user's identity as verified (skips Shufti)
+    # The acting administrator's own password, checked in the same request.
+    current_password: str = Field(default="", max_length=256)
+
+
+# What a manual payment must say about the money it stands for.
+GRANT_REASON_MIN_LENGTH = 10
 
 
 def _valid_deposit_counts(db: Session, user_id: int) -> Dict[str, int]:
@@ -3914,6 +4024,7 @@ async def get_user_payment_status(
 def grant_user_payment(
     user_id: int,
     request: GrantPaymentRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -3928,6 +4039,12 @@ def grant_user_payment(
     - Otherwise, an existing PENDING/PARTIALLY_PAID deposit for the product is validated,
       or a new validated deposit is created.
     - Runs the standard validation pipeline (commissions, accounting, confirmation email).
+
+    It records money as received, so being an administrator is not enough: it
+    needs the explicit grant_manual_payments permission and the administrator's
+    current password, is refused for the administrator's own account, and must
+    say what the payment was (a reference to the payment that was received).
+    Refusals are audited.
     """
     check_admin(current_user)
 
@@ -3941,7 +4058,15 @@ def grant_user_payment(
     from app.services.new_model_ledger import model_version_for_new_event
 
     if is_legacy_founding_product(product_code):
-        _reject_retired_legacy_writer("Granting a Founding membership")
+        _reject_retired_legacy_writer("Granting a Founding membership")     # retired for everybody: nothing to authorize
+    _privileged_action(db, http_request, current_user, permission=admin_security.PERMISSION_GRANT_PAYMENTS,
+                       password=request.current_password, target_id=user_id, attempted="grant payment")
+    reason = " ".join((request.notes or "").split())
+    if len(reason) < GRANT_REASON_MIN_LENGTH:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "code": "REASON_REQUIRED",
+            "message": "Say which payment this is: a reference to the payment that was received "
+                       f"(at least {GRANT_REASON_MIN_LENGTH} characters)."})
     if product_code not in GRANTABLE_PRODUCT_CODES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3951,6 +4076,13 @@ def grant_user_payment(
     user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.is_active or getattr(user, "is_deleted", False):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "code": "TARGET_NOT_ELIGIBLE", "message": "A payment cannot be recorded for an inactive account."})
+    # Nobody records a payment they would earn a commission from: not for a
+    # member they sponsor, and not for anybody further down their referrals.
+    if admin_security.earns_from_payment_by(db, current_user.id, user.id):
+        _refuse_commission_conflict(db, http_request, current_user, user_id)
 
     product = db.query(ProductType).filter(ProductType.code == product_code).first()
     if not product:
@@ -3996,7 +4128,7 @@ def grant_user_payment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admin amount must match the server product price",
         )
-    admin_note = request.notes or f"Manually marked as paid by admin #{current_user.id}"
+    admin_note = f"{reason} [marked as paid by admin #{current_user.id}]"[:1000]
 
     try:
         # Prefer validating an existing unfinished deposit (keeps history/accounting accurate).
@@ -4046,11 +4178,28 @@ def grant_user_payment(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to process payment validation",
             )
+        # The rule above is about the referral records; this is about the
+        # result. Whatever commission the pipeline has just prepared for this
+        # payment (nothing is committed yet): if any of it is the acting
+        # administrator's, the whole payment is undone.
+        db.flush()
+        from app.models.affiliate import AffiliateCommission
+        from sqlalchemy import and_, or_
 
-        _record_admin_audit(
+        own_commission = db.query(AffiliateCommission.id).filter(
+            AffiliateCommission.user_id == current_user.id,
+            or_(AffiliateCommission.deposit_id == deposit.id,
+                and_(AffiliateCommission.source_type == "DEPOSIT", AffiliateCommission.source_id == deposit.id)),
+        ).first()
+        if own_commission:
+            _refuse_commission_conflict(db, http_request, current_user, user_id)
+
+        admin_security.audit(
             db, actor_id=current_user.id, record_id=user.id, action="ADMIN_PAYMENT_GRANT",
             old={"deposit_id": None if created_new else deposit.id},
-            new={"deposit_id": deposit.id, "product_code": product_code, "amount": str(amount)},
+            new={"deposit_id": deposit.id, "product_code": product_code, "amount": str(amount),
+                 "reason": reason[:300]},
+            ip=client_ip(http_request),
         )
         db.commit()
         db.refresh(deposit)

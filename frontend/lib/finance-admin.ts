@@ -65,6 +65,21 @@ export type FinanceSettings = {
   /** Set by the engine when a payout did not add up; lifted only by an explicit reactivation. */
   payout_suspension?: PayoutSuspension | null
   crypto_sections?: CryptoSection[]
+  /** Which changes also need the activation permission. Absent from an older server. */
+  activation?: ActivationRules | null
+}
+
+/**
+ * Configuring and activating are two authorities. A change listed here needs
+ * the activation permission in addition to manage_payment_settings. The server
+ * decides and refuses; this only lets the page say so before the attempt.
+ */
+export type ActivationRules = {
+  permission: string
+  /** setting -> the value that activates */
+  values: Record<string, string | boolean>
+  automatic_payouts_on: boolean
+  while_automatic_payouts_on: { fields: string[]; switches: string[]; credential_group: string }
 }
 
 /**
@@ -151,7 +166,8 @@ export type ProviderView = {
 }
 
 export type FinanceOverview = {
-  permissions: { can_manage: boolean; can_process: boolean }
+  /** can_activate is true only with BOTH manage_payment_settings and the activation permission. */
+  permissions: { can_manage: boolean; can_process: boolean; can_activate?: boolean }
   providers: {
     key: string
     name: string
@@ -532,6 +548,45 @@ export function changedValues(fields: SettingField[], draft: Record<string, stri
     if (field.kind === 'bool' ? next !== current : String(next).trim() !== current) out[field.name] = next
   }
   return out
+}
+
+/**
+ * The settings in a set of changes that also need the activation permission.
+ * Switching something off never does. Mirrors the server's rule; the server
+ * remains the one that decides.
+ */
+export function activationChanges(rules: ActivationRules | null | undefined,
+  changes: Record<string, string | boolean>): string[] {
+  if (!rules) return []
+  const out = Object.keys(changes).filter((name) => name in rules.values && changes[name] === rules.values[name])
+  // Automatic payouts are on and this change does not switch them off.
+  if (rules.automatic_payouts_on && changes.crypto_auto_payout_enabled !== false) {
+    const live = rules.while_automatic_payouts_on
+    out.push(...live.fields.filter((name) => name in changes))
+    out.push(...live.switches.filter((name) => changes[name] === true))
+  }
+  return out
+}
+
+/**
+ * Why an administrator who may configure but not activate cannot use a
+ * control as it stands, or null when they can. A switch that is ON stays
+ * usable: switching off is always allowed.
+ */
+export function activationLock(rules: ActivationRules | null | undefined, field: SettingField): string | null {
+  if (!rules) return null
+  const live = rules.while_automatic_payouts_on
+  if (field.kind === 'bool') {
+    const activates = rules.values[field.name] === true
+      || (rules.automatic_payouts_on && live.switches.includes(field.name))
+    if (!activates || field.value) return null
+    return `Switching this on needs the ${rules.permission} permission, which your account does not have.`
+  }
+  if (rules.automatic_payouts_on && live.fields.includes(field.name)) {
+    return `Automatic payouts are on: changing this needs the ${rules.permission} permission, which your account `
+      + 'does not have. Switching automatic payouts off does not.'
+  }
+  return null
 }
 
 /** Credential fields are write-only: a blank field is not sent, so it keeps the stored value. */

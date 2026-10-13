@@ -115,13 +115,22 @@ def configure(db, **values):
     db.commit()
 
 
-def finance_role(db) -> Role:
-    """A role that explicitly holds both Finance & Payments permissions."""
-    role = db.query(Role).filter(Role.name == "finance_admin").first()
+FINANCE_PERMISSIONS = (payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS,
+                       payment_config.PERMISSION_ACTIVATE)
+
+
+def finance_role(db, permissions=FINANCE_PERMISSIONS) -> Role:
+    """A role that explicitly holds the given Finance & Payments permissions.
+    All three by default: the administrator of most tests may configure,
+    activate and process. Who may do what with fewer is tested in
+    test_payment_activation_permission.py."""
+    wanted = [name for name in FINANCE_PERMISSIONS if name in permissions]
+    name = "finance_admin" if len(wanted) == len(FINANCE_PERMISSIONS) else "finance_" + "_".join(wanted)
+    role = db.query(Role).filter(Role.name == name).first()
     if role is None:
-        role = Role(name="finance_admin", permissions=[
-            Permission(name=name, category="admin")
-            for name in (payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS)])
+        role = Role(name=name, permissions=[
+            db.query(Permission).filter(Permission.name == p).first() or Permission(name=p, category="admin")
+            for p in wanted])
         db.add(role)
         db.flush()
     return role
@@ -168,14 +177,15 @@ def ledger(world):
 
 
 def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponsor=None, admin=False,
-           dob=datetime(1990, 1, 1), terms=True) -> User:
+           dob=datetime(1990, 1, 1), terms=True, permissions=FINANCE_PERMISSIONS) -> User:
     """A synthetic member. One who chose Crypto Cashout has accepted the
-    network fee terms unless `terms=False`."""
+    network fee terms unless `terms=False`. An administrator holds the given
+    Finance & Payments permissions (all of them unless told otherwise)."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=name.upper(),
                usdt_wallet_address=wallet, payout_currency="usdtbsc", cashout_method=method,
-               role_id=finance_role(db).id if admin else None,
+               role_id=finance_role(db, permissions).id if admin else None,
                payout_wallet_verified_at=verified_at if wallet else None)
     db.add(row)
     db.commit()
