@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import AdminKycSessionGrant from './admin-kyc-session-grant'
 import { CheckCircle, XCircle, Eye, AlertCircle, FileText, ExternalLink } from 'lucide-react'
 import api from '@/lib/api'
 import { API_URL } from '@/lib/config'
@@ -37,6 +38,8 @@ interface KYCVerification {
   rejection_reason?: string
   submitted_at: string
   processed_at?: string
+  attempt_sessions_count?: number | null
+  attempt_sessions_granted?: number | null
   user?: {
     id: number
     email: string
@@ -572,6 +575,8 @@ export default function AdminKYC() {
                   </Button>
                 </div>
               )}
+
+              <AdminKycSessionGrant verification={detail} onGranted={() => void openDetail(detail.id)} />
             </div>
           )}
         </DialogContent>

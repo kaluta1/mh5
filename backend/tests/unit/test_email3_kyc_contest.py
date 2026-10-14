@@ -232,7 +232,8 @@ def test_admin_decisions_keep_their_email_and_never_double_up(client, db, email_
     assert "The photo is too dark to read" in rejected_mail["html"]        # the administrator's own, member-facing reason
 
 
-@pytest.mark.parametrize("event, status", [("session.expired", KYCStatus.EXPIRED),
+# An expired SESSION leaves the attempt open (the status does not change).
+@pytest.mark.parametrize("event, status", [("session.expired", KYCStatus.PENDING),
                                            ("session.created", KYCStatus.PENDING),
                                            ("session.processing", KYCStatus.PENDING)])
 def test_internal_and_session_states_send_nothing(db, email_outbox, event, status):

@@ -2,7 +2,7 @@
 import hashlib
 import hmac
 import json
-from datetime import datetime
+import time
 
 import pytest
 
@@ -46,7 +46,7 @@ def test_webhook_signature_valid():
     svc = KalutaKYCService()
     svc.webhook_secret = "test-secret"
     body = b'{"event":"session.approved"}'
-    ts = str(int(datetime.utcnow().timestamp()))
+    ts = str(int(time.time()))          # the real epoch, as the provider sends it
     signed = f"{ts}.".encode() + body
     sig = hmac.new(b"test-secret", signed, hashlib.sha256).hexdigest()
     header = f"t={ts},v1={sig}"
@@ -57,7 +57,7 @@ def test_webhook_signature_rejects_tampered_body():
     svc = KalutaKYCService()
     svc.webhook_secret = "test-secret"
     body = b'{"event":"session.approved"}'
-    ts = str(int(datetime.utcnow().timestamp()))
+    ts = str(int(time.time()))          # the real epoch, as the provider sends it
     signed = f"{ts}.".encode() + body
     sig = hmac.new(b"test-secret", signed, hashlib.sha256).hexdigest()
     header = f"t={ts},v1={sig}"

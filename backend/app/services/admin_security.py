@@ -33,11 +33,13 @@ logger = logging.getLogger(__name__)
 
 PERMISSION_MANAGE_ADMINS = "manage_administrators"
 PERMISSION_GRANT_PAYMENTS = "grant_manual_payments"
+# The KYC fee and the Kaluta settings (app.services.kyc_settings).
+PERMISSION_MANAGE_KYC = "manage_kyc_settings"
 
 # Permissions that are granted to a named administrator on purpose, by the
 # grant tool, and never through the general role management API.
 PROTECTED_PERMISSIONS = frozenset({
-    PERMISSION_MANAGE_ADMINS, PERMISSION_GRANT_PAYMENTS,
+    PERMISSION_MANAGE_ADMINS, PERMISSION_GRANT_PAYMENTS, PERMISSION_MANAGE_KYC,
     payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS, payment_config.PERMISSION_ACTIVATE,
 })
 # Roles that make their holder an administrator (admin.check_admin) or open everything.

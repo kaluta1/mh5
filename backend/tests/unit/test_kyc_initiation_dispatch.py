@@ -132,7 +132,7 @@ def test_A_B_D_E_eligible_adult_reaches_the_mocked_provider_through_the_mounted_
                                     "address": ADDRESS["residential_address"]}]
     body = r.json()                                                                       # E: existing contract
     assert set(body) == {"verification_url", "reference", "verification_id", "reused", "provider", "status",
-                         "attempts_count", "max_attempts", "attempts_remaining"}
+                         "attempts_count", "max_attempts", "attempts_remaining", "sessions_remaining"}
     assert body["status"] == "new" and body["reused"] is False and body["provider"] == "kaluta"
     assert body["reference"] == call["reference"] and body["verification_url"].startswith("https://verify.invalid/")
     row = kyc_rows(db, a)[0]
@@ -296,14 +296,16 @@ def test_provider_selection_is_unchanged(client, db, providers, monkeypatch):
 
 def test_disabled_kaluta_stays_disabled_and_fails_safely(client, db, monkeypatch):
     """With the real adapter and KALUTA_KYC_ENABLED off (the default), nothing is
-    sent and the endpoint answers 503, as before."""
+    sent and the endpoint answers 503, as before. Nothing is opened either: no
+    attempt is started and the paid payment is not used."""
     monkeypatch.setattr(kaluta_kyc.kaluta_kyc_service, "enabled", False)
     a = adult(db)
-    kyc_paid(db, a)
+    paid = kyc_paid(db, a)
     r = client.post(INITIATE, json=ADDRESS, headers=auth(a))
     assert r.status_code == 503 and "disabled" in r.text
-    row = kyc_rows(db, a)[0]
-    assert row.status == KYCStatus.PENDING and not row.identity_verified and not row.verification_url
+    assert kyc_rows(db, a) == []
+    db.expire_all()
+    assert db.get(Deposit, paid.id).is_used is False
 
 
 @pytest.mark.parametrize("kind", ["timeout", "rejected", "malformed"])

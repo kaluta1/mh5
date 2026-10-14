@@ -16,6 +16,7 @@ import logging
 from app.api import deps
 from app.models.user import User
 from app.models.payment import Deposit, DepositStatus, ProductType
+from app.services import kyc_fee
 from app.services.nowpayments_service import (
     NowPaymentsError,
     build_order_id,
@@ -177,6 +178,11 @@ async def create_payment(
         # Retired 2026-09-28: no deposit, seat or provider invoice is created.
         raise HTTPException(status_code=410, detail=POOL_RETIRED_MESSAGE)
 
+    if product_code == kyc_fee.PRODUCT_CODE and kyc_fee.is_free(db):
+        # Free KYC: there is nothing to pay, so no deposit and no provider invoice.
+        raise HTTPException(status_code=409, detail={
+            "code": "KYC_FEE_NOT_REQUIRED", "message": "Identity verification is free. No payment is needed."})
+
     try:
         expected_amount, expected_currency = authoritative_product_terms(product)
         validate_client_purchase_terms(
@@ -241,6 +247,17 @@ async def create_payment(
     ) or "usdtbsc"
 
     from app.services.new_model_ledger import model_version_for_new_event
+
+    if product_code == kyc_fee.PRODUCT_CODE:
+        # A NEW KYC payment only for an attempt the member needs and does not
+        # already hold or is not already paying for (an idempotent replay above
+        # is answered as before). The member's row stays locked until the
+        # deposit below is committed: two requests arriving together cannot
+        # both create one.
+        refusal = kyc_fee.payment_refusal(db, current_user.id, lock=True)
+        if refusal:
+            db.rollback()
+            raise HTTPException(status_code=409, detail={"code": refusal[0], "message": refusal[1]})
 
     deposit = Deposit(
         user_id=current_user.id,

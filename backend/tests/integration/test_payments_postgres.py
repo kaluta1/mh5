@@ -88,6 +88,7 @@ FEE_SAFETY = "d8e9f0a1b2c3_payout_fee_safety.py"
 FEE_REVIEW = "e9f0a1b2c3d4_payout_fee_review.py"
 ACTIVATION_PERMISSION = "f0a1b2c3d4e5_activate_financial_operations_permission.py"
 ADMIN_SECURITY = "a2b3c4d5e6f7_administrator_security_permissions.py"
+KYC_SETTINGS = "b3c4d5e6f7a8_kyc_settings_and_session_limit.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -299,7 +300,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (eighth.revision, eighth.down_revision, eighth.depends_on) == ("a2b3c4d5e6f7", "f0a1b2c3d4e5", None)
     assert eighth.branch_labels is None
     heads = [name for name, line in revisions.items() if '"a2b3c4d5e6f7"' in line or "'a2b3c4d5e6f7'" in line]
-    assert heads == []                                             # a2b3c4d5e6f7 is the single head
+    assert heads == [KYC_SETTINGS]                                 # one line, no branch
+    ninth = load_migration(KYC_SETTINGS)
+    assert (ninth.revision, ninth.down_revision, ninth.depends_on) == ("b3c4d5e6f7a8", "a2b3c4d5e6f7", None)
+    assert ninth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"b3c4d5e6f7a8"' in line or "'b3c4d5e6f7a8'" in line]
+    assert heads == []                                             # b3c4d5e6f7a8 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

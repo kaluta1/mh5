@@ -278,9 +278,22 @@ class KYCService {
         can_start: result.can_restart || result.can_continue || false,
         needs_payment: result.needs_payment || false,
         has_valid_payment: result.has_valid_payment || false,
+        // The member fee the server charges for a new attempt (0 = free).
+        kyc_price: result.kyc_price,
+        kyc_currency: result.kyc_currency,
+        kyc_is_free: result.kyc_is_free === true,
+        kyc_retry_policy: result.kyc_retry_policy,
         can_continue: result.can_continue,
         can_restart: result.can_restart,
         verification_url: result.verification_url,
+        attempts_count: result.attempts_count,
+        max_attempts: result.max_attempts,
+        attempts_remaining: result.attempts_remaining,
+        max_attempts_reached: result.max_attempts_reached === true,
+        // A provider session that ran out is renewed for the same attempt, within a limit.
+        session_expired: result.session_expired === true,
+        sessions_remaining: result.sessions_remaining ?? null,
+        session_limit_reached: result.session_limit_reached === true,
       } as any
     } catch (error) {
       // Handle network errors gracefully
@@ -288,6 +301,26 @@ class KYCService {
         throw new Error('Network error: Unable to connect to server')
       }
       throw error instanceof Error ? error : new Error('An error occurred while fetching KYC status')
+    }
+  }
+
+  /**
+   * What one new verification attempt costs a member now (0 = free).
+   * Null when the server could not be asked: the caller keeps what it had.
+   */
+  async getKycFee(token: string): Promise<{ amount: number; currency: string; is_free: boolean } | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/kyc/fee`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!response.ok) return null
+      const result = await response.json()
+      const amount = Number(result.amount)
+      if (!Number.isFinite(amount) || amount < 0) return null
+      return { amount, currency: String(result.currency || 'USD'), is_free: result.is_free === true || amount === 0 }
+    } catch {
+      return null
     }
   }
 

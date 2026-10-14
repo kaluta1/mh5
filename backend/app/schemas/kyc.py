@@ -70,7 +70,12 @@ class KYCVerification(KYCVerificationBase):
     submitted_at: datetime
     processed_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
-    
+    attempts_count: Optional[int] = None
+    max_attempts: Optional[int] = None
+    # Provider sessions of the current attempt, and the extra ones an administrator allowed.
+    attempt_sessions_count: Optional[int] = None
+    attempt_sessions_granted: Optional[int] = None
+
     class Config:
         from_attributes = True
 

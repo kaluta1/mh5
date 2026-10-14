@@ -8,6 +8,8 @@ from datetime import datetime
 import json
 import logging
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.api import deps
 from app.core.config import settings
 from app.crud import crud_kyc
@@ -20,12 +22,21 @@ from app.services.shufti_pro import (
     normalize_country_iso2_for_shufti,
     resolve_shufti_callback_and_redirect_urls,
 )
-from app.services.kaluta_kyc import active_kyc_provider, is_kaluta_active, kaluta_kyc_service
+from app.core.client_ip import client_ip
+from app.services import kyc_fee, kyc_settings
+from app.services.kaluta_kyc import (
+    UNAVAILABLE_MESSAGE,
+    WEBHOOK_MAX_BODY_BYTES,
+    active_kyc_provider,
+    is_kaluta_active,
+    kaluta_kyc_service,
+    parse_provider_time,
+)
 from app.services.kyc_provider_dispatch import (
     check_kyc_session_validity,
     generate_kyc_reference,
+    handle_kaluta_webhook,
     initiate_kyc_session,
-    process_kaluta_webhook_event,
     provider_for_verification,
     sync_verification_from_provider,
     verification_provider_enum,
@@ -61,7 +72,6 @@ from app.models.kyc import KYCDocument as KYCDocumentModel, KYCVerification as K
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-KYC_PRICE_USD = 10.00  # keep in sync with product_types.price for code "kyc"
 
 
 def _shufti_urls_for_client_error() -> dict:
@@ -191,6 +201,45 @@ def _guard_kyc_initiation(db: Session, user: User) -> None:
         raise _fe.http_error(exc) from None
 
 
+def _session_expired_locally(verification) -> bool:
+    """Has the provider session of an OPEN verification run out, by the expiry
+    the provider gave when it was created (or that its expiry event set)? An
+    EXPIRED verification (older records) is an open attempt whose session ended.
+    False when no expiry is known."""
+    if verification is None:
+        return False
+    if verification.status == KYCStatus.EXPIRED:
+        return True
+    return bool(verification.expires_at is not None
+                and verification.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS)
+                and verification.expires_at <= datetime.utcnow())
+
+
+# A new attempt (a new payment unless KYC is free) starts only from these.
+_NEW_ATTEMPT_STATUSES = (KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW)
+# The attempt is open: continued, or given a fresh provider session, for free.
+_OPEN_ATTEMPT_STATUSES = (KYCStatus.PENDING, KYCStatus.IN_PROGRESS, KYCStatus.EXPIRED)
+
+
+def _attempt_view(verification) -> dict:
+    return {
+        "attempts_count": verification.attempts_count,
+        "max_attempts": verification.max_attempts,
+        "attempts_remaining": max(0, verification.max_attempts - verification.attempts_count),
+        "sessions_remaining": kyc_settings.sessions_left(verification),
+    }
+
+
+def _refuse_closed(verification) -> None:
+    if verification and verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Complétez l’étape justificatif de domicile avant de relancer la vérification d’identité.",
+        )
+    if verification and verification.status == KYCStatus.APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Votre identité est déjà vérifiée")
+
+
 @router.post("/initiate")
 async def initiate_shufti_verification(
     *,
@@ -204,98 +253,162 @@ async def initiate_shufti_verification(
     payload: KYCInitiateRequest = Body(default_factory=KYCInitiateRequest),
 ):
     """
-    Initier ou reprendre une vérification KYC (Kaluta par défaut, Shufti Pro legacy).
-    
-    Règles:
-    - UN SEUL enregistrement par utilisateur (jamais de doublons)
-    - APPROVED: Bloquer (déjà vérifié)
-    - IN_PROGRESS/PENDING: Réutiliser si la session provider est encore valide
-    - REJECTED/REQUIRES_REVIEW/EXPIRED: Permettre de reprendre avec nouvelle référence
+    Start or continue a KYC verification (Kaluta by default, Shufti Pro legacy).
+
+    Rules:
+    - ONE record per member.
+    - APPROVED / PENDING_PROOF_OF_ADDRESS: refused.
+    - PENDING / IN_PROGRESS: the open session is handed out again while it is valid.
+    - Session ran out (expiry time passed, an expiry event, or EXPIRED): a fresh
+      session for the SAME attempt: no payment, no new attempt, within the
+      session limit of the attempt (kyc_settings.SESSIONS_PER_ATTEMPT plus what
+      an administrator allowed). force_new also opens a fresh session and counts.
+    - REJECTED / REQUIRES_REVIEW: a NEW attempt (attempt limit applies). It is
+      paid with a paid, unused KYC payment, or free while the member KYC fee is
+      0; a free attempt never uses a payment the member already made.
     """
     _guard_kyc_initiation(db, current_user)
-    # Récupérer l'enregistrement KYC existant (il ne peut y en avoir qu'un par user)
+    kyc_settings.apply(db)
+    if is_kaluta_active() and not kaluta_kyc_service.configured():
+        # Switched off or without a key: refused before an attempt is opened or a payment used.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Kaluta KYC is temporarily disabled." if not kaluta_kyc_service.enabled
+                            else "Kaluta KYC is not configured (KALUTA_API_KEY missing).")
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
-
-    # Cas 1a: Identité OK — en attente du justificatif de domicile
-    if verification and verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Complétez l’étape justificatif de domicile avant de relancer la vérification d’identité.",
-        )
-
-    # Cas 1: Déjà approuvé → Bloquer
-    if verification and verification.status == KYCStatus.APPROVED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Votre identité est déjà vérifiée"
-        )
-    
-    # Cas 1b: Nombre max de tentatives atteint → Bloquer
-    if verification and verification.attempts_count >= verification.max_attempts:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Vous avez atteint le nombre maximum de tentatives ({verification.max_attempts}). Veuillez contacter le support."
-        )
-    
-    # Cas 1c: Vérifier si l'utilisateur a un paiement valide pour le KYC
-    # (Seulement si c'est une NOUVELLE tentative, pas si on continue une existante)
-    needs_new_payment = False
-    if not verification:
-        # Première tentative → besoin de paiement
-        needs_new_payment = True
-    elif verification.status in [KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED]:
-        # Nouvelle tentative après échec → besoin de paiement
-        needs_new_payment = True
-    
-    valid_payment = None
-    if needs_new_payment:
-        valid_payment = crud_deposit.deposit.get_valid_deposit_for_product(
-            db, user_id=current_user.id, product_code="kyc"
-        )
-        if not valid_payment:
-            available_count = crud_deposit.deposit.count_valid_deposits_for_product(
-                db, user_id=current_user.id, product_code="kyc"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    "message": "Vous devez payer pour effectuer la vérification KYC",
-                    "available_attempts": available_count,
-                    "price": KYC_PRICE_USD,
-                    "currency": "USD"
-                }
-            )
+    _refuse_closed(verification)
 
     # Adresse résidentielle (obligatoire pour un nouveau cycle ; réutilisable si session verrouillée)
     raw_in = (payload.residential_address or "").strip()
-    addr = raw_in
-    if verification and verification.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS):
-        if len(addr) < 2 and verification.verified_address:
-            addr = (verification.verified_address or "").strip()
-
     if raw_in and len(raw_in) < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="If provided, residential address must be at least 2 characters.",
         )
 
-    needs_fresh_address = (
-        not verification
-        or verification.status in (KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED)
-    )
-    if needs_fresh_address and len(addr) < 2:
+    # The open session is handed out again while it is valid (no lock: the
+    # provider may be asked over the network; a decision found there is applied
+    # under the verification's own lock).
+    if (
+        not force_new
+        and verification
+        and verification.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS)
+        and not _session_expired_locally(verification)
+        and verification.reference_id
+    ):
+        reference = verification.reference_id
+        validity_check = await check_kyc_session_validity(verification)
+        if validity_check.get("is_completed"):
+            synced = await sync_verification_from_provider(db, crud_kyc=crud_kyc, verification=verification)
+            if synced and synced.get("needs_proof_of_address"):
+                return {
+                    "verification_url": None,
+                    "reference": reference,
+                    "verification_id": verification.id,
+                    "reused": True,
+                    "provider": provider_for_verification(verification),
+                    "status": "pending_proof_of_address",
+                    "kyc_step": 2,
+                    "needs_proof_of_address": True,
+                    "message": "Identity verification accepted. Upload proof of address to finish KYC.",
+                }
+            if synced and synced.get("fully_approved"):
+                return {
+                    "verification_url": None,
+                    "reference": reference,
+                    "verification_id": verification.id,
+                    "reused": True,
+                    "provider": provider_for_verification(verification),
+                    "status": "approved",
+                    "kyc_step": 0,
+                    "needs_proof_of_address": False,
+                    "message": "KYC verification complete.",
+                }
+            if synced and synced.get("status") == "rejected":
+                # The attempt has ended. A new one is a separate decision of the
+                # member (and a new payment unless KYC is free): never opened here.
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+                    "code": "KYC_ATTEMPT_ENDED",
+                    "message": "This verification attempt has ended. Reload the page to see the result."})
+            db.refresh(verification)
+        elif validity_check.get("is_valid"):
+            verification_url = validity_check.get("verification_url") or verification.verification_url
+            if verification_url:
+                return {
+                    "verification_url": verification_url,
+                    "reference": reference,
+                    "verification_id": verification.id,
+                    "reused": True,
+                    "provider": provider_for_verification(verification),
+                    "status": "in_progress",
+                    **_attempt_view(verification),
+                }
+
+    # From here on the member's row is locked until the next commit: two requests
+    # at once are decided one after the other, so one paid payment opens one
+    # attempt and the session limit cannot be passed by asking twice.
+    db.query(User.id).filter(User.id == current_user.id).with_for_update().first()
+    verification = (db.query(KYCVerificationModel).filter(KYCVerificationModel.user_id == current_user.id)
+                    .populate_existing().first())
+    _refuse_closed(verification)
+
+    new_attempt = verification is None or verification.status in _NEW_ATTEMPT_STATUSES
+    if new_attempt and verification is not None and verification.attempts_count >= verification.max_attempts:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Vous avez atteint le nombre maximum de tentatives ({verification.max_attempts}). Veuillez contacter le support."
+        )
+
+    valid_payment = None
+    if new_attempt and not kyc_fee.is_free(db):
+        # A paid, unused payment opens the attempt whatever the (non-zero) fee is now.
+        valid_payment = crud_deposit.deposit.get_valid_deposit_for_product(
+            db, user_id=current_user.id, product_code="kyc"
+        )
+        if not valid_payment:
+            fee_amount, fee_currency = kyc_fee.member_fee(db)
+            available_count = crud_deposit.deposit.count_valid_deposits_for_product(
+                db, user_id=current_user.id, product_code="kyc"
+            )
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "message": "Vous devez payer pour effectuer la vérification KYC",
+                    "available_attempts": available_count,
+                    "price": float(fee_amount),
+                    "currency": fee_currency
+                }
+            )
+    # KYC is free (fee 0): no payment is looked for, and a paid one the member
+    # holds is left exactly as it is (paid, unused) for a later paid attempt.
+
+    if not new_attempt and kyc_settings.sessions_left(verification) <= 0:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "code": "KYC_SESSION_LIMIT_REACHED",
+            "message": ("Your verification link was renewed the maximum number of times for this attempt. "
+                        "Please contact support: they can allow one more. You will not be charged again."),
+        })
+
+    addr = raw_in
+    if not new_attempt and len(addr) < 2 and verification.verified_address:
+        addr = (verification.verified_address or "").strip()
+    if new_attempt and len(addr) < 2:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Residential address is required (at least 2 characters) before starting verification.",
         )
-
     if (
         verification
+        and not new_attempt
         and verification.residential_address_locked_at
         and verification.verified_address
         and len(addr) >= 2
         and normalized_address_key(addr) != normalized_address_key(verification.verified_address)
     ):
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -304,116 +417,51 @@ async def initiate_shufti_verification(
             ),
         )
 
-    # Cas 2: Vérification en cours (PENDING/IN_PROGRESS) → Essayer de réutiliser
-    if (
-        not force_new
-        and verification
-        and verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]
-    ):
-        reference = verification.reference_id
-        
-        if reference:
-            validity_check = await check_kyc_session_validity(verification)
-            
-            if validity_check.get("is_completed"):
-                synced = await sync_verification_from_provider(
-                    db, crud_kyc=crud_kyc, verification=verification
-                )
-                if synced and synced.get("needs_proof_of_address"):
-                    return {
-                        "verification_url": None,
-                        "reference": reference,
-                        "verification_id": verification.id,
-                        "reused": True,
-                        "provider": provider_for_verification(verification),
-                        "status": "pending_proof_of_address",
-                        "kyc_step": 2,
-                        "needs_proof_of_address": True,
-                        "message": "Identity verification accepted. Upload proof of address to finish KYC.",
-                    }
-                if synced and synced.get("fully_approved"):
-                    return {
-                        "verification_url": None,
-                        "reference": reference,
-                        "verification_id": verification.id,
-                        "reused": True,
-                        "provider": provider_for_verification(verification),
-                        "status": "approved",
-                        "kyc_step": 0,
-                        "needs_proof_of_address": False,
-                        "message": "KYC verification complete.",
-                    }
-                if synced and synced.get("status") == "rejected":
-                    pass  # fall through to new session
-                else:
-                    db.refresh(verification)
-            
-            elif validity_check.get("is_valid"):
-                verification_url = validity_check.get("verification_url") or verification.verification_url
-                
-                if verification_url:
-                    return {
-                        "verification_url": verification_url,
-                        "reference": reference,
-                        "verification_id": verification.id,
-                        "reused": True,
-                        "provider": provider_for_verification(verification),
-                        "status": "in_progress",
-                        "attempts_count": verification.attempts_count,
-                        "max_attempts": verification.max_attempts,
-                        "attempts_remaining": verification.max_attempts - verification.attempts_count
-                    }
-    
-    # Cas 3: Pas de vérification, ou statut REJECTED/REQUIRES_REVIEW/EXPIRED → Créer/Mettre à jour
-    
     reference = generate_kyc_reference(current_user.id)
     active_provider = verification_provider_enum()
-    
-    if verification:
-        # Mettre à jour l'enregistrement existant (pas de doublon)
-        # Incrémenter le compteur de tentatives seulement si c'est une nouvelle tentative (après rejet)
-        if verification.status in [KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW, KYCStatus.EXPIRED]:
-            verification.attempts_count += 1
-            verification.residential_address_locked_at = None
-            verification.identity_verified = False
-            verification.document_verified = False
-            verification.face_verified = False
-            verification.address_verified = False
-            # Marquer le paiement comme utilisé
-            if valid_payment:
-                crud_deposit.deposit.mark_as_used(db, deposit=valid_payment)
-        
-        verification.reference_id = reference
-        verification.provider = active_provider
-        verification.verification_url = None
-        verification.status = KYCStatus.PENDING
-        verification.submitted_at = datetime.utcnow()
-        verification.processed_at = None
-        verification.rejection_reason = None
-        db.commit()
-        db.refresh(verification)
-    else:
-        # Créer le premier enregistrement pour cet utilisateur (première tentative)
-        verification_create = KYCVerificationCreate(
-            user_id=current_user.id,
-            status=KYCStatus.PENDING,
-            reference_id=reference,
-            provider=active_provider,
-        )
-        verification = crud_kyc.kyc_verification.create(db=db, obj_in=verification_create)
-        # Incrémenter pour la première tentative
-        verification.attempts_count = 1
-        # Marquer le paiement comme utilisé
-        if valid_payment:
-            crud_deposit.deposit.mark_as_used(db, deposit=valid_payment)
-        db.commit()
-        db.refresh(verification)
+    now = datetime.utcnow()
 
+    if verification is None:
+        verification = KYCVerificationModel(user_id=current_user.id, status=KYCStatus.PENDING, attempts_count=1,
+                                            reference_id=reference, provider=active_provider, submitted_at=now,
+                                            attempt_sessions_count=0, attempt_sessions_granted=0)
+        db.add(verification)
+    elif new_attempt:
+        verification.attempts_count += 1
+        verification.attempt_sessions_count = 0
+        verification.attempt_sessions_granted = 0
+        verification.residential_address_locked_at = None
+        verification.identity_verified = False
+        verification.document_verified = False
+        verification.face_verified = False
+        verification.address_verified = False
+    if new_attempt:
+        verification.submitted_at = now
+    if valid_payment is not None:
+        valid_payment.is_used = True
+        valid_payment.used_at = now
+    # One provider session of this attempt is taken now, before the provider is
+    # asked, so that a second request cannot pass the limit meanwhile.
+    verification.attempt_sessions_count = int(verification.attempt_sessions_count or 0) + 1
+    verification.reference_id = reference
+    verification.provider = active_provider
+    verification.verification_url = None
+    verification.status = KYCStatus.PENDING
+    verification.processed_at = None
+    verification.rejection_reason = None
+    verification.rejection_details = None
+    verification.expires_at = None
     if len(addr) >= 2:
-        verification = crud_kyc.kyc_verification.update(
-            db,
-            db_obj=verification,
-            obj_in=KYCVerificationUpdate(verified_address=addr),
+        verification.verified_address = addr
+    db.commit()
+    db.refresh(verification)
+
+    if new_attempt:
+        # What this attempt cost stays with the verification, whatever the fee becomes later.
+        crud_kyc.kyc_verification._create_audit_log(
+            db, verification.id, "kyc_attempt_fee",
+            f"Attempt {verification.attempts_count}: {kyc_fee.attempt_fee_note(valid_payment)}",
+            current_user.id, False,
         )
 
     # Appeler le provider KYC actif (Kaluta ou Shufti legacy)
@@ -432,8 +480,16 @@ async def initiate_shufti_verification(
         country_iso=_shufti_country_iso2_for_user(db, current_user),
         residential_address=addr if len(addr) >= 2 else None,
     )
-    
+
     if not result.get("success"):
+        if result.get("no_session_created"):
+            # The provider refused before opening anything (or was not asked):
+            # the session taken for this request is given back.
+            row = (db.query(KYCVerificationModel).filter(KYCVerificationModel.id == verification.id)
+                   .with_for_update().populate_existing().first())
+            if row is not None and int(row.attempt_sessions_count or 0) > 0:
+                row.attempt_sessions_count = int(row.attempt_sessions_count) - 1
+            db.commit()
         err = result.get("error", "Erreur lors de l'initialisation de la vérification")
         err_l = (err or "").lower()
         if is_kaluta_active():
@@ -442,6 +498,12 @@ async def initiate_shufti_verification(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail=err,
                 )
+            # The provider refused or could not be reached. Nothing of its answer is
+            # shown; the same paid attempt can be started again later.
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=UNAVAILABLE_MESSAGE,
+            )
         # Shufti misconfiguration / bad credentials — clearer than generic 500
         if (
             "shufti pro is not configured" in err_l
@@ -467,7 +529,7 @@ async def initiate_shufti_verification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=err,
         )
-    
+
     verification_url = result.get("verification_url")
     external_id = result.get("session_id") or result.get("reference") or reference
 
@@ -485,8 +547,17 @@ async def initiate_shufti_verification(
             external_verification_id=external_id,
             verification_url=verification_url,
         )
+    # When the provider's session ends (24 hours for Kaluta). None for a provider that does not say.
+    update_data.expires_at = parse_provider_time(result.get("expires_at"))
     crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
-    
+    if active_provider == VerificationProvider.KALUTA:
+        crud_kyc.kyc_verification._create_audit_log(
+            db, verification.id, "kaluta_session_created",
+            f"Provider session {external_id} opened (attempt {verification.attempts_count}, "
+            f"session {verification.attempt_sessions_count} of {kyc_settings.session_allowance(verification)})",
+            current_user.id, False,
+        )
+
     return {
         "verification_url": verification_url,
         "reference": reference,
@@ -494,10 +565,137 @@ async def initiate_shufti_verification(
         "reused": False,
         "provider": active_kyc_provider(),
         "status": "new",
-        "attempts_count": verification.attempts_count,
-        "max_attempts": verification.max_attempts,
-        "attempts_remaining": verification.max_attempts - verification.attempts_count
+        **_attempt_view(verification),
     }
+
+
+class KycFeeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount: str = Field(..., max_length=20)
+    current_password: str = Field(default="", max_length=256)
+    # The fee the administrator was shown; the change is refused if it has moved since.
+    expected_amount: Optional[str] = Field(default=None, max_length=20)
+
+
+def _kyc_fee_http_error(exc: kyc_fee.KycFeeError) -> HTTPException:
+    code = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "REAUTH_REQUIRED": status.HTTP_403_FORBIDDEN,
+            "REAUTH_LOCKED": status.HTTP_429_TOO_MANY_REQUESTS,
+            "INVALID_VALUE": status.HTTP_422_UNPROCESSABLE_ENTITY}.get(exc.code, status.HTTP_409_CONFLICT)
+    return HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)})
+
+
+@router.get("/fee")
+def get_member_kyc_fee(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """What one new verification attempt costs a member now (0 = free)."""
+    return kyc_fee.fee_view(db)
+
+
+@router.get("/admin/fee")
+def get_admin_kyc_fee(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_admin_user),
+):
+    return {**kyc_fee.fee_view(db), "max_amount": f"{kyc_fee.MAX_FEE:.2f}",
+            "can_change": kyc_settings.has_permission(current_user), "permission": kyc_settings.PERMISSION,
+            "last_change": kyc_fee.last_change(db)}
+
+
+@router.put("/admin/fee")
+def set_admin_kyc_fee(
+    body: KycFeeBody,
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_admin_user),
+):
+    """Set the Member KYC Verification Fee (USD). 0 = free KYC. Applies to
+    attempts paid from now on; existing payments keep their amount."""
+    try:
+        kyc_fee.set_member_fee(db, current_user, body.amount, password=body.current_password,
+                               ip=client_ip(request), expected_amount=body.expected_amount)
+    except kyc_fee.KycFeeError as exc:
+        db.rollback()
+        raise _kyc_fee_http_error(exc) from None
+    return get_admin_kyc_fee(db=db, current_user=current_user)
+
+
+class KycSettingsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # Absent or null = keep. A key or secret is write-only: blank keeps the saved one.
+    enabled: Optional[bool] = None
+    api_key: Optional[str] = Field(default=None, max_length=512)
+    webhook_secret: Optional[str] = Field(default=None, max_length=512)
+    current_password: str = Field(default="", max_length=256)
+    # The version the administrator was shown; the change is refused if it has moved since.
+    expected_version: Optional[int] = Field(default=None, ge=0)
+
+
+class KycSessionGrantBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(default="", max_length=256)
+
+
+def _kyc_settings_http_error(exc: kyc_settings.KycSettingsError) -> HTTPException:
+    code = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "REAUTH_REQUIRED": status.HTTP_403_FORBIDDEN,
+            "REAUTH_LOCKED": status.HTTP_429_TOO_MANY_REQUESTS, "NOT_FOUND": status.HTTP_404_NOT_FOUND,
+            "INVALID_VALUE": status.HTTP_422_UNPROCESSABLE_ENTITY, "INVALID_FIELD": status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "NOTHING_TO_CHANGE": status.HTTP_422_UNPROCESSABLE_ENTITY}.get(exc.code, status.HTTP_409_CONFLICT)
+    detail = {"code": exc.code, "message": str(exc)}
+    if exc.field:
+        detail["field"] = exc.field
+    return HTTPException(status_code=code, detail=detail)
+
+
+@router.get("/admin/settings")
+def get_admin_kyc_settings(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_admin_user),
+):
+    """Kaluta KYC settings as the Admin Panel shows them: whether a key and a
+    secret are saved and in force, never their values."""
+    return kyc_settings.view(db, current_user)
+
+
+@router.put("/admin/settings")
+def set_admin_kyc_settings(
+    body: KycSettingsBody,
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_admin_user),
+):
+    """Switch Kaluta KYC on/off and/or replace its API key or webhook secret
+    (manage_kyc_settings + current password; stored encrypted; audited without values)."""
+    try:
+        return kyc_settings.update(
+            db, current_user, password=body.current_password, enabled=body.enabled,
+            credentials={"API_KEY": body.api_key, "WEBHOOK_SECRET": body.webhook_secret},
+            expected_version=body.expected_version, ip=client_ip(request))
+    except kyc_settings.KycSettingsError as exc:
+        db.rollback()
+        raise _kyc_settings_http_error(exc) from None
+
+
+@router.post("/admin/verification/{verification_id}/grant-session")
+def grant_kyc_session(
+    verification_id: int,
+    body: KycSessionGrantBody,
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_admin_user),
+):
+    """Allow ONE more provider session for a member whose open attempt used every
+    session it had (no payment, no new attempt; audited)."""
+    try:
+        return kyc_settings.grant_session(db, current_user, verification_id, password=body.current_password,
+                                          ip=client_ip(request))
+    except kyc_settings.KycSettingsError as exc:
+        db.rollback()
+        raise _kyc_settings_http_error(exc) from None
 
 
 @router.get("/redirect")
@@ -527,13 +725,28 @@ async def get_kyc_status_detailed(
     Récupérer le statut KYC détaillé de l'utilisateur actuel.
     Synchronise avec Shufti Pro si une vérification est en cours.
     """
+    kyc_settings.apply(db)
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
-    
+
+    fee_amount, fee_currency = kyc_fee.member_fee(db)
+    kyc_is_free = fee_amount <= 0
+
     if not verification:
+        paid = crud_deposit.deposit.count_valid_deposits_for_product(
+            db, user_id=current_user.id, product_code="kyc"
+        )
         return {
             "status": None,
             "can_start": True,
-            "message": "Aucune vérification KYC trouvée"
+            "message": "Aucune vérification KYC trouvée",
+            # The fee is shown before the member starts.
+            "available_payments": paid,
+            "has_valid_payment": paid > 0,
+            "needs_payment": paid == 0 and not kyc_is_free,
+            "kyc_price": float(fee_amount),
+            "kyc_currency": fee_currency,
+            "kyc_is_free": kyc_is_free,
+            "kyc_retry_policy": kyc_fee.RETRY_POLICY,
         }
     
     # Si en cours, synchroniser avec le provider KYC actif
@@ -543,12 +756,15 @@ async def get_kyc_status_detailed(
 
     # Déterminer si l'utilisateur peut démarrer/reprendre une vérification
     max_attempts_reached = verification.attempts_count >= verification.max_attempts
+    # A NEW attempt only after a decision. A session that ran out (EXPIRED on
+    # older records) leaves the attempt open: it is continued, not restarted.
     can_restart = verification.status in [
-        KYCStatus.REJECTED, 
-        KYCStatus.REQUIRES_REVIEW, 
-        KYCStatus.EXPIRED
+        KYCStatus.REJECTED,
+        KYCStatus.REQUIRES_REVIEW,
     ] and not max_attempts_reached
-    can_continue = verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]
+    can_continue = verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS, KYCStatus.EXPIRED]
+    session_expired = _session_expired_locally(verification)
+    sessions_remaining = kyc_settings.sessions_left(verification) if can_continue else None
     needs_proof_of_address = verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
     if verification.status == KYCStatus.APPROVED:
         kyc_step = 0
@@ -566,7 +782,7 @@ async def get_kyc_status_detailed(
     has_valid_payment = available_payments > 0
     
     # Si can_restart mais pas de paiement, indiquer qu'il faut payer
-    needs_payment = can_restart and not has_valid_payment
+    needs_payment = can_restart and not has_valid_payment and not kyc_is_free
     
     return {
         "status": verification.status.value if verification.status else None,
@@ -581,9 +797,15 @@ async def get_kyc_status_detailed(
         "residential_address_locked": bool(verification.residential_address_locked_at),
         "needs_proof_of_address": needs_proof_of_address,
         "kyc_step": kyc_step,
-        "can_restart": can_restart and has_valid_payment,  # Ne peut reprendre que si payé
+        "can_restart": can_restart and (has_valid_payment or kyc_is_free),  # paid, or KYC is free
         "can_continue": can_continue,
-        "verification_url": verification.verification_url if can_continue else None,
+        # A link whose session has run out is not shown; "continue" then opens a fresh session
+        # for the same attempt (no payment), while the attempt has sessions left.
+        "verification_url": (verification.verification_url
+                             if can_continue and not session_expired else None),
+        "session_expired": session_expired,
+        "sessions_remaining": sessions_remaining,
+        "session_limit_reached": bool(can_continue and session_expired and sessions_remaining == 0),
         "attempts_count": verification.attempts_count,
         "max_attempts": verification.max_attempts,
         "attempts_remaining": max(0, verification.max_attempts - verification.attempts_count),
@@ -592,8 +814,10 @@ async def get_kyc_status_detailed(
         "available_payments": available_payments,
         "has_valid_payment": has_valid_payment,
         "needs_payment": needs_payment,
-        "kyc_price": KYC_PRICE_USD,
-        "kyc_currency": "USD",
+        "kyc_price": float(fee_amount),
+        "kyc_currency": fee_currency,
+        "kyc_is_free": kyc_is_free,
+        "kyc_retry_policy": kyc_fee.RETRY_POLICY,
         "provider": provider_for_verification(verification),
         "kyc_provider": active_kyc_provider(),
     }
@@ -1307,38 +1531,46 @@ async def kaluta_kyc_webhook(
 ):
     """
     Kaluta KYC webhook (session.approved, session.rejected, session.expired, …).
-    Verifies X-Kaluta-Signature when KALUTA_WEBHOOK_SECRET is set.
+    Verifies X-Kaluta-Signature with the webhook secret in force (Admin Panel, else KALUTA_WEBHOOK_SECRET).
     """
-    if not settings.KALUTA_KYC_ENABLED:
-        logger.warning("Kaluta KYC webhook received while KALUTA_KYC_ENABLED=false — rejecting")
+    if not kyc_settings.kaluta_enabled(db):
+        logger.warning("Kaluta KYC webhook received while Kaluta KYC is switched off — rejecting")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Kaluta KYC integration is temporarily disabled.",
         )
+    declared = request.headers.get("content-length") or ""
+    if declared.isdigit() and int(declared) > WEBHOOK_MAX_BODY_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Payload too large")
     raw = await request.body()
-    signature = request.headers.get("x-kaluta-signature") or request.headers.get("X-Kaluta-Signature") or ""
+    signature = request.headers.get("x-kaluta-signature") or ""
 
+    # Nothing in the body is read, and nothing is looked up, before the signature holds.
     if not kaluta_kyc_service.verify_webhook_signature(raw, signature):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
 
     try:
         payload = json.loads(raw.decode("utf-8") or "{}")
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON")
 
-    ok = process_kaluta_webhook_event(db, crud_kyc=crud_kyc, payload=payload)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification not found")
-
-    return {"ok": True}
+    outcome = handle_kaluta_webhook(db, crud_kyc=crud_kyc, payload=payload, ip=client_ip(request))
+    # Acknowledged whatever it changed: a duplicate, a late event or an event for
+    # a session this server no longer tracks must not be delivered again. (An
+    # error while applying it is NOT caught: the provider then retries.)
+    return {"ok": True, "result": outcome}
 
 
 @router.get("/deployment/kaluta-urls")
 def get_kaluta_deployment_urls(
     *,
+    db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_admin_user),
 ):
     """Debug: Kaluta webhook/redirect URLs this server uses (no secrets)."""
+    kyc_settings.apply(db)
     webhook, redirect = kaluta_kyc_service.webhook_url, kaluta_kyc_service.redirect_url
     return {
         "kyc_provider": active_kyc_provider(),
@@ -1347,7 +1579,7 @@ def get_kaluta_deployment_urls(
         "api_key_configured": kaluta_kyc_service.configured(),
         "webhook_secret_configured": bool(kaluta_kyc_service.webhook_secret),
         "checklist": [
-            "Set KALUTA_API_KEY and KALUTA_WEBHOOK_SECRET on the VPS.",
+            "Save the Kaluta API key and webhook secret in Admin > KYC (or set KALUTA_API_KEY and KALUTA_WEBHOOK_SECRET on the VPS).",
             "Register webhook URL in Kaluta Dashboard → Webhooks.",
             "Ensure POST /api/v1/kyc/webhook/kaluta is reachable from the public internet.",
         ],

@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
 import { KalutaVerificationEmbed } from '@/components/kyc/kaluta-verification-embed'
+import { waitForDecision } from '@/lib/kaluta-verification'
+import { formatKycFee, isKycFree } from '@/lib/kyc-fee'
 import { logger } from '@/lib/logger'
 import { 
   CheckCircle, 
@@ -44,6 +46,10 @@ interface KYCStatusData {
   max_attempts?: number
   attempts_remaining?: number
   max_attempts_reached?: boolean
+  // The provider session ran out; renewing it keeps the same attempt and costs nothing.
+  session_expired?: boolean
+  sessions_remaining?: number | null
+  session_limit_reached?: boolean
   declared_residential_address?: string | null
   residential_address_locked?: boolean
   needs_proof_of_address?: boolean
@@ -56,6 +62,8 @@ interface KYCStatusData {
   available_payments?: number
   kyc_price?: number
   kyc_currency?: string
+  kyc_is_free?: boolean
+  kyc_retry_policy?: string
   provider?: string
   kyc_provider?: string
 }
@@ -263,7 +271,22 @@ function KYCPageContent() {
 
   const handleKalutaVerificationComplete = async () => {
     setVerificationUrl(null)
-    await handleRefreshStatus()
+    // The result is the backend's, never the widget's: the provider reports it to
+    // the server, usually a moment after the widget closes.
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    if (!token) return
+    setIsLoadingStatus(true)
+    try {
+      const status = await waitForDecision(() => kycService.getKYCStatus(token))
+      setKycData(status)
+      if (status.status === 'approved' || status.needs_proof_of_address) {
+        refreshUser?.()
+      }
+    } catch (err) {
+      logger.error('Error refreshing KYC status:', err)
+    } finally {
+      setIsLoadingStatus(false)
+    }
   }
 
   const handleSubmitProofOfAddress = async () => {
@@ -445,8 +468,7 @@ function KYCPageContent() {
             {useKalutaEmbed ? (
               <KalutaVerificationEmbed
                 verificationUrl={verificationUrl}
-                onComplete={() => void handleKalutaVerificationComplete()}
-                onClose={() => void handleKalutaVerificationComplete()}
+                onFinished={() => void handleKalutaVerificationComplete()}
               />
             ) : (
               <iframe
@@ -667,8 +689,22 @@ function KYCPageContent() {
                 <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
+            {kycData?.session_limit_reached ? (
+              <div data-testid="kyc-session-limit" role="status"
+                className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-left">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {t('kyc.session_limit_reached') ||
+                    'Your verification link was renewed the maximum number of times for this attempt. Please contact support: they can allow one more. You will not be charged again.'}
+                </p>
+              </div>
+            ) : kycData?.session_expired ? (
+              <p data-testid="kyc-session-expired" className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                {t('kyc.session_expired_free_renewal') ||
+                  'Your verification link expired. Continue to get a new link for the same attempt, at no cost.'}
+              </p>
+            ) : null}
             {residentialAddressField}
-            
+
             {kycData?.submitted_at && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {t('kyc.submitted_on') || 'Submitted on'}: {new Date(kycData.submitted_at).toLocaleDateString('en-US', {
@@ -684,7 +720,7 @@ function KYCPageContent() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
                 onClick={handleContinueVerification}
-                disabled={isInitiating}
+                disabled={isInitiating || !!kycData?.session_limit_reached}
                 className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 {isInitiating ? (
@@ -717,7 +753,7 @@ function KYCPageContent() {
               variant="ghost"
               size="sm"
               className="mt-1 text-myhigh5-primary"
-              disabled={isInitiating}
+              disabled={isInitiating || !!kycData?.session_limit_reached || kycData?.sessions_remaining === 0}
               onClick={() => void handleStartVerification(true)}
             >
               {t('kyc.new_verification_link') || 'Get a new verification link'}
@@ -767,7 +803,7 @@ function KYCPageContent() {
                 </p>
               </div>
               <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
               </p>
               <Button
                 onClick={() => setShowPaymentDialog(true)}
@@ -799,7 +835,8 @@ function KYCPageContent() {
   }
 
   // Tentatives épuisées ou paiement requis
-  if (kycData?.max_attempts_reached || (kycData?.needs_payment && !kycData?.has_valid_payment)) {
+  // (A member who has not started yet sees the fee on the first form instead.)
+  if (kycData?.max_attempts_reached || (kycData?.status && kycData?.needs_payment && !kycData?.has_valid_payment)) {
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
@@ -826,7 +863,7 @@ function KYCPageContent() {
                 {t('kyc.verification_fee') || 'Frais de vérification'}
               </p>
               <p className="text-2xl font-bold text-myhigh5-primary">
-                {kycData?.kyc_price || 10} {kycData?.kyc_currency || 'USD'}
+                {formatKycFee(kycData, t('kyc.fee_free') || 'Free')}
               </p>
             </div>
 
@@ -902,7 +939,7 @@ function KYCPageContent() {
                   </p>
                 </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                  Prix: <span className="font-bold">{kycData.kyc_price || 10} {kycData.kyc_currency || 'USD'}</span>
+                  Prix: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
                 </p>
                 <Button
                   onClick={() => setShowPaymentDialog(true)}
@@ -1062,6 +1099,23 @@ function KYCPageContent() {
         </div>
 
         <div className="max-w-xl mx-auto mb-8">{residentialAddressField}</div>
+
+        {/* The fee, before the member starts */}
+        <div className="max-w-xl mx-auto mb-8 rounded-xl border border-myhigh5-primary/20 bg-myhigh5-primary/5 p-4 text-center" data-testid="kyc-fee-notice">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('kyc.verification_fee') || 'Verification fee'}
+          </p>
+          <p className="text-2xl font-bold text-myhigh5-primary">
+            {formatKycFee(kycData, t('kyc.fee_free') || 'Free')}
+          </p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {isKycFree(kycData)
+              ? (t('kyc.fee_free_note') || 'Identity verification is free. No payment is needed.')
+              : kycData?.has_valid_payment
+                ? (t('kyc.fee_already_paid') || 'You have already paid for this attempt.')
+                : (kycData?.kyc_retry_policy || t('kyc.fee_retry_policy') || 'Each new verification attempt costs this fee.')}
+          </p>
+        </div>
 
         {/* CTA Button */}
         <div className="text-center">

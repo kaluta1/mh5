@@ -1,6 +1,20 @@
 """
 Kaluta KYC integration — session creation, status sync, webhook verification.
-Docs: https://kalutakyc.com (API at https://kalutakyc.com/v1)
+Docs: https://kalutakyc.com/docs (API at https://kalutakyc.com/v1)
+
+What the provider documents, and what this module relies on:
+  * POST /v1/sessions with the secret key in X-API-Key creates a session and
+    returns session_id, verification_url and expires_at (24 hours).
+  * The decision arrives on a webhook signed "t=<unix>,v1=<hex>" where v1 is
+    HMAC-SHA256 over "<t>.<raw body>"; a timestamp older than five minutes is
+    refused. The webhook is the source of truth. Deliveries are retried, so the
+    handler must be idempotent and answer within ten seconds.
+  * After a rejection the member may retry inside the provider's widget: a new
+    session with the SAME external_id.
+
+The key and the webhook secret come from the Admin Panel (stored encrypted,
+app.services.kyc_settings) or else the server environment, and are never sent
+to a browser, logged or returned in an answer.
 """
 from __future__ import annotations
 
@@ -8,11 +22,13 @@ import hashlib
 import hmac
 import json
 import logging
-import random
-import string
 import os
-from datetime import datetime
+import secrets
+import string
+import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 import httpx
 
@@ -23,6 +39,19 @@ logger = logging.getLogger(__name__)
 KALUTA_API_BASE = "https://kalutakyc.com/v1"
 KALUTA_APP_HOST = "https://kalutakyc.com"
 WEBHOOK_MAX_AGE_SECONDS = 300
+WEBHOOK_MAX_BODY_BYTES = 1_000_000
+
+# What a member is told when the provider cannot be used. The provider's own
+# words (which may name an account balance or a key) go to the server log only.
+UNAVAILABLE_MESSAGE = "Identity verification is temporarily unavailable. Please try again later."
+# Stored with a provider rejection, so that an approval the provider sends later
+# for the same reference (the member retried in the widget) is recognised as
+# following a PROVIDER rejection and never overturns an administrator's decision.
+PROVIDER_REJECTION_MARK = "kaluta:session:"
+
+# Raw model output and documents are not needed to decide anything here and are
+# not kept (the provider keeps them; the decision, scores and identity are kept).
+_NOT_STORED = ("ai_extraction", "extracted_data", "proof_of_address", "images", "image_urls", "document_images")
 
 TERMINAL_APPROVED = {"approved"}
 TERMINAL_REJECTED = {"rejected"}
@@ -78,6 +107,31 @@ def kyc_flags_from_kaluta_session(session: Dict[str, Any]) -> Dict[str, bool]:
     }
 
 
+def is_provider_verification_url(url: Optional[str]) -> bool:
+    """Only an https page of the provider's own host is ever stored or handed to a browser."""
+    try:
+        parsed = urlparse((url or "").strip())
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and parsed.netloc.lower() == urlparse(KALUTA_APP_HOST).netloc
+
+
+def parse_provider_time(value: Any) -> Optional[datetime]:
+    """An ISO 8601 instant from the provider as a naive UTC datetime (how this database stores time)."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
+def storable_session(session: Dict[str, Any]) -> Dict[str, Any]:
+    """The part of a provider session that is kept in the verification record."""
+    return {k: v for k, v in session.items() if k not in _NOT_STORED} if isinstance(session, dict) else {}
+
+
 def _parse_dob(user_dob: Optional[datetime]) -> Optional[str]:
     if not user_dob:
         return None
@@ -88,17 +142,43 @@ def _parse_dob(user_dob: Optional[datetime]) -> Optional[str]:
 
 
 class KalutaKYCService:
+    """`enabled`, `api_key` and `webhook_secret` are what the server environment
+    says, unless the Admin Panel set a value: app.services.kyc_settings.apply()
+    hands the saved values over before every KYC request (use_admin_values)."""
+
     def __init__(self) -> None:
+        self._admin_values: Dict[str, Any] = {}
         self.enabled = bool(getattr(settings, "KALUTA_KYC_ENABLED", True))
         self.api_key = (settings.KALUTA_API_KEY or "").strip()
         self.webhook_secret = (settings.KALUTA_WEBHOOK_SECRET or "").strip()
         self.webhook_url, self.redirect_url = resolve_kaluta_urls()
 
+    def use_admin_values(self, values: Dict[str, Any]) -> None:
+        """REPLACE the Admin Panel values in force (enabled / api_key /
+        webhook_secret). A name that is absent falls back to the environment."""
+        self._admin_values = {k: v for k, v in values.items() if k in ("enabled", "api_key", "webhook_secret")
+                              and v is not None}
+
+    def _value(self, name: str) -> Any:
+        return self._admin_values[name] if name in self._admin_values else self.__dict__[f"_env_{name}"]
+
+    enabled = property(lambda self: bool(self._value("enabled")),
+                       lambda self, value: self.__dict__.__setitem__("_env_enabled", value))
+    api_key = property(lambda self: self._value("api_key"),
+                       lambda self, value: self.__dict__.__setitem__("_env_api_key", value))
+    webhook_secret = property(lambda self: self._value("webhook_secret"),
+                              lambda self, value: self.__dict__.__setitem__("_env_webhook_secret", value))
+
+    def __repr__(self) -> str:  # a key or a secret must never reach a log through repr()
+        return (f"KalutaKYCService(enabled={self.enabled}, api_key={'set' if self.api_key else 'missing'}, "
+                f"webhook_secret={'set' if self.webhook_secret else 'missing'})")
+
     def configured(self) -> bool:
         return self.enabled and bool(self.api_key)
 
     def generate_reference(self, user_id: int) -> str:
-        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        alphabet = string.ascii_lowercase + string.digits
+        suffix = "".join(secrets.choice(alphabet) for _ in range(16))      # not guessable
         return f"mh5_{user_id}_{suffix}"
 
     def verify_webhook_signature(self, raw_body: bytes, signature_header: str) -> bool:
@@ -109,7 +189,7 @@ class KalutaKYCService:
             logger.warning("KALUTA_WEBHOOK_SECRET not set — webhook signature not verified")
             return os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local", "test")
 
-        if not signature_header:
+        if not signature_header or len(signature_header) > 512 or len(raw_body) > WEBHOOK_MAX_BODY_BYTES:
             return False
 
         try:
@@ -122,7 +202,10 @@ class KalutaKYCService:
             v1 = parts.get("v1")
             if not ts or not v1:
                 return False
-            age = abs(int(datetime.utcnow().timestamp()) - int(ts))
+            # time.time() is the real epoch. datetime.utcnow().timestamp() reads a UTC
+            # wall clock as LOCAL time, which shifts it by the server's UTC offset
+            # and refused every genuine delivery on a server not set to UTC.
+            age = abs(int(time.time()) - int(ts))
             if age > WEBHOOK_MAX_AGE_SECONDS:
                 return False
             signed = f"{ts}.".encode() + raw_body
@@ -131,9 +214,9 @@ class KalutaKYCService:
                 signed,
                 hashlib.sha256,
             ).hexdigest()
-            return hmac.compare_digest(expected, v1)
-        except Exception:
-            logger.exception("Kaluta webhook signature parse failed")
+            return hmac.compare_digest(expected.encode("ascii"), v1.encode("utf-8"))
+        except Exception as exc:  # noqa: BLE001 - a malformed header is simply not a signature
+            logger.warning("Kaluta webhook signature could not be read (%s)", type(exc).__name__)
             return False
 
     async def create_session(
@@ -144,10 +227,13 @@ class KalutaKYCService:
         country_iso: Optional[str] = None,
         residential_address: Optional[str] = None,
     ) -> Dict[str, Any]:
+        # "no_session_created": the provider certainly opened nothing (it was not
+        # asked, or it refused the request), so nothing can have been charged.
         if not self.enabled:
-            return {"success": False, "error": "Kaluta KYC is temporarily disabled."}
+            return {"success": False, "no_session_created": True, "error": "Kaluta KYC is temporarily disabled."}
         if not self.configured():
-            return {"success": False, "error": "Kaluta KYC is not configured (KALUTA_API_KEY missing)."}
+            return {"success": False, "no_session_created": True,
+                    "error": "Kaluta KYC is not configured (KALUTA_API_KEY missing)."}
 
         body: Dict[str, Any] = {
             "external_id": external_id,
@@ -175,20 +261,29 @@ class KalutaKYCService:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{KALUTA_API_BASE}/sessions", headers=headers, json=body)
             if resp.status_code >= 400:
-                detail = resp.text[:500]
-                try:
-                    detail = resp.json().get("detail", detail)
-                except Exception:
-                    pass
-                return {"success": False, "error": f"Kaluta POST /sessions -> {resp.status_code}: {detail}"}
+                # 401 key refused, 402 no balance, 429 rate limit, 5xx provider fault: none of
+                # them is the member's doing and none of the provider's wording is shown to them.
+                reason = {400: "request refused", 401: "API key refused", 402: "insufficient balance",
+                          403: "not allowed", 429: "rate limited"}.get(resp.status_code, "provider error")
+                logger.error("Kaluta POST /sessions answered %s (%s)", resp.status_code, reason)
+                # A 4xx refusal opened nothing. After a 5xx it is not known, so it counts.
+                return {"success": False, "unavailable": True, "provider_status": resp.status_code,
+                        "no_session_created": resp.status_code < 500, "error": UNAVAILABLE_MESSAGE}
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError:
+                data = None
+            if not isinstance(data, dict):
+                logger.error("Kaluta POST /sessions answered %s without a JSON object", resp.status_code)
+                return {"success": False, "unavailable": True, "error": UNAVAILABLE_MESSAGE}
             session_id = str(data.get("session_id") or data.get("id") or "")
             verification_url = data.get("verification_url") or (
                 f"{KALUTA_APP_HOST}/verify/{session_id}" if session_id else None
             )
-            if not session_id or not verification_url:
-                return {"success": False, "error": "Kaluta session response missing session_id or verification_url"}
+            if not session_id or not is_provider_verification_url(verification_url):
+                logger.error("Kaluta POST /sessions answer had no usable session id or verification URL")
+                return {"success": False, "unavailable": True, "error": UNAVAILABLE_MESSAGE}
 
             return {
                 "success": True,
@@ -198,8 +293,9 @@ class KalutaKYCService:
                 "reference": external_id,
             }
         except httpx.HTTPError as exc:
-            logger.exception("Kaluta create_session HTTP error")
-            return {"success": False, "error": f"Kaluta API error: {exc}"}
+            # Not retried here: a session may have been created, and a second call would make a second one.
+            logger.error("Kaluta create_session failed (%s)", type(exc).__name__)
+            return {"success": False, "unavailable": True, "error": UNAVAILABLE_MESSAGE}
 
     async def get_session(self, session_id: str) -> Dict[str, Any]:
         if not self.enabled:
@@ -213,10 +309,13 @@ class KalutaKYCService:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(f"{KALUTA_API_BASE}/sessions/{session_id}", headers=headers)
             if resp.status_code >= 400:
-                return {"success": False, "error": resp.text[:300], "status_code": resp.status_code}
-            return {"success": True, "data": resp.json()}
-        except httpx.HTTPError as exc:
-            return {"success": False, "error": str(exc)}
+                return {"success": False, "error": "provider answered an error", "status_code": resp.status_code}
+            data = resp.json()
+            if not isinstance(data, dict):
+                return {"success": False, "error": "unreadable answer"}
+            return {"success": True, "data": data}
+        except (httpx.HTTPError, ValueError) as exc:
+            return {"success": False, "error": type(exc).__name__}
 
     async def check_reference_validity(self, verification) -> Dict[str, Any]:
         """
@@ -253,8 +352,16 @@ class KalutaKYCService:
             return {"is_valid": False, "is_completed": False, "data": {}}
 
         data = fetched.get("data") or {}
+        # The answer must be about THIS verification: the reference it was created for.
+        answered_for = data.get("external_id")
+        if answered_for is not None and str(answered_for) != str(verification.reference_id or ""):
+            logger.warning("Kaluta session answer is for another reference; ignored (verification %s)", verification.id)
+            return {"is_valid": bool(verification.verification_url), "is_completed": False,
+                    "verification_url": verification.verification_url, "data": {}}
         status = (data.get("status") or "").lower()
-        verification_url = data.get("verification_url") or verification.verification_url
+        verification_url = data.get("verification_url")
+        if not is_provider_verification_url(verification_url):
+            verification_url = verification.verification_url
 
         if status in TERMINAL_APPROVED:
             return {

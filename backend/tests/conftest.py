@@ -93,6 +93,17 @@ def setup_test_database():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_kyc_admin_values_between_tests():
+    """Kaluta settings saved in the Admin Panel reach the shared service object;
+    no test may see the values another test saved."""
+    from app.services.kaluta_kyc import kaluta_kyc_service
+
+    kaluta_kyc_service.use_admin_values({})
+    yield
+    kaluta_kyc_service.use_admin_values({})
+
+
 @pytest.fixture(scope="function")
 def db() -> Generator[Session, None, None]:
     """Provide an empty database even when endpoint code commits transactions."""

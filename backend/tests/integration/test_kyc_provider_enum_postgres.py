@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_db
 from app.db.base_class import Base
 from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
+from app.models.payment import Deposit
 from app.services import kaluta_kyc
 from tests.unit.test_kyc_initiation_dispatch import (  # noqa: F401  (fixtures + helpers)
     ADDRESS,
@@ -216,9 +217,10 @@ def _client(app, engine):
     return client, db, close
 
 
-def test_pre_fix_database_turns_disabled_kaluta_into_a_500(app, prefix_engine, monkeypatch):
-    """The production symptom, reproduced through the mounted route (contrast for I)."""
-    monkeypatch.setattr(kaluta_kyc.kaluta_kyc_service, "enabled", False)
+def test_pre_fix_database_turns_a_kaluta_initiation_into_a_500(app, prefix_engine, providers):
+    """The production symptom, reproduced through the mounted route (contrast for I).
+    A switched-off Kaluta is now refused before anything is written, so the
+    symptom is reproduced with Kaluta on (the provider is a fake)."""
     client, db, close = _client(app, prefix_engine)
     try:
         a = adult(db)
@@ -239,9 +241,10 @@ def test_I_disabled_kaluta_reaches_the_intended_503_without_network_or_db_error(
         with client:
             r = client.post(INITIATE, json=ADDRESS, headers=auth(a))
         assert r.status_code == 503 and "disabled" in r.text
-        row = kyc_rows(db, a)[0]
-        assert row.provider is VerificationProvider.KALUTA and row.status == KYCStatus.PENDING
-        assert not row.identity_verified and not row.verification_url
+        # Refused before anything is written: no attempt, the paid payment not used.
+        assert kyc_rows(db, a) == []
+        db.expire_all()
+        assert db.query(Deposit).filter(Deposit.user_id == a.id).one().is_used is False
     finally:
         close()
 

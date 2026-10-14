@@ -1,7 +1,7 @@
 # Import all models to ensure they are registered with SQLAlchemy
 from .user import User, Role, Permission, role_permissions
 from .transaction import UserTransaction, Wallet
-from .kyc import KYCVerification, KYCDocument, KYCAuditLog
+from .kyc import KYCVerification, KYCDocument, KYCAuditLog, KycSettings
 from .voting import Vote, VoteSession, MyFavorites, ContestComment, ContestLike, PageView, ContestantReaction, ContestantShare, ReactionType
 from .geography import Continent, Region, Country, City
 from .dsp import DSPWallet, DSPTransaction, DSPExchangeRate, DigitalProduct, DigitalPurchase, ProductReview
