@@ -48,6 +48,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services import super_admin
+
 from app.core.config import settings
 from app.core.security import verify_password
 from app.models.accounting import ChartOfAccounts
@@ -673,10 +675,13 @@ def _row_for_update(db: Session) -> PaymentSettings:
 # ---------------------------------------------------------------------------
 
 def has_permission(user, permission: str) -> bool:
-    """Only a role that EXPLICITLY holds the permission. Never implied by
-    is_admin or by the 'all' wildcard, and never assigned automatically."""
+    """Only a role that EXPLICITLY holds the permission, or a Super Admin
+    (app.services.super_admin). Never implied by is_admin or by the 'all'
+    wildcard, and never assigned automatically."""
     if user is None or not getattr(user, "is_active", True):
         return False
+    if super_admin.is_super_admin(user):
+        return True
     role = getattr(user, "role", None)
     if role is None:
         return False

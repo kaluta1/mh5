@@ -19,7 +19,7 @@ from app.models.clubs import FanClub, ClubMembership, ClubAdmin
 from app.models.follow import Affiliation
 from app.models.affiliate import AffiliateTree, FoundingMember
 from app.models.category import Category
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from typing import List, Optional, Dict, Any, Dict, Any
 from datetime import datetime, timedelta, date
 from app.crud.crud_round import round as crud_round
@@ -27,7 +27,7 @@ from app.crud import crud_accounting
 from app.schemas.round import RoundCreate
 from app.models.accounting import AuditTrail
 from app.core.client_ip import client_ip
-from app.services import admin_security
+from app.services import admin_security, super_admin
 from app.services.auth_security import must_verify_email
 
 router = APIRouter()
@@ -65,6 +65,14 @@ class AdminRoleUpdate(BaseModel):
     current_password: str = Field(default="", max_length=256)
 
 
+class SuperAdminUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    is_super_admin: StrictBool
+    current_password: str = Field(default="", max_length=256)
+    # Revoking only: the role the account gets instead of its previous one.
+    replacement_role_id: Optional[StrictInt] = Field(default=None, ge=1)
+
+
 class AdminStatusUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     is_active: StrictBool
@@ -72,13 +80,14 @@ class AdminStatusUpdate(BaseModel):
     current_password: str = Field(default="", max_length=256)
 
 
-def _privileged_action(db: Session, http_request: Request, actor: User, *, permission: str, password: str,
-                       target_id: int, attempted: str) -> None:
-    """An explicit permission, the administrator's current password, and never
-    on their own account (app.services.admin_security). A refusal is audited."""
+def _privileged_action(db: Session, http_request: Request, actor: User, *, permission: Optional[str], password: str,
+                       target_id: int, attempted: str, super_admin_only: bool = False) -> None:
+    """An explicit permission (or being a Super Admin), the administrator's
+    current password, and never on their own account
+    (app.services.admin_security). A refusal is audited."""
     try:
         admin_security.authorize(db, actor, permission=permission, password=password, target_id=target_id,
-                                 attempted=attempted, ip=client_ip(http_request))
+                                 attempted=attempted, ip=client_ip(http_request), super_admin_only=super_admin_only)
     except admin_security.AdminSecurityError as exc:
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
 
@@ -2753,6 +2762,8 @@ def get_all_users(
             ).filter(ContestEntry.user_id.in_(user_ids)).group_by(ContestEntry.user_id).all()
         } if user_ids else {}
 
+        super_admin_ids = set(admin_security.active_super_admin_ids(db))
+
         # Enrichir avec les statistiques (safe getattr pour colonnes optionnelles)
         result = []
         for user in users:
@@ -2777,6 +2788,7 @@ def get_all_users(
                 'is_active': getattr(user, 'is_active', True),
                 'is_verified': getattr(user, 'is_verified', False),
                 'is_admin': getattr(user, 'is_admin', False),
+                'is_super_admin': user.id in super_admin_ids,
                 'created_at': created_at.isoformat() if created_at else None,
                 'date_of_birth': date_of_birth.isoformat() if date_of_birth else None,
                 'city': getattr(user, 'city', None),
@@ -3195,6 +3207,16 @@ async def update_user_role(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
+        if admin_security.role_is_super_admin_role(user.role):
+            # The administrator flag decides whether that role counts: taking it
+            # away would end a Super Admin, and giving it would make one, without
+            # the Super Admin rules (a Super Admin, never the last one).
+            admin_security.record_denial(db, actor=current_user, target_id=user_id,
+                                         attempted="grant administrator" if role_data.is_admin else "remove administrator",
+                                         code="SUPER_ADMIN_PROTECTED", ip=client_ip(http_request))
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+                "code": "SUPER_ADMIN_PROTECTED",
+                "message": "This account is a Super Admin. A Super Admin has to revoke that role first."})
         if role_data.is_admin and (not user.is_active or getattr(user, "is_deleted", False)
                                    or must_verify_email(user)):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
@@ -3227,6 +3249,70 @@ async def update_user_role(
             detail=f"Erreur lors de la mise à jour du rôle: {str(e)}"
         )
 
+
+@router.get("/super-admins")
+def list_super_admins(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """The Super Admins, and whether the caller may grant or revoke the role."""
+    check_admin(current_user)
+    ids = admin_security.active_super_admin_ids(db)
+    rows = db.query(User).filter(User.id.in_(ids)).order_by(User.id).all() if ids else []
+    return {
+        "can_manage": super_admin.is_super_admin(current_user),
+        "is_super_admin": super_admin.is_super_admin(current_user),
+        "role_exists": admin_security.super_admin_role(db) is not None,
+        "super_admins": [{"id": u.id, "email": u.email, "full_name": u.full_name, "username": u.username}
+                         for u in rows],
+    }
+
+
+@router.put("/users/{user_id}/super-admin")
+def update_user_super_admin(
+    user_id: int,
+    body: SuperAdminUpdate,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Grant or revoke the Super Admin role (every administrative permission).
+
+    Only a Super Admin, with their current password, never on their own
+    account, and never removing the last active Super Admin. The account must
+    be an active administrator with a verified email address. Revoking ends
+    that account's sessions and gives it back the role it had before, or the
+    role chosen in `replacement_role_id` (required when there is no valid
+    previous role); never one that is or inherits from the Super Admin role.
+    Audited, refusals too.
+    """
+    check_admin(current_user)
+    try:
+        return admin_security.set_super_admin(db, current_user, target_id=user_id, grant=body.is_super_admin,
+                                              password=body.current_password, ip=client_ip(http_request),
+                                              replacement_role_id=body.replacement_role_id)
+    except admin_security.AdminSecurityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
+
+
+@router.get("/users/{user_id}/super-admin/demotion-options")
+def super_admin_demotion_options(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """What revoking this account's Super Admin role would move it to (Super Admins only)."""
+    check_admin(current_user)
+    if not super_admin.is_super_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": admin_security.SUPER_ADMIN_REQUIRED, "message": "Only a Super Admin can do this."})
+    target = db.query(User).filter(User.id == user_id).first()
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+    return {"id": target.id, **admin_security.demotion_options(db, target)}
+
+
 @router.put("/users/{user_id}/status")
 async def update_user_status(
     user_id: int,
@@ -3254,7 +3340,22 @@ async def update_user_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Utilisateur non trouvé"
             )
-        if admin_security.is_administrator(user) or admin_security.role_is_privileged(user.role):
+        if admin_security.role_is_super_admin_role(user.role):
+            # A Super Admin account is switched on or off by another Super Admin
+            # only, and never the last active one off.
+            _privileged_action(db, http_request, current_user, permission=None,
+                               password=status_data.current_password, target_id=user_id,
+                               attempted=attempted + " (super admin)", super_admin_only=True)
+            user = db.query(User).filter(User.id == user_id).with_for_update().first()
+            if not status_data.is_active:
+                try:
+                    admin_security.refuse_removing_last_super_admin(
+                        db, current_user, target=user, attempted=attempted + " (super admin)",
+                        ip=client_ip(http_request))
+                except admin_security.AdminSecurityError as exc:
+                    raise HTTPException(status_code=exc.status_code,
+                                        detail={"code": exc.code, "message": str(exc)}) from None
+        elif admin_security.is_administrator(user) or admin_security.role_is_privileged(user.role):
             _privileged_action(db, http_request, current_user,
                                permission=admin_security.PERMISSION_MANAGE_ADMINS,
                                password=status_data.current_password, target_id=user_id,

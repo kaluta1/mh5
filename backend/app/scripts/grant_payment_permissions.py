@@ -84,6 +84,10 @@ def _admin(db: Session, email: str) -> User:
         raise GrantError("No account with this email address.")
     if not user.is_active or not user.is_admin:
         raise GrantError("The account must be an active administrator.")
+    if admin_security.role_is_super_admin_role(user.role):
+        # It holds every permission already, and this tool would move it off
+        # the Super Admin role. A Super Admin is managed by another Super Admin.
+        raise GrantError("The account is a Super Admin: it holds every permission. Nothing was changed.")
     return user
 
 

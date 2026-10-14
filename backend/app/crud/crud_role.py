@@ -182,8 +182,11 @@ class CRUDRole:
     def user_has_permission(self, db: Session, user_id: int, permission_name: str) -> bool:
         """Check if a user has a specific permission through their role."""
         from app.models.user import User
-        
+        from app.services import super_admin
+
         user = db.query(User).filter(User.id == user_id).first()
+        if super_admin.is_super_admin(user):
+            return True
         if not user or not user.role:
             return False
         

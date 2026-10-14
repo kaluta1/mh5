@@ -30,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.services import super_admin
 from app.models.accounting import AuditTrail
 from app.models.email import EmailEventSetting, EmailSettings
 from app.services import email_crypto
@@ -75,10 +76,13 @@ def valid_email(address: Optional[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 def can_manage_email_settings(user) -> bool:
-    """Only a role that EXPLICITLY holds manage_email_settings. Never implied by
-    is_admin or by the 'all' wildcard, and never assigned automatically."""
+    """Only a role that EXPLICITLY holds manage_email_settings, or a Super
+    Admin. Never implied by is_admin or by the 'all' wildcard, and never
+    assigned automatically."""
     if user is None or not getattr(user, "is_active", True):
         return False
+    if super_admin.is_super_admin(user):
+        return True
     role = getattr(user, "role", None)
     if role is None:
         return False

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Shield, Ban, CheckCircle, XCircle, Edit2, Eye, Users, Trophy, Award, MapPin, Calendar, FileCheck, MessageCircle, X, MoreVertical, Trash2, CheckSquare, Square } from 'lucide-react'
+import { Shield, Crown, Ban, CheckCircle, XCircle, Edit2, Eye, Users, Trophy, Award, MapPin, Calendar, FileCheck, MessageCircle, X, MoreVertical, Trash2, CheckSquare, Square } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +32,7 @@ interface UserDetails {
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
+  is_super_admin?: boolean
   created_at: string
   date_of_birth?: string
   city?: string
@@ -103,7 +104,18 @@ export default function AdminUsers() {
   const [loadError, setLoadError] = useState<string | null>(null)
   // A change to an administrator (the role itself, or switching an administrator's
   // account on or off) is confirmed with the acting administrator's own password.
-  const [privileged, setPrivileged] = useState<{ kind: 'role' | 'status'; userId: number; current: boolean } | null>(null)
+  // Granting or revoking Super Admin goes through the same dialog; only a Super Admin is offered it.
+  const [privileged, setPrivileged] = useState<{ kind: 'role' | 'status' | 'super'; userId: number; current: boolean } | null>(null)
+  const [canManageSuperAdmins, setCanManageSuperAdmins] = useState(false)
+  // Revoking Super Admin: the role the account gets instead. '' = its previous role (server rule:
+  // required when there is no valid previous role; never a role that leads back to Super Admin).
+  const [demotion, setDemotion] = useState<{
+    loading: boolean
+    previous: { id: number; name: string } | null
+    previousValid: boolean
+    roles: Array<{ id: number; name: string; description?: string | null }>
+  } | null>(null)
+  const [replacementRoleId, setReplacementRoleId] = useState('')
   const [privilegedPassword, setPrivilegedPassword] = useState('')
   const [privilegedBusy, setPrivilegedBusy] = useState(false)
 
@@ -116,6 +128,13 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchUsers()
   }, [filter])
+
+  useEffect(() => {
+    // The server decides who may grant or revoke Super Admin; the page only hides what would be refused.
+    api.get('/api/v1/admin/super-admins')
+      .then((response) => setCanManageSuperAdmins(response.status === 200 && response.data?.can_manage === true))
+      .catch(() => setCanManageSuperAdmins(false))
+  }, [])
 
   const fetchUsers = async () => {
     try {
@@ -183,6 +202,32 @@ export default function AdminUsers() {
     setPrivileged({ kind: 'role', userId, current: currentStatus })
   }
 
+  const handleToggleSuperAdmin = async (userId: number, currentStatus: boolean) => {
+    setPrivilegedPassword('')
+    setReplacementRoleId('')
+    setDemotion(currentStatus ? { loading: true, previous: null, previousValid: false, roles: [] } : null)
+    setPrivileged({ kind: 'super', userId, current: currentStatus })
+    if (!currentStatus) return
+    try {
+      const response = await api.get(`/api/v1/admin/users/${userId}/super-admin/demotion-options`)
+      throwIfApiError(response)
+      const data = response.data ?? {}
+      setDemotion({
+        loading: false,
+        previous: data.previous_role ?? null,
+        previousValid: data.previous_role_valid === true,
+        roles: Array.isArray(data.roles) ? data.roles : [],
+      })
+    } catch (error) {
+      setDemotion({ loading: false, previous: null, previousValid: false, roles: [] })
+      addToast(adminErrorText(error, t('admin.users.super_admin_error') || 'Error updating the Super Admin role'), 'error')
+    }
+  }
+
+  // A revocation needs somewhere to go: the previous role, or a role chosen here.
+  const demotionReady = !(privileged?.kind === 'super' && privileged.current) ||
+    (!!demotion && !demotion.loading && (replacementRoleId !== '' || demotion.previousValid))
+
   const confirmPrivileged = async () => {
     if (!privileged) return
     const { kind, userId, current } = privileged
@@ -194,6 +239,16 @@ export default function AdminUsers() {
         throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/role`,
           { is_admin: !current, current_password: sentPassword }))
         addToast(t('admin.users.toggle_admin_success') || 'Admin rights updated', 'success')
+      } else if (kind === 'super') {
+        throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/super-admin`,
+          {
+            is_super_admin: !current,
+            current_password: sentPassword,
+            ...(current && replacementRoleId !== '' ? { replacement_role_id: Number(replacementRoleId) } : {}),
+          }))
+        addToast(current
+          ? t('admin.users.super_admin_revoked') || 'Super Admin role revoked'
+          : t('admin.users.super_admin_granted') || 'Super Admin role granted', 'success')
       } else {
         throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/status`,
           { is_active: !current, current_password: sentPassword }))
@@ -207,7 +262,9 @@ export default function AdminUsers() {
     } catch (error) {
       addToast(adminErrorText(error, kind === 'role'
         ? t('admin.users.toggle_admin_error') || 'Error updating admin role'
-        : t('admin.users.toggle_active_error') || 'Error updating user status'), 'error')
+        : kind === 'super'
+          ? t('admin.users.super_admin_error') || 'Error updating the Super Admin role'
+          : t('admin.users.toggle_active_error') || 'Error updating user status'), 'error')
     } finally {
       setPrivilegedBusy(false)
     }
@@ -491,6 +548,12 @@ export default function AdminUsers() {
                     {/* Statut */}
                     <td className="px-6 py-4">
                       <div className="flex gap-1.5 flex-wrap">
+                        {user.is_super_admin && (
+                          <span data-testid={`super-admin-badge-${user.id}`} className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full text-xs font-semibold">
+                            <Crown className="h-3 w-3" />
+                            Super Admin
+                          </span>
+                        )}
                         {user.is_admin && (
                           <span className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full text-xs font-semibold">
                             <Shield className="h-3 w-3" />
@@ -569,13 +632,28 @@ export default function AdminUsers() {
                             <span>{t('admin.users.view_comments') || 'View comments'}</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleToggleAdmin(user.id, user.is_admin)}
-                            className="gap-2 cursor-pointer"
-                          >
-                            <Shield className="h-4 w-4" />
-                            <span>{user.is_admin ? t('admin.users.remove_admin') || 'Remove admin' : t('admin.users.make_admin') || 'Make admin'}</span>
-                          </DropdownMenuItem>
+                          {/* A Super Admin keeps the administrator flag until a Super Admin revokes that role first. */}
+                          {!user.is_super_admin && (
+                            <DropdownMenuItem
+                              onClick={() => handleToggleAdmin(user.id, user.is_admin)}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Shield className="h-4 w-4" />
+                              <span>{user.is_admin ? t('admin.users.remove_admin') || 'Remove admin' : t('admin.users.make_admin') || 'Make admin'}</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canManageSuperAdmins && (user.is_admin || user.is_super_admin) && (
+                            <DropdownMenuItem
+                              onClick={() => void handleToggleSuperAdmin(user.id, !!user.is_super_admin)}
+                              className="gap-2 cursor-pointer"
+                              data-testid={`super-admin-toggle-${user.id}`}
+                            >
+                              <Crown className="h-4 w-4" />
+                              <span>{user.is_super_admin
+                                ? t('admin.users.revoke_super_admin') || 'Revoke Super Admin'
+                                : t('admin.users.grant_super_admin') || 'Make Super Admin'}</span>
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={() => handleToggleActive(user.id, user.is_active)}
                             className="gap-2 cursor-pointer"
@@ -877,12 +955,43 @@ export default function AdminUsers() {
             <h2 id="privileged-title" className="text-lg font-semibold text-gray-900 dark:text-white">
               {privileged.kind === 'role'
                 ? (privileged.current ? t('admin.users.remove_admin') || 'Remove admin' : t('admin.users.make_admin') || 'Make admin')
-                : (privileged.current ? t('admin.users.deactivate') || 'Deactivate' : t('admin.users.activate') || 'Activate')}
+                : privileged.kind === 'super'
+                  ? (privileged.current
+                    ? t('admin.users.revoke_super_admin') || 'Revoke Super Admin'
+                    : t('admin.users.grant_super_admin') || 'Make Super Admin')
+                  : (privileged.current ? t('admin.users.deactivate') || 'Deactivate' : t('admin.users.activate') || 'Activate')}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              {t('admin.users.privileged_hint') ||
-                'This changes an administrator. It needs the manage_administrators permission and your current password, cannot be done on your own account, and is recorded in the audit trail.'}
+              {privileged.kind === 'super'
+                ? t('admin.users.super_admin_hint') ||
+                  'A Super Admin holds every administrative permission, including payment, KYC and administrator settings. Only a Super Admin can grant or revoke it, with their current password, never on their own account, and the last Super Admin cannot be removed. Recorded in the audit trail.'
+                : t('admin.users.privileged_hint') ||
+                  'This changes an administrator. It needs the manage_administrators permission and your current password, cannot be done on your own account, and is recorded in the audit trail.'}
             </p>
+            {privileged.kind === 'super' && privileged.current && (
+              <div className="space-y-1">
+                <label htmlFor="replacement-role" className="block text-sm font-medium">
+                  {t('admin.users.role_after_revocation') || 'Role after revocation'}
+                </label>
+                <select id="replacement-role" data-testid="replacement-role" value={replacementRoleId}
+                  disabled={privilegedBusy || !demotion || demotion.loading}
+                  onChange={(e) => setReplacementRoleId(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
+                  {demotion?.previousValid && demotion.previous ? (
+                    <option value="">
+                      {(t('admin.users.restore_previous_role') || 'Restore previous role') + ': ' + demotion.previous.name}
+                    </option>
+                  ) : (
+                    <option value="" disabled>
+                      {t('admin.users.choose_role') || 'Choose a role (no previous role to restore)'}
+                    </option>
+                  )}
+                  {(demotion?.roles ?? [])
+                    .filter((r) => !(demotion?.previousValid && demotion.previous?.id === r.id))
+                    .map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="space-y-1">
               <label htmlFor="privileged-password" className="block text-sm font-medium">
                 {t('admin.users.current_password') || 'Your current password'}
@@ -892,10 +1001,10 @@ export default function AdminUsers() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" disabled={privilegedBusy}
-                onClick={() => { setPrivilegedPassword(''); setPrivileged(null) }}>
+                onClick={() => { setPrivilegedPassword(''); setReplacementRoleId(''); setDemotion(null); setPrivileged(null) }}>
                 {t('admin.users.cancel') || 'Cancel'}
               </Button>
-              <Button disabled={privilegedBusy || !privilegedPassword} onClick={() => void confirmPrivileged()}>
+              <Button disabled={privilegedBusy || !privilegedPassword || !demotionReady} onClick={() => void confirmPrivileged()}>
                 {t('admin.users.confirm') || 'Confirm'}
               </Button>
             </div>

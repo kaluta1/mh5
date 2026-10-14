@@ -65,6 +65,7 @@ from app.core.child_safety import (
     SafetyConcern,
 )
 from app.models.accounting import AuditTrail
+from app.services import super_admin
 from app.models.content_moderation import ContentModeration
 from app.models.media import Media
 
@@ -554,12 +555,14 @@ def can_moderate(user) -> bool:
 
 def can_resolve_child_safety(user) -> bool:
     """Child-safety resolution: ONLY a role that explicitly holds
-    child_safety_resolve (e.g. a designated Child Safety Admin, or a Super Admin
-    role that was explicitly granted it). Never implied by is_admin, by the
-    'all' wildcard, by moderate_content or by the Moderator role, and never
-    assigned automatically to any account."""
+    child_safety_resolve (e.g. a designated Child Safety Admin), or a Super
+    Admin (app.services.super_admin). Never implied by is_admin, by the 'all'
+    wildcard, by moderate_content or by the Moderator role, and never assigned
+    automatically to any account."""
     if user is None or not getattr(user, "is_active", True):
         return False
+    if super_admin.is_super_admin(user):
+        return True
     role = getattr(user, "role", None)
     return bool(role and PERMISSION_CHILD_SAFETY_RESOLVE in {p.name for p in role.permissions}
                 | (set(role.inherit_from.get_all_permissions()) if role.inherit_from else set()))

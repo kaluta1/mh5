@@ -986,3 +986,121 @@ rollback is itself a security decision. The two permission rows may stay.
 - No two-person rule: one administrator holding a permission acts alone
   (except on their own account).
 - Sign-in has no second factor.
+
+## 17. Super Admin role (implemented, not deployed)
+
+One role that holds every administrative permission, so the owner and the
+operator do not each need every protected permission granted one by one.
+
+### 17.1 What a Super Admin is
+
+An account that is active, not deleted, an administrator (`is_admin`), and on
+the system role `super_admin`. The rule lives in ONE place,
+`app/services/super_admin.py`, and every permission check asks it:
+`payment_config.has_permission` (Finance & Payments, administrator management,
+manual payments, KYC settings), `can_manage_email_settings`,
+`can_resolve_child_safety`, the general `/rbac` checks and `/rbac/me/permissions`.
+A permission added later is covered without a migration.
+
+A switched-off, deleted or non-administrator account on that role holds
+nothing. A role that only has the same name, without the system flag, does
+not count.
+
+### 17.2 What still applies to a Super Admin
+
+Holding a permission is all the role changes. Unchanged, for a Super Admin as
+for anybody: the current password for every privileged action (and its
+lock-out after wrong attempts), the audit trail, no privileged action on one's
+own account (no self-granted payment, no own identity verification, no
+self-demotion), no manual payment for one's own referral line, the financial
+activation rules and the server environment master switches.
+
+### 17.3 Granting and revoking
+
+`PUT /api/v1/admin/users/{id}/super-admin` with `is_super_admin` and
+`current_password` (Admin Users page: "Make Super Admin" / "Revoke Super
+Admin", shown to a Super Admin only). Refused, and audited as
+`ADMIN_ACTION_DENIED`, unless:
+
+- the actor is a Super Admin (`SUPER_ADMIN_REQUIRED`; neither `is_admin`, nor
+  `manage_administrators`, nor the `all` wildcard is enough);
+- the target is not the actor (`SELF_ACTION_FORBIDDEN`);
+- the password is right (`REAUTH_REQUIRED` / `REAUTH_LOCKED`);
+- to grant: the target is an active administrator with a verified email
+  address (`TARGET_NOT_ELIGIBLE`), not already one (`ALREADY_SUPER_ADMIN`);
+- to revoke: the target is one (`NOT_SUPER_ADMIN`) and another active Super
+  Admin remains (`LAST_SUPER_ADMIN`).
+
+The Super Admin rows are locked in id order and re-read before the change, so
+two Super Admins revoking each other at the same moment cannot both succeed.
+A grant keeps the role the account had in `users.role_before_super_admin_id`
+and is audited as `SUPER_ADMIN_GRANTED` (with that role). A revocation is
+audited as `SUPER_ADMIN_REVOKED`, ends the account's sessions, keeps it an
+administrator, and moves it to:
+
+- its previous role, when no `replacement_role_id` is sent (the default on the
+  Admin Users page, which shows that role); or
+- the role the acting Super Admin chose in `replacement_role_id`.
+
+Without a usable previous role (none, deleted, or since changed to lead back
+to Super Admin) a choice is required: 409 `REPLACEMENT_ROLE_REQUIRED`, nothing
+changed. A chosen role that does not exist (`REPLACEMENT_ROLE_NOT_FOUND`) or
+is, or inherits at any depth from, the Super Admin role
+(`REPLACEMENT_ROLE_GRANTS_SUPER_ADMIN`; a broken inheritance chain counts as
+such) is refused with 422. The chosen role row is held (FOR SHARE) until the
+change commits, so it cannot be deleted underneath it.
+`GET /api/v1/admin/users/{id}/super-admin/demotion-options` (Super Admins
+only) lists the previous role and the roles that may be chosen.
+
+No other path makes or unmakes a Super Admin:
+
+| Path | Result |
+|---|---|
+| Remove the administrator flag of a Super Admin | 409 `SUPER_ADMIN_PROTECTED` (revoke the role first) |
+| Switch a Super Admin account off or on | another Super Admin + password; never the last active one off |
+| Delete a Super Admin account | 409 `ADMIN_ACCOUNT_PROTECTED` (as for every administrator) |
+| `/rbac`: assign, edit, delete, inherit from, create or rename into `super_admin` | 403 `PROTECTED_PERMISSION` |
+| `grant_payment_permissions`, `grant_email_settings_permission` on a Super Admin | refused, nothing changed |
+
+`GET /api/v1/admin/super-admins` lists the Super Admins and whether the caller
+may manage the role.
+
+### 17.4 Migration
+
+`c4d5e6f7a8b9` after `b3c4d5e6f7a8`: one row in `roles` (`super_admin`,
+`is_system = true`), no permission rows, no member; and one nullable column
+`users.role_before_super_admin_id` (foreign key to `roles`, ON DELETE SET
+NULL), NULL on every existing row. Nothing else. It stops, changing nothing,
+if a role of that name already exists that it did not create. Downgrade
+removes the role and the column only while nobody holds the role. Production
+head after this section: `c4d5e6f7a8b9`.
+
+### 17.5 The first Super Admins
+
+Only while nobody holds the role, from the server, dry run by default:
+
+```
+python -m app.scripts.bootstrap_super_admins --account <id>:<email> --account <id>:<email>
+python -m app.scripts.bootstrap_super_admins --account <id>:<email> --account <id>:<email> --apply
+```
+
+Each account is named by id AND email (both must match), at least two
+accounts (nobody acts on their own account, so one alone could never be
+managed), each an active administrator with a verified email address. Audited
+as `SUPER_ADMIN_BOOTSTRAP`; each account's previous role is kept aside and
+given back if the role is ever revoked. Once anybody holds the role the tool
+refuses.
+
+Before naming an account, make sure its password was changed recently and is
+not shared: a Super Admin holds every power on the platform.
+
+### 17.6 Deployment and rollback
+
+Backend and frontend together (the Admin Users page shows the role and its
+controls). Until the bootstrap is run, nothing changes for anybody. Rolling
+the code back leaves the role row in place and the Super Admins holding only
+what the role explicitly carries (nothing): the protected permissions are then
+held by nobody, as before this release, and the role an account had before it
+became a Super Admin (for example one carrying `manage_email_settings`) is not
+restored by itself: it is in `users.role_before_super_admin_id` and in the
+audit row, and must be put back by hand.

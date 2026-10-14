@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.schemas.token import TokenPayload
 from app.core.security import decode_access_token
+from app.services import super_admin
 from app.services.auth_security import (EMAIL_NOT_VERIFIED_MESSAGE, access_token_is_current, account_is_usable,
                                         must_verify_email)
 
@@ -135,6 +136,8 @@ def check_user_permission(user: User, permission_name: str) -> bool:
     Vérifie si un utilisateur a une permission spécifique.
     Les admins avec la permission 'all' ont accès à tout.
     """
+    if super_admin.is_super_admin(user):
+        return True
     if not user or not user.role:
         return False
     
@@ -154,6 +157,8 @@ def check_user_permissions(user: User, permissions: List[str], require_all: bool
         permissions: Liste des permissions à vérifier
         require_all: Si True, toutes les permissions sont requises. Si False, une seule suffit.
     """
+    if super_admin.is_super_admin(user):
+        return True
     if not user or not user.role:
         return False
     

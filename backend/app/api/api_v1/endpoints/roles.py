@@ -3,6 +3,8 @@
 Protected permissions (Finance & Payments, administrator management, manual
 payments) and the roles that carry them are NOT managed here: they are granted
 to a named administrator on purpose (app/scripts/grant_payment_permissions.py).
+The Super Admin role is not managed here either: a Super Admin grants or
+revokes it (PUT /admin/users/{id}/super-admin).
 Nor can this API turn an account that is not an administrator into one; that
 is the administrator endpoint, which asks for an explicit permission and the
 current password. Whoever may manage roles in general cannot use this API to
@@ -21,8 +23,8 @@ from app.schemas.role import (
     Permission, PermissionCreate, PermissionUpdate,
     UserRoleAssignment, UserRoleResponse
 )
-from app.models.user import User
-from app.services import admin_security
+from app.models.user import Permission as PermissionModel, User
+from app.services import admin_security, super_admin
 
 router = APIRouter()
 
@@ -50,6 +52,16 @@ def _protect_permission_ids(db: Session, permission_ids) -> None:
 def _protect_role(role_obj) -> None:
     if role_obj is not None and admin_security.role_has_protected_permission(role_obj):
         _refuse_protected(f"The role '{role_obj.name}'")
+
+
+def _protect_role_name(name: Optional[str]) -> None:
+    if name and name.strip().lower() == super_admin.SUPER_ADMIN_ROLE_NAME:
+        _refuse_protected(f"The role name '{super_admin.SUPER_ADMIN_ROLE_NAME}'")
+
+
+def _all_permission_names(db: Session) -> List[str]:
+    """A Super Admin holds every permission there is."""
+    return sorted(name for (name,) in db.query(PermissionModel.name).all())
 
 
 # ============== PERMISSIONS ==============
@@ -177,6 +189,7 @@ def create_role(
     current_user: User = Depends(require_permission("manage_roles"))
 ):
     """Create a new role. Requires 'manage_roles' permission."""
+    _protect_role_name(role_in.name)
     if role_in.inherit_from_id is not None:
         _protect_role(crud_role.get(db, role_in.inherit_from_id))
     _protect_permission_ids(db, role_in.permission_ids)
@@ -221,6 +234,7 @@ def update_role(
     if (role_in.name and role_in.name.strip() == admin_security.ADMIN_ROLE_NAME
             and role_obj.name != admin_security.ADMIN_ROLE_NAME):
         _refuse_protected("The role name 'admin'")              # renaming a role into the administrator role
+    _protect_role_name(role_in.name)                            # ... or into the Super Admin role
     if role_in.inherit_from_id is not None:
         _protect_role(crud_role.get(db, role_in.inherit_from_id))
 
@@ -392,6 +406,8 @@ def get_user_permissions(
             detail="User not found"
         )
     
+    if super_admin.is_super_admin(user_obj):
+        return _all_permission_names(db)
     if not user_obj.role:
         return []
     
@@ -404,6 +420,8 @@ def get_my_permissions(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get all permissions for the current user."""
+    if super_admin.is_super_admin(current_user):
+        return _all_permission_names(db)
     if not current_user.role:
         return []
     

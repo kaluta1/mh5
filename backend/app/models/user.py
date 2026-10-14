@@ -140,7 +140,11 @@ class User(Base):
     
     # Rôle unique de l'utilisateur
     role_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)
-    role: Mapped[Optional["Role"]] = relationship("Role", back_populates="users")
+    role: Mapped[Optional["Role"]] = relationship("Role", back_populates="users", foreign_keys=[role_id])
+    # The role held before becoming a Super Admin, restored when that role is
+    # revoked (app.services.admin_security.set_super_admin). Null otherwise.
+    role_before_super_admin_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     
     # Logs de connexion
     login_logs: Mapped[List["LoginLog"]] = relationship("LoginLog", back_populates="user", cascade="all, delete-orphan")
