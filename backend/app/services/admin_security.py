@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.models.accounting import AuditTrail
 from app.models.user import User
-from app.services import payment_config, reauth, super_admin
+from app.services import password_exposure, payment_config, reauth, super_admin
 
 logger = logging.getLogger(__name__)
 
@@ -357,6 +357,10 @@ def set_super_admin(db: Session, actor, *, target_id: int, grant: bool, password
         if not eligible_for_super_admin(target):
             raise refuse("TARGET_NOT_ELIGIBLE", "Only an active administrator with a verified email address can "
                                                 "be made a Super Admin.")
+        if password_exposure.is_exposed(db, target):
+            raise refuse(password_exposure.PASSWORD_CHANGE_REQUIRED,
+                         "This account's password was exposed and has not been changed since. It can be made a "
+                         "Super Admin once its owner has set a new password.")
         target.role_before_super_admin_id = target.role_id      # restored when the role is revoked
         target.role_id = role.id
         new = {"role_id": role.id, "role": role.name}

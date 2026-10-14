@@ -241,3 +241,92 @@ def test_a_replacement_role_cannot_be_deleted_while_it_is_being_given(pg):
     # refused and the account is still a Super Admin). Never an account on a role that is gone.
     assert results in (["revoked", "kept"], ["REPLACEMENT_ROLE_NOT_FOUND", "deleted"]), results
     assert name == ("helper" if results[0] == "revoked" else "super_admin")
+
+
+# ---------------------------------------------------------------------------
+# d5e6f7a8b9c0: fingerprints of exposed password hashes
+# ---------------------------------------------------------------------------
+
+EXPOSED_MIGRATION = "d5e6f7a8b9c0_exposed_password_fingerprints.py"
+
+
+def fingerprint_table(engine) -> list:
+    with engine.connect() as c:
+        return [tuple(r) for r in c.execute(text(
+            "select column_name, data_type, is_nullable from information_schema.columns "
+            "where table_name = 'exposed_password_fingerprints' order by column_name"))]
+
+
+def test_the_exposed_fingerprint_migration_is_additive_repeatable_and_reversible(pg):
+    engine, Session = pg
+    roles(Session, "user")
+    seed(Session, "owner", role_name="user")
+    migrate(engine, EXPOSED_MIGRATION, "downgrade")
+    assert fingerprint_table(engine) == []
+    before = access(engine)
+    for _ in range(2):
+        migrate(engine, EXPOSED_MIGRATION, "upgrade")
+        assert [c[0] for c in fingerprint_table(engine)] == ["created_at", "fingerprint", "id", "source", "updated_at"]
+        assert access(engine) == before
+        with engine.connect() as c:
+            assert c.execute(text("select count(*) from exposed_password_fingerprints")).scalar() == 0
+    with engine.connect() as c:
+        for bad in ("not-hex", "A" * 64, "a" * 63):                          # only a lowercase SHA-256 fits
+            with pytest.raises(Exception):
+                with c.begin():
+                    c.execute(text("insert into exposed_password_fingerprints (fingerprint) values (:f)"), {"f": bad})
+        with c.begin():
+            c.execute(text("insert into exposed_password_fingerprints (fingerprint) values (:f)"), {"f": "a" * 64})
+        with pytest.raises(Exception):
+            with c.begin():
+                c.execute(text("insert into exposed_password_fingerprints (fingerprint) values (:f)"), {"f": "a" * 64})
+    migrate(engine, EXPOSED_MIGRATION, "downgrade")
+    assert fingerprint_table(engine) == [] and access(engine) == before
+
+
+def _pg_bin():
+    import shutil
+    from pathlib import Path
+
+    for candidate in (os.getenv("PG_BIN"), str(Path(shutil.which("pg_dump")).parent) if shutil.which("pg_dump") else None,
+                      r"C:\Program Files\PostgreSQL\16\bin", r"C:\Program Files\PostgreSQL\17\bin", "/usr/bin"):
+        if candidate and (Path(candidate) / ("pg_dump.exe" if os.name == "nt" else "pg_dump")).exists():
+            return candidate
+    return None
+
+
+def test_the_loader_reads_a_real_custom_format_dump(pg, tmp_path, monkeypatch):
+    import subprocess
+
+    from sqlalchemy.engine import make_url
+
+    from app.scripts import load_exposed_password_fingerprints as loader
+    from app.services import password_exposure
+
+    bindir = _pg_bin()
+    if bindir is None:
+        pytest.skip("pg_dump / pg_restore not found")
+    monkeypatch.setenv("PATH", bindir + os.pathsep + os.environ.get("PATH", ""))
+    engine, Session = pg
+    roles(Session, "user")
+    exposed_ids = [seed(Session, f"exposed{i}", role_name="user") for i in range(3)]
+    with Session() as db:                          # each gets its own hash (same password, new salt)
+        for i in exposed_ids:
+            db.get(User, i).hashed_password = get_password_hash(PASSWORD)
+        db.commit()
+    url = make_url(str(engine.url))
+    dump = tmp_path / "exposed.dump"
+    subprocess.run([os.path.join(bindir, "pg_dump"), "-Fc", "-t", "users", "-f", str(dump),
+                    "-h", url.host, "-p", str(url.port or 5432), "-U", url.username or "postgres", url.database],
+                   check=True, env={**os.environ, "PGPASSWORD": url.password or ""})
+    assert dump.read_bytes()[:5] == b"PGDMP"
+    with Session() as db:
+        # Afterwards one of them changes the password: it is no longer exposed.
+        db.get(User, exposed_ids[0]).hashed_password = get_password_hash("A-Brand-New-Passw0rd!77")
+        db.commit()
+        result = loader.load(db, [str(dump)], source="synthetic custom dump", apply=True)
+        assert (result["hashes read"], result["new"], result["accounts whose current password is one of them"]) == (3, 3, 2)
+        stored = [r[0] for r in db.execute(text("select fingerprint from exposed_password_fingerprints"))]
+        hashes = [r[0] for r in db.execute(text("select hashed_password from users"))]
+        assert len(stored) == 3 and not set(stored) & set(hashes)
+        assert [password_exposure.is_exposed(db, db.get(User, i)) for i in exposed_ids] == [False, True, True]

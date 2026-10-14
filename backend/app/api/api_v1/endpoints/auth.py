@@ -608,6 +608,12 @@ def confirm_password_reset(
         db.rollback()
         logger.info("Password reset refused (%s)", exc.reason)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalide ou expiré")
+    # A reset sets a NEW password (as a password change does). Refused before anything is
+    # written: the rollback leaves the link unused, so it can be used again with another password.
+    if verify_password(password_reset.new_password, user.hashed_password):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Le nouveau mot de passe doit être différent de l'ancien")
 
     version = auth_security.set_password(db, user, password_reset.new_password,
                                          action=auth_security.AUDIT_PASSWORD_RESET, ip=ip)

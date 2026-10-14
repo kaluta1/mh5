@@ -7,6 +7,11 @@ AuthToken       one-time credentials sent by email (email verification,
 AuthRateLimit   durable fixed-window counters for the public auth endpoints
                 (per client address, per account, global). Keys are keyed
                 hashes: no address or email is stored.
+ExposedPasswordFingerprint
+                SHA-256 of stored password hashes that are known to have
+                been exposed (app.services.password_exposure). Neither the
+                password nor the stored hash can be recovered from it, and it
+                names no account.
 """
 from __future__ import annotations
 
@@ -55,3 +60,11 @@ class AuthRateLimit(Base):
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     window_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ExposedPasswordFingerprint(Base):
+    __tablename__ = "exposed_password_fingerprints"
+
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # Where the exposed hash was found (a label, never a path to the data).
+    source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

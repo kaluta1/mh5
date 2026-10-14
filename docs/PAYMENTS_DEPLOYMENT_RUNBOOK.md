@@ -1077,22 +1077,37 @@ head after this section: `c4d5e6f7a8b9`.
 
 ### 17.5 The first Super Admins
 
-Only while nobody holds the role, from the server, dry run by default:
+Only while nobody holds the role, from the server, dry run by default. First,
+record the fingerprints of every password hash known to have been exposed
+(the tool refuses to run while that list is empty):
 
 ```
+python -m app.scripts.load_exposed_password_fingerprints --dump <exposed dump> [--dump <another>] --source "<label>"
+python -m app.scripts.load_exposed_password_fingerprints --dump <exposed dump> [--dump <another>] --source "<label>" --apply
 python -m app.scripts.bootstrap_super_admins --account <id>:<email> --account <id>:<email>
 python -m app.scripts.bootstrap_super_admins --account <id>:<email> --account <id>:<email> --apply
+python -m app.scripts.bootstrap_super_admins --single --account <id>:<email> --apply
 ```
 
-Each account is named by id AND email (both must match), at least two
-accounts (nobody acts on their own account, so one alone could never be
-managed), each an active administrator with a verified email address. Audited
-as `SUPER_ADMIN_BOOTSTRAP`; each account's previous role is kept aside and
-given back if the role is ever revoked. Once anybody holds the role the tool
-refuses.
+Each account is named by id AND email (both must match), each an active
+administrator with a verified email address whose current password is NOT an
+exposed one (`PASSWORD_CHANGE_REQUIRED`). At least two accounts, or exactly
+one with `--single`, said on purpose: a single Super Admin can promote others
+in the Admin Panel, but until a second one exists nobody can change or remove
+it (it is the last one, and nobody acts on their own account). Audited as
+`SUPER_ADMIN_BOOTSTRAP` (with `single_initial_super_admin` when `--single`);
+each account's previous role is kept aside and given back if the role is ever
+revoked. Once anybody holds the role the tool refuses. The tool prints account
+ids only.
 
-Before naming an account, make sure its password was changed recently and is
-not shared: a Super Admin holds every power on the platform.
+The same exposed-password rule applies in the Admin Panel: a Super Admin
+cannot grant the role to an account whose current password hash is an exposed
+one (409 `PASSWORD_CHANGE_REQUIRED`, audited). Only fingerprints (SHA-256 of
+the stored hash) are kept, in `exposed_password_fingerprints` (migration
+`d5e6f7a8b9c0`); a new password always gives a new hash, so the block lifts by
+itself once the owner sets one. A password reset now refuses the current
+password, as a password change already did, so the block cannot be lifted by
+"changing" to the same password.
 
 ### 17.6 Deployment and rollback
 

@@ -25,7 +25,7 @@ from app.scripts import bootstrap_super_admins as bootstrap
 from app.scripts import grant_email_settings_permission as email_grants
 from app.scripts import grant_payment_permissions as grants
 from app.services import admin_security as sec
-from app.services import content_safety, email_settings_service, kyc_settings
+from app.services import content_safety, email_settings_service, kyc_settings, password_exposure
 from app.services import payment_config as pc
 from app.services import super_admin as sa
 from tests.unit.test_admin_security_hardening import (PASSWORD, bearer, code_of, denials, grant, person,  # noqa: F401
@@ -530,6 +530,8 @@ def test_a_super_admin_is_still_bound_by_the_password_and_the_financial_safeguar
 
 def test_the_first_super_admins_are_named_once_by_id_and_address(db):
     role = super_role(db)
+    password_exposure.add(db, ["an-unrelated-exposed-hash"], source="test")      # the list has been loaded
+    db.commit()
     owner = person(db, "owner", admin=True)
     operator = person(db, "operator", admin=True, permissions=("manage_email_settings",))
     plain_member = person(db, "member")
