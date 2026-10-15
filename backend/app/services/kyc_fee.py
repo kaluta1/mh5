@@ -116,21 +116,33 @@ def set_member_fee(db: Session, actor, value: Any, *, password: Optional[str], i
     except payment_config.PaymentConfigError as exc:
         raise KycFeeError(exc.code, str(exc)) from None
 
+    try:
+        stage_member_fee(db, actor, amount, ip=ip, expected_amount=expected_amount)
+    except KycFeeError:
+        db.rollback()
+        raise
+    db.commit()
+    return fee_view(db)
+
+
+def stage_member_fee(db: Session, actor, amount: Decimal, *, ip: Optional[str] = None,
+                     expected_amount: Any = None) -> bool:
+    """Set the fee in the caller's transaction (the caller authorizes, commits or
+    rolls back). True when it changed. Payments that exist keep their amount:
+    only product_types.price, the figure NEW payments are created from, moves."""
     product = _product(db, lock=True)
     if product is None:
-        db.rollback()
         raise KycFeeError("PRODUCT_MISSING", "The KYC product is not set up on this server. Nothing was changed.")
     current = Decimal(str(product.price)).quantize(_CENT)
     if expected_amount is not None and parse_fee(expected_amount) != current:
-        db.rollback()
         raise KycFeeError("STALE", "The fee was changed by somebody else. Reload and try again.")
-    if amount != current:
-        product.price = amount
-        db.add(AuditTrail(table_name="product_types", record_id=int(product.id), action=AUDIT_ACTION,
-                          old_values={"price": f"{current:.2f}"}, new_values={"price": f"{amount:.2f}"},
-                          user_id=getattr(actor, "id", None), ip_address=(ip or None)))
-    db.commit()
-    return fee_view(db)
+    if amount == current:
+        return False
+    product.price = amount
+    db.add(AuditTrail(table_name="product_types", record_id=int(product.id), action=AUDIT_ACTION,
+                      old_values={"price": f"{current:.2f}"}, new_values={"price": f"{amount:.2f}"},
+                      user_id=getattr(actor, "id", None), ip_address=(ip or None)))
+    return True
 
 
 def last_change(db: Session) -> Optional[dict]:

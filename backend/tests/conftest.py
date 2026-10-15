@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Generator
+from typing import Generator, Optional
 
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_dir not in sys.path:
@@ -17,13 +17,14 @@ os.environ["SECRET_KEY"] = "test-secret-key-minimum-32-characters-long"
 os.environ["MASTER_ENCRYPTION_KEY"] = "test-master-encryption-key-32b!"
 os.environ["ENCRYPTION_KEY_DERIVATION_SALT"] = "test-encryption-salt-value"
 os.environ["KYC_PROVIDER"] = "kaluta"
-os.environ["KALUTA_API_KEY"] = "klt_test_key"
-os.environ["KALUTA_WEBHOOK_SECRET"] = "whsec_test_webhook_secret"
-# Pin these deterministic to "enabled" as the test baseline so existing tests
-# do not depend on whichever real deployment .env happens to be in the cwd
-# (KALUTA_KYC_ENABLED / ANNUALADS_ENABLED). Individual tests may monkeypatch
-# them false to test the disabled path explicitly.
-os.environ["KALUTA_KYC_ENABLED"] = "true"
+# Kaluta KYC is configured only in the database (Admin > KYC): tests that need
+# it on call save_kaluta_settings(). The KALUTA_* variables are ignored, and are
+# cleared so a real deployment .env in the cwd cannot leak into a test.
+for _name in ("KALUTA_API_KEY", "KALUTA_WEBHOOK_SECRET", "KALUTA_KYC_ENABLED"):
+    os.environ[_name] = ""
+# Pin deterministic to "enabled" as the test baseline so existing tests do not
+# depend on whichever real deployment .env happens to be in the cwd
+# (ANNUALADS_ENABLED). Individual tests may monkeypatch it false.
 os.environ["ANNUALADS_ENABLED"] = "true"
 os.environ.setdefault("ANNUALADS_WEBHOOK_SECRET", "annualads_test_webhook_secret")
 os.environ.setdefault("ANNUALADS_SSO_SECRET", "annualads_test_sso_secret")
@@ -99,9 +100,48 @@ def _no_kyc_admin_values_between_tests():
     no test may see the values another test saved."""
     from app.services.kaluta_kyc import kaluta_kyc_service
 
-    kaluta_kyc_service.use_admin_values({})
+    kaluta_kyc_service.use_settings({})
     yield
-    kaluta_kyc_service.use_admin_values({})
+    kaluta_kyc_service.use_settings({})
+
+
+TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY = "synthetic-test-payment-settings-encryption-key"
+
+
+def save_kaluta_settings(db: Session, *, enabled: bool = True, api_key: Optional[str] = "klt_test_key_synthetic_01",
+                         webhook_secret: Optional[str] = "whsec_test_webhook_secret_01",
+                         sessions_per_attempt: Optional[int] = None) -> None:
+    """Kaluta KYC settings as Admin > KYC stores them (the only source): the
+    kyc_settings row and the key / secret as ciphertext. Synthetic values only.
+    Needs PAYMENT_SETTINGS_ENCRYPTION_KEY in the environment (kaluta_settings_key)."""
+    from app.models.kyc import KycSettings
+    from app.models.payment_config import PaymentCredential
+    from app.services import kyc_settings, payment_crypto
+
+    row = db.query(KycSettings).filter(KycSettings.id == kyc_settings.ROW_ID).first()
+    if row is None:
+        row = KycSettings(id=kyc_settings.ROW_ID, version=0)
+        db.add(row)
+    row.kaluta_enabled = enabled
+    row.sessions_per_attempt = sessions_per_attempt
+    for name, value in (("API_KEY", api_key), ("WEBHOOK_SECRET", webhook_secret)):
+        stored = (db.query(PaymentCredential)
+                  .filter(PaymentCredential.provider == kyc_settings.PROVIDER, PaymentCredential.name == name).first())
+        if value is None:
+            if stored is not None:
+                db.delete(stored)
+            continue
+        ciphertext = payment_crypto.encrypt(value, kyc_settings._PURPOSE + name)
+        if stored is None:
+            db.add(PaymentCredential(provider=kyc_settings.PROVIDER, name=name, ciphertext=ciphertext))
+        else:
+            stored.ciphertext = ciphertext
+    db.commit()
+
+
+@pytest.fixture
+def kaluta_settings_key(monkeypatch):
+    monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY)
 
 
 @pytest.fixture(scope="function")

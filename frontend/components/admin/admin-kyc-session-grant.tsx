@@ -9,6 +9,7 @@ import { kycGrantSessionUrl } from '@/lib/kyc-settings'
 import { inputClass } from './admin-finance-ui'
 
 const OPEN = new Set(['pending', 'in_progress', 'expired'])
+/** Used only when the server did not say (the default of the Admin > KYC setting). */
 export const SESSIONS_PER_ATTEMPT = 3
 
 type Verification = {
@@ -16,10 +17,12 @@ type Verification = {
   status: string
   attempt_sessions_count?: number | null
   attempt_sessions_granted?: number | null
+  /** The sessions-per-attempt setting in force, sent with the verification detail. */
+  sessions_per_attempt?: number | null
 }
 
 /** Sessions the member can still open for the current attempt (null when unknown). */
-export function sessionsLeft(v: Verification, perAttempt = SESSIONS_PER_ATTEMPT): number | null {
+export function sessionsLeft(v: Verification, perAttempt = v.sessions_per_attempt ?? SESSIONS_PER_ATTEMPT): number | null {
   if (v.attempt_sessions_count === undefined || v.attempt_sessions_count === null) return null
   return Math.max(0, perAttempt + (v.attempt_sessions_granted || 0) - v.attempt_sessions_count)
 }

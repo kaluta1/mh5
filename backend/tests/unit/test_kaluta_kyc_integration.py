@@ -27,8 +27,9 @@ from app.models.accounting import JournalEntry
 from app.models.affiliate import AffiliateCommission
 from app.models.kyc import KYCAuditLog, KYCStatus, KYCVerification, VerificationProvider
 from app.models.payment import Deposit
-from app.services import kaluta_kyc
+from app.services import kaluta_kyc, kyc_settings
 from app.services import kyc_provider_dispatch as dispatch
+from tests.conftest import save_kaluta_settings
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_email3_kyc_contest import events, verification
 from tests.unit.test_kyc_initiation_dispatch import ADDRESS, INITIATE, adult, kyc_paid, kyc_rows, no_real_network  # noqa: F401
@@ -45,14 +46,13 @@ PRIVATE = ("P1234567", "Jane", "Doe", "MRZ-RAW-LINE", "1990-01-01")
 
 
 @pytest.fixture(autouse=True)
-def provider(monkeypatch):
-    """Kaluta switched on with a synthetic key and secret, for this test only."""
+def provider(monkeypatch, db, kaluta_settings_key):
+    """Kaluta switched on in Admin > KYC (the database) with a synthetic key and
+    secret, for this test only."""
     svc = kaluta_kyc.kaluta_kyc_service
-    monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", True)
     monkeypatch.setattr(settings, "KYC_PROVIDER", "kaluta")
-    monkeypatch.setattr(svc, "enabled", True)
-    monkeypatch.setattr(svc, "api_key", KEY)
-    monkeypatch.setattr(svc, "webhook_secret", SECRET)
+    save_kaluta_settings(db, enabled=True, api_key=KEY, webhook_secret=SECRET)
+    kyc_settings.apply(db)
     monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",
                         lambda *a, **k: True)
     return svc
@@ -199,7 +199,7 @@ def test_a_signed_delivery_that_is_not_a_json_object_is_refused(client, db):
 
 def test_the_integration_switched_off_accepts_nothing(client, db, monkeypatch):
     v = open_verification(db, person(db, 30))
-    monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", False)
+    save_kaluta_settings(db, enabled=False, api_key=KEY, webhook_secret=SECRET)
     assert deliver(client, approved(v)).status_code == 503
     db.expire_all()
     assert db.get(KYCVerification, v.id).status == KYCStatus.IN_PROGRESS

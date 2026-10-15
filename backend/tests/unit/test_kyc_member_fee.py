@@ -24,6 +24,7 @@ from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.user import Permission, Role
 from app.services import admin_security, kaluta_kyc, kyc_fee
 from app.services import payment_config as pc
+from tests.conftest import save_kaluta_settings
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_dual_cashout import PASSWORD, member
 from tests.unit.test_kaluta_kyc_integration import FakeProvider
@@ -35,12 +36,9 @@ FEE, ADMIN_FEE, STATUS, PAY = "/api/v1/kyc/fee", "/api/v1/kyc/admin/fee", "/api/
 
 
 @pytest.fixture(autouse=True)
-def kyc_provider(monkeypatch):
-    svc = kaluta_kyc.kaluta_kyc_service
-    monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", True)
+def kyc_provider(monkeypatch, db, kaluta_settings_key):
     monkeypatch.setattr(settings, "KYC_PROVIDER", "kaluta")
-    monkeypatch.setattr(svc, "enabled", True)
-    monkeypatch.setattr(svc, "api_key", "klt_test_synthetic_key_0001")
+    save_kaluta_settings(db, enabled=True, api_key="klt_test_synthetic_key_0001")
     return FakeProvider(monkeypatch)
 
 

@@ -1,5 +1,6 @@
-"""Kaluta KYC settings in the Admin Panel, the manage_kyc_settings permission,
-and provider sessions that run out without using up the member's attempt.
+"""Kaluta KYC settings in the Admin Panel (the database is their only source),
+the manage_kyc_settings permission, and provider sessions that run out without
+using up the member's attempt.
 
 Every administrator, member, key, secret, payment and session here is
 SYNTHETIC. No request leaves the process: httpx network transports fail the
@@ -24,6 +25,7 @@ from app.models.payment_config import PaymentCredential
 from app.services import kaluta_kyc, kyc_settings
 from app.services import kyc_provider_dispatch as dispatch
 from app.services import payment_config as pc
+from tests.conftest import save_kaluta_settings
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_dual_cashout import PASSWORD
 from tests.unit.test_kaluta_kyc_integration import FakeProvider, event, open_verification, signed
@@ -35,27 +37,35 @@ pytestmark = pytest.mark.unit
 
 SETTINGS, WEBHOOK, STATUS, PAY = ("/api/v1/kyc/admin/settings", "/api/v1/kyc/webhook/kaluta",
                                   "/api/v1/kyc/status-detailed", "/api/v1/payments/create")
+# In the server environment: must be IGNORED everywhere.
 ENV_KEY, ENV_SECRET = "klt_env_synthetic_key_000001", "whsec_env_synthetic_secret_01"
+# Saved in Admin > KYC before a test starts (turn_on), and saved during a test.
+SAVED_KEY, SAVED_SECRET = "klt_saved_synthetic_key_0001", "whsec_saved_synthetic_secret1"
 ADMIN_KEY, ADMIN_SECRET = "klt_admin_synthetic_key_0002", "whsec_admin_synthetic_secret_2"
 SESSIONS = "https://kalutakyc.com/v1/sessions"
 
 
 @pytest.fixture(autouse=True)
 def environment(monkeypatch):
-    """Kaluta on in the environment with synthetic env credentials, and the
-    dedicated encryption key present (removed explicitly where tested)."""
-    svc = kaluta_kyc.kaluta_kyc_service
+    """The server environment says Kaluta is ON with its own synthetic key and
+    secret: every test proves it is ignored. Nothing is saved in the database
+    (Kaluta off) until a test saves it. The dedicated encryption key is present
+    (removed explicitly where tested)."""
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
+    for name, value in (("KALUTA_KYC_ENABLED", "true"), ("KALUTA_API_KEY", ENV_KEY), ("KALUTA_WEBHOOK_SECRET", ENV_SECRET)):
+        monkeypatch.setenv(name, value)
     monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", True)
     monkeypatch.setattr(settings, "KYC_PROVIDER", "kaluta")
     monkeypatch.setattr(settings, "KALUTA_API_KEY", ENV_KEY)
     monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", ENV_SECRET)
-    monkeypatch.setattr(svc, "enabled", True)
-    monkeypatch.setattr(svc, "api_key", ENV_KEY)
-    monkeypatch.setattr(svc, "webhook_secret", ENV_SECRET)
     monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",
                         lambda *a, **k: True)
-    return svc
+    return kaluta_kyc.kaluta_kyc_service
+
+
+def turn_on(db, **kw):
+    """Kaluta switched on in Admin > KYC with the SAVED synthetic key and secret."""
+    save_kaluta_settings(db, enabled=True, api_key=SAVED_KEY, webhook_secret=SAVED_SECRET, **kw)
 
 
 def kyc_admin(db, name="kycadmin"):
@@ -138,8 +148,8 @@ def test_a_saved_key_and_secret_are_encrypted_never_returned_and_never_audited(c
     with pytest.raises(payment_crypto.PaymentCryptoError):
         payment_crypto.decrypt(stored["API_KEY"].ciphertext, payment_crypto.PURPOSE_CREDENTIAL + "API_KEY")
     view = answer.json()
-    assert [(c["name"], c["saved"], c["saved_readable"], c["in_use"]) for c in view["credentials"]] == \
-        [("API_KEY", True, True, "admin_panel"), ("WEBHOOK_SECRET", True, True, "admin_panel")]
+    assert [(c["name"], c["saved"], c["saved_readable"], c["configured"]) for c in view["credentials"]] == \
+        [("API_KEY", True, True, True), ("WEBHOOK_SECRET", True, True, True)]
     assert view["version"] == 1
     trail = db.query(AuditTrail).filter(AuditTrail.action == kyc_settings.AUDIT_SETTINGS).one()
     dumped = json.dumps([trail.old_values, trail.new_values])
@@ -150,16 +160,17 @@ def test_a_saved_key_and_secret_are_encrypted_never_returned_and_never_audited(c
 def test_the_saved_key_is_what_the_provider_receives_and_a_blank_field_keeps_it(client, db, monkeypatch):
     fake = FakeProvider(monkeypatch)
     admin, user = kyc_admin(db), adult(db)
-    assert put(client, admin, api_key=ADMIN_KEY).status_code == 200
+    assert put(client, admin, api_key=ADMIN_KEY, webhook_secret=ADMIN_SECRET).status_code == 200
     assert put(client, admin, api_key="", webhook_secret="   ", enabled=True).status_code == 200   # blank = keep
     kyc_paid(db, user)
     assert client.post(INITIATE, json=ADDRESS, headers=auth(user)).status_code == 200
     assert fake.requests[0]["headers"]["X-API-Key"] == ADMIN_KEY
-    stored = db.query(PaymentCredential).filter(PaymentCredential.provider == "kaluta").one()
-    before = stored.ciphertext
+    key_row = lambda: (db.query(PaymentCredential)  # noqa: E731
+                       .filter(PaymentCredential.provider == "kaluta", PaymentCredential.name == "API_KEY").one())
+    before = key_row().ciphertext
     assert put(client, admin, api_key="klt_admin_synthetic_key_0003").status_code == 200
     db.expire_all()
-    assert db.query(PaymentCredential).filter(PaymentCredential.provider == "kaluta").one().ciphertext != before
+    assert key_row().ciphertext != before
 
 
 @pytest.mark.parametrize("field, value, code", [
@@ -197,24 +208,25 @@ def test_unknown_fields_and_the_webhook_url_cannot_be_sent(client, db):
 
 def test_a_change_made_on_a_stale_page_is_refused(client, db):
     admin = kyc_admin(db)
-    assert put(client, admin, enabled=False, expected_version=0).status_code == 200
-    stale = put(client, admin, enabled=True, expected_version=0)
+    assert put(client, admin, sessions_per_attempt=4, expected_version=0).json()["version"] == 1
+    stale = put(client, admin, sessions_per_attempt=5, member_fee="12.00", api_key=ADMIN_KEY, expected_version=0)
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "STALE"
     db.expire_all()
-    assert db.query(KycSettings).one().kaluta_enabled is False
+    assert db.query(KycSettings).one().sessions_per_attempt == 4 and db.query(PaymentCredential).count() == 0
 
 
 # ===========================================================================
 # 3. On / off
 # ===========================================================================
 
-def test_switching_on_needs_a_key_and_a_secret_in_force(client, db, monkeypatch):
-    monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", False)
-    monkeypatch.setattr(settings, "KALUTA_API_KEY", "")
-    monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", "")
+def test_switching_on_needs_a_saved_key_and_secret_and_the_environment_never_counts(client, db):
     admin = kyc_admin(db)
     view = client.get(SETTINGS, headers=auth(admin)).json()
-    assert (view["enabled"], view["enabled_source"], view["ready_to_enable"]) == (False, "environment", False)
+    # The environment says on, with a key and a secret: none of it counts.
+    assert (view["source"], view["enabled"], view["ready_to_enable"]) == ("database", False, False)
+    assert [c["configured"] for c in view["credentials"]] == [False, False]
+    for gone in ("enabled_source", "environment_configured", "in_use"):
+        assert gone not in json.dumps(view)
     refused = put(client, admin, enabled=True)
     assert refused.status_code == 409 and refused.json()["detail"]["code"] == "NOT_READY"
     partial = put(client, admin, enabled=True, api_key=ADMIN_KEY)               # still no webhook secret
@@ -222,11 +234,8 @@ def test_switching_on_needs_a_key_and_a_secret_in_force(client, db, monkeypatch)
     db.expire_all()
     # The key was not saved either: one change, all or nothing.
     assert db.query(PaymentCredential).count() == 0 and db.query(KycSettings).count() == 0
-    monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", "https://myhigh5.com/api/v1/kyc/webhook/kaluta")
-    assert put(client, admin, enabled=True, api_key=ADMIN_KEY).json()["detail"]["code"] == "NOT_READY"
-    monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", "")
     on = put(client, admin, enabled=True, api_key=ADMIN_KEY, webhook_secret=ADMIN_SECRET)
-    assert on.status_code == 200 and (on.json()["enabled"], on.json()["enabled_source"]) == (True, "admin_panel")
+    assert on.status_code == 200 and (on.json()["enabled"], on.json()["source"]) == (True, "database")
 
 
 def test_switched_off_in_the_admin_panel_nothing_reaches_the_provider_and_the_webhook_answers_503(client, db, monkeypatch):
@@ -245,14 +254,12 @@ def test_switched_off_in_the_admin_panel_nothing_reaches_the_provider_and_the_we
 
 
 def test_switched_on_in_the_admin_panel_with_its_own_secret(client, db, monkeypatch):
-    monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", False)
-    monkeypatch.setattr(kaluta_kyc.kaluta_kyc_service, "enabled", False)
     admin = kyc_admin(db)
     v = open_verification(db, person(db, 30))
     body = event("session.expired", v, status="expired")
-    assert deliver(client, body, ENV_SECRET).status_code == 503                    # off in the environment
-    assert put(client, admin, enabled=True, webhook_secret=ADMIN_SECRET).status_code == 200
-    assert deliver(client, body, ENV_SECRET).status_code == 401                    # the old secret no longer holds
+    assert deliver(client, body, ENV_SECRET).status_code == 503                    # on in the environment: ignored
+    assert put(client, admin, enabled=True, api_key=ADMIN_KEY, webhook_secret=ADMIN_SECRET).status_code == 200
+    assert deliver(client, body, ENV_SECRET).status_code == 401                    # the environment secret never holds
     assert deliver(client, body, ADMIN_SECRET).json()["result"] == "applied"
 
 
@@ -261,6 +268,7 @@ def test_switched_on_in_the_admin_panel_with_its_own_secret(client, db, monkeypa
 # ===========================================================================
 
 def test_free_kyc_starts_without_touching_a_paid_payment(client, db, monkeypatch):
+    turn_on(db)
     FakeProvider(monkeypatch)
     product(db, "0")
     user = adult(db)
@@ -277,13 +285,14 @@ def test_free_kyc_starts_without_touching_a_paid_payment(client, db, monkeypatch
 # ===========================================================================
 
 def test_an_expired_session_is_renewed_for_the_same_paid_attempt_without_a_payment(client, db, monkeypatch):
+    turn_on(db)
     fake = FakeProvider(monkeypatch)
     product(db, "10")
     user = adult(db)
     kyc_paid(db, user)
     first = client.post(INITIATE, json=ADDRESS, headers=auth(user)).json()
     row = kyc_rows(db, user)[0]
-    assert deliver(client, event("session.expired", row, session="sess-1", status="expired"), ENV_SECRET
+    assert deliver(client, event("session.expired", row, session="sess-1", status="expired"), SAVED_SECRET
                    ).json()["result"] == "applied"
     state = client.get(STATUS, headers=auth(user)).json()
     assert (state["status"], state["session_expired"], state["can_continue"], state["needs_payment"],
@@ -300,6 +309,7 @@ def test_an_expired_session_is_renewed_for_the_same_paid_attempt_without_a_payme
 
 
 def test_renewals_stop_at_the_session_limit_and_an_administrator_can_allow_one_more(client, db, monkeypatch):
+    turn_on(db)
     fake = FakeProvider(monkeypatch)
     user = adult(db)
     kyc_paid(db, user)
@@ -343,6 +353,7 @@ def test_renewals_stop_at_the_session_limit_and_an_administrator_can_allow_one_m
 
 
 def test_a_provider_refusal_does_not_use_up_a_session_but_an_unknown_outcome_does(client, db, monkeypatch):
+    turn_on(db)
     user = adult(db)
     kyc_paid(db, user)
     FakeProvider(monkeypatch, status=402, body={"detail": "Insufficient balance"})
@@ -357,6 +368,7 @@ def test_a_provider_refusal_does_not_use_up_a_session_but_an_unknown_outcome_doe
 
 
 def test_a_new_attempt_after_a_rejection_starts_with_a_full_session_allowance(client, db, monkeypatch):
+    turn_on(db)
     FakeProvider(monkeypatch)
     user = adult(db)
     kyc_paid(db, user)
@@ -372,6 +384,7 @@ def test_a_new_attempt_after_a_rejection_starts_with_a_full_session_allowance(cl
 
 
 def test_the_last_attempt_can_still_renew_its_session(client, db, monkeypatch):
+    turn_on(db)
     fake = FakeProvider(monkeypatch)
     user = adult(db)
     kyc_paid(db, user)
@@ -384,6 +397,7 @@ def test_the_last_attempt_can_still_renew_its_session(client, db, monkeypatch):
 
 
 def test_an_older_expired_record_continues_the_same_attempt_without_a_payment(client, db, monkeypatch):
+    turn_on(db)
     fake = FakeProvider(monkeypatch)
     product(db, "10")
     user = adult(db)
@@ -421,6 +435,7 @@ def test_a_status_read_that_reports_an_expiry_is_not_a_rejection(db, monkeypatch
 
 
 def test_a_rejection_found_while_continuing_never_opens_a_new_attempt(client, db, monkeypatch):
+    turn_on(db)
     FakeProvider(monkeypatch)
     user = adult(db)
     kyc_paid(db, user)

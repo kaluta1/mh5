@@ -4,31 +4,31 @@ MyHigh5 uses **Kaluta KYC** for identity verification. **Shufti Pro** remains in
 
 Provider documentation: <https://kalutakyc.com/docs>.
 
-## Settings: Admin Panel first, server environment as fallback
+## Settings: managed in the Admin Panel only (the database is the single source)
 
-Admin → KYC → **Kaluta KYC settings** (`GET|PUT /api/v1/kyc/admin/settings`):
+Admin → KYC → **Kaluta KYC settings** (`GET|PUT /api/v1/kyc/admin/settings`), one form and one Save button:
 
 | Setting | Stored as | Notes |
 |---|---|---|
-| Kaluta API key | AES-256-GCM ciphertext in `payment_credentials` (`provider = 'kaluta'`, name `API_KEY`) | Write-only. Never shown again, logged, audited or returned; the page shows only *saved / readable / in use* |
+| Kaluta KYC on/off | `kyc_settings.kaluta_enabled` (one row) | No row / NULL = **off**. Switching on is refused unless a key and a secret are saved and readable and `KYC_PROVIDER` is `kaluta` |
+| Kaluta API key | AES-256-GCM ciphertext in `payment_credentials` (`provider = 'kaluta'`, name `API_KEY`) | Write-only. Never shown again, logged, audited or returned; the page shows only *configured / not configured* |
 | Kaluta webhook secret | same (`WEBHOOK_SECRET`) | A URL-shaped value is refused (the known mistake of pasting the webhook URL) |
-| Kaluta KYC on/off | `kyc_settings.kaluta_enabled` (one row) | Switching on is refused unless a key and a secret are in force and `KYC_PROVIDER` is `kaluta` |
-| Member KYC fee | `product_types.price` of `kyc` | See below |
+| Member KYC fee (USD) | `product_types.price` of `kyc` | 0 to 1000.00, two decimals; 0 = free. See below |
+| Sessions per attempt | `kyc_settings.sessions_per_attempt` | 1 to 10 (CHECK constraint); NULL = the default 3 (migration `e6f7a8b9c0d1`) |
 | Webhook URL | not stored | Read-only, with a Copy button, for the Kaluta dashboard |
 
-- Encryption uses the dedicated `PAYMENT_SETTINGS_ENCRYPTION_KEY` (the Finance & Payments key; HKDF purpose `mh5-kyc:kaluta-credential:<name>`, so a KYC ciphertext can never be read as a payment credential). Without that key nothing can be saved (409 `ENCRYPTION_KEY_MISSING`); the environment values keep working.
+- **The server environment is not read** for the on/off switch, the key or the secret: `KALUTA_KYC_ENABLED`, `KALUTA_API_KEY` and `KALUTA_WEBHOOK_SECRET` have no effect. If they are present, startup prints `IGNORED: <names>` (names only, never values). Nothing is copied from them into the database.
+- **Fail closed.** No saved settings, a key or secret that cannot be decrypted (e.g. a different `PAYMENT_SETTINGS_ENCRYPTION_KEY`), or a database read error: Kaluta KYC is treated as off. `initiate` answers 503 before anything is opened (no attempt, no payment used); the webhook answers 503 when off and 401 when no readable secret is saved. A webhook is never accepted unsigned, in any environment.
+- Encryption uses the dedicated `PAYMENT_SETTINGS_ENCRYPTION_KEY` (the Finance & Payments key; HKDF purpose `mh5-kyc:kaluta-credential:<name>`, so a KYC ciphertext can never be read as a payment credential). Without that key a key or secret cannot be saved (409 `ENCRYPTION_KEY_MISSING`).
 - A blank key/secret field keeps the saved value; saving a new one replaces it. There is no "delete" (rotation = replace).
-- A value saved in the Admin Panel is used instead of the environment. Anything not saved there comes from the environment exactly as before; until an administrator saves something, nothing changes.
-- Every change needs the explicit `manage_kyc_settings` permission AND the administrator's current password (shared wrong-password lockout), is refused if the page was stale (`expected_version`), and writes one `audit_trails` row `KYC_SETTINGS_CHANGED` naming what changed (`API_KEY`, `WEBHOOK_SECRET`, `KALUTA_ENABLED`) and the on/off value. Never a key or secret.
+- One save is ONE transaction: every value is validated first (422 with `field` = `MEMBER_FEE`, `SESSIONS_PER_ATTEMPT`, `API_KEY` or `WEBHOOK_SECRET`), and any refusal (bad value, stale page, switching on without a secret, missing `kyc` product) leaves everything as it was.
+- Every change needs the explicit `manage_kyc_settings` permission (or a Super Admin) AND the administrator's current password (shared wrong-password lockout), is refused if the page was stale (`expected_version`, `expected_fee`), and writes one `audit_trails` row `KYC_SETTINGS_CHANGED` naming what changed (`API_KEY`, `WEBHOOK_SECRET`, `KALUTA_ENABLED`, `MEMBER_FEE`, `SESSIONS_PER_ATTEMPT`) with the old and new on/off, fee and sessions values. Never a key or secret. A fee change also writes its own `KYC_MEMBER_FEE_CHANGED` row.
 - The saved values are re-read on every KYC request, so a change takes effect on every worker without a restart.
 
-Server environment (fallback; still required for startup validation):
+Server environment (only what is not a KYC setting):
 
 ```env
 KYC_PROVIDER=kaluta
-KALUTA_KYC_ENABLED=true           # default false: nothing is sent and the webhook answers 503
-KALUTA_API_KEY=klt_...            # Kaluta Dashboard → API Keys (shown once)
-KALUTA_WEBHOOK_SECRET=whsec_...   # Kaluta Dashboard → Webhooks (NOT the webhook URL)
 ```
 
 Optional overrides (defaults are derived from `BACKEND_PUBLIC_URL` and `FRONTEND_URL`):
@@ -38,7 +38,7 @@ KALUTA_WEBHOOK_URL=https://myhigh5.com/api/v1/kyc/webhook/kaluta
 KALUTA_REDIRECT_URL=https://myhigh5.com/dashboard/kyc
 ```
 
-The key and the secret never reach a browser, a log line or an API answer. With `KALUTA_KYC_ENABLED=true`, the application refuses to start in production when the environment key or secret is missing or when the secret is URL-shaped (this check reads the environment only).
+The key and the secret never reach a browser, a log line or an API answer.
 
 ## The `manage_kyc_settings` permission
 
@@ -85,7 +85,7 @@ One figure, in USD: what a member pays MyHigh5 for one new verification attempt.
 
 | Rule | Behaviour |
 |---|---|
-| Who sets it | An administrator with the `manage_kyc_settings` permission (NOT `manage_payment_settings`), confirming with their current password (Admin → KYC). `PUT /api/v1/kyc/admin/fee`; each change writes one `audit_trails` row (`KYC_MEMBER_FEE_CHANGED`, old and new amount) |
+| Who sets it | An administrator with the `manage_kyc_settings` permission (NOT `manage_payment_settings`), confirming with their current password (Admin → KYC). The KYC settings form (`PUT /api/v1/kyc/admin/settings`, field `member_fee`; the older `PUT /api/v1/kyc/admin/fee` still works under the same rules); each change writes one `audit_trails` row (`KYC_MEMBER_FEE_CHANGED`, old and new amount) |
 | Range | 0 to 1000.00, at most two decimals |
 | Free KYC | Fee 0: an attempt starts without a payment, and a KYC payment cannot be created (409 `KYC_FEE_NOT_REQUIRED`). A paid, unused KYC payment the member already holds is NOT used: it stays paid and unused, unchanged, and opens a later attempt once the fee is no longer 0 |
 | Shown to the member | `GET /api/v1/kyc/fee` and `status-detailed` (`kyc_price`, `kyc_is_free`), on the KYC page before the member starts |
@@ -125,7 +125,7 @@ A provider session that runs out never uses up the member's paid attempt.
 - The expiry returned by the provider is stored. Once it has passed, or a `session.expired` webhook (or a status read reporting `expired`) arrives for the CURRENT session, the verification stays open (`in_progress`, same attempt, same payment) and only the session is ended: the link is no longer handed out and `status-detailed` reports `session_expired: true`. An expiry is never treated as a rejection.
 - The next "continue" opens a fresh session for the SAME attempt: new reference, no payment, `attempts_count` unchanged. A KYC payment is refused meanwhile (409 `KYC_ATTEMPT_OPEN`).
 - Older records with status `expired` are treated the same way: an open attempt whose session ended.
-- **Limit.** Each provider session may be charged to MyHigh5, so one attempt may open at most `SESSIONS_PER_ATTEMPT` = 3 sessions (`kyc_verifications.attempt_sessions_count`; `force_new` counts too). The session is taken under the member's row lock BEFORE the provider is asked, so requests arriving together cannot pass the limit. It is given back only when the provider certainly opened nothing (4xx answer, or switched off); after a timeout or a 5xx it stays counted. `status-detailed` reports `sessions_remaining` and `session_limit_reached`; past the limit `initiate` answers 409 `KYC_SESSION_LIMIT_REACHED` and the member is asked to contact support.
+- **Limit.** Each provider session may be charged to MyHigh5, so one attempt may open at most the **sessions per attempt** setting (default 3) (`kyc_verifications.attempt_sessions_count`; `force_new` counts too). The session is taken under the member's row lock BEFORE the provider is asked, so requests arriving together cannot pass the limit. It is given back only when the provider certainly opened nothing (4xx answer, or switched off); after a timeout or a 5xx it stays counted. `status-detailed` reports `sessions_remaining` and `session_limit_reached`; past the limit `initiate` answers 409 `KYC_SESSION_LIMIT_REACHED` and the member is asked to contact support.
 - **Controlled recovery.** An administrator with `manage_kyc_settings` can allow ONE more session for that open attempt (`POST /api/v1/kyc/admin/verification/{id}/grant-session`, current password; refused while the member still has a session, at most 3 extra per attempt). Each grant writes `kyc_audit_logs` (`kyc_session_granted`) and `audit_trails` (`KYC_SESSION_GRANTED`). No payment and no new attempt.
 - A new attempt (after a rejection or a review) starts with a full allowance.
 - The last attempt (`attempts_count == max_attempts`) can still renew its session; `max_attempts` limits new attempts only.
@@ -138,7 +138,7 @@ A refused key (401), an empty balance (402), a rate limit (429), a provider faul
 
 1. Add the webhook endpoint `{BACKEND_PUBLIC_URL}/api/v1/kyc/webhook/kaluta`.
 2. Subscribe to `session.approved` (or `session.verified`), `session.rejected`, `session.expired`. Progress events are optional.
-3. Save the webhook signing secret and an API key in Admin → KYC → Kaluta KYC settings (or in `KALUTA_WEBHOOK_SECRET` / `KALUTA_API_KEY` on the server). The webhook URL to register is shown there with a Copy button.
+3. Save the webhook signing secret and an API key in Admin → KYC → Kaluta KYC settings (the server environment is not used). The webhook URL to register is shown there with a Copy button.
 4. Keep a balance on the account (Dashboard → Billing).
 
 `GET /api/v1/kyc/deployment/kaluta-urls` (administrators) shows the URLs this server uses and whether a key and a secret are configured, without their values.

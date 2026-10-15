@@ -21,6 +21,7 @@ from app.models.kyc import KYCStatus, KYCVerification
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.services import kaluta_kyc, shufti_pro
 from app.services import kyc_provider_dispatch as dispatch
+from tests.conftest import save_kaluta_settings
 from tests.unit.test_age_gate_registration import auth
 from tests.unit.test_phase5_contest_eligibility import person
 from tests.unit.test_phase6_content_safety import role_user
@@ -47,8 +48,10 @@ def no_real_network(monkeypatch):
 
 
 @pytest.fixture
-def providers(monkeypatch):
-    """Recorders at the provider boundary (both providers)."""
+def providers(monkeypatch, db, kaluta_settings_key):
+    """Recorders at the provider boundary (both providers), with Kaluta KYC
+    switched on in Admin > KYC (the database) with a test-only key."""
+    save_kaluta_settings(db, enabled=True, api_key=FAKE_KEY)
     calls = {"kaluta": [], "shufti": [], "validity": []}
 
     async def kaluta_create(*, external_id, user, country_iso=None, residential_address=None):
@@ -295,10 +298,9 @@ def test_provider_selection_is_unchanged(client, db, providers, monkeypatch):
 
 
 def test_disabled_kaluta_stays_disabled_and_fails_safely(client, db, monkeypatch):
-    """With the real adapter and KALUTA_KYC_ENABLED off (the default), nothing is
-    sent and the endpoint answers 503, as before. Nothing is opened either: no
-    attempt is started and the paid payment is not used."""
-    monkeypatch.setattr(kaluta_kyc.kaluta_kyc_service, "enabled", False)
+    """With the real adapter and Kaluta KYC off (nothing saved in Admin > KYC: the
+    default), nothing is sent and the endpoint answers 503, as before. Nothing
+    is opened either: no attempt is started and the paid payment is not used."""
     a = adult(db)
     paid = kyc_paid(db, a)
     r = client.post(INITIATE, json=ADDRESS, headers=auth(a))
@@ -314,8 +316,6 @@ def test_provider_failures_are_safe_and_retryable(client, db, providers, monkeyp
     real_create = kaluta_kyc.KalutaKYCService.create_session
     svc = kaluta_kyc.kaluta_kyc_service
     monkeypatch.setattr(svc, "create_session", real_create.__get__(svc))
-    monkeypatch.setattr(svc, "enabled", True)
-    monkeypatch.setattr(svc, "api_key", FAKE_KEY)
 
     async def fake_post(self, url, **kwargs):
         if kind == "timeout":

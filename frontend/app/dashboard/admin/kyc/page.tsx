@@ -2,7 +2,6 @@
 
 import { useLanguage } from '@/contexts/language-context'
 import AdminKYC from '@/components/admin/admin-kyc'
-import AdminKycFee from '@/components/admin/admin-kyc-fee'
 import AdminKycSettings from '@/components/admin/admin-kyc-settings'
 
 export default function KYCPage() {
@@ -14,7 +13,6 @@ export default function KYCPage() {
         <p className="text-gray-600 dark:text-gray-400 mt-2">{t('admin.kyc.description') || 'Approve or reject identity verifications'}</p>
       </div>
       <AdminKycSettings />
-      <AdminKycFee />
       <AdminKYC />
     </div>
   )

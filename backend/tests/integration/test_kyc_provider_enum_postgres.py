@@ -25,7 +25,6 @@ from app.api.deps import get_db
 from app.db.base_class import Base
 from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
 from app.models.payment import Deposit
-from app.services import kaluta_kyc
 from tests.unit.test_kyc_initiation_dispatch import (  # noqa: F401  (fixtures + helpers)
     ADDRESS,
     INITIATE,
@@ -36,6 +35,7 @@ from tests.unit.test_kyc_initiation_dispatch import (  # noqa: F401  (fixtures +
     no_real_network,
     providers,
 )
+from tests.conftest import save_kaluta_settings
 from tests.unit.test_age_gate_registration import auth
 
 pytestmark = [
@@ -223,17 +223,20 @@ def test_pre_fix_database_turns_a_kaluta_initiation_into_a_500(app, prefix_engin
     symptom is reproduced with Kaluta on (the provider is a fake)."""
     client, db, close = _client(app, prefix_engine)
     try:
+        save_kaluta_settings(db, enabled=True)                    # on in Admin > KYC (synthetic values)
         a = adult(db)
         kyc_paid(db, a)
         with client:
             r = client.post(INITIATE, json=ADDRESS, headers=auth(a))
         assert r.status_code == 500
     finally:
+        db.rollback()
+        save_kaluta_settings(db, enabled=False, api_key=None, webhook_secret=None)
         close()
 
 
 def test_I_disabled_kaluta_reaches_the_intended_503_without_network_or_db_error(app, fixed_engine, monkeypatch):
-    monkeypatch.setattr(kaluta_kyc.kaluta_kyc_service, "enabled", False)  # the default (KALUTA_KYC_ENABLED off)
+    # Nothing saved in Admin > KYC: Kaluta is off (the default).
     client, db, close = _client(app, fixed_engine)
     try:
         a = adult(db)
@@ -252,6 +255,7 @@ def test_I_disabled_kaluta_reaches_the_intended_503_without_network_or_db_error(
 def test_H_K_kaluta_selected_persists_kaluta_and_passes_the_live_session(app, fixed_engine, providers, dispatcher_spy):
     client, db, close = _client(app, fixed_engine)
     try:
+        save_kaluta_settings(db, enabled=True)                    # on in Admin > KYC (synthetic values)
         a = adult(db)
         kyc_paid(db, a)
         with client:
@@ -262,6 +266,8 @@ def test_H_K_kaluta_selected_persists_kaluta_and_passes_the_live_session(app, fi
         db.expire_all()
         assert kyc_rows(db, a)[0].provider is VerificationProvider.KALUTA
     finally:
+        db.rollback()
+        save_kaluta_settings(db, enabled=False, api_key=None, webhook_secret=None)
         close()
 
 

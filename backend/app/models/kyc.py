@@ -103,13 +103,20 @@ class KYCVerification(Base):
 
 class KycSettings(Base):
     """KYC provider settings an administrator changes in the Admin Panel (one
-    row, id = 1). The Kaluta API key and webhook secret are NOT here: they are
+    row, id = 1). The ONLY source of these settings: the server environment is
+    not read. The Kaluta API key and webhook secret are NOT here: they are
     kept as AES-256-GCM ciphertext in payment_credentials (provider "kaluta").
-    NULL = not set in the Admin Panel; the server environment then decides."""
+    No row, or kaluta_enabled NULL = Kaluta KYC is off; sessions_per_attempt
+    NULL = the default (3)."""
     __tablename__ = "kyc_settings"
-    __table_args__ = (CheckConstraint("id = 1", name="ck_kyc_settings_single_row"),)
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_kyc_settings_single_row"),
+        CheckConstraint("sessions_per_attempt IS NULL OR sessions_per_attempt BETWEEN 1 AND 10",
+                        name="ck_kyc_settings_sessions_per_attempt"),
+    )
 
     kaluta_enabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    sessions_per_attempt: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Incremented by every accepted change: a change made on a stale page is refused.
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"),

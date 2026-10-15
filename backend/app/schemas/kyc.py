@@ -139,6 +139,8 @@ class KYCVerificationAdminDetail(KYCVerification):
     documents: List[KYCDocumentWithPublicUrls] = Field(default_factory=list)
     user_email: Optional[str] = None
     user_full_name: Optional[str] = None
+    # The sessions-per-attempt setting in force (Admin > KYC), for "sessions left".
+    sessions_per_attempt: Optional[int] = None
 
     class Config:
         from_attributes = True

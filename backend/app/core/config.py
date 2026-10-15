@@ -192,10 +192,11 @@ class Settings(BaseModel):
     # KYC provider: kaluta (default) | shufti_pro (legacy)
     KYC_PROVIDER: str = os.getenv("KYC_PROVIDER", "kaluta")
 
-    # Kaluta KYC (default)
+    # Kaluta KYC (default). Its on/off switch, API key and webhook secret are
+    # configured ONLY in Admin > KYC (database, app.services.kyc_settings). The
+    # three variables below are NOT used at runtime: they are read only so the
+    # startup check can warn (by name) that they are ignored.
     KALUTA_API_KEY: str = _first_nonempty_env("KALUTA_API_KEY", "kaluta_api_key")
-    # Fail-safe default: disabled unless explicitly enabled -- same reasoning as
-    # ANNUALADS_ENABLED above.
     KALUTA_KYC_ENABLED: bool = os.getenv("KALUTA_KYC_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     KALUTA_WEBHOOK_SECRET: str = _first_nonempty_env("KALUTA_WEBHOOK_SECRET", "kaluta_webhook_secret")
     KALUTA_WEBHOOK_URL: str = _first_nonempty_env("KALUTA_WEBHOOK_URL", "kaluta_webhook_url")

@@ -12,9 +12,10 @@ What the provider documents, and what this module relies on:
   * After a rejection the member may retry inside the provider's widget: a new
     session with the SAME external_id.
 
-The key and the webhook secret come from the Admin Panel (stored encrypted,
-app.services.kyc_settings) or else the server environment, and are never sent
-to a browser, logged or returned in an answer.
+Whether Kaluta KYC is on, the API key and the webhook secret come ONLY from
+the database (Admin > KYC, app.services.kyc_settings; the key and the secret
+stored encrypted). The server environment is not read for them. They are never
+sent to a browser, logged or returned in an answer.
 """
 from __future__ import annotations
 
@@ -22,7 +23,6 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import secrets
 import string
 import time
@@ -142,32 +142,22 @@ def _parse_dob(user_dob: Optional[datetime]) -> Optional[str]:
 
 
 class KalutaKYCService:
-    """`enabled`, `api_key` and `webhook_secret` are what the server environment
-    says, unless the Admin Panel set a value: app.services.kyc_settings.apply()
-    hands the saved values over before every KYC request (use_admin_values)."""
+    """`enabled`, `api_key` and `webhook_secret` are the database settings in
+    force: app.services.kyc_settings.apply() hands them over before every KYC
+    request (use_settings). Until then, and whenever they cannot be read,
+    Kaluta KYC is off and has no key or secret."""
 
     def __init__(self) -> None:
-        self._admin_values: Dict[str, Any] = {}
-        self.enabled = bool(getattr(settings, "KALUTA_KYC_ENABLED", True))
-        self.api_key = (settings.KALUTA_API_KEY or "").strip()
-        self.webhook_secret = (settings.KALUTA_WEBHOOK_SECRET or "").strip()
+        self.enabled = False
+        self.api_key = ""
+        self.webhook_secret = ""
         self.webhook_url, self.redirect_url = resolve_kaluta_urls()
 
-    def use_admin_values(self, values: Dict[str, Any]) -> None:
-        """REPLACE the Admin Panel values in force (enabled / api_key /
-        webhook_secret). A name that is absent falls back to the environment."""
-        self._admin_values = {k: v for k, v in values.items() if k in ("enabled", "api_key", "webhook_secret")
-                              and v is not None}
-
-    def _value(self, name: str) -> Any:
-        return self._admin_values[name] if name in self._admin_values else self.__dict__[f"_env_{name}"]
-
-    enabled = property(lambda self: bool(self._value("enabled")),
-                       lambda self, value: self.__dict__.__setitem__("_env_enabled", value))
-    api_key = property(lambda self: self._value("api_key"),
-                       lambda self, value: self.__dict__.__setitem__("_env_api_key", value))
-    webhook_secret = property(lambda self: self._value("webhook_secret"),
-                              lambda self, value: self.__dict__.__setitem__("_env_webhook_secret", value))
+    def use_settings(self, values: Dict[str, Any]) -> None:
+        """REPLACE the settings in force. A name that is absent means off / not set."""
+        self.enabled = bool(values.get("enabled"))
+        self.api_key = str(values.get("api_key") or "")
+        self.webhook_secret = str(values.get("webhook_secret") or "")
 
     def __repr__(self) -> str:  # a key or a secret must never reach a log through repr()
         return (f"KalutaKYCService(enabled={self.enabled}, api_key={'set' if self.api_key else 'missing'}, "
@@ -183,11 +173,12 @@ class KalutaKYCService:
 
     def verify_webhook_signature(self, raw_body: bytes, signature_header: str) -> bool:
         if not self.enabled:
-            logger.warning("Kaluta KYC is disabled (KALUTA_KYC_ENABLED=false) — webhook rejected, not verified")
+            logger.warning("Kaluta KYC is switched off in Admin > KYC — webhook rejected, not verified")
             return False
         if not self.webhook_secret:
-            logger.warning("KALUTA_WEBHOOK_SECRET not set — webhook signature not verified")
-            return os.getenv("ENVIRONMENT", "").lower() in ("development", "dev", "local", "test")
+            # Never accepted unsigned, in any environment.
+            logger.warning("No Kaluta webhook secret is saved in Admin > KYC — webhook rejected")
+            return False
 
         if not signature_header or len(signature_header) > 512 or len(raw_body) > WEBHOOK_MAX_BODY_BYTES:
             return False
@@ -233,7 +224,7 @@ class KalutaKYCService:
             return {"success": False, "no_session_created": True, "error": "Kaluta KYC is temporarily disabled."}
         if not self.configured():
             return {"success": False, "no_session_created": True,
-                    "error": "Kaluta KYC is not configured (KALUTA_API_KEY missing)."}
+                    "error": "Kaluta KYC is not configured (no API key saved in Admin > KYC)."}
 
         body: Dict[str, Any] = {
             "external_id": external_id,

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request, Header, BackgroundTasks, Body, Query
@@ -8,7 +8,7 @@ from datetime import datetime
 import json
 import logging
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from app.api import deps
 from app.core.config import settings
@@ -221,12 +221,12 @@ _NEW_ATTEMPT_STATUSES = (KYCStatus.REJECTED, KYCStatus.REQUIRES_REVIEW)
 _OPEN_ATTEMPT_STATUSES = (KYCStatus.PENDING, KYCStatus.IN_PROGRESS, KYCStatus.EXPIRED)
 
 
-def _attempt_view(verification) -> dict:
+def _attempt_view(verification, per_attempt: int) -> dict:
     return {
         "attempts_count": verification.attempts_count,
         "max_attempts": verification.max_attempts,
         "attempts_remaining": max(0, verification.max_attempts - verification.attempts_count),
-        "sessions_remaining": kyc_settings.sessions_left(verification),
+        "sessions_remaining": kyc_settings.sessions_left(verification, per_attempt=per_attempt),
     }
 
 
@@ -261,8 +261,8 @@ async def initiate_shufti_verification(
     - PENDING / IN_PROGRESS: the open session is handed out again while it is valid.
     - Session ran out (expiry time passed, an expiry event, or EXPIRED): a fresh
       session for the SAME attempt: no payment, no new attempt, within the
-      session limit of the attempt (kyc_settings.SESSIONS_PER_ATTEMPT plus what
-      an administrator allowed). force_new also opens a fresh session and counts.
+      session limit of the attempt (the sessions-per-attempt setting in
+      Admin > KYC plus what an administrator allowed). force_new also opens a fresh session and counts.
     - REJECTED / REQUIRES_REVIEW: a NEW attempt (attempt limit applies). It is
       paid with a paid, unused KYC payment, or free while the member KYC fee is
       0; a free attempt never uses a payment the member already made.
@@ -273,7 +273,8 @@ async def initiate_shufti_verification(
         # Switched off or without a key: refused before an attempt is opened or a payment used.
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                             detail="Kaluta KYC is temporarily disabled." if not kaluta_kyc_service.enabled
-                            else "Kaluta KYC is not configured (KALUTA_API_KEY missing).")
+                            else "Kaluta KYC is not configured (no API key saved in Admin > KYC).")
+    per_attempt = kyc_settings.sessions_per_attempt(db)
     verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
     _refuse_closed(verification)
 
@@ -340,7 +341,7 @@ async def initiate_shufti_verification(
                     "reused": True,
                     "provider": provider_for_verification(verification),
                     "status": "in_progress",
-                    **_attempt_view(verification),
+                    **_attempt_view(verification, per_attempt),
                 }
 
     # From here on the member's row is locked until the next commit: two requests
@@ -383,7 +384,7 @@ async def initiate_shufti_verification(
     # KYC is free (fee 0): no payment is looked for, and a paid one the member
     # holds is left exactly as it is (paid, unused) for a later paid attempt.
 
-    if not new_attempt and kyc_settings.sessions_left(verification) <= 0:
+    if not new_attempt and kyc_settings.sessions_left(verification, per_attempt=per_attempt) <= 0:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
             "code": "KYC_SESSION_LIMIT_REACHED",
@@ -554,7 +555,7 @@ async def initiate_shufti_verification(
         crud_kyc.kyc_verification._create_audit_log(
             db, verification.id, "kaluta_session_created",
             f"Provider session {external_id} opened (attempt {verification.attempts_count}, "
-            f"session {verification.attempt_sessions_count} of {kyc_settings.session_allowance(verification)})",
+            f"session {verification.attempt_sessions_count} of {kyc_settings.session_allowance(verification, per_attempt=per_attempt)})",
             current_user.id, False,
         )
 
@@ -565,7 +566,7 @@ async def initiate_shufti_verification(
         "reused": False,
         "provider": active_kyc_provider(),
         "status": "new",
-        **_attempt_view(verification),
+        **_attempt_view(verification, per_attempt),
     }
 
 
@@ -629,9 +630,14 @@ class KycSettingsBody(BaseModel):
     enabled: Optional[bool] = None
     api_key: Optional[str] = Field(default=None, max_length=512)
     webhook_secret: Optional[str] = Field(default=None, max_length=512)
+    # The Member KYC Verification Fee in USD ("10.00"; 0 = free) and the provider
+    # sessions one attempt may open. Validated by app.services.kyc_settings.
+    member_fee: Optional[str] = Field(default=None, max_length=20)
+    sessions_per_attempt: Optional[Union[StrictInt, str]] = Field(default=None)
     current_password: str = Field(default="", max_length=256)
-    # The version the administrator was shown; the change is refused if it has moved since.
+    # What the administrator was shown; the change is refused if it has moved since.
     expected_version: Optional[int] = Field(default=None, ge=0)
+    expected_fee: Optional[str] = Field(default=None, max_length=20)
 
 
 class KycSessionGrantBody(BaseModel):
@@ -656,8 +662,9 @@ def get_admin_kyc_settings(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_admin_user),
 ):
-    """Kaluta KYC settings as the Admin Panel shows them: whether a key and a
-    secret are saved and in force, never their values."""
+    """Kaluta KYC settings as the Admin Panel shows them (the database is their
+    only source): on/off, whether a key and a secret are saved, never their
+    values, the member fee and the sessions per attempt."""
     return kyc_settings.view(db, current_user)
 
 
@@ -668,13 +675,16 @@ def set_admin_kyc_settings(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_admin_user),
 ):
-    """Switch Kaluta KYC on/off and/or replace its API key or webhook secret
-    (manage_kyc_settings + current password; stored encrypted; audited without values)."""
+    """Save the KYC settings form: Kaluta on/off, replace its API key or webhook
+    secret, the member fee, the sessions per attempt (manage_kyc_settings +
+    current password; secrets stored encrypted; audited without their values;
+    one commit, nothing changed on any refusal)."""
     try:
         return kyc_settings.update(
             db, current_user, password=body.current_password, enabled=body.enabled,
             credentials={"API_KEY": body.api_key, "WEBHOOK_SECRET": body.webhook_secret},
-            expected_version=body.expected_version, ip=client_ip(request))
+            member_fee=body.member_fee, sessions=body.sessions_per_attempt,
+            expected_version=body.expected_version, expected_fee=body.expected_fee, ip=client_ip(request))
     except kyc_settings.KycSettingsError as exc:
         db.rollback()
         raise _kyc_settings_http_error(exc) from None
@@ -764,7 +774,8 @@ async def get_kyc_status_detailed(
     ] and not max_attempts_reached
     can_continue = verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS, KYCStatus.EXPIRED]
     session_expired = _session_expired_locally(verification)
-    sessions_remaining = kyc_settings.sessions_left(verification) if can_continue else None
+    sessions_remaining = (kyc_settings.sessions_left(verification, per_attempt=kyc_settings.sessions_per_attempt(db))
+                          if can_continue else None)
     needs_proof_of_address = verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
     if verification.status == KYCStatus.APPROVED:
         kyc_step = 0
@@ -1114,6 +1125,7 @@ def admin_kyc_verification_detail(
         documents=out_docs,
         user_email=u.email if u else None,
         user_full_name=(str(u.full_name).strip() if u and u.full_name else None),
+        sessions_per_attempt=kyc_settings.sessions_per_attempt(db),
     )
 
 
@@ -1531,7 +1543,7 @@ async def kaluta_kyc_webhook(
 ):
     """
     Kaluta KYC webhook (session.approved, session.rejected, session.expired, …).
-    Verifies X-Kaluta-Signature with the webhook secret in force (Admin Panel, else KALUTA_WEBHOOK_SECRET).
+    Verifies X-Kaluta-Signature with the webhook secret saved in Admin > KYC (refused when none is saved).
     """
     if not kyc_settings.kaluta_enabled(db):
         logger.warning("Kaluta KYC webhook received while Kaluta KYC is switched off — rejecting")
@@ -1579,7 +1591,7 @@ def get_kaluta_deployment_urls(
         "api_key_configured": kaluta_kyc_service.configured(),
         "webhook_secret_configured": bool(kaluta_kyc_service.webhook_secret),
         "checklist": [
-            "Save the Kaluta API key and webhook secret in Admin > KYC (or set KALUTA_API_KEY and KALUTA_WEBHOOK_SECRET on the VPS).",
+            "Save the Kaluta API key and webhook secret in Admin > KYC (the server environment is not used).",
             "Register webhook URL in Kaluta Dashboard → Webhooks.",
             "Ensure POST /api/v1/kyc/webhook/kaluta is reachable from the public internet.",
         ],

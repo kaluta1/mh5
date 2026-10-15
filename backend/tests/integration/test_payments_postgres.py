@@ -91,6 +91,7 @@ ADMIN_SECURITY = "a2b3c4d5e6f7_administrator_security_permissions.py"
 KYC_SETTINGS = "b3c4d5e6f7a8_kyc_settings_and_session_limit.py"
 SUPER_ADMIN = "c4d5e6f7a8b9_super_admin_role.py"
 EXPOSED_PASSWORDS = "d5e6f7a8b9c0_exposed_password_fingerprints.py"
+KYC_SESSIONS_SETTING = "e6f7a8b9c0d1_kyc_sessions_per_attempt_setting.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -317,7 +318,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (eleventh.revision, eleventh.down_revision, eleventh.depends_on) == ("d5e6f7a8b9c0", "c4d5e6f7a8b9", None)
     assert eleventh.branch_labels is None
     heads = [name for name, line in revisions.items() if '"d5e6f7a8b9c0"' in line or "'d5e6f7a8b9c0'" in line]
-    assert heads == []                                             # d5e6f7a8b9c0 is the single head
+    assert heads == [KYC_SESSIONS_SETTING]                         # one line, no branch
+    twelfth = load_migration(KYC_SESSIONS_SETTING)
+    assert (twelfth.revision, twelfth.down_revision, twelfth.depends_on) == ("e6f7a8b9c0d1", "d5e6f7a8b9c0", None)
+    assert twelfth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"e6f7a8b9c0d1"' in line or "'e6f7a8b9c0d1'" in line]
+    assert heads == []                                             # e6f7a8b9c0d1 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

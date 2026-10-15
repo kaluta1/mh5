@@ -207,16 +207,25 @@ def _valid_production_baseline(monkeypatch):
     monkeypatch.setattr(settings, "ANNUALADS_ENABLED", True)
 
 
-# 1. Kaluta enabled + invalid (URL-shaped) secret => startup validation fails
-def test_kaluta_enabled_invalid_secret_fails_startup(monkeypatch):
+# 1. Kaluta KYC is configured only in Admin > KYC (the database): KALUTA_* in
+#    the environment, even "enabled" with a URL-shaped secret, neither switches
+#    it on nor blocks startup; the startup check names them as ignored (names
+#    only, never a value).
+def test_kaluta_environment_variables_are_ignored_and_named_never_shown(monkeypatch, capsys):
     from main import validate_critical_settings
 
     _valid_production_baseline(monkeypatch)
+    secret = "https://example.com/webhook/kaluta"
+    monkeypatch.setenv("KALUTA_KYC_ENABLED", "true")
+    monkeypatch.setenv("KALUTA_API_KEY", "klt_test_key_synthetic_value")
+    monkeypatch.setenv("KALUTA_WEBHOOK_SECRET", secret)
     monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", True)
-    monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", "https://example.com/webhook/kaluta")
+    monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", secret)
 
-    with pytest.raises(RuntimeError, match="Missing required critical secrets"):
-        validate_critical_settings()
+    validate_critical_settings()  # must not raise
+    out = capsys.readouterr().out
+    assert "IGNORED: KALUTA_KYC_ENABLED, KALUTA_API_KEY, KALUTA_WEBHOOK_SECRET" in out
+    assert secret not in out and "klt_test_key_synthetic_value" not in out
 
 
 # 2. Kaluta disabled + invalid/missing secret => main application can start

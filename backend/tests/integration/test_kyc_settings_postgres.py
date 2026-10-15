@@ -27,6 +27,7 @@ from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.user import Permission, Role, User
 from app.schemas.kyc import KYCInitiateRequest
 from app.services import kyc_settings
+from tests.conftest import save_kaluta_settings
 from tests.integration.test_payments_postgres import in_threads, migrate, pg  # noqa: F401
 
 pytestmark = [
@@ -37,13 +38,15 @@ pytestmark = [
 
 WORKERS = 8
 MIGRATION = "b3c4d5e6f7a8_kyc_settings_and_session_limit.py"
+SESSIONS_MIGRATION = "e6f7a8b9c0d1_kyc_sessions_per_attempt_setting.py"
 ADDRESS = "12 Synthetic Road, Arusha"
 
 
 @pytest.fixture
-def fake_provider(monkeypatch):
+def fake_provider(monkeypatch, pg):
     """The provider boundary of the endpoint: every session opened is recorded.
-    A small delay keeps the requests overlapping."""
+    A small delay keeps the requests overlapping. Kaluta KYC is switched on in
+    Admin > KYC (the database, its only source) with synthetic values."""
     opened, guard = [], threading.Lock()
 
     async def create(*, db, user, reference, **_kwargs):
@@ -63,6 +66,8 @@ def fake_provider(monkeypatch):
     monkeypatch.setattr(kyc_endpoint, "check_kyc_session_validity", validity)
     monkeypatch.setattr(kyc_endpoint, "_guard_kyc_initiation", lambda *_a, **_k: None)
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
+    with pg[1]() as db:
+        save_kaluta_settings(db, enabled=True)
     return opened
 
 
@@ -192,7 +197,8 @@ def test_settings_saved_at_once_by_two_administrators_are_one_change_each_or_ref
         with Session() as db:
             try:
                 kyc_settings.update(db, Admin(), password="x", enabled=bool(i % 2), expected_version=0,
-                                    credentials={"API_KEY": f"klt_synthetic_concurrent_key_{i:04d}"})
+                                    credentials={"API_KEY": f"klt_synthetic_concurrent_key_{i:04d}",
+                                                 "WEBHOOK_SECRET": f"whsec_synthetic_concurrent_{i:04d}"})
                 return "saved"
             except kyc_settings.KycSettingsError as exc:
                 db.rollback()
@@ -206,7 +212,7 @@ def test_settings_saved_at_once_by_two_administrators_are_one_change_each_or_ref
     with Session() as db:
         assert db.query(KycSettings).one().version == 1
         assert db.query(AuditTrail).filter(AuditTrail.action == kyc_settings.AUDIT_SETTINGS).count() == 1
-        assert db.execute(text("select count(*) from payment_credentials where provider = 'kaluta'")).scalar() == 1
+        assert db.execute(text("select count(*) from payment_credentials where provider = 'kaluta'")).scalar() == 2
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +253,8 @@ def test_the_migration_is_additive_held_by_nobody_repeatable_and_reversible(pg):
     with Session() as db:
         db.add(KYCVerification(user_id=user_id, status=KYCStatus.IN_PROGRESS, reference_id="mh5_x", attempts_count=2))
         db.commit()
-    built = kyc_schema(engine)                                           # what the models define
+    migrate(engine, SESSIONS_MIGRATION, "downgrade")                     # the later revision first
+    built = kyc_schema(engine)                                           # what the models define, up to it
     migrate(engine, MIGRATION, "downgrade")                              # the production schema before it
     assert kyc_schema(engine)["columns"] == [] and kyc_permission(engine) == []
     before = access_and_money(engine)
@@ -276,3 +283,88 @@ def test_the_migration_is_additive_held_by_nobody_repeatable_and_reversible(pg):
     assert kyc_schema(engine)["columns"] == []
     migrate(engine, MIGRATION, "upgrade")
     assert kyc_schema(engine)["columns"] == built["columns"]
+    migrate(engine, SESSIONS_MIGRATION, "upgrade")
+
+
+# ---------------------------------------------------------------------------
+# e6f7a8b9c0d1: sessions per attempt as a setting
+# ---------------------------------------------------------------------------
+
+
+def kyc_settings_columns(engine) -> list:
+    with engine.connect() as c:
+        return [r[0] for r in c.execute(text(
+            "select column_name from information_schema.columns where table_name = 'kyc_settings' order by 1"))]
+
+
+def test_the_sessions_setting_migration_is_additive_repeatable_reversible_and_switches_nothing_on(pg):
+    engine, Session = pg
+    with Session() as db:                               # a row saved before the migration (Kaluta off)
+        db.add(KycSettings(id=1, kaluta_enabled=False, version=2))
+        db.commit()
+    migrate(engine, SESSIONS_MIGRATION, "downgrade")
+    assert "sessions_per_attempt" not in kyc_settings_columns(engine)
+    for _ in range(2):
+        migrate(engine, SESSIONS_MIGRATION, "upgrade")
+        assert "sessions_per_attempt" in kyc_settings_columns(engine)
+        with engine.connect() as c:
+            assert tuple(c.execute(text("select kaluta_enabled, version, sessions_per_attempt from kyc_settings")).one()) \
+                == (False, 2, None)
+            assert c.execute(text("select count(*) from payment_credentials")).scalar() == 0
+    with Session() as db:
+        assert kyc_settings.sessions_per_attempt(db) == 3 and kyc_settings.kaluta_enabled(db) is False
+    with engine.connect() as c:
+        for bad in (0, 11, -1):
+            with pytest.raises(Exception):
+                with c.begin():
+                    c.execute(text("update kyc_settings set sessions_per_attempt = :v"), {"v": bad})
+        with c.begin():
+            c.execute(text("update kyc_settings set sessions_per_attempt = 7"))
+    with Session() as db:
+        assert kyc_settings.sessions_per_attempt(db) == 7
+    migrate(engine, SESSIONS_MIGRATION, "downgrade")
+    assert "sessions_per_attempt" not in kyc_settings_columns(engine)
+    with engine.connect() as c:
+        assert tuple(c.execute(text("select kaluta_enabled, version from kyc_settings")).one()) == (False, 2)
+    migrate(engine, SESSIONS_MIGRATION, "upgrade")
+
+
+def test_one_save_of_every_setting_is_one_transaction_on_postgres(pg, monkeypatch):
+    """A save refused at its last step (switching on without a secret) leaves
+    the key, the fee and the sessions exactly as they were."""
+    engine, Session = pg
+    monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
+    with Session() as db:
+        db.add(ProductType(code="kyc", name="KYC", price=Decimal("10.00"), currency="USD", is_active=True))
+        role = Role(name="kyc_settings_pg", description="test", is_system=False)
+        permission = db.query(Permission).filter(Permission.name == kyc_settings.PERMISSION).first()
+        if permission is None:
+            permission = Permission(name=kyc_settings.PERMISSION, description="test", category="admin")
+            db.add(permission)
+        role.permissions.append(permission)
+        db.add(role)
+        db.flush()
+        from app.core.security import get_password_hash
+
+        admin = User(email="kycpg@example.com", username="kycpg", hashed_password=get_password_hash("Synthetic-Pass-123!"),
+                     is_active=True, is_deleted=False, is_admin=True, role_id=role.id, personal_referral_code="KYCPG",
+                     email_verified=True, date_of_birth=datetime(1990, 1, 1))
+        db.add(admin)
+        db.commit()
+        admin_id = admin.id
+    with Session() as db:
+        admin = db.get(User, admin_id)
+        with pytest.raises(kyc_settings.KycSettingsError) as refused:
+            kyc_settings.update(db, admin, password="Synthetic-Pass-123!", enabled=True,
+                                credentials={"API_KEY": "klt_pg_synthetic_key_000001"}, member_fee="20",
+                                sessions="6", expected_version=0)
+        assert refused.value.code == "NOT_READY"
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from kyc_settings")).scalar() == 0
+        assert c.execute(text("select count(*) from payment_credentials")).scalar() == 0
+        assert c.execute(text("select price from product_types where code = 'kyc'")).scalar() == Decimal("10.00")
+        assert c.execute(text("select count(*) from audit_trails")).scalar() == 0
+    with Session() as db:
+        view = kyc_settings.update(db, db.get(User, admin_id), password="Synthetic-Pass-123!", member_fee="20",
+                                   sessions=6, expected_version=0)
+        assert (view["member_fee"]["amount"], view["sessions_per_attempt"], view["enabled"]) == ("20.00", 6, False)
