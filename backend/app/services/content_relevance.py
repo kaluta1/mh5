@@ -40,7 +40,8 @@ class RelevanceResult:
         }
 
 
-# Seuil minimum de pertinence pour approuver automatiquement
+# Score below which an entry is flagged as possibly off-topic. The score is a
+# moderation signal only: submissions are never refused because of it.
 RELEVANCE_THRESHOLD = 0.3  # 30% de pertinence minimum
 
 # Mots-clés par type de concours
@@ -99,6 +100,12 @@ CONTEST_TYPE_KEYWORDS = {
         "en": ["pet", "dog", "cat", "cute", "adorable", "companion", "breed",
                "fur", "eyes", "playful", "loyal", "affectionate", "funny"]
     },
+    "comedy": {
+        "fr": ["comédie", "comédien", "comédienne", "humour", "humoriste", "drôle", "rire",
+               "blague", "sketch", "spectacle", "scène", "stand-up"],
+        "en": ["comedy", "comedian", "comedienne", "comic", "humor", "humour", "funny",
+               "laugh", "joke", "sketch", "skit", "stand-up", "standup", "show", "stage"]
+    },
     "default": {
         "fr": ["concours", "participation", "candidature", "présentation", "motivation",
                "passion", "objectif", "rêve", "ambition", "talent", "unique"],
@@ -137,13 +144,13 @@ class ContentRelevanceService:
         
         # 1. Vérifier la longueur minimale
         if len(contestant_title.strip()) < 4:
-            suggestions.append("Le titre est trop court. Ajoutez plus de détails.")
+            suggestions.append("The title is too short. Please add more detail.")
             score -= 0.1
         else:
             score += 0.1
             
         if len(contestant_description.strip()) < 4:
-            suggestions.append("La description est trop courte. Expliquez davantage votre candidature.")
+            suggestions.append("The description is too short. Please tell us more about the entry.")
             score -= 0.1
         else:
             score += 0.15
@@ -154,27 +161,27 @@ class ContentRelevanceService:
             contest_type or "default"
         )
         if keywords_found:
-            reasons.append(f"Mots-clés pertinents trouvés: {', '.join(keywords_found[:5])}")
+            reasons.append(f"Relevant keywords found: {', '.join(keywords_found[:5])}")
             score += min(0.3, len(keywords_found) * 0.05)
         else:
-            suggestions.append("Ajoutez des mots-clés liés au thème du concours.")
+            suggestions.append("Consider adding words related to the contest theme.")
         
         # 3. Vérifier le chevauchement de mots avec le titre/description du concours
         overlap_score = self._calculate_text_overlap(contestant_text, contest_text)
         if overlap_score > 0.1:
-            reasons.append("Votre texte mentionne des éléments du concours.")
+            reasons.append("The text mentions elements of the contest.")
             score += overlap_score * 0.3
         
         # 4. Vérifier que ce n'est pas du contenu générique/spam
         if self._is_generic_content(contestant_text):
-            suggestions.append("Votre candidature semble trop générique. Personnalisez-la.")
+            suggestions.append("The entry text looks generic. Consider describing the entry in your own words.")
             score -= 0.2
         else:
             score += 0.1
         
         # 5. Vérifier la présence de liens/URLs suspects
         if self._contains_suspicious_links(contestant_text):
-            suggestions.append("Évitez les liens externes dans votre description.")
+            suggestions.append("Avoid external links in the description.")
             score -= 0.15
         
         # 6. Vérifier la cohérence globale
@@ -184,7 +191,7 @@ class ContentRelevanceService:
         )
         score += coherence_score * 0.15
         if coherence_score > 0.5:
-            reasons.append("Le titre et la description sont cohérents.")
+            reasons.append("The title and description are consistent.")
         
         # Normaliser le score entre 0 et 1
         score = max(0.0, min(1.0, score))
@@ -204,15 +211,15 @@ class ContentRelevanceService:
         
         if not is_relevant:
             suggestions.append(
-                "Votre candidature ne semble pas assez liée au concours. "
-                "Assurez-vous que votre titre et description correspondent au thème."
+                "The entry may not be closely related to the contest. "
+                "Make sure the title and description match the contest theme."
             )
         
         return RelevanceResult(
             is_relevant=is_relevant,
             score=score,
             level=level,
-            reasons=reasons if reasons else ["Aucune correspondance forte trouvée."],
+            reasons=reasons if reasons else ["No strong match found."],
             suggestions=suggestions
         )
     
@@ -295,8 +302,8 @@ class ContentRelevanceService:
         urls = re.findall(url_pattern, text)
         
         # Domaines autorisés
-        allowed_domains = ["youtube.com", "instagram.com", "tiktok.com", "twitter.com", 
-                          "facebook.com", "linkedin.com", "myhigh5.com"]
+        allowed_domains = ["youtube.com", "youtu.be", "instagram.com", "tiktok.com", "twitter.com",
+                          "x.com", "facebook.com", "fb.watch", "linkedin.com", "myhigh5.com"]
         
         for url in urls:
             is_allowed = any(domain in url.lower() for domain in allowed_domains)

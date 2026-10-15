@@ -2923,34 +2923,25 @@ def create_contestant(
             exclude_contest_id=season_id,
         )
         if existing_cat is not None:
+            # The business rule stands (one nomination per category per round across
+            # sibling contests), but the existing nomination is reported, never
+            # returned as if created and never moved to this contest.
             existing_row = crud_contestant.get(db, existing_cat)
-            if existing_row:
-                from app.services.contest_category_integrity import rehome_nomination_to_contest
-
-                rehome_nomination_to_contest(
-                    db,
-                    existing_row,
-                    target_contest_id=int(season_id),
-                    apply=True,
-                )
-                if target_round_id and existing_row.round_id != target_round_id:
-                    existing_row.round_id = target_round_id
-                    db.add(existing_row)
-                    db.commit()
-                    db.refresh(existing_row)
-                return ContestantSubmissionResponse(
-                    id=existing_row.id,
-                    season_id=existing_row.season_id,
-                    round_id=existing_row.round_id,
-                    user_id=existing_row.user_id,
-                    title=existing_row.title,
-                    description=existing_row.description,
-                    registration_date=existing_row.registration_date,
-                    message=(
-                        "You already nominated in this category for this round. "
-                        "Returning existing nomination."
-                    ),
-                )
+            sibling = (
+                db.query(MyfavContest).filter(MyfavContest.id == existing_row.season_id).first()
+                if existing_row is not None
+                else None
+            )
+            where = f' in "{sibling.name}"' if sibling is not None and sibling.name else ""
+            nominee = f' ("{existing_row.title}")' if existing_row is not None and existing_row.title else ""
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"You have already nominated someone{nominee}{where} in this category for this round. "
+                    "Only one nomination per category per round is allowed, so this nomination was not saved. "
+                    "Your existing nomination was not changed."
+                ),
+            )
 
         vid_norm = _normalize_video_media_ids_for_dedup(getattr(contestant_data, "video_media_ids", None))
         from sqlalchemy import or_
@@ -2980,6 +2971,7 @@ def create_contestant(
                         description=row.description,
                         registration_date=row.registration_date,
                         message="Submission already exists for this round. Returning existing submission.",
+                        created=False,
                     )
         else:
             title_key = (getattr(contestant_data, "title", None) or "").strip().lower()
@@ -2995,6 +2987,7 @@ def create_contestant(
                             description=row.description,
                             registration_date=row.registration_date,
                             message="Submission already exists for this round. Returning existing submission.",
+                            created=False,
                         )
     else:
         existing = crud_contestant.get_by_round_and_user(
@@ -3014,6 +3007,7 @@ def create_contestant(
                 description=existing.description,
                 registration_date=existing.registration_date,
                 message="Submission already exists for this round. Returning existing submission.",
+                created=False,
             )
 
     # The entry is grouped by the submitter's country (nomination, Country
@@ -3269,11 +3263,15 @@ def create_contestant(
     
     logger.info(f"Relevance check completed: is_relevant={relevance_result.is_relevant}, score={relevance_result.score}")
     
+    # The keyword score is a moderation signal only. It cannot tell a real
+    # nomination ("Please vote for X, the funniest man in Kenya") from an
+    # off-topic one, so it never refuses a submission; safety, moderation and
+    # duplicate checks are what can.
     if not relevance_result.is_relevant:
-        suggestions_text = " ".join(relevance_result.suggestions[:2])
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Submission not relevant for this contest. {suggestions_text}"
+        logger.warning(
+            "Low relevance score %.2f for contest %s (not blocking)",
+            relevance_result.score,
+            getattr(contest, "id", None),
         )
     
     # ============================================
@@ -3934,11 +3932,15 @@ def update_contestant(
     
     logger.info(f"Relevance check completed: is_relevant={relevance_result.is_relevant}, score={relevance_result.score}")
     
+    # The keyword score is a moderation signal only. It cannot tell a real
+    # nomination ("Please vote for X, the funniest man in Kenya") from an
+    # off-topic one, so it never refuses a submission; safety, moderation and
+    # duplicate checks are what can.
     if not relevance_result.is_relevant:
-        suggestions_text = " ".join(relevance_result.suggestions[:2])
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Submission not relevant for this contest. {suggestions_text}"
+        logger.warning(
+            "Low relevance score %.2f for contest %s (not blocking)",
+            relevance_result.score,
+            getattr(contest, "id", None),
         )
     
     # ============================================

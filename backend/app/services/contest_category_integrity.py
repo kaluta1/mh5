@@ -333,38 +333,22 @@ def contestant_roster_season_clause(
     )
 
 
-def rehome_nomination_to_contest(
-    db,
-    contestant_row: Any,
-    *,
-    target_contest_id: int,
-    apply: bool = True,
-) -> bool:
-    """Move nomination row onto the contest the user is submitting/viewing."""
-    if contestant_row is None:
-        return False
-    current = int(getattr(contestant_row, "season_id", 0) or 0)
-    target = int(target_contest_id)
-    if current == target:
-        return False
-    if apply:
-        contestant_row.season_id = target
-        db.add(contestant_row)
-        db.commit()
-        db.refresh(contestant_row)
-    return True
-
-
 def contest_ids_for_category(
     db,
     *,
     category_id: Optional[int],
     contest_type: str,
+    contest_mode: Optional[str] = None,
 ) -> List[int]:
-    """All active contest ids sharing a category scope."""
+    """All active contest ids sharing a category scope.
+
+    ``contest_mode`` (nomination/participation) keeps only contests of that mode;
+    by default every mode is returned.
+    """
     from app.models.contest import Contest
 
-    q = db.query(Contest.id).filter(
+    columns = (Contest.id,) if contest_mode is None else (Contest.id, Contest.contest_mode)
+    q = db.query(*columns).filter(
         Contest.is_deleted == False,
         Contest.is_active == True,
     )
@@ -380,7 +364,11 @@ def contest_ids_for_category(
             Contest.category_id.is_(None),
             func.lower(func.trim(Contest.contest_type)) == ctype,
         )
-    return [row[0] for row in q.all()]
+    rows = q.all()
+    if contest_mode is not None:
+        wanted = normalize_contest_mode(contest_mode)
+        rows = [row for row in rows if normalize_contest_mode(row[1]) == wanted]
+    return [row[0] for row in rows]
 
 
 def pooled_roster_contest_scope_clause(db, contest: Any):
@@ -411,14 +399,15 @@ def nominator_has_nomination_in_category_round(
     exclude_contest_id: Optional[int] = None,
 ) -> Optional[int]:
     """
-  One nomination per nominator per category per calendar round (any contest row).
-  Returns existing contestant id if found.
+    One nomination per nominator per category per calendar round, across the
+    sibling nomination contests of that category (duplicate contest rows).
+    Returns the id of the nominator's existing nomination in a sibling contest,
+    if any. Read-only: the existing row is never changed.
     """
     from app.models.contests import Contestant
-    from app.models.contest import Contest
 
     contest_ids = contest_ids_for_category(
-        db, category_id=category_id, contest_type=contest_type
+        db, category_id=category_id, contest_type=contest_type, contest_mode="nomination"
     )
     if not contest_ids:
         return None

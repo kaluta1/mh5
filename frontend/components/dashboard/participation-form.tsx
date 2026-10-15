@@ -18,10 +18,14 @@ import { getCitiesByCountry } from '@/lib/geography'
 import { contestService } from '@/services/contest-service'
 import { getRoundNominationDeadlineMs } from '@/lib/nomination-deadline'
 
-const MIN_CONTENT_TITLE_LENGTH = 4
-const MIN_CONTENT_DESCRIPTION_LENGTH = 4
-const MAX_CONTENT_TITLE_LENGTH = 100
-const MAX_CONTENT_DESCRIPTION_LENGTH = 500
+import {
+  MAX_CONTENT_DESCRIPTION_LENGTH,
+  MAX_CONTENT_TITLE_LENGTH,
+  MIN_CONTENT_DESCRIPTION_LENGTH,
+  MIN_CONTENT_TITLE_LENGTH,
+  requirementMessage,
+  stepRequirements,
+} from '@/lib/participation-form-requirements'
 
 type ReactQuillComponent = React.ComponentType<any>
 
@@ -490,6 +494,21 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
     t('participation.step_media') || 'Media',
     t('participation.step_review') || 'Review'
   ]
+
+  // What still blocks the current step, shown next to the disabled button.
+  const blockingRequirements = stepRequirements(currentStep, {
+    title,
+    descriptionLength: plainDescriptionLength,
+    isNomination,
+    nominatorCountry,
+    asksNomineeAge,
+    nomineeAgeDeclared: !!nomineeAgeDeclaration,
+    requiresVideo,
+    hasVideo: !!videoUrl,
+    hasVideoDuplicateError: !!videoDuplicateError,
+    imageCount: imageUrls.length,
+    minImages,
+  })
 
   const canGoNext = () => {
     if (currentStep === 0) return isStep1Valid
@@ -1041,6 +1060,20 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Why the button below is disabled */}
+      {blockingRequirements.length > 0 && !isSubmitting && (
+        <div role="status" aria-live="polite" className="p-3 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20">
+          <p className="text-xs sm:text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+            {t('participation.requirements.heading') || 'To continue:'}
+          </p>
+          <ul className="list-disc pl-5 space-y-0.5 text-xs sm:text-sm text-amber-700 dark:text-amber-300">
+            {blockingRequirements.map((req) => (
+              <li key={req}>{requirementMessage(req, t)}</li>
+            ))}
+          </ul>
         </div>
       )}
 

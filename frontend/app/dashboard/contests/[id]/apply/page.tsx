@@ -52,6 +52,8 @@ function ApplyToContestPageContent() {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   /** Shown inline when submit fails (e.g. missing gender on profile). */
   const [submitError, setSubmitError] = useState<string | null>(null)
+  /** Shown when the backend matched an entry that already existed (nothing new created). */
+  const [existingEntryNotice, setExistingEntryNotice] = useState<string | null>(null)
   // Safe next-step code from a structured backend error (Phase 5).
   const [eligibilityNextStep, setEligibilityNextStep] = useState<string | null>(null)
   // Set when the backend created the entry but keeps it private pending checks.
@@ -590,6 +592,7 @@ function ApplyToContestPageContent() {
 
     setIsSubmitting(true)
     setSubmitError(null)
+    setExistingEntryNotice(null)
     setEligibilityNextStep(null)
 
     try {
@@ -631,6 +634,35 @@ function ApplyToContestPageContent() {
           isNomination ? 'nomination' : 'participation',
           isNomination ? nomineeAgeDeclaration : undefined
         )
+      }
+
+      // Success only when the backend confirms a new entry. `created: false` means
+      // the same entry already existed for this round: open it for editing instead.
+      if (!isEditingParticipation && response?.created === false) {
+        const notice =
+          t('dashboard.contests.participation_form.already_exists') ||
+          'You already submitted this entry for this round, so nothing new was created. You can edit your existing entry below.'
+        if (response?.id != null) setParticipantId(Number(response.id))
+        setUserAlreadyParticipating(true)
+        setIsEditingParticipation(true)
+        setExistingParticipationData({
+          title: response?.title || title || '',
+          description: response?.description || description || '',
+          imageUrls: [],
+          videoUrl: (() => {
+            try {
+              const vids = videoMediaIds ? JSON.parse(videoMediaIds) : []
+              return Array.isArray(vids) && vids.length > 0 ? vids[0] : ''
+            } catch {
+              return ''
+            }
+          })(),
+          nominatorCity: nominatorCity || '',
+          nominatorCountry: nominatorCountry || '',
+        })
+        setExistingEntryNotice(notice)
+        addToast(notice, 'info')
+        return
       }
 
       setSubmitSuccess(true)
@@ -919,6 +951,15 @@ function ApplyToContestPageContent() {
                 <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-sm text-amber-900 dark:text-amber-100">
                   {t('verification.incomplete_warning') ||
                     'Complétez toutes les vérifications dans la fenêtre pour accéder au formulaire.'}
+                </div>
+              )}
+
+              {existingEntryNotice && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-blue-300 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40"
+                >
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">{existingEntryNotice}</p>
                 </div>
               )}
 

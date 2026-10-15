@@ -648,7 +648,8 @@
         },
         "description": "Description",
         "drag_drop": "Drag Drop",
-        "file_info": "File Info"
+        "file_info": "File Info",
+        "already_exists": "You already submitted this entry for this round, so nothing new was created. You can edit your existing entry below."
       },
       "submission_closed": "Submissions are closed for this contest.",
       "submission_closed_message": "The submission deadline has passed.",
@@ -2147,7 +2148,21 @@
     "complete_profile_button": "Complete Profile Button",
     "unsupported_platform": "Link not allowed",
     "only_youtube_tiktok": "Only YouTube and TikTok are accepted",
-    "watch_on_tiktok": "Watch on TikTok"
+    "watch_on_tiktok": "Watch on TikTok",
+    "requirements": {
+      "heading": "To continue:",
+      "title_missing": "Enter a title.",
+      "title_too_short": "The title needs at least 4 characters.",
+      "title_too_long": "The title can have at most 100 characters.",
+      "description_missing": "Enter a description.",
+      "description_too_short": "The description needs at least 4 characters.",
+      "description_too_long": "The description can have at most 500 characters (formatting not counted).",
+      "country_missing": "Select the nominee's country.",
+      "age_missing": "Tell us whether the nominee is an adult.",
+      "video_missing": "Add a link to the video (for example YouTube or TikTok).",
+      "video_duplicate": "This video link is already used in this category and round. Use a different link.",
+      "images_missing": "Add at least one image."
+    }
   },
   "authorization": "Authorization",
   "url": "Url",

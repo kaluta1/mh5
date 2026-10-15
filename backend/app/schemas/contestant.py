@@ -103,6 +103,9 @@ class ContestantSubmissionResponse(BaseModel):
     # Nominations only: single-use claim token for the nominee, returned once to
     # the nominator (never stored in clear, never shown again).
     nominee_claim_token: Optional[str] = None
+    # False when the request matched an entry that already existed (same contest,
+    # round and content): nothing new was created and the existing entry is returned.
+    created: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -713,12 +713,19 @@ def participate_in_contest(
     from app.api.api_v1.endpoints.contestant import create_contestant
     
     # Call the contestant endpoint function
-    return create_contestant(
+    result = create_contestant(
         db=db,
         current_user=current_user,
         contest_id=contest_id,
         contestant_data=contestant_data
     )
+    # 201 only when a new entry was created; an existing entry is returned with 200.
+    if getattr(result, "created", True) is False:
+        from fastapi.encoders import jsonable_encoder
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=status.HTTP_200_OK, content=jsonable_encoder(result))
+    return result
 
 
 @router.get("/{contest_id}/rounds")
