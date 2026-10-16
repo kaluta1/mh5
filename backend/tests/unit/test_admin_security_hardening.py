@@ -335,6 +335,15 @@ def grant(client, actor, target, **body):
                        json={k: v for k, v in payload.items() if v is not None})
 
 
+EVIDENCE = "TX-0xsynthetic-receipt-0001"
+
+
+def confirm(client, actor, request_id, **body):
+    payload = {"current_password": PASSWORD, "evidence_reference": EVIDENCE, **body}
+    return client.post(f"/api/v1/admin/manual-payments/{request_id}/confirm", headers=bearer(actor),
+                       json={k: v for k, v in payload.items() if v is not None})
+
+
 def test_a_manual_payment_needs_its_own_permission_the_password_and_another_account(client, world):
     db = world
     plain = person(db, "plain", admin=True)
@@ -371,15 +380,32 @@ def test_a_manual_payment_needs_its_own_permission_the_password_and_another_acco
     assert [d[3] for d in denials(db)].count("PERMISSION_REQUIRED") == 4
     assert {(d[0], d[3]) for d in denials(db)} >= {(cashier.id, "SELF_ACTION_FORBIDDEN"), (cashier.id, "REAUTH_REQUIRED")}
 
+    # Step 1: recorded. Nothing is credited, posted or commissioned yet.
     done = grant(client, cashier, member)
-    assert done.status_code == 200 and done.json()["status"] == "granted", done.text
+    assert done.status_code == 200 and done.json()["status"] == "pending_confirmation", done.text
+    request_id = done.json()["request_id"]
     db.expire_all()
     deposit = db.query(Deposit).one()
-    assert (deposit.user_id, deposit.validated_by, str(deposit.status.value)) == (member.id, cashier.id, "validated")
-    assert deposit.admin_notes.startswith(REASON) and f"admin #{cashier.id}" in deposit.admin_notes
+    assert (deposit.user_id, deposit.validated_by, str(deposit.status.value)) == (member.id, None, "pending")
+    assert (db.query(JournalEntry).count(), db.query(AffiliateCommission).count()) == (0, 0)
+    assert db.query(AuditTrail).filter(AuditTrail.action == "MANUAL_PAYMENT_REQUESTED").one().user_id == cashier.id
+    # Step 2: never the same administrator; a second one confirms, citing the evidence.
+    same = confirm(client, cashier, request_id)
+    assert (same.status_code, code_of(same)) == (403, "SAME_ADMINISTRATOR")
+    checker = person(db, "checker", admin=True, permissions=(sec.PERMISSION_GRANT_PAYMENTS,))
+    assert code_of(confirm(client, checker, request_id, evidence_reference="x")) == "EVIDENCE_REQUIRED"
+    assert code_of(confirm(client, finance, request_id)) == "PERMISSION_REQUIRED"
+    ok = confirm(client, checker, request_id)
+    assert ok.status_code == 200 and ok.json()["status"] == "granted", ok.text
+    assert code_of(confirm(client, checker, request_id)) == "ALREADY_DECIDED"
+    db.expire_all()
+    deposit = db.query(Deposit).one()
+    assert (deposit.user_id, deposit.validated_by, str(deposit.status.value)) == (member.id, checker.id, "validated")
+    assert REASON in deposit.admin_notes and f"admin #{cashier.id}" in deposit.admin_notes and EVIDENCE in deposit.admin_notes
     entry = db.query(AuditTrail).filter(AuditTrail.action == "ADMIN_PAYMENT_GRANT").one()
-    assert (entry.user_id, entry.record_id) == (cashier.id, member.id)
+    assert (entry.user_id, entry.record_id) == (checker.id, member.id)
     assert entry.new_values["reason"] == REASON and entry.new_values["deposit_id"] == deposit.id
+    assert (entry.new_values["requested_by"], entry.new_values["confirmed_by"]) == (cashier.id, checker.id)
     assert PASSWORD not in str(entry.new_values) + str(deposit.admin_notes)
     # The ledger is the ordinary validation pipeline's, untouched by this change, and balances.
     _assert_all_journals_balance(db)
@@ -812,15 +838,21 @@ def test_the_upline_is_found_through_both_referral_records_and_survives_bad_data
     db.commit()
     assert sec.upline_ids(db, orphan.id) == {tree_sponsor.id}
 
-    # A cycle, a self-sponsor and a sponsor that does not exist: each ends, none raises.
-    a, b = person(db, "cyca"), person(db, "cycb")
-    a.sponsor_id, b.sponsor_id = b.id, a.id
+    # A self-sponsor can no longer be stored (ck_users_sponsor_not_self).
+    from sqlalchemy.exc import IntegrityError
+
     selfish = person(db, "selfish")
     selfish.sponsor_id = selfish.id
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()
+
+    # A historical cycle and a sponsor that does not exist: each ends, none raises.
+    a, b = person(db, "cyca"), person(db, "cycb")
+    a.sponsor_id, b.sponsor_id = b.id, a.id
     dangling = person(db, "dangling", sponsor_id=987654)
     db.commit()
     assert sec.upline_ids(db, a.id) == {a.id, b.id} and sec.earns_from_payment_by(db, b.id, a.id) is True
-    assert sec.upline_ids(db, selfish.id) == {selfish.id}
     assert sec.upline_ids(db, dangling.id) == {987654}
     assert sec.earns_from_payment_by(db, top.id, a.id) is False
 
@@ -856,10 +888,13 @@ def test_an_administrator_cannot_record_a_payment_for_their_own_referral_line(cl
     assert [(d[0], d[1], d[3]) for d in denials(db)] == [
         (cashier.id, m.id, "COMMISSION_CONFLICT") for m in (direct, indirect, by_tree)]
 
-    # The legitimate workflow is untouched: a member outside the administrator's line, whose own
-    # sponsor earns exactly what a received payment earns them.
+    # The legitimate workflow: a member outside the administrator's line, recorded by one
+    # administrator and confirmed by another; the member's own sponsor earns what a received payment earns.
+    checker = person(db, "checker", admin=True, permissions=(sec.PERMISSION_GRANT_PAYMENTS,))
     done = grant(client, cashier, unrelated)
-    assert done.status_code == 200 and done.json()["status"] == "granted", done.text
+    assert done.status_code == 200 and done.json()["status"] == "pending_confirmation", done.text
+    ok = confirm(client, checker, done.json()["request_id"])
+    assert ok.status_code == 200 and ok.json()["status"] == "granted", ok.text
     db.expire_all()
     commission = db.query(AffiliateCommission).one()
     assert (commission.user_id, commission.source_user_id) == (other_sponsor.id, unrelated.id)
@@ -869,9 +904,14 @@ def test_an_administrator_cannot_record_a_payment_for_their_own_referral_line(cl
     # Belt and braces: even if the referral records were wrong, the RESULT is checked. A payment whose
     # commission turns out to be the administrator's own is undone completely.
     monkeypatch.setattr(sec, "earns_from_payment_by", lambda *_a, **_k: False)
-    undone = grant(client, cashier, direct)
+    pending = grant(client, cashier, direct)
+    assert pending.status_code == 200 and pending.json()["status"] == "pending_confirmation"
+    undone = confirm(client, checker, pending.json()["request_id"])
     assert (undone.status_code, code_of(undone)) == (403, "COMMISSION_CONFLICT")
-    assert recorded() == after_legitimate                                     # no deposit, journal or commission left
+    deposits, journals, commissions = recorded()
+    assert (deposits, journals, commissions) == (after_legitimate[0] + 1, after_legitimate[1], after_legitimate[2])
+    from app.models.financial_controls import ManualPaymentConfirmation
+    assert db.get(ManualPaymentConfirmation, pending.json()["request_id"]).status == "REQUESTED"   # nothing decided
     assert db.query(AffiliateCommission).filter(AffiliateCommission.user_id == cashier.id).count() == 0
     _assert_all_journals_balance(db)
 

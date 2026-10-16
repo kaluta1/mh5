@@ -19,6 +19,15 @@ from app.services.financial_integrity import FinancialIntegrityError, money
 logger = logging.getLogger(__name__)
 
 _REFUND_MARKER = "Provider refund reconciled"
+# Written by app/scripts/reverse_invalid_payments.py on a payment recorded as received that never arrived.
+INVALID_PAYMENT_REVERSAL_MARKER = "Invalid payment reversed"
+REVERSAL_MARKERS = (_REFUND_MARKER, INVALID_PAYMENT_REVERSAL_MARKER)
+
+
+def is_reversed_deposit(deposit: Deposit) -> bool:
+    """Was this deposit reversed (provider refund or invalid-payment reversal)? It must never be validated again."""
+    notes = str(getattr(deposit, "admin_notes", "") or "")
+    return any(marker in notes for marker in REVERSAL_MARKERS)
 
 
 def _mentions_exact_deposit(description: str, deposit_id: int) -> bool:

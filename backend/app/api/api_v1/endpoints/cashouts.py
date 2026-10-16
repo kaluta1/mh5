@@ -109,6 +109,42 @@ def fee_exceptions(state: Optional[str] = Query(None, pattern="^(PENDING|REVIEWE
     return service.fee_exceptions(db, state=state, skip=skip, limit=limit)
 
 
+class CommissionReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: str = Field(..., pattern="^(RELEASE|CANCEL)$")
+    reason: str = Field(..., max_length=2000)
+    evidence_reference: Optional[str] = Field(default=None, max_length=255)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.get("/commission-reviews")
+def held_commissions(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Historical commissions held from every payout until reviewed, with any decision taken."""
+    from app.services import commission_payout_hold as hold
+
+    return {"items": hold.held_view(db)}
+
+
+@admin_router.post("/commission-reviews/{commission_id}")
+def review_held_commission(commission_id: int, body: CommissionReviewBody, request: Request,
+                           db: Session = Depends(get_db), current_user: User = Depends(require_processor)):
+    """Record THE decision for one held historical commission: RELEASE (may then be paid when payouts
+    are enabled) or CANCEL (carried out by the reconciliation procedure). Final, audited, password
+    required, never on one's own commission."""
+    from app.services import commission_payout_hold as hold
+
+    try:
+        record = hold.review(db, current_user, commission_id, decision=body.decision, reason=body.reason,
+                             password=body.current_password, evidence_reference=body.evidence_reference,
+                             ip=client_ip(request))
+    except hold.CommissionReviewError as exc:
+        code = {"FORBIDDEN": 403, "REAUTH_REQUIRED": 403, "REAUTH_LOCKED": 429, "SELF_ACTION_FORBIDDEN": 403,
+                "NOT_FOUND": 404, "REASON_REQUIRED": 400, "INVALID_DECISION": 400}.get(exc.code, 409)
+        raise HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)}) from None
+    return {"commission_id": record.commission_id, "decision": record.decision, "decided_by": record.decided_by,
+            "decided_at": record.decided_at.isoformat()}
+
+
 @admin_router.get("/{cashout_id}")
 def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """One cashout with the commissions it holds and the member's other

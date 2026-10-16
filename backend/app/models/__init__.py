@@ -49,6 +49,7 @@ from .email import EmailSettings, EmailEventSetting, EmailDelivery, EmailWebhook
 from .verification import UserVerification
 # Account security (EMAIL-2): one-time email credentials + durable auth rate limits
 from .auth_security import AuthToken, AuthRateLimit, ExposedPasswordFingerprint
+from .financial_controls import CommissionPayoutReview, ManualPaymentConfirmation  # noqa: F401
 from .progression_safety import ProgressionSafetyHold
 from .interaction_safety import UserBlock
 # Finance & Payments configuration (dual cashout)

@@ -1,5 +1,5 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import Boolean, String, Integer, ForeignKey, Table, Column, DateTime, Enum as SQLEnum
+from sqlalchemy import Boolean, CheckConstraint, String, Integer, ForeignKey, Table, Column, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 import enum
@@ -46,6 +46,10 @@ class Permission(Base):
 
 class User(Base):
     __tablename__ = "users"
+    # Nobody sponsors themselves (a cycle through others is refused by the
+    # trigger of migration b7d9f1a3c5e7 on PostgreSQL and by
+    # affiliate_hierarchy.validate_sponsor_assignment).
+    __table_args__ = (CheckConstraint("sponsor_id IS NULL OR sponsor_id <> id", name="ck_users_sponsor_not_self"),)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)

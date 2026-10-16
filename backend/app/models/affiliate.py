@@ -1,5 +1,5 @@
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import Column, Index, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, text
+from sqlalchemy import CheckConstraint, Column, Index, Integer, String, ForeignKey, Float, Text, DateTime, Boolean, Numeric, Enum as SQLEnum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from decimal import Decimal
@@ -100,6 +100,19 @@ class CommissionRate(Base):
 
 class AffiliateCommission(Base):
     __tablename__ = "affiliate_commissions"
+    __table_args__ = (
+        # One commission per payment and beneficiary, and per structured source and
+        # beneficiary (migrations u4v5w6x7y8z9 / w6x7y8z9a0b1, guarded by b7d9f1a3c5e7).
+        Index("uq_affiliate_commissions_deposit_user", "deposit_id", "user_id", unique=True,
+              postgresql_where=text("deposit_id IS NOT NULL"), sqlite_where=text("deposit_id IS NOT NULL")),
+        Index("uq_affiliate_commissions_source_user", "source_type", "source_id", "user_id", unique=True,
+              postgresql_where=text("source_type IS NOT NULL"), sqlite_where=text("source_type IS NOT NULL")),
+        CheckConstraint("commission_amount > 0", name="ck_affiliate_commissions_amount_positive"),
+        CheckConstraint("level BETWEEN 1 AND 10", name="ck_affiliate_commissions_level_range"),
+        # The active program is direct referrals only: a NEW_V2 commission is level 1.
+        CheckConstraint("COALESCE(business_model_version, '') <> 'NEW_V2' OR level = 1",
+                        name="ck_affiliate_commissions_new_model_level_one"),
+    )
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Bénéficiaire
     source_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Générateur
     

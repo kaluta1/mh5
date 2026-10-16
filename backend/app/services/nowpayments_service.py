@@ -348,11 +348,11 @@ def finalize_deposit_from_nowpayments(
     if deposit.status == DepositStatus.VALIDATED:
         return True
 
-    from app.services.financial_reversal import _REFUND_MARKER
+    from app.services.financial_reversal import is_reversed_deposit
 
-    if _REFUND_MARKER in str(deposit.admin_notes or ""):
-        # Already refunded and reversed. An older "finished" notification that
-        # arrives late (or is replayed) must not validate the deposit again.
+    if is_reversed_deposit(deposit):
+        # Already refunded (or reversed as an invalid payment). An older "finished" notification
+        # that arrives late (or is replayed) must not validate the deposit again.
         logger.warning("Deposit %s was refunded; ignoring provider status %s", deposit.id, provider_status)
         return True
 

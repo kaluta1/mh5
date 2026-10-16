@@ -531,7 +531,11 @@ def test_leaders_ranks_direct_commission_only_and_allocates_5pct_exactly(world):
     _commission(db, b, 20)
     _commission(db, c, 10)
     _commission(db, legacy_user, 500, version=None)  # old model: ignored
-    _commission(db, legacy_user, 500, level=2)  # never counted
+    _commission(db, legacy_user, 500, level=2, version=None)  # never counted
+    with pytest.raises(IntegrityError):  # a NEW_V2 row above level 1 cannot exist (Phase 1 guard)
+        with db.begin_nested():
+            _commission(db, legacy_user, 500, level=2)
+            db.flush()
     _commission(db, b, 999, status=CommissionStatus.CANCELLED)
     _revenue(db, Decimal("1000.00"))
     _revenue(db, Decimal("777.00"), eligible=False)  # a policy marked not Leaders-eligible: excluded

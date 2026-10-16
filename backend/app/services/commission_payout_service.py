@@ -153,12 +153,15 @@ def _reserve_cashout(
     if other_active:
         raise ValueError("Another payout is awaiting provider reconciliation")
 
+    from app.services.commission_payout_hold import payable_clause
+
     query = (
         db.query(AffiliateCommission)
         .filter(
             AffiliateCommission.user_id == user_id,
             AffiliateCommission.status == CommissionStatus.APPROVED,
             AffiliateCommission.payout_reference.is_(None),
+            payable_clause(),                     # never a held historical row
         )
         .order_by(AffiliateCommission.transaction_date.asc(), AffiliateCommission.id.asc())
         .with_for_update()
@@ -371,6 +374,11 @@ def trigger_commission_payout_sync(
         .with_for_update()
         .one()
     )
+    from app.services.commission_payout_hold import is_payable
+
+    if not is_payable(db, locked):
+        db.rollback()                            # held historical row: stays exactly as it is
+        return False
     if locked.status == CommissionStatus.PENDING:
         locked.status = CommissionStatus.APPROVED
     if locked.status != CommissionStatus.APPROVED or locked.payout_reference:
@@ -420,12 +428,15 @@ def pay_pending_commissions_for_user_sync(db: Session, user_id: int) -> int:
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.usdt_wallet_address:
         return 0
+    from app.services.commission_payout_hold import payable_clause
+
     pending = (
         db.query(AffiliateCommission)
         .filter(
             AffiliateCommission.user_id == user_id,
             AffiliateCommission.status.in_([CommissionStatus.PENDING, CommissionStatus.APPROVED]),
             AffiliateCommission.payout_reference.is_(None),
+            payable_clause(),
         )
         .order_by(AffiliateCommission.transaction_date.asc())
         .all()
@@ -435,9 +446,12 @@ def pay_pending_commissions_for_user_sync(db: Session, user_id: int) -> int:
 
 def retry_failed_payouts_sync(db: Session, *, user_id: Optional[int] = None, limit: int = 50) -> int:
     """Retry only unreserved legacy APPROVED rows; unknown intents are never auto-retried."""
+    from app.services.commission_payout_hold import payable_clause
+
     query = db.query(AffiliateCommission).filter(
         AffiliateCommission.status == CommissionStatus.APPROVED,
         AffiliateCommission.payout_reference.is_(None),
+        payable_clause(),
     )
     if user_id is not None:
         query = query.filter(AffiliateCommission.user_id == user_id)

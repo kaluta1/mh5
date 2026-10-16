@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import insert
 
 from app.models.business_model import AffiliateRateQualification, ReferralPoolAssignment
@@ -143,8 +144,16 @@ def test_E_referral_pool_and_historical_random_assignments_do_not_count(world, s
 def test_F_self_referral_does_not_count(world, small_threshold):
     db = world
     s = _sponsor(db)
-    s.sponsor_id = s.id
-    s.sponsor_source = "PERSONAL_REFERRAL"
+    db.flush()
+    # The database refuses a self-sponsorship (ck_users_sponsor_not_self, Phase 1) ...
+    with pytest.raises(IntegrityError):
+        with db.begin_nested():
+            s.sponsor_id = s.id
+            s.sponsor_source = "PERSONAL_REFERRAL"
+            db.flush()
+    db.refresh(s)
+    assert s.sponsor_id != s.id
+    # ... and the member never counts as their own referral.
     db.add(KYCVerification(user_id=s.id, status=KYCStatus.APPROVED, processed_at=JOINED + timedelta(days=2)))
     _referral(db, s, "f1")
     _referral(db, s, "f2")

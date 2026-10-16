@@ -269,9 +269,10 @@ def test_historical_commissions_and_founding_records_remain_readable(db):
     db.add(FoundingPoolSnapshotLine(snapshot_id=snap.id, user_id=sponsor.id, share_amount=12.5, weight_ratio=1))
     db.commit()
 
-    # B: balances derived from history are unchanged by the retirement.
+    # B: balances derived from history are unchanged by the retirement; an open historical
+    # commission is HELD from payout until an administrator reviews it (Phase 1).
     balance = get_commission_balance(db, sponsor.id)
-    assert balance.available == Decimal("1.00")
+    assert (balance.available, balance.held) == (Decimal("0.00"), Decimal("1.00"))
     assert balance.paid_lifetime == Decimal("0.10")
     assert balance.earned_lifetime == Decimal("1.10")
     # C: Founding history stays queryable.

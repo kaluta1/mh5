@@ -37,6 +37,8 @@ export default function WalletPage() {
   
   const [balance, setBalance] = useState(0)
   const [pendingBalance, setPendingBalance] = useState(0)
+  // Historical commissions held from payout until an administrator reviews them.
+  const [heldBalance, setHeldBalance] = useState(0)
   const [totalEarnings, setTotalEarnings] = useState(0)
   const [thisMonth, setThisMonth] = useState(0)
   const [growthRate, setGrowthRate] = useState(0)
@@ -76,6 +78,7 @@ export default function WalletPage() {
         const balanceData = await balanceResponse.json()
         setBalance(balanceData.available_balance || 0)
         setPendingBalance(balanceData.pending_balance || 0)
+        setHeldBalance(balanceData.held_balance || 0)
         setTotalEarnings(balanceData.total_earnings || 0)
         setThisMonth(balanceData.this_month || 0)
         setGrowthRate(balanceData.growth_rate || 0)
@@ -230,6 +233,11 @@ export default function WalletPage() {
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Earned, and waiting for a payout destination (choose a cashout method below).
           </p>
+          {heldBalance > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2" data-testid="wallet-held-balance">
+              {formatCurrency(heldBalance)} from the earlier affiliate program is under review and cannot be paid out yet.
+            </p>
+          )}
         </div>
 
         {/* Total Earnings */}

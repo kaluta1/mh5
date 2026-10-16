@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import ManualPaymentQueue from '@/components/admin/manual-payment-queue'
 import {
   Search,
   BadgeCheck,
@@ -63,6 +64,8 @@ export default function MarkPaidPage() {
   // The administrator's own password, sent with the request and cleared at once.
   const [password, setPassword] = useState('')
   const [granting, setGranting] = useState(false)
+  // Bumped after a payment is recorded so the queue below reloads.
+  const [queueKey, setQueueKey] = useState(0)
 
   const handleSearch = async () => {
     const term = searchTerm.trim().toLowerCase()
@@ -127,10 +130,10 @@ export default function MarkPaidPage() {
       if (result.status === 'already_paid') {
         addToast(t('admin.mark_paid.already_paid') || 'User already has a valid credit for this product', 'success')
       } else {
-        addToast(t('admin.mark_paid.granted') || 'User marked as paid successfully', 'success')
-      }
-      if (verifyIdentity && result.identity_verified) {
-        addToast(t('admin.mark_paid.identity_verified_toast') || 'Identity marked as verified', 'success')
+        // Nothing is credited yet: a second administrator has to confirm the money was received.
+        addToast(t('admin.mark_paid.recorded_pending') ||
+          'Payment recorded. A second administrator must confirm it was received before it is credited.', 'success')
+        setQueueKey((k) => k + 1)
       }
       setPaymentStatus((prev) =>
         prev
@@ -163,7 +166,7 @@ export default function MarkPaidPage() {
             </h1>
             <p className="text-white/90 font-medium mt-1">
               {t('admin.mark_paid.description') ||
-                'Search a user and grant a paid service credit so they can continue to the next step (e.g. KYC verification) without paying again.'}
+                'Record a payment a member made outside the payment provider. It is credited only after a second administrator confirms the money was received.'}
             </p>
           </div>
         </div>
@@ -351,7 +354,7 @@ export default function MarkPaidPage() {
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t('admin.mark_paid.password_hint') ||
-                      'Recording a payment needs the grant_manual_payments permission and your password. You cannot record a payment for your own account.'}
+                      'Recording a payment needs the grant_manual_payments permission and your password. You cannot record a payment for your own account, and you cannot confirm a payment you recorded.'}
                   </p>
                 </div>
 
@@ -365,7 +368,7 @@ export default function MarkPaidPage() {
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4 mr-2" />
-                        {t('admin.mark_paid.grant_button') || 'Mark as paid'}
+                        {t('admin.mark_paid.record_button') || 'Record payment for confirmation'}
                       </>
                     )}
                   </Button>
@@ -378,15 +381,15 @@ export default function MarkPaidPage() {
                       className="w-full"
                     >
                       <ShieldCheck className="h-4 w-4 mr-2" />
-                      {t('admin.mark_paid.grant_and_verify_button') || 'Mark as paid + Verify identity'}
+                      {t('admin.mark_paid.record_and_verify_button') || 'Record payment + verify identity (on confirmation)'}
                     </Button>
                   )}
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {product === 'kyc'
                       ? (t('admin.mark_paid.verify_hint') ||
-                        'Verify identity also marks KYC as approved (skips the verification step entirely).')
-                      : (t('admin.mark_paid.paid_hint') ||
-                        'Grants the paid credit so the user can continue without paying again.')}
+                        'On confirmation, verify identity also marks KYC as approved (skips the verification step entirely).')
+                      : (t('admin.mark_paid.recorded_hint') ||
+                        'Nothing is credited until a second administrator confirms the payment.')}
                   </p>
                 </div>
               </>
@@ -394,6 +397,8 @@ export default function MarkPaidPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ManualPaymentQueue refreshKey={queueKey} onChanged={() => selectedUser && void selectUser(selectedUser)} />
     </div>
   )
 }

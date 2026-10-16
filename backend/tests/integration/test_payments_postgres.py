@@ -92,6 +92,9 @@ KYC_SETTINGS = "b3c4d5e6f7a8_kyc_settings_and_session_limit.py"
 SUPER_ADMIN = "c4d5e6f7a8b9_super_admin_role.py"
 EXPOSED_PASSWORDS = "d5e6f7a8b9c0_exposed_password_fingerprints.py"
 KYC_SESSIONS_SETTING = "e6f7a8b9c0d1_kyc_sessions_per_attempt_setting.py"
+MANUAL_PAYMENTS = "f9b1c3d5e7a9_manual_payment_confirmations.py"
+PAYOUT_REVIEWS = "a8c0e2f4b6d8_commission_payout_reviews.py"
+REFERRAL_GUARDS = "b7d9f1a3c5e7_referral_and_commission_guards.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -231,12 +234,14 @@ def production_like_rows(db) -> dict:
     payer = _user(db, "payer@t.com", sponsor=sponsor, wallet=False)
     from app.models.affiliate import CommissionType
 
+    # Current (NEW_V2) direct commissions: historical rows are held from payout until reviewed (Phase 1,
+    # covered by test_phase1_financial_controls_postgres).
     for amount, status in (("5.00", CommissionStatus.APPROVED), ("7.50", CommissionStatus.PENDING),
                            ("3.00", CommissionStatus.PAID), ("2.00", CommissionStatus.CANCELLED)):
         db.add(AffiliateCommission(user_id=sponsor.id, source_user_id=payer.id,
                                    commission_type=CommissionType.KYC_PAYMENT, level=1, base_amount=Decimal("10.00"),
                                    commission_amount=Decimal(amount), status=status,
-                                   transaction_date=datetime(2026, 8, 1)))
+                                   transaction_date=datetime(2026, 8, 1), business_model_version="NEW_V2"))
     db.add(AffiliateCashoutRequest(user_id=sponsor.id, gross_amount=Decimal("3.00"), fee=Decimal("0"),
                                    net_amount=Decimal("3.00"), status="completed",
                                    payout_reference="intent:legacy-1;provider:5000000001",
@@ -323,7 +328,22 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (twelfth.revision, twelfth.down_revision, twelfth.depends_on) == ("e6f7a8b9c0d1", "d5e6f7a8b9c0", None)
     assert twelfth.branch_labels is None
     heads = [name for name, line in revisions.items() if '"e6f7a8b9c0d1"' in line or "'e6f7a8b9c0d1'" in line]
-    assert heads == []                                             # e6f7a8b9c0d1 is the single head
+    assert heads == [MANUAL_PAYMENTS]                              # one line, no branch
+    thirteenth = load_migration(MANUAL_PAYMENTS)
+    assert (thirteenth.revision, thirteenth.down_revision, thirteenth.depends_on) == ("f9b1c3d5e7a9", "e6f7a8b9c0d1", None)
+    assert thirteenth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"f9b1c3d5e7a9"' in line or "'f9b1c3d5e7a9'" in line]
+    assert heads == [PAYOUT_REVIEWS]                               # one line, no branch
+    fourteenth = load_migration(PAYOUT_REVIEWS)
+    assert (fourteenth.revision, fourteenth.down_revision, fourteenth.depends_on) == ("a8c0e2f4b6d8", "f9b1c3d5e7a9", None)
+    assert fourteenth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"a8c0e2f4b6d8"' in line or "'a8c0e2f4b6d8'" in line]
+    assert heads == [REFERRAL_GUARDS]                              # one line, no branch
+    fifteenth = load_migration(REFERRAL_GUARDS)
+    assert (fifteenth.revision, fifteenth.down_revision, fifteenth.depends_on) == ("b7d9f1a3c5e7", "a8c0e2f4b6d8", None)
+    assert fifteenth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"b7d9f1a3c5e7"' in line or "'b7d9f1a3c5e7'" in line]
+    assert heads == []                                             # b7d9f1a3c5e7 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

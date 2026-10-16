@@ -57,7 +57,7 @@ describe('Mark as paid: a refused payment is not a payment', () => {
 
   it('asks for a payment reference and the password before anything is sent', async () => {
     await chooseMember()
-    const button = screen.getByRole('button', { name: 'Mark as paid' })
+    const button = screen.getByRole('button', { name: 'Record payment for confirmation' })
     expect(button).toBeDisabled()
     fill('paid', PASSWORD)
     expect(button).toBeDisabled()                                    // says nothing about which payment
@@ -80,7 +80,7 @@ describe('Mark as paid: a refused payment is not a payment', () => {
     await chooseMember(0)
     postMock.mockResolvedValue(refused(status, code, message))
     fill()
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment for confirmation' }))
 
     await waitFor(() => expect(errors()).toEqual([message]))
     expect(postMock).toHaveBeenCalledWith('/api/v1/admin/users/42/grant-payment', {
@@ -100,18 +100,21 @@ describe('Mark as paid: a refused payment is not a payment', () => {
     await chooseMember()
     postMock.mockResolvedValue({ status: 500, data: { detail: 'Internal server error' }, config: { url: '/x' } })
     fill()
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment for confirmation' }))
     await waitFor(() => expect(errors().length).toBe(1))
     expect(successes()).toEqual([])
   })
 
-  it('reports the payment and refreshes the credits only after the server recorded it', async () => {
+  it('reports the payment as recorded, not credited: a second administrator has to confirm it', async () => {
     await chooseMember(0)
-    postMock.mockResolvedValue({ status: 200, data: { status: 'granted', deposit_id: 9, product_code: 'kyc',
-      identity_verified: false, available_credits: { kyc: 1 } } })
+    postMock.mockResolvedValue({ status: 200, data: { status: 'pending_confirmation', request_id: 5, deposit_id: 9,
+      product_code: 'kyc', identity_verified: false, available_credits: { kyc: 0 } } })
     fill()
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }))
-    await waitFor(() => expect(successes()).toEqual(['User marked as paid successfully']))
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment for confirmation' }))
+    await waitFor(() => expect(successes()).toEqual([
+      'Payment recorded. A second administrator must confirm it was received before it is credited.']))
+    // The queue of payments awaiting a second administrator is reloaded.
+    await waitFor(() => expect(getMock.mock.calls.filter(([url]) => url === '/api/v1/admin/manual-payments').length).toBe(2))
     expect(errors()).toEqual([])
     expect((screen.getByLabelText(/Payment reference/) as HTMLInputElement).value).toBe('')
   })
@@ -132,7 +135,7 @@ describe('Mark as paid: a refused payment is not a payment', () => {
     fireEvent.click(screen.getByRole('button', { name: /Another Member/ }))
     await waitFor(() => expect((screen.getByLabelText(/Payment reference/) as HTMLInputElement).value).toBe(''))
     expect((screen.getByLabelText('Your current password') as HTMLInputElement).value).toBe('')
-    expect(screen.getByRole('button', { name: 'Mark as paid' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Record payment for confirmation' })).toBeDisabled()
     expect(postMock).not.toHaveBeenCalled()
   })
 

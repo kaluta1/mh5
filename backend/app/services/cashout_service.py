@@ -454,10 +454,13 @@ def release_pending(db: Session, user: User, *, now: Optional[datetime] = None,
     amount is not touched. No commit."""
     if not destination_ready(user, now, config=config):
         return 0
+    from app.services.commission_payout_hold import payable_clause
+
     rows = (db.query(AffiliateCommission)
             .filter(AffiliateCommission.user_id == user.id,
                     AffiliateCommission.status == CommissionStatus.PENDING,
-                    AffiliateCommission.payout_reference.is_(None))
+                    AffiliateCommission.payout_reference.is_(None),
+                    payable_clause())          # a held historical row stays exactly as it is
             .with_for_update().all())
     for row in rows:
         row.status = CommissionStatus.APPROVED
@@ -478,11 +481,14 @@ def active_cashout(db: Session, user_id: int) -> Optional[AffiliateCashoutReques
 
 
 def available_rows(db: Session, user_id: int) -> List[AffiliateCommission]:
-    """Unreserved APPROVED rows, oldest first, locked."""
+    """Unreserved APPROVED rows that may be paid (never a held historical row), oldest first, locked."""
+    from app.services.commission_payout_hold import payable_clause
+
     return (db.query(AffiliateCommission)
             .filter(AffiliateCommission.user_id == user_id,
                     AffiliateCommission.status == CommissionStatus.APPROVED,
-                    AffiliateCommission.payout_reference.is_(None))
+                    AffiliateCommission.payout_reference.is_(None),
+                    payable_clause())
             .order_by(AffiliateCommission.transaction_date.asc(), AffiliateCommission.id.asc())
             .with_for_update().all())
 

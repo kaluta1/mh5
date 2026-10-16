@@ -68,10 +68,12 @@ def _setup(db):
             user_id=user.id,
             source_user_id=source.id,
             commission_type=CommissionType.KYC_PAYMENT,
-            level=index,
+            level=1,
             base_amount=Decimal("600.00"),
             commission_amount=Decimal(amount),
             status=CommissionStatus.APPROVED,
+            # Current (NEW_V2) direct commissions: historical rows are held from payout until reviewed.
+            business_model_version="NEW_V2",
         )
         db.add(row)
         rows.append(row)

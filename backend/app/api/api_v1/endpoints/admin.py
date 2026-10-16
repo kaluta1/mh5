@@ -92,18 +92,6 @@ def _privileged_action(db: Session, http_request: Request, actor: User, *, permi
         raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
 
 
-def _refuse_commission_conflict(db: Session, http_request: Request, actor: User, target_id: int) -> None:
-    """The acting administrator would be paid a commission by the payment they
-    are recording. Everything the request started is rolled back (the refusal
-    record does that first), the refusal is audited, and it is refused."""
-    admin_security.record_denial(db, actor=actor, target_id=target_id, attempted="grant payment",
-                                 code="COMMISSION_CONFLICT", ip=client_ip(http_request))
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
-        "code": "COMMISSION_CONFLICT",
-        "message": "You cannot record a payment for a member in your own referral line: you would receive a "
-                   "commission from it. Another authorized administrator has to record it."})
-
-
 def _refuse_own_account(db: Session, http_request: Request, actor: User, target_id: int, attempted: str) -> None:
     """Nobody approves their own account: a second administrator has to."""
     if int(target_id) == int(actor.id):
@@ -4068,8 +4056,8 @@ async def unverify_user_kyc(
 # ADMIN: MARK USER AS PAID (grant a service credit)
 # ============================================
 
-# Products an admin can grant manually. Maps to product_types.code.
-GRANTABLE_PRODUCT_CODES = ["kyc", "mfm_membership", "annual_membership", "founding_membership"]
+# Products an admin can grant manually (maps to product_types.code); one list, owned by the service.
+from app.services.manual_payment_service import GRANTABLE_PRODUCT_CODES  # noqa: E402
 
 
 class GrantPaymentRequest(BaseModel):
@@ -4080,10 +4068,6 @@ class GrantPaymentRequest(BaseModel):
     verify_identity: bool = False  # Also mark the user's identity as verified (skips Shufti)
     # The acting administrator's own password, checked in the same request.
     current_password: str = Field(default="", max_length=256)
-
-
-# What a manual payment must say about the money it stands for.
-GRANT_REASON_MIN_LENGTH = 10
 
 
 def _valid_deposit_counts(db: Session, user_id: int) -> Dict[str, int]:
@@ -4130,201 +4114,122 @@ def grant_user_payment(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Mark a user as paid for a service (admin only).
+    RECORD a payment a member made outside the payment provider (step 1 of 2).
 
-    Use when a user paid but the deposit was never validated (e.g. failed callback),
-    so they can proceed to the next step (KYC verification, membership) without paying again.
-
-    Behaviour:
-    - If the user already has a valid unused credit for the product, no new credit is created.
-    - Otherwise, an existing PENDING/PARTIALLY_PAID deposit for the product is validated,
-      or a new validated deposit is created.
-    - Runs the standard validation pipeline (commissions, accounting, confirmation email).
-
-    It records money as received, so being an administrator is not enough: it
-    needs the explicit grant_manual_payments permission and the administrator's
-    current password, is refused for the administrator's own account, and must
-    say what the payment was (a reference to the payment that was received).
-    Refusals are audited.
+    Nothing is credited, posted or commissioned here: the payment waits for a
+    DIFFERENT administrator to confirm that the money was received
+    (POST /admin/manual-payments/{id}/confirm). Needs the explicit
+    grant_manual_payments permission and the administrator's current password,
+    is refused for the administrator's own account and for any member in their
+    referral line, and must say what the payment was. Refusals are audited.
     """
     check_admin(current_user)
+    from app.services import manual_payment_service as mps
 
-    from app.crud import crud_deposit
-    from app.models.payment import Deposit, DepositStatus
-    from app.services.commission_distribution import process_payment_validation
-    import uuid as _uuid
-
-    product_code = (request.product_code or "kyc").strip().lower()
-    from app.services.legacy_business_model import is_legacy_founding_product
-    from app.services.new_model_ledger import model_version_for_new_event
-
-    if is_legacy_founding_product(product_code):
-        _reject_retired_legacy_writer("Granting a Founding membership")     # retired for everybody: nothing to authorize
-    _privileged_action(db, http_request, current_user, permission=admin_security.PERMISSION_GRANT_PAYMENTS,
-                       password=request.current_password, target_id=user_id, attempted="grant payment")
-    reason = " ".join((request.notes or "").split())
-    if len(reason) < GRANT_REASON_MIN_LENGTH:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
-            "code": "REASON_REQUIRED",
-            "message": "Say which payment this is: a reference to the payment that was received "
-                       f"(at least {GRANT_REASON_MIN_LENGTH} characters)."})
-    if product_code not in GRANTABLE_PRODUCT_CODES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported product_code. Allowed: {', '.join(GRANTABLE_PRODUCT_CODES)}",
-        )
-
-    user = db.query(User).filter(User.id == user_id).with_for_update().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if not user.is_active or getattr(user, "is_deleted", False):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
-            "code": "TARGET_NOT_ELIGIBLE", "message": "A payment cannot be recorded for an inactive account."})
-    # Nobody records a payment they would earn a commission from: not for a
-    # member they sponsor, and not for anybody further down their referrals.
-    if admin_security.earns_from_payment_by(db, current_user.id, user.id):
-        _refuse_commission_conflict(db, http_request, current_user, user_id)
-
-    product = db.query(ProductType).filter(ProductType.code == product_code).first()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Product type '{product_code}' not found",
-        )
-
-    def _maybe_verify_identity() -> bool:
-        """Optionally flag the user's identity as verified (admin override, skips Shufti)."""
-        if not request.verify_identity:
-            return False
-        old_value = bool(user.identity_verified)
-        user.identity_verified = True
-        user.verification_date = datetime.utcnow()
-        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_VERIFY_WITH_GRANT", old={"identity_verified": old_value}, new={"identity_verified": True})
-        db.commit()
-        db.refresh(user)
-        return True
-
-    # Already has a usable credit → nothing to do (avoids double-granting).
-    existing_valid = crud_deposit.deposit.get_valid_deposit_for_product(
-        db, user_id=user_id, product_code=product_code
-    )
-    if existing_valid:
-        identity_verified = _maybe_verify_identity()
+    try:
+        outcome = mps.record(db, current_user, user_id, product_code=request.product_code,
+                             reason=request.notes or "", password=request.current_password,
+                             amount=request.amount, verify_identity=request.verify_identity,
+                             ip=client_ip(http_request))
+    except mps.ManualPaymentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
+    user = db.query(User).filter(User.id == user_id).first()
+    if outcome.status == "already_paid":
         return {
             "status": "already_paid",
             "message": "User already has a valid credit for this product",
-            "deposit_id": existing_valid.id,
-            "product_code": product_code,
-            "identity_verified": identity_verified or getattr(user, "identity_verified", False),
+            "product_code": (request.product_code or "kyc").strip().lower(),
+            "identity_verified": bool(getattr(user, "identity_verified", False)),
             "available_credits": _valid_deposit_counts(db, user_id),
         }
+    return {
+        "status": "pending_confirmation",
+        "message": "Payment recorded. A second administrator must confirm that it was received.",
+        "request_id": outcome.request.id,
+        "deposit_id": outcome.deposit.id,
+        "product_code": outcome.request.product_code,
+        "created_new_deposit": outcome.request.created_new_deposit,
+        "identity_verified": bool(getattr(user, "identity_verified", False)),
+        "available_credits": _valid_deposit_counts(db, user_id),
+    }
 
-    validity_days = getattr(product, "validity_days", 0) or 0
-    expires_at = datetime.utcnow() + timedelta(days=validity_days) if validity_days > 0 else None
-    from app.services.financial_integrity import money
 
-    amount = money(product.price)
-    if request.amount is not None and money(request.amount) != amount:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin amount must match the server product price",
-        )
-    admin_note = f"{reason} [marked as paid by admin #{current_user.id}]"[:1000]
+class ManualPaymentDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(default="", max_length=256)
+    evidence_reference: Optional[str] = Field(default=None, max_length=255)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+@router.get("/manual-payments")
+def list_manual_payments(
+    http_request: Request,
+    status_filter: Optional[str] = Query(None, alias="status", description="REQUESTED, CONFIRMED, REJECTED, CANCELLED"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually recorded payments, newest first. The queue shows members' contact details and money
+    awaiting confirmation, so only administrators holding grant_manual_payments (or a Super Admin)
+    may see it; a refusal is audited."""
+    check_admin(current_user)
+    from app.services import manual_payment_service as mps
+
+    if not admin_security.has_permission(current_user, admin_security.PERMISSION_GRANT_PAYMENTS):
+        admin_security.record_denial(db, actor=current_user, target_id=0, attempted="view manual payments",
+                                     code="FORBIDDEN", ip=client_ip(http_request))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": "FORBIDDEN",
+            "message": f"The {admin_security.PERMISSION_GRANT_PAYMENTS} permission is required to view manual payments."})
+    if status_filter and status_filter.upper() not in ("REQUESTED", "CONFIRMED", "REJECTED", "CANCELLED"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown status")
+    return {"items": mps.list_requests(db, status=status_filter), "current_admin_id": current_user.id,
+            "can_decide": True}
+
+
+def _manual_payment_action(action, request_id: int, body: ManualPaymentDecision, http_request: Request,
+                           db: Session, current_user: User) -> dict:
+    check_admin(current_user)
+    from app.services import manual_payment_service as mps
 
     try:
-        # Prefer validating an existing unfinished deposit (keeps history/accounting accurate).
-        deposit = (
-            db.query(Deposit)
-            .filter(
-                Deposit.user_id == user_id,
-                Deposit.product_type_id == product.id,
-                Deposit.status.in_([DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID]),
-            )
-            .order_by(Deposit.created_at.desc())
-            .first()
-        )
-
-        created_new = False
-        if deposit:
-            deposit.amount = amount
-            deposit.currency = (getattr(product, "currency", None) or "USD").upper()
-            deposit.status = DepositStatus.VALIDATED
-            deposit.validated_at = datetime.utcnow()
-            deposit.validated_by = current_user.id
-            deposit.expires_at = expires_at
-            deposit.admin_notes = admin_note
+        if action == "confirm":
+            outcome = mps.confirm(db, current_user, request_id, password=body.current_password,
+                                  evidence_reference=body.evidence_reference or "", note=body.note,
+                                  ip=client_ip(http_request))
+        elif action == "reject":
+            outcome = mps.reject(db, current_user, request_id, password=body.current_password,
+                                 reason=body.note or "", ip=client_ip(http_request))
         else:
-            created_new = True
-            deposit = Deposit(
-                user_id=user_id,
-                product_type_id=product.id,
-                amount=amount,
-                currency=(getattr(product, "currency", None) or "USD"),
-                order_id=f"ADMIN-{_uuid.uuid4().hex}",
-                status=DepositStatus.VALIDATED,
-                business_model_version=model_version_for_new_event(db),
-                validated_at=datetime.utcnow(),
-                validated_by=current_user.id,
-                expires_at=expires_at,
-                admin_notes=admin_note,
-            )
-            db.add(deposit)
+            outcome = mps.cancel(db, current_user, request_id, password=body.current_password,
+                                 reason=body.note or "", ip=client_ip(http_request))
+    except mps.ManualPaymentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
+    member_id = outcome.request.member_id
+    return {"status": outcome.status, "request": mps.view(outcome.request),
+            "identity_verified": outcome.identity_verified,
+            "available_credits": _valid_deposit_counts(db, member_id)}
 
-        db.flush()
 
-        ok = process_payment_validation(db, deposit, defer_commit=True)
-        if not ok:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process payment validation",
-            )
-        # The rule above is about the referral records; this is about the
-        # result. Whatever commission the pipeline has just prepared for this
-        # payment (nothing is committed yet): if any of it is the acting
-        # administrator's, the whole payment is undone.
-        db.flush()
-        from app.models.affiliate import AffiliateCommission
-        from sqlalchemy import and_, or_
+@router.post("/manual-payments/{request_id}/confirm")
+def confirm_manual_payment(request_id: int, body: ManualPaymentDecision, http_request: Request,
+                           db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Step 2 of 2: a DIFFERENT administrator confirms the money was received (evidence reference required);
+    the payment is then credited, posted and commissioned."""
+    return _manual_payment_action("confirm", request_id, body, http_request, db, current_user)
 
-        own_commission = db.query(AffiliateCommission.id).filter(
-            AffiliateCommission.user_id == current_user.id,
-            or_(AffiliateCommission.deposit_id == deposit.id,
-                and_(AffiliateCommission.source_type == "DEPOSIT", AffiliateCommission.source_id == deposit.id)),
-        ).first()
-        if own_commission:
-            _refuse_commission_conflict(db, http_request, current_user, user_id)
 
-        admin_security.audit(
-            db, actor_id=current_user.id, record_id=user.id, action="ADMIN_PAYMENT_GRANT",
-            old={"deposit_id": None if created_new else deposit.id},
-            new={"deposit_id": deposit.id, "product_code": product_code, "amount": str(amount),
-                 "reason": reason[:300]},
-            ip=client_ip(http_request),
-        )
-        db.commit()
-        db.refresh(deposit)
+@router.post("/manual-payments/{request_id}/reject")
+def reject_manual_payment(request_id: int, body: ManualPaymentDecision, http_request: Request,
+                          db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """A second administrator refuses a recorded payment (reason in `note`). Nothing is credited."""
+    return _manual_payment_action("reject", request_id, body, http_request, db, current_user)
 
-        identity_verified = _maybe_verify_identity()
 
-        return {
-            "status": "granted",
-            "message": "User marked as paid successfully",
-            "deposit_id": deposit.id,
-            "product_code": product_code,
-            "created_new_deposit": created_new,
-            "identity_verified": identity_verified or getattr(user, "identity_verified", False),
-            "available_credits": _valid_deposit_counts(db, user_id),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error("grant_user_payment failed for user %s: %s", user_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to grant payment: {str(e)}",
-        )
+@router.post("/manual-payments/{request_id}/cancel")
+def cancel_manual_payment(request_id: int, body: ManualPaymentDecision, http_request: Request,
+                          db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The administrator who recorded a payment withdraws it (reason in `note`). Nothing is credited."""
+    return _manual_payment_action("cancel", request_id, body, http_request, db, current_user)
 
 
 # Modèles de réponse pour les transactions

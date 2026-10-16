@@ -8,6 +8,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models.affiliate import AffiliateCommission, CommissionStatus
+from app.services.commission_payout_hold import held_clause, payable_clause
 from app.services.financial_integrity import money
 
 
@@ -18,6 +19,9 @@ class CommissionBalance:
     paid_lifetime: Decimal
     earned_lifetime: Decimal
     reserved: Decimal
+    # Historical commissions held from payout until reviewed (part of `pending`
+    # or of what would otherwise be `available`; never paid while held).
+    held: Decimal = Decimal("0.00")
 
 
 def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
@@ -30,6 +34,7 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                             (
                                 (AffiliateCommission.status == CommissionStatus.APPROVED)
                                 & AffiliateCommission.payout_reference.is_(None)
+                                & payable_clause()
                             ),
                             AffiliateCommission.commission_amount,
                         ),
@@ -38,6 +43,20 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                 ),
                 0,
             ).label("available"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            AffiliateCommission.status.in_((CommissionStatus.PENDING, CommissionStatus.APPROVED))
+                            & AffiliateCommission.payout_reference.is_(None)
+                            & held_clause(),
+                            AffiliateCommission.commission_amount,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("held"),
             func.coalesce(
                 func.sum(
                     case(
@@ -90,5 +109,6 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
         paid_lifetime=money(row.paid_lifetime),
         earned_lifetime=money(row.earned_lifetime),
         reserved=money(row.reserved),
+        held=money(row.held),
     )
 

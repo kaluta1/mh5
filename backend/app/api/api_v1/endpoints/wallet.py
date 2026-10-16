@@ -82,6 +82,8 @@ def get_wallet_balance(
         "available_balance": float(available_balance),
         "pending_balance": float(pending_balance),
         "reserved_balance": float(balance.reserved),
+        # Historical commissions held from payout until an administrator reviews them.
+        "held_balance": float(balance.held),
         "total_earnings": float(total_earnings),
         "this_month": float(this_month_earnings),
         "last_month": float(last_month_earnings),

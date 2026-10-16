@@ -129,9 +129,10 @@ def earnings(db, user, amounts=("60.00", "60.00")):
     src = person(db, 40)
     rows = []
     for i, amount in enumerate(amounts, start=1):
+        # Current (NEW_V2) direct commissions: historical rows are held from payout until reviewed (Phase 1).
         row = AffiliateCommission(user_id=user.id, source_user_id=src.id, commission_type=CommissionType.KYC_PAYMENT,
-                                  level=i, base_amount=Decimal("600.00"), commission_amount=Decimal(amount),
-                                  status=CommissionStatus.APPROVED)
+                                  level=1, base_amount=Decimal("600.00"), commission_amount=Decimal(amount),
+                                  status=CommissionStatus.APPROVED, business_model_version="NEW_V2")
         db.add(row)
         rows.append(row)
     db.commit()

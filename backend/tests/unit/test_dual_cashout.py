@@ -196,9 +196,10 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
 
 def commission(db, user, amount, *, status=CommissionStatus.APPROVED, when=None) -> AffiliateCommission:
     payer = db.query(User).filter(User.username == "payer").first() or member(db, "payer", wallet=None)
+    # A current (NEW_V2) direct commission: historical rows are held from payout until reviewed (Phase 1).
     row = AffiliateCommission(user_id=user.id, source_user_id=payer.id, commission_type=CommissionType.KYC_PAYMENT,
                               level=1, base_amount=Decimal("10.00"), commission_amount=Decimal(amount), status=status,
-                              transaction_date=when or NOW - timedelta(days=2))
+                              transaction_date=when or NOW - timedelta(days=2), business_model_version="NEW_V2")
     db.add(row)
     db.commit()
     return row

@@ -110,6 +110,7 @@ from app.services import cashout_service as cs
 from app.services import financial_eligibility as fe
 from app.services import nowpayments_service as nowpayments
 from app.services import payment_config
+from app.services.commission_payout_hold import held_clause
 from app.services.commission_payout_service import _intent_reference
 from app.services.financial_integrity import money
 
@@ -624,12 +625,15 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
 # ---------------------------------------------------------------------------
 
 def candidate_user_ids(db: Session, limit: int) -> list[int]:
-    """Members who chose CRYPTO and have unreserved commission rows."""
+    """Members who chose CRYPTO and have unreserved commission rows that may be paid."""
+    from app.services.commission_payout_hold import payable_clause
+
     rows = (db.query(AffiliateCommission.user_id)
             .join(User, User.id == AffiliateCommission.user_id)
             .filter(User.cashout_method == cs.METHOD_CRYPTO,
                     AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
-                    AffiliateCommission.payout_reference.is_(None))
+                    AffiliateCommission.payout_reference.is_(None),
+                    payable_clause())
             .group_by(AffiliateCommission.user_id)
             .order_by(func.min(AffiliateCommission.transaction_date).asc(), AffiliateCommission.user_id.asc())
             .limit(limit).all())
@@ -884,6 +888,9 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
                              if gate is not None else None),
         "owed": {k: float(v) for k, v in owed.items()},
         "owed_total": float(unpaid),
+        # Part of owed_total: historical commissions held from every payout until reviewed.
+        "held_for_review": float(total(AffiliateCommission.status.in_((CommissionStatus.PENDING, CommissionStatus.APPROVED)),
+                                       held_clause())),
         "owed_to_crypto_cashout_members": float(crypto_members),
         "open_cashouts": {str(k): int(v) for k, v in open_by_state.items()},
         "provider_balance_state": provider_state,

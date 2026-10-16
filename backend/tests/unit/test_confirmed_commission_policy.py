@@ -8,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.api.api_v1.endpoints import business_model as bm_api
@@ -337,7 +338,11 @@ def test_leaders_never_counts_legacy_or_level_2_to_10_even_if_paid(world):
     u = _user(db, "lp-legacy@t.com")
     _commission(db, u, 500, version=None, status=CommissionStatus.PAID)
     for level in range(2, 11):
-        _commission(db, u, 100, level=level, status=CommissionStatus.PAID)
+        _commission(db, u, 100, level=level, version=None, status=CommissionStatus.PAID)   # historical
+        with pytest.raises(IntegrityError):                   # a NEW_V2 row above level 1 cannot exist (Phase 1)
+            with db.begin_nested():
+                _commission(db, u, 100, level=level, status=CommissionStatus.PAID)
+                db.flush()
     db.commit()
     assert leaders_service.rank_members(db, LAST_MONTH.year, LAST_MONTH.month) == []
 
