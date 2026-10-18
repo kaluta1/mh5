@@ -1011,3 +1011,75 @@ describe('AdminFinance', () => {
     expect(await screen.findByText(/activate_financial_operations permission is required/)).toHaveAttribute('role', 'alert')
   })
 })
+
+describe('AdminFinance: payout credential source', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // A real server answers every reload with new objects; the shared fixtures would hide a reset of the form.
+  const freshReloads = () => {
+    const served = getMock.getMockImplementation()!
+    getMock.mockImplementation(async (url: string, options?: any) => {
+      const res = await served(url, options)
+      return { ...res, data: JSON.parse(JSON.stringify(res.data)) }
+    })
+  }
+  const providerCard = () => screen.getByRole('heading', { name: 'Provider settings' }).closest('div') as HTMLElement
+
+  it('keeps an unsaved credential source when credentials are stored in the card below', async () => {
+    setup()
+    freshReloads()
+    render(<AdminFinance section="nowpayments" />)
+    const source = await screen.findByLabelText('Payout credential source') as HTMLSelectElement
+    fireEvent.change(source, { target: { value: 'DATABASE' } })
+
+    fireEvent.change(screen.getByLabelText('Payout login password'), { target: { value: SECRET } })
+    const passwords = screen.getAllByLabelText('Your current password')
+    fireEvent.change(passwords[passwords.length - 1], { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Store credentials' }))
+    expect(await screen.findByText(/Credentials stored encrypted/)).toBeInTheDocument()
+
+    expect((screen.getByLabelText('Payout credential source') as HTMLSelectElement).value).toBe('DATABASE')
+    expect(document.body.innerHTML).not.toContain(SECRET)
+  })
+
+  it('shows a refused switch next to the form and keeps the choice so it can be retried', async () => {
+    setup()
+    putMock.mockResolvedValue({ status: 409, data: { detail: { code: 'CREDENTIALS_INCOMPLETE', field: 'payout_credential_source',
+      message: 'Store every payout credential before switching its source to the database. Missing or unreadable: '
+        + 'Payout authenticator (TOTP) secret.' } } })
+    render(<AdminFinance section="nowpayments" />)
+    fireEvent.change(await screen.findByLabelText('Payout credential source'), { target: { value: 'DATABASE' } })
+    fireEvent.change(within(providerCard()).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(within(providerCard()).getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
+      changes: { payout_credential_source: 'DATABASE' }, current_password: PASSWORD, confirmation: undefined,
+      expected_version: 3 }))
+    expect(await within(providerCard()).findByTestId('provider-save-error'))
+      .toHaveTextContent('Missing or unreadable: Payout authenticator (TOTP) secret.')
+    expect(within(providerCard()).getByText(/Not saved/)).toBeInTheDocument()
+    expect((screen.getByLabelText('Payout credential source') as HTMLSelectElement).value).toBe('DATABASE')
+  })
+
+  it('reloads the saved source from the server after a successful save', async () => {
+    setup()
+    let saved = false
+    const served = getMock.getMockImplementation()!
+    getMock.mockImplementation(async (url: string, options?: any) => {
+      if (saved && url.endsWith('/finance/settings')) {
+        const s = settings({ version: 4 })
+        s.fields = s.fields.map((f: SettingField) => f.name === 'payout_credential_source' ? { ...f, value: 'DATABASE' } : f)
+        return { status: 200, data: s }
+      }
+      return served(url, options)
+    })
+    putMock.mockImplementation(async () => { saved = true; return { status: 200, data: {} } })
+    render(<AdminFinance section="nowpayments" />)
+    fireEvent.change(await screen.findByLabelText('Payout credential source'), { target: { value: 'DATABASE' } })
+    fireEvent.change(within(providerCard()).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(within(providerCard()).getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText(/Provider settings saved/)).toBeInTheDocument()
+    expect((screen.getByLabelText('Payout credential source') as HTMLSelectElement).value).toBe('DATABASE')
+    expect(within(providerCard()).getByRole('button', { name: 'Save changes' })).toBeDisabled()   // nothing left to save
+  })
+})

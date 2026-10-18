@@ -51,7 +51,9 @@ import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
  * No secret is ever received from the API: credential fields are write-only,
  * a blank field keeps the stored value, and they are cleared after saving.
  */
-type Change = (request: () => Promise<{ status: number; data?: any }>, ok: string, failure: string) => Promise<boolean>
+type Change = (request: () => Promise<{ status: number; data?: any }>, ok: string, failure: string,
+  /** Shows a refusal where the change was made instead of at the top of the page. */
+  onRefused?: (message: string) => void) => Promise<boolean>
 
 function PasswordField({ id, value, onChange, disabled }: {
   id: string; value: string; onChange: (value: string) => void; disabled?: boolean
@@ -99,7 +101,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
   const activation = canManage && !canActivate ? settings?.activation ?? null : null
 
   /** Run one change, then refresh. Returns true when the server accepted it. */
-  const change: Change = async (request, ok, failure) => {
+  const change: Change = async (request, ok, failure, onRefused) => {
     setBusy(true)
     setError('')
     setNotice('')
@@ -110,7 +112,9 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         await load()
         return true
       }
-      setError(financeErrorText(res, failure))
+      const message = financeErrorText(res, failure)
+      if (onRefused) onRefused(message)
+      else setError(message)
       return false
     } finally {
       setBusy(false)
@@ -529,10 +533,15 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
 }) {
   const initial = useMemo(() => Object.fromEntries(fields.map((f) =>
     [f.name, f.kind === 'bool' ? Boolean(f.value) : String(f.value ?? '')])), [fields])
-  const [draft, setDraft] = useState<Record<string, string | boolean>>(initial)
+  // Only what the administrator edited here and has not saved. Every change on the page reloads the
+  // settings; the edits stay on top of the values reloaded, so a choice made here survives a change
+  // made in another card (storing credentials) and a refused save.
+  const [edits, setEdits] = useState<Record<string, string | boolean>>({})
+  const draft = { ...initial, ...edits }
+  const edit = (name: string, value: string | boolean) => setEdits((e) => ({ ...e, [name]: value }))
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  useEffect(() => { setDraft(initial) }, [initial])
+  const [refusal, setRefusal] = useState('')
 
   const changes = changedValues(fields, draft)
   // Switching on something that moves money needs a typed confirmation phrase.
@@ -548,12 +557,17 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
   const save = async () => {
     const sentPassword = password
     setPassword('')
+    setRefusal('')
     // The version this page shows: the server refuses the change if the configuration has changed since.
     const ok = await change(() => api.put(`${FINANCE_BASE}/settings`, {
       changes, current_password: sentPassword, confirmation: phrase ? confirmation : undefined,
       expected_version: settings.version,
-    }), `${title} saved. Nothing was paid or released by this change.`, `${title} could not be saved.`)
-    if (ok) setConfirmation('')
+    }), `${title} saved. Nothing was paid or released by this change.`, `${title} could not be saved.`, setRefusal)
+    if (ok) {
+      // Saved: the form shows what the server holds now.
+      setEdits((e) => Object.fromEntries(Object.entries(e).filter(([name]) => !(name in changes))))
+      setConfirmation('')
+    }
   }
 
   return (
@@ -579,12 +593,12 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
                 <label htmlFor={id} className="text-sm font-medium text-gray-900 dark:text-white">{f.label}</label>
                 {f.kind === 'bool' && (
                   <Switch id={id} aria-label={f.label} checked={Boolean(draft[f.name])} disabled={disabled || !!lock}
-                    onCheckedChange={(v) => setDraft({ ...draft, [f.name]: v })} />
+                    onCheckedChange={(v) => edit(f.name, v)} />
                 )}
               </div>
               {f.kind === 'choice' && (
                 <select id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled || !!lock}
-                  onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })}>
+                  onChange={(e) => edit(f.name, e.target.value)}>
                   {f.choices.map((c) => {
                     const off = unsupported.some((u) => u.value === c)
                     if (c === lockedChoice) return <option key={c} value={c} disabled>{humanize(c)} (needs the activation permission)</option>
@@ -601,7 +615,7 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
                 <div className="flex items-center gap-2">
                   <input id={id} className={inputClass} value={String(draft[f.name] ?? '')} disabled={disabled || !!lock}
                     inputMode={['text', 'account'].includes(f.kind) ? 'text' : 'decimal'} maxLength={f.max_length ?? 20}
-                    onChange={(e) => setDraft({ ...draft, [f.name]: e.target.value })} />
+                    onChange={(e) => edit(f.name, e.target.value)} />
                   {f.unit && <span className="text-xs text-gray-500 whitespace-nowrap">{f.unit}</span>}
                 </div>
               )}
@@ -635,6 +649,11 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
               <p role="alert" className="text-sm text-amber-800 dark:text-amber-200" data-testid={`${idPrefix}-needs-activation`}>
                 This change needs the <code>{activation?.permission}</code> permission, which your account does not
                 have, so it cannot be saved. Nothing has been changed.
+              </p>
+            )}
+            {refusal && (
+              <p role="alert" className="text-sm text-red-600" data-testid={`${idPrefix}-save-error`}>
+                Not saved: {refusal}
               </p>
             )}
             <PasswordField id={`${idPrefix}-password`} value={password} onChange={setPassword} disabled={busy} />

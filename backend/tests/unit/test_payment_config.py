@@ -460,6 +460,63 @@ def test_switching_to_the_database_needs_every_credential_and_never_falls_back(d
     assert credentials.payout_missing == ["Payout authenticator (TOTP) secret"]   # the environment one is NOT used
 
 
+def test_the_payout_source_is_saved_and_reloaded_through_the_api_and_leaves_pay_in_on_the_environment(
+        client, db, monkeypatch):
+    """As in production: no settings row yet, pay-in from the environment, the
+    payout credentials typed into the Admin Panel, then the payout source switched."""
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-env-payin-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-env-ipn-secret")
+    admin = member(db, "boss", admin=True)
+    headers = auth(admin)
+
+    def source_shown():
+        fields = client.get("/api/v1/admin/finance/settings", headers=headers).json()["fields"]
+        return next(f["value"] for f in fields if f["name"] == "payout_credential_source")
+
+    def switch():
+        version = client.get("/api/v1/admin/finance/settings", headers=headers).json()["version"]
+        return client.put("/api/v1/admin/finance/settings", headers=headers, json={
+            "changes": {"payout_credential_source": "DATABASE"}, "current_password": PASSWORD,
+            "expected_version": version})
+
+    payout = {k: v for k, v in SECRETS.items() if k.startswith("PAYOUT_")}
+    stored = client.put("/api/v1/admin/finance/credentials", headers=headers, json={
+        "values": {k: v for k, v in payout.items() if k != "PAYOUT_TOTP_SECRET"}, "current_password": PASSWORD})
+    assert stored.status_code == 200, stored.text
+
+    refused = switch()                                                    # three of the four: refused, nothing saved
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "CREDENTIALS_INCOMPLETE"
+    assert refused.json()["detail"]["field"] == "payout_credential_source"
+    assert "Payout authenticator (TOTP) secret" in refused.json()["detail"]["message"]
+    assert source_shown() == "ENVIRONMENT" and pc.load(db).payout_credential_source == "ENVIRONMENT"
+
+    wrong_password = client.put("/api/v1/admin/finance/settings", headers=headers, json={
+        "changes": {"payout_credential_source": "DATABASE"}, "current_password": "not-the-password"})
+    assert wrong_password.status_code == 403 and wrong_password.json()["detail"]["code"] == "REAUTH_REQUIRED"
+    assert source_shown() == "ENVIRONMENT"
+
+    stored = client.put("/api/v1/admin/finance/credentials", headers=headers, json={
+        "values": {"PAYOUT_TOTP_SECRET": payout["PAYOUT_TOTP_SECRET"]}, "current_password": PASSWORD})
+    assert stored.status_code == 200, stored.text
+    saved = switch()
+    assert saved.status_code == 200, saved.text
+
+    db.expire_all()
+    pc.invalidate_runtime()
+    assert source_shown() == "DATABASE"                                   # persisted and reloaded
+    view = client.get("/api/v1/admin/finance/provider", headers=headers).json()
+    assert view["credential_sources"] == {"payin": "ENVIRONMENT", "payout": "DATABASE"}
+    credentials = pc.resolve_credentials(db)
+    assert credentials.payout_ready and credentials.get("PAYOUT_API_KEY") == payout["PAYOUT_API_KEY"]
+    assert credentials.get("PAYIN_API_KEY") == "synthetic-env-payin-key"  # pay-in untouched
+    assert credentials.get("IPN_SECRET") == "synthetic-env-ipn-secret"
+    assert db.query(PaymentCredential).filter(PaymentCredential.name.in_(("PAYIN_API_KEY", "IPN_SECRET"))).count() == 0
+    assert pc.load(db).crypto_auto_payout_enabled is False
+    text = refused.text + saved.text + json.dumps(view) + everything_audited(db)
+    assert all(value not in text for value in payout.values())
+
+
 def test_the_pay_in_key_is_never_used_as_the_payout_key(db, monkeypatch):
     monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-env-payin-key")
     for name in ("NOWPAYMENTS_EMAIL", "NOWPAYMENTS_PASSWORD", "NOWPAYMENTS_PAYOUT_TOTP_SECRET"):
