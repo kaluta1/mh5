@@ -41,6 +41,11 @@ from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.user import User
 
 PRODUCT_CODE = "kyc"
+# Every product a KYC verification fee may have been paid under. Only PRODUCT_CODE
+# is sold; `kyc_verification` is an older catalogue row that /payments/create
+# refuses, kept so a payment already made under it is honoured exactly once.
+KYC_PRODUCT_CODES = (PRODUCT_CODE, "kyc_verification")
+RETIRED_KYC_PRODUCT_CODES = ("kyc_verification",)
 DEFAULT_FEE = Decimal("10.00")          # used only when the product row does not exist
 MAX_FEE = Decimal("1000.00")
 AUDIT_ACTION = "KYC_MEMBER_FEE_CHANGED"

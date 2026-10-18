@@ -762,14 +762,21 @@ def test_the_link_works_once_for_its_own_account_wallet_and_lifetime(ledger, eng
     assert user.usdt_wallet_address == WALLET
 
     state = cs.confirm_payout_wallet(db, user, result.token, now=NOW + timedelta(minutes=5), ip="203.0.113.7")
-    assert (state.status, state.address) == ("ON_HOLD", OTHER_WALLET)
+    # Confirmed by the member; now waits for an administrator (owner rule 2026-10-18).
+    assert (state.status, state.address) == ("PENDING_APPROVAL", OTHER_WALLET)
     change = db.query(PayoutWalletChange).one()
     assert (change.old_address, change.new_address, change.verification_method) == (WALLET, OTHER_WALLET, "EMAIL")
     assert invalid(user, result.token, now=NOW + timedelta(minutes=6))            # replay
     assert db.query(PayoutWalletChange).count() == 1
 
-    # Nothing is paid during the hold; afterwards the engine pays the confirmed wallet.
+    # Nothing is paid before an administrator approved it, nor during the hold;
+    # afterwards the engine pays the confirmed, approved wallet.
     provider = FakeProvider()
+    assert run(db, provider, now=NOW + timedelta(hours=1))["members"] == {"WALLET_PENDING_APPROVAL": 1}
+    from app.services import payout_wallet_approval as approvals
+
+    approvals.decide(db, member(db, "boss", admin=True), approvals.current(db, user.id).id, decision="APPROVE",
+                     note=None, password=PASSWORD)
     assert run(db, provider, now=NOW + timedelta(hours=1))["members"] == {"WALLET_ON_HOLD": 1}
     assert run(db, provider, now=NOW + timedelta(hours=73))["members"] == {"SUBMITTED": 1}
     assert provider.created[0]["address"] == OTHER_WALLET
@@ -829,7 +836,7 @@ def test_a_legacy_wallet_is_never_paid_until_it_is_confirmed(client, ledger, eng
     assert cs.summary(db, user)["status"] == "WALLET_CONFIRMATION_PENDING"
     confirm = client.post("/api/v1/wallet/payout-wallet/confirm", headers=auth(user), json={"token": result.token})
     assert confirm.status_code == 200, confirm.text
-    assert confirm.json()["wallet_status"] == "ON_HOLD" and confirm.json()["wallet"] == "0xaaaa...aaaa"
+    assert confirm.json()["wallet_status"] == "PENDING_APPROVAL" and confirm.json()["wallet"] == "0xaaaa...aaaa"
     again = client.post("/api/v1/wallet/payout-wallet/confirm", headers=auth(user), json={"token": result.token})
     assert again.status_code == 400 and again.json()["detail"]["code"] == "LINK_INVALID"
     assert client.post("/api/v1/wallet/payout-wallet/confirm", json={"token": result.token}).status_code in (401, 403)
@@ -897,6 +904,9 @@ def test_minimum_interval_between_payouts_and_the_retry_limit(ledger, engine_on)
     run(db, provider)
     run(db, provider)                                                             # reconciled: paid
     commission(db, user, "6.00")
+    # No interval by default since individual payouts (owner rule 2026-10-18); an
+    # administrator may still set one.
+    configure(db, min_hours_between_payouts=24)
     assert run(db, provider, now=NOW + timedelta(hours=23))["members"] == {"PAYOUT_INTERVAL": 1}
     assert run(db, provider, now=NOW + timedelta(hours=25))["members"] == {"SUBMITTED": 1}
 

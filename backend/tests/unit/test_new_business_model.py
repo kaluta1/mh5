@@ -147,27 +147,32 @@ def test_direct_sponsor_earns_20pct_of_website_revenue_and_upline_earns_nothing(
     _assert_all_journals_balance(db)
 
 
-def test_kyc_commission_is_20pct_of_full_fee_provider_cost_separate_and_only_on_recognition(world):
+def test_kyc_commission_is_20pct_of_full_fee_posted_at_payment_cost_expensed_on_recognition(world):
+    """Owner rule 2026-10-18: the KYC commission is earned when the fee is paid;
+    revenue (and the commission's expense) wait for the verification."""
     db = world
     sponsor = _user(db, "ks@t.com")
     payer = _user(db, "kp@t.com", sponsor=sponsor)
     deposit = _deposit(db, payer, "kyc")
     process_payment_validation(db, deposit, defer_commit=True)
     db.commit()
-    assert db.query(AffiliateCommission).count() == 0  # service not performed yet
-    assert _balance(db, "2113") == Decimal("-10.00")
+    c = db.query(AffiliateCommission).one()          # earned at payment, available at once
+    assert c.status == CommissionStatus.APPROVED
+    assert _balance(db, "2113") == Decimal("-10.00")  # revenue still deferred
+    assert _balance(db, "1230") == Decimal("2.00") and _balance(db, "2001") == Decimal("-2.00")
+    assert _balance(db, "5001") == 0                  # cost deferred with the revenue
 
     assert recognize_deferred_deposit(db, deposit) is True
     assert recognize_deferred_deposit(db, deposit) is False  # idempotent
     db.commit()
-    c = db.query(AffiliateCommission).one()
+    assert db.query(AffiliateCommission).count() == 1
     # Confirmed rule: full $10 is the commission base -> $2.00 (the old $1.60 is gone).
     assert (c.base_amount, c.commission_amount) == (Decimal("10.00"), Decimal("2.00"))
     assert c.commission_amount != Decimal("1.60")
     # Provider cost stays a separate pass-through; it does not reduce the commission.
     assert _balance(db, "4001") == Decimal("-8.00") and _balance(db, "2003") == Decimal("-2.00")
     assert _balance(db, "5001") == Decimal("2.00") and _balance(db, "2001") == Decimal("-2.00")
-    assert _balance(db, "2113") == 0
+    assert _balance(db, "1230") == 0 and _balance(db, "2113") == 0
     _assert_all_journals_balance(db)
 
 

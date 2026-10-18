@@ -8,6 +8,8 @@ export type CashoutStatus =
   | 'METHOD_REQUIRED'
   | 'WALLET_REQUIRED'
   | 'WALLET_CONFIRMATION_PENDING'
+  | 'WALLET_APPROVAL_PENDING'
+  | 'WALLET_REJECTED'
   | 'WALLET_ON_HOLD'
   | 'FEE_TERMS_REQUIRED'
   | 'METHOD_UNAVAILABLE'
@@ -69,12 +71,41 @@ export type CashoutRecord = {
   reference?: string | null
   requested_at?: string | null
   processed_at?: string | null
+  /** Individual automatic payout: the ONE commission it pays, its blockchain transaction and explorer link. */
+  commission_id?: number | null
+  tx_hash?: string | null
+  explorer_url?: string | null
+}
+
+/** The administrator's decision on the member's current payout wallet. */
+export type WalletApproval = {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED'
+  wallet: string | null
+  network: string
+  submitted_at: string | null
+  decided_at: string | null
+  reason: string | null
 }
 
 export type CashoutSummary = {
   cashout_method: CashoutMethod | null
   status: CashoutStatus
-  balances: { total_earned: number; pending: number; available: number; reserved: number; paid: number }
+  balances: {
+    total_earned: number
+    pending: number
+    available: number
+    reserved: number
+    paid: number
+    /** Historical commissions held for review: never available, never paid automatically. */
+    held?: number
+    /** Available and not yet paid (never a held row). */
+    available_unpaid?: number
+    /** The part of the unpaid balance waiting for the wallet's approval. */
+    awaiting_wallet_approval?: number
+    /** Handed to a payout that is not settled yet. */
+    processing?: number
+  }
+  wallet_approval?: WalletApproval | null
   payable_amount: number
   minimum: number | null
   minimums: Record<CashoutMethod, number>
@@ -95,7 +126,7 @@ export type CashoutSummary = {
   destination: {
     type: CashoutMethod | null
     wallet: string | null
-    wallet_status: 'MISSING' | 'INVALID' | 'UNVERIFIED' | 'ON_HOLD' | 'VERIFIED'
+    wallet_status: 'MISSING' | 'INVALID' | 'UNVERIFIED' | 'PENDING_APPROVAL' | 'REJECTED' | 'ON_HOLD' | 'VERIFIED'
     payout_currency: string
     payable_from: string | null
     network?: string
@@ -127,6 +158,10 @@ export function cashoutStatusText(summary: CashoutSummary): string {
         : 'Add a valid USDT BSC payout wallet in Settings to receive crypto payouts.'
     case 'WALLET_CONFIRMATION_PENDING':
       return 'Open the confirmation link we sent to your email address to confirm your payout wallet.'
+    case 'WALLET_APPROVAL_PENDING':
+      return 'Your payout wallet is waiting for approval by MyHigh5. Your commissions are kept in full and are paid automatically, each one separately, once it is approved.'
+    case 'WALLET_REJECTED':
+      return 'Your payout wallet was not approved. Submit a valid USDT BEP20 wallet in Settings. Your commissions are kept in full.'
     case 'METHOD_UNAVAILABLE':
       return 'This cashout method is not available at the moment. Your earnings are kept in full; you can choose the other method.'
     case 'WALLET_ON_HOLD':
@@ -139,8 +174,8 @@ export function cashoutStatusText(summary: CashoutSummary): string {
       return `Your balance is below the ${minimum} minimum for ${methodLabel(summary.cashout_method)}.`
     case 'AUTOMATIC_PAYOUT_PENDING':
       return summary.fees.CRYPTO.network_fee_policy === 'MEMBER_PAYS'
-        ? 'Your balance will be sent to your wallet automatically in a coming payout run, less the network fee. The fee is estimated before the payout; the actual fee may differ.'
-        : 'Your balance will be sent to your wallet automatically in the next payout run.'
+        ? 'Each commission is sent to your approved wallet automatically, on its own, as soon as it is available, less the network fee. The fee is estimated before the payout; the actual fee may differ.'
+        : 'Each commission is sent to your approved wallet automatically, on its own, as soon as it is available.'
     case 'AUTOMATIC_PAYOUT_NOT_ACTIVE':
       return 'Automatic crypto payouts are not active yet. Your balance is kept in full and will be paid once they start.'
     case 'READY_TO_REQUEST':
@@ -167,7 +202,7 @@ export function recordStatusLabel(status: CashoutRecord['status']): string {
     case 'processing':
       return 'Processing'
     case 'unknown':
-      return 'Being verified'
+      return 'Delayed - being verified'
     case 'completed':
       return 'Paid'
     case 'failed':
@@ -222,6 +257,10 @@ export function walletStatusLabel(status: CashoutSummary['destination']['wallet_
       return 'Verified - security hold'
     case 'UNVERIFIED':
       return 'Not confirmed'
+    case 'PENDING_APPROVAL':
+      return 'Waiting for approval'
+    case 'REJECTED':
+      return 'Not approved'
     case 'INVALID':
       return 'Not valid for the payout network'
     default:
@@ -249,4 +288,10 @@ export function canCancel(record: CashoutRecord, summary?: CashoutSummary | null
 
 export function canRequestUsd(summary: CashoutSummary): boolean {
   return summary.cashout_method === 'USD' && summary.status === 'READY_TO_REQUEST'
+}
+
+/** A short transaction hash for tables: 0x1234...abcd. */
+export function shortHash(hash: string | null | undefined): string {
+  if (!hash) return '-'
+  return hash.length > 16 ? `${hash.slice(0, 8)}...${hash.slice(-6)}` : hash
 }

@@ -33,6 +33,7 @@ import {
   type WebhookHealth,
 } from '@/lib/finance-admin'
 import { CashoutTransactions, ReconciliationAndAudit } from './admin-finance-cashouts'
+import { CommissionPayouts, PayoutPause, WalletApprovals } from './admin-finance-payouts'
 import { FlaggedPayoutReview } from './admin-finance-review'
 import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
 
@@ -231,7 +232,14 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         <SettingsForm title="Payout security" fields={group('security')} settings={settings} canManage={canManage}
           activation={activation} busy={busy} change={change} idPrefix="security" />
       )}
-      {section === 'transactions' && overview && <CashoutTransactions canProcess={canProcess} />}
+      {section === 'transactions' && overview && (
+        <div className="space-y-4">
+          <PayoutPause canProcess={canProcess} active={!!settings?.effective.automatic_crypto_payouts} />
+          <WalletApprovals canProcess={canProcess} />
+          <CashoutTransactions canProcess={canProcess} />
+          <CommissionPayouts />
+        </div>
+      )}
       {section === 'reconciliation' && overview && (
         <div className="space-y-4">
           <FlaggedPayoutReview canProcess={canProcess} />

@@ -21,6 +21,7 @@ import {
   networkFeeText,
   receivedText,
   recordStatusLabel,
+  shortHash,
   walletStatusLabel,
   type CashoutMethod,
   type CashoutRecord,
@@ -150,13 +151,16 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
   if (!summary) return null
 
   const b = summary.balances
-  const tiles: Array<[string, number]> = [
-    ['Total earned', b.total_earned],
-    ['Pending', b.pending],
-    ['Available', b.available],
-    ['Reserved', b.reserved],
-    ['Paid', b.paid],
+  // Held historical commissions are shown on their own and never as available.
+  const tiles: Array<[string, number, string]> = [
+    ['Total earned', b.total_earned, 'balance-total'],
+    ['Available unpaid', b.available_unpaid ?? b.available + b.pending, 'balance-available'],
+    ['Awaiting wallet approval', b.awaiting_wallet_approval ?? 0, 'balance-awaiting'],
+    ['Payout processing', b.processing ?? b.reserved, 'balance-processing'],
+    ['Total paid', b.paid, 'balance-paid'],
+    ['Historical held', b.held ?? 0, 'balance-held'],
   ]
+  const approval = summary.wallet_approval
   const method = summary.cashout_method
   const feeTerms = summary.fees.CRYPTO.terms
   const providerName = feeTerms?.provider || 'The payment provider'
@@ -174,9 +178,9 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {tiles.map(([label, value]) => (
-          <div key={label} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map(([label, value, testId]) => (
+          <div key={label} data-testid={testId} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
             <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
             <p className="mt-1 text-base font-semibold tabular-nums text-gray-900 dark:text-white">
               {formatUsd(value)}
@@ -184,6 +188,28 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
           </div>
         ))}
       </div>
+      {(b.held ?? 0) > 0 && (
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="held-note">
+          Historical held commissions are under review. They are not available and are not paid automatically.
+        </p>
+      )}
+
+      {approval && (
+        <div data-testid="wallet-approval" className="rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700">
+          <p className="font-medium text-gray-900 dark:text-white">
+            Payout wallet {approval.wallet ?? ''} ({approval.network}):{' '}
+            {approval.status === 'APPROVED' ? 'approved' : approval.status === 'REJECTED' ? 'not approved' : 'waiting for approval'}
+          </p>
+          {approval.status === 'REJECTED' && approval.reason && (
+            <p className="mt-1 text-gray-600 dark:text-gray-300">Reason: {approval.reason}</p>
+          )}
+          {approval.status === 'PENDING' && (
+            <p className="mt-1 text-gray-600 dark:text-gray-300">
+              Submitted {formatDate(approval.submitted_at)}. Nothing is paid to a wallet before MyHigh5 approves it.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {(
@@ -429,7 +455,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">No cashouts yet.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="text-xs text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="py-2 pr-3 font-medium">Date</th>
@@ -438,6 +464,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                   <th className="py-2 pr-3 text-right font-medium">Fee</th>
                   <th className="py-2 pr-3 text-right font-medium">Net</th>
                   <th className="py-2 pr-3 font-medium">Status</th>
+                  <th className="py-2 pr-3 font-medium">Transaction</th>
                   <th className="py-2 font-medium" />
                 </tr>
               </thead>
@@ -456,7 +483,21 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                     <td className="py-2 pr-3 text-right tabular-nums">{receivedText(row)}</td>
                     <td className="py-2 pr-3 text-gray-700 dark:text-gray-200">
                       {recordStatusLabel(row.status)}
-                      {row.reference ? <span className="block font-mono text-xs text-gray-500">{row.reference}</span> : null}
+                      {row.commission_id ? (
+                        <span className="block text-xs text-gray-500">Commission #{row.commission_id}</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {row.tx_hash && row.explorer_url ? (
+                        <a href={row.explorer_url} target="_blank" rel="noopener noreferrer"
+                           className="text-myhigh5-primary underline" data-testid="tx-link">
+                          {shortHash(row.tx_hash)}
+                        </a>
+                      ) : row.reference ? (
+                        <span className="text-gray-500">{row.reference}</span>
+                      ) : (
+                        '-'
+                      )}
                     </td>
                     <td className="py-2 text-right">
                       {canCancel(row, summary) && (

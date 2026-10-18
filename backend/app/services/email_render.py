@@ -250,10 +250,89 @@ def _payout_wallet_confirmation(db, to, user_id, ctx, lang) -> Rendered:
         f"on {ctx.get('network', '')}.",
         "If you made this request, sign in and confirm it with the button below. The link works once and "
         f"expires in {int(ctx.get('minutes') or 60)} minutes.",
-        "After you confirm, payouts to this wallet start once a security hold has passed.",
+        "After you confirm, MyHigh5 reviews the wallet. Payouts to it start once it is approved and a security "
+        "hold has passed.",
         "If you did not make this request, do not confirm it and change your account password now. Your "
         "current payout wallet stays as it is.",
     ], button_text="Confirm payout wallet", button_url=url, subject="Confirm your MyHigh5 payout wallet")
+
+
+def _wallet_page() -> str:
+    return f"{public_site_base()}/dashboard/wallet"
+
+
+def _commission_wallet_missing(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    count, total = int(ctx.get("count") or 1), ctx.get("total", "")
+    earned = (f"You earned a new commission of ${total}." if count == 1
+              else f"You earned {count} new commissions totalling ${total}.")
+    ask = ("Your payout wallet was not approved. Add a valid USDT BEP20 (BNB Smart Chain) wallet so your "
+           "commissions can be paid." if ctx.get("rejected") else
+           "To receive it, add your USDT BEP20 (BNB Smart Chain) wallet in your account.")
+    return _simple("en", "You earned a commission", [
+        earned,
+        "It is available and waits for your payout wallet. Nothing is paid until a wallet is set up and "
+        "approved by MyHigh5.",
+        ask,
+        "Each commission is then paid automatically, on its own, to your approved wallet.",
+    ], button_text="Set up payout wallet", button_url=_wallet_page(), subject="You earned a MyHigh5 commission")
+
+
+def _wallet_submitted(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    return _simple("en", "Payout wallet submitted", [
+        f"Your payout wallet {ctx.get('wallet', '')} on {ctx.get('network', '')} was submitted for approval.",
+        "MyHigh5 reviews every new wallet and every change before anything is paid to it. You will receive "
+        "an email with the decision.",
+        "If you did not make this change, change your account password now and contact support.",
+    ], button_text="View payout wallet", button_url=_wallet_page(), subject="Your MyHigh5 payout wallet was submitted")
+
+
+def _wallet_approved(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    return _simple("en", "Payout wallet approved", [
+        f"Your payout wallet {ctx.get('wallet', '')} on {ctx.get('network', '')} was approved.",
+        "Your available commissions are now paid automatically to this wallet, each one separately. You will "
+        "receive an email when each payout is completed.",
+        "If you did not set this wallet, change your account password now and contact support.",
+    ], button_text="View payouts", button_url=_wallet_page(), subject="Your MyHigh5 payout wallet was approved")
+
+
+def _wallet_rejected(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    reason = str(ctx.get("reason") or "").strip()
+    return _simple("en", "Payout wallet not approved", [
+        f"Your payout wallet {ctx.get('wallet', '')} on {ctx.get('network', '')} was not approved.",
+        f"Reason: {reason}" if reason else "",
+        "Nothing is paid to this wallet. Your commissions stay available. Submit a valid USDT BEP20 wallet "
+        "from your account.",
+    ], button_text="Update payout wallet", button_url=_wallet_page(), subject="Your MyHigh5 payout wallet was not approved")
+
+
+def _payout_completed(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    received = ctx.get("received")
+    return _simple("en", "Payout completed", [
+        f"Your commission payout of ${ctx.get('amount', '')} was completed.",
+        f"Amount received after the network fee: {received} USDT." if received else "",
+        f"Transaction: {ctx.get('tx_hash')}" if ctx.get("tx_hash") else "",
+    ], button_text="View transaction" if ctx.get("explorer_url") else "View payouts",
+        button_url=ctx.get("explorer_url") or _wallet_page(), subject="Your MyHigh5 payout was completed")
+
+
+def _payout_failed(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    if ctx.get("kind") == "DELAYED":
+        return _simple("en", "Payout delayed", [
+            f"Your commission payout of ${ctx.get('amount', '')} is taking longer than usual.",
+            "It is being checked with the payment provider. It is never sent twice; you will receive an email "
+            "when it is completed.",
+        ], button_text="View payouts", button_url=_wallet_page(), subject="Your MyHigh5 payout is delayed")
+    return _simple("en", "Payout not completed", [
+        f"Your commission payout of ${ctx.get('amount', '')} could not be completed.",
+        "Nothing was paid. The commission stays available in your account and is paid again automatically "
+        "once the issue is resolved. Check that your payout wallet is correct.",
+    ], button_text="View payouts", button_url=_wallet_page(), subject="Your MyHigh5 payout was not completed")
 
 
 def _invitation(db, to, user_id, ctx, lang) -> Rendered:
@@ -328,6 +407,12 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.BILLING_PAYMENT_CONFIRMED.value: _payment_confirmed,
     EmailEvent.AFFILIATE_INVITATION.value: _invitation,
     EmailEvent.PAYOUT_WALLET_CONFIRMATION.value: _payout_wallet_confirmation,
+    EmailEvent.PAYOUT_WALLET_SUBMITTED.value: _wallet_submitted,
+    EmailEvent.PAYOUT_WALLET_APPROVED.value: _wallet_approved,
+    EmailEvent.PAYOUT_WALLET_REJECTED.value: _wallet_rejected,
+    EmailEvent.PAYOUT_COMPLETED.value: _payout_completed,
+    EmailEvent.PAYOUT_FAILED.value: _payout_failed,
+    EmailEvent.AFFILIATE_COMMISSION_EARNED.value: _commission_wallet_missing,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,
     EmailEvent.ADMIN_CONTACT_MESSAGE.value: _contact_message,
     EmailEvent.SUPPORT_CONTACT_CONFIRMATION.value: _contact_confirmation,

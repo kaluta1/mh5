@@ -192,6 +192,6 @@ describe('cashout actions', () => {
     expect(recordStatusLabel('completed')).toBe('Paid')
     expect(recordStatusLabel('failed')).toContain('returned to balance')
     expect(recordStatusLabel('cancelled')).toContain('returned to balance')
-    expect(recordStatusLabel('unknown')).toBe('Being verified')
+    expect(recordStatusLabel('unknown')).toBe('Delayed - being verified')
   })
 })

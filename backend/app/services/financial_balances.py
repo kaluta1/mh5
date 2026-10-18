@@ -22,6 +22,8 @@ class CommissionBalance:
     # Historical commissions held from payout until reviewed (part of `pending`
     # or of what would otherwise be `available`; never paid while held).
     held: Decimal = Decimal("0.00")
+    # PENDING rows that may be paid once a destination exists (never a held row).
+    pending_payable: Decimal = Decimal("0.00")
 
 
 def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
@@ -57,6 +59,20 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                 ),
                 0,
             ).label("held"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            (AffiliateCommission.status == CommissionStatus.PENDING)
+                            & AffiliateCommission.payout_reference.is_(None)
+                            & payable_clause(),
+                            AffiliateCommission.commission_amount,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("pending_payable"),
             func.coalesce(
                 func.sum(
                     case(
@@ -110,5 +126,6 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
         earned_lifetime=money(row.earned_lifetime),
         reserved=money(row.reserved),
         held=money(row.held),
+        pending_payable=money(row.pending_payable),
     )
 

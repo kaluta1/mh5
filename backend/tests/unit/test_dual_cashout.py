@@ -177,9 +177,10 @@ def ledger(world):
 
 
 def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponsor=None, admin=False,
-           dob=datetime(1990, 1, 1), terms=True, permissions=FINANCE_PERMISSIONS) -> User:
+           dob=datetime(1990, 1, 1), terms=True, permissions=FINANCE_PERMISSIONS, approved=True) -> User:
     """A synthetic member. One who chose Crypto Cashout has accepted the
-    network fee terms unless `terms=False`. An administrator holds the given
+    network fee terms unless `terms=False`. A verified wallet was approved by an
+    administrator unless `approved=False`. An administrator holds the given
     Finance & Payments permissions (all of them unless told otherwise)."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
@@ -189,8 +190,25 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
                payout_wallet_verified_at=verified_at if wallet else None)
     db.add(row)
     db.commit()
+    if wallet and verified_at is not None and approved:
+        approve_wallet(db, row)
     if method == "CRYPTO" and terms:
         accept_terms(db, row)
+    return row
+
+
+def approve_wallet(db, user, *, status="APPROVED"):
+    """The member's current wallet as decided by an administrator (written directly: test set-up only)."""
+    from app.models.affiliate import PayoutWalletApproval
+
+    db.query(PayoutWalletApproval).filter(PayoutWalletApproval.user_id == user.id,
+                                          PayoutWalletApproval.status != "SUPERSEDED").update(
+        {PayoutWalletApproval.status: "SUPERSEDED"}, synchronize_session=False)
+    row = PayoutWalletApproval(user_id=user.id, address=user.usdt_wallet_address, currency=user.payout_currency,
+                               status=status, submitted_at=LONG_AGO,
+                               decided_at=LONG_AGO if status != "PENDING" else None)
+    db.add(row)
+    db.commit()
     return row
 
 
@@ -235,7 +253,8 @@ def test_level_one_commission_is_calculated_as_before_and_becomes_the_balance(le
     balance = get_commission_balance(db, sponsor.id)
     assert (balance.available, balance.reserved, balance.paid_lifetime) == (Decimal("10.00"), 0, 0)
     assert cs.summary(db, sponsor, now=NOW)["balances"] == {
-        "total_earned": 10.0, "pending": 0.0, "available": 10.0, "reserved": 0.0, "paid": 0.0}
+        "total_earned": 10.0, "pending": 0.0, "available": 10.0, "reserved": 0.0, "paid": 0.0, "held": 0.0,
+        "available_unpaid": 10.0, "awaiting_wallet_approval": 0.0, "processing": 0.0}
 
 
 # ===========================================================================
@@ -270,7 +289,9 @@ def test_the_flag_alone_does_not_enable_the_engine_without_provider_credentials(
 # 3. Crypto Cashout thresholds
 # ===========================================================================
 
-@pytest.mark.parametrize("amounts, paid", [(["0.99"], False), (["1.00"], True), (["0.60", "0.40"], True),
+# Each commission is paid by its own payout (owner rule 2026-10-18): two small
+# commissions are never combined to reach the minimum.
+@pytest.mark.parametrize("amounts, paid", [(["0.99"], False), (["1.00"], True), (["0.60", "0.40"], False),
                                            (["7.50"], True)])
 def test_crypto_minimum_is_one_dollar(ledger, engine_on, amounts, paid):
     db = ledger
@@ -300,28 +321,34 @@ def test_crypto_minimum_is_one_dollar(ledger, engine_on, amounts, paid):
 def test_successful_payout_is_paid_only_when_the_provider_reports_it_finished(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
-    commission(db, user, "3.00")
-    commission(db, user, "2.00")
+    first = commission(db, user, "3.00")
+    second = commission(db, user, "2.00")
     provider = FakeProvider()
-    run(db, provider)
+    assert run(db, provider)["members"] == {"SUBMITTED": 2}         # one payout per commission
+    assert [c["amount"] for c in provider.created] == [Decimal("3.00"), Decimal("2.00")]
     assert db.query(JournalEntry).count() == 0                      # nothing posted on submission
-    assert run(db, provider)["reconciled"] == {"PENDING": 1}        # provider still working: unchanged
+    assert run(db, provider)["reconciled"] == {"PENDING": 2}        # provider still working: unchanged
 
     provider.statuses["batch-1"] = "FINISHED"
-    assert run(db, provider)["reconciled"] == {"COMPLETED": 1}
+    assert run(db, provider)["reconciled"] == {"COMPLETED": 1, "PENDING": 1}
     row = cashouts(db, user)[0]
     assert row.status == "completed" and row.settlement_reference == "batch-1" and row.provider_status == "FINISHED"
-    assert all(c.status == CommissionStatus.PAID and c.payout_reference == "batch-1"
-               for c in db.query(AffiliateCommission).all())
+    assert row.commission_id == first.id and row.gross_amount == Decimal("3.00")
+    db.refresh(first)
+    db.refresh(second)
+    assert first.status == CommissionStatus.PAID and first.payout_reference == "batch-1"
+    assert second.status == CommissionStatus.APPROVED                # its own payout is still open
+    provider.statuses["batch-2"] = "FINISHED"
+    assert run(db, provider)["reconciled"] == {"COMPLETED": 1}
     balance = get_commission_balance(db, user.id)
     assert (balance.available, balance.reserved, balance.paid_lifetime) == (0, 0, Decimal("5.00"))
     journal = db.query(JournalEntry).filter_by(description=f"Affiliate Cashout #{row.id}").one()
-    assert journal.total_debit == journal.total_credit == Decimal("5.00")
+    assert journal.total_debit == journal.total_credit == Decimal("3.00")
     assert _balance(db, "2001") == Decimal("5.00") and _balance(db, "1001") == Decimal("-5.00")
     _assert_all_journals_balance(db)
     # A later cycle changes nothing and pays nothing again.
     assert run(db, provider) == {"enabled": True, "reconciled": {}, "members": {}}
-    assert len(provider.created) == 1 and db.query(JournalEntry).count() == 1
+    assert len(provider.created) == 2 and db.query(JournalEntry).count() == 2
 
 
 # ===========================================================================
@@ -362,14 +389,21 @@ def test_wallet_change_needs_the_password_and_starts_a_hold(client, ledger, engi
 
     resp = client.patch("/api/v1/users/me/wallet", headers=auth(user), json={**body, "current_password": PASSWORD})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["wallet_status"] == "ON_HOLD" and resp.json()["pending_commissions_paid"] == 0
+    assert resp.json()["wallet_status"] == "PENDING_APPROVAL" and resp.json()["pending_commissions_paid"] == 0
     change = db.query(PayoutWalletChange).one()
     assert (change.old_address, change.new_address) == (WALLET, OTHER_WALLET)
     assert db.query(AuditTrail).filter_by(action="PAYOUT_WALLET_CHANGED").count() == 1
 
-    # Saving a wallet pays nothing, and the engine does not pay to it during the hold.
+    # Saving a wallet pays nothing: not before an administrator approved it, and
+    # not during the security hold after it.
     provider = FakeProvider()
     now = datetime.utcnow()
+    assert run(db, provider, now=now)["members"] == {"WALLET_PENDING_APPROVAL": 1} and provider.created == []
+    from app.services import payout_wallet_approval as approvals
+
+    admin = member(db, "boss", admin=True)
+    pending = approvals.current(db, user.id)
+    approvals.decide(db, admin, pending.id, decision="APPROVE", note=None, password=PASSWORD)
     assert run(db, provider, now=now)["members"] == {"WALLET_ON_HOLD": 1} and provider.created == []
     after_hold = now + timedelta(hours=payment_config.load(db).wallet_hold_hours + 1)
     assert run(db, provider, now=after_hold)["members"] == {"SUBMITTED": 1}
@@ -413,7 +447,8 @@ def test_wallet_changed_between_reservation_and_sending_cancels_the_payout(ledge
 
     monkeypatch.setattr(cs, "reserve", reserve_then_change)
     provider = FakeProvider()
-    assert run(db, provider)["members"] == {"WALLET_CHANGED": 1}
+    # The new address has no administrator approval: the reserved payout is cancelled.
+    assert run(db, provider)["members"] == {"WALLET_UNVERIFIED": 1}
     assert provider.created == [] and cashouts(db, user)[0].status == "cancelled"
     assert get_commission_balance(db, user.id).available == Decimal("5.00")
 
@@ -560,11 +595,14 @@ def test_repeated_cycles_and_a_second_worker_never_pay_the_same_commission_twice
     provider = FakeProvider()
     facts = {"balance": Decimal("1000"), "minimum": Decimal("0.10"), "network_fee": Decimal("0.02")}
     assert engine.process_member(db, user.id, provider, facts=facts, now=NOW) == "SUBMITTED"
-    assert engine.process_member(db, user.id, provider, facts=facts, now=NOW) == "CASHOUT_IN_PROGRESS"
+    assert engine.process_member(db, user.id, provider, facts=facts, now=NOW) == "NOTHING_TO_PAY"
     run(db, provider)
-    commission(db, user, "9.00")                                       # new earnings wait for the open payout
-    assert run(db, provider)["members"] == {"CASHOUT_IN_PROGRESS": 1}
     assert len(provider.created) == 1 and len(cashouts(db, user)) == 1
+    later = commission(db, user, "9.00")                               # new earnings get their OWN payout
+    assert run(db, provider)["members"] == {"SUBMITTED": 1}
+    assert len(provider.created) == 2 and cashouts(db, user)[1].commission_id == later.id
+    assert run(db, provider)["members"] == {}                          # nothing is ever sent twice
+    assert len(provider.created) == 2
 
 
 def test_the_database_refuses_a_second_open_cashout_for_one_member(ledger):
@@ -767,6 +805,8 @@ def test_pending_commissions_become_available_only_with_a_usable_destination(led
     assert get_commission_balance(db, user.id).pending == Decimal("5.00")
     user.payout_wallet_verified_at = LONG_AGO
     db.commit()
+    assert run(db, FakeProvider())["members"] == {"WALLET_UNVERIFIED": 1}    # never approved
+    approve_wallet(db, user)
     assert run(db, FakeProvider())["members"] == {"SUBMITTED": 1}
     assert get_commission_balance(db, user.id).reserved == Decimal("5.00")
 

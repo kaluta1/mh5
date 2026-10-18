@@ -36,6 +36,7 @@ from app.services.new_model_revenue import (
     RevenuePolicyMissing,
     accrue_direct_commission,
     compute_breakdown,
+    recognize_deferred_commission_cost,
     get_policy,
     record_recognition,
     reverse_direct_commissions,
@@ -43,6 +44,8 @@ from app.services.new_model_revenue import (
 )
 
 logger = logging.getLogger(__name__)
+
+KYC_REVENUE_CATEGORY = "KYC_VERIFICATION"
 
 
 def _product(db: Session, deposit: Deposit) -> ProductType:
@@ -74,10 +77,13 @@ def _recognize(db: Session, deposit: Deposit, *, credit_from: str, recognized_at
         db, source_type=SourceType.DEPOSIT, source_id=deposit.id, user_id=deposit.user_id,
         breakdown=breakdown, journal_entry_id=entry.id, recognized_at=recognized_at,
     )
-    accrue_direct_commission(
+    commission = accrue_direct_commission(
         db, source_type=SourceType.DEPOSIT, source_id=deposit.id, payer_user_id=deposit.user_id,
         breakdown=breakdown, deposit_id=deposit.id, product_type_id=deposit.product_type_id,
     )
+    # A KYC commission was already posted when the fee was paid: its cost moves
+    # from the deferred cost account to the expense account with this revenue.
+    recognize_deferred_commission_cost(db, commission, recognized_at=recognized_at)
 
 
 def _hold_retired_pool_payment(db: Session, deposit: Deposit) -> None:
@@ -126,6 +132,16 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
                    Line(policy.deferred_account_code, credit=money(deposit.amount), description="Deferred revenue")],
             description=f"NEW_V2 deferred receipt - {product.code} - deposit {deposit.id} - user {deposit.user_id}",
         )
+        if policy.revenue_category == KYC_REVENUE_CATEGORY:
+            # Owner rule (2026-10-18): the KYC commission is earned when the fee is
+            # confirmed paid, not when the verification is approved. Three separate
+            # events: payment (this receipt), commission (now, cost deferred in 1230),
+            # revenue recognition (at approval, which also expenses the cost).
+            accrue_direct_commission(
+                db, source_type=SourceType.DEPOSIT, source_id=deposit.id, payer_user_id=deposit.user_id,
+                breakdown=compute_breakdown(policy, deposit.amount), deposit_id=deposit.id,
+                product_type_id=deposit.product_type_id, deferred_cost=True,
+            )
         return
     _recognize(db, deposit, credit_from="1001")
 

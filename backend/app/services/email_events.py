@@ -139,6 +139,9 @@ class EmailEvent(str, Enum):
     PAYOUT_COMPLETED = "PAYOUT.COMPLETED"
     PAYOUT_FAILED = "PAYOUT.FAILED"
     PAYOUT_WALLET_CONFIRMATION = "PAYOUT.WALLET_CONFIRMATION"
+    PAYOUT_WALLET_SUBMITTED = "PAYOUT.WALLET_SUBMITTED"
+    PAYOUT_WALLET_APPROVED = "PAYOUT.WALLET_APPROVED"
+    PAYOUT_WALLET_REJECTED = "PAYOUT.WALLET_REJECTED"
     # ADMIN
     ADMIN_CONTENT_REPORT = "ADMIN.CONTENT_REPORT"
     ADMIN_CONTACT_MESSAGE = "ADMIN.CONTACT_MESSAGE"
@@ -245,12 +248,16 @@ _DEFINITIONS: List[EmailEventDefinition] = [
     # ---- AFFILIATE -----------------------------------------------------------
     _d(E.AFFILIATE_INVITATION, "Referral invitation", _M, "Invitee (non-member)", live=True),
     _d(E.AFFILIATE_DIRECT_REFERRAL, "New direct referral", _T, "Sponsor", on=False, phase=_LATER),
-    _d(E.AFFILIATE_COMMISSION_EARNED, "Commission earned", _T, "Sponsor", on=False, phase=_APPROVAL),
+    # Owner rule 2026-10-18: sent when a commission waits for an approved payout wallet.
+    _d(E.AFFILIATE_COMMISSION_EARNED, "Commission earned (payout wallet needed)", _T, "Sponsor", live=True),
     _d(E.AFFILIATE_COMMISSION_AVAILABLE, "Commission available", _T, "Sponsor", on=False, phase=_APPROVAL),
     # ---- PAYOUT --------------------------------------------------------------
     _d(E.PAYOUT_REQUESTED, "Payout requested", _T, "Member", on=False, phase=_APPROVAL),
-    _d(E.PAYOUT_COMPLETED, "Payout completed", _T, "Member", on=False, phase=_APPROVAL),
-    _d(E.PAYOUT_FAILED, "Payout failed", _T, "Member", on=False, phase=_APPROVAL),
+    _d(E.PAYOUT_COMPLETED, "Payout completed", _T, "Member", live=True),
+    _d(E.PAYOUT_FAILED, "Payout failed or delayed", _T, "Member", live=True),
+    _d(E.PAYOUT_WALLET_SUBMITTED, "Payout wallet submitted for approval", _S, "Member", live=True),
+    _d(E.PAYOUT_WALLET_APPROVED, "Payout wallet approved", _S, "Member", live=True),
+    _d(E.PAYOUT_WALLET_REJECTED, "Payout wallet rejected", _S, "Member", live=True),
     _d(E.PAYOUT_WALLET_CONFIRMATION, "Payout wallet confirmation", _S, "Member", live=True, critical=True,
        warning="Members will not receive the link that confirms a new or changed payout wallet, so no "
                "payout wallet can be set or changed while wallet email verification is required."),

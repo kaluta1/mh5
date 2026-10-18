@@ -362,7 +362,8 @@ def test_invalid_payment_reversal_dry_run_changes_nothing_and_apply_reverses_exa
     ids = [d.id for d in deposits]
     before = ledger_snapshot.snapshot(db)
     assert before["accounts_debit_minus_credit"]["1001"] == "120.00"
-    assert before["open_commissions"]["new_v2"] == "10.00"
+    # 20% of the referral's membership ($10) and, since 2026-10-18, of its KYC fee at payment ($2).
+    assert before["open_commissions"]["new_v2"] == "12.00"
 
     script.reverse(db, ids, case="CASE-TEST", evidence_ref="synthetic approval reference")
     db.rollback()                                                                    # the dry run
@@ -371,14 +372,14 @@ def test_invalid_payment_reversal_dry_run_changes_nothing_and_apply_reverses_exa
     result = script.reverse(db, ids, case="CASE-TEST", evidence_ref="synthetic approval reference", actor_id=None)
     db.commit()
     after = ledger_snapshot.snapshot(db)
-    for code in ("1001", "4002", "2113", "2001", "5001"):
-        assert after["accounts_debit_minus_credit"][code] == "0.00", code
+    for code in ("1001", "4002", "2113", "2001", "5001", "1230"):
+        assert after["accounts_debit_minus_credit"].get(code, "0.00") == "0.00", code
     assert after["open_commissions"]["all"] == "0.00"
     assert [r["deposit_id"] for r in result["reversed"]] == ids
     for d in deposits:
         db.refresh(d)
         assert d.status == DepositStatus.FAILED and INVALID_PAYMENT_REVERSAL_MARKER in d.admin_notes
-    assert db.query(AffiliateCommission).one().status == CommissionStatus.CANCELLED
+    assert {c.status for c in db.query(AffiliateCommission).all()} == {CommissionStatus.CANCELLED}
     audits = db.query(AuditTrail).filter(AuditTrail.action == script.AUDIT_ACTION).all()
     assert len(audits) == 4 and all(a.old_values["deposit"]["status"] == "validated" for a in audits)
     _assert_all_journals_balance(db)
@@ -402,7 +403,7 @@ def test_invalid_payment_reversal_refuses_anything_it_must_not_touch(world):
     with pytest.raises(script.ReversalRefused, match="provider payment id"):
         script.reverse(db, [provider_paid.id], case="CASE-TEST", evidence_ref="synthetic approval reference")
     db.rollback()
-    commission = db.query(AffiliateCommission).one()
+    commission = db.query(AffiliateCommission).order_by(AffiliateCommission.id).first()
     commission.payout_reference = "intent:synthetic"
     db.commit()
     with pytest.raises(script.ReversalRefused, match="reserved"):

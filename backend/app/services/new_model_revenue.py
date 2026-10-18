@@ -22,7 +22,15 @@ from app.models.affiliate import AffiliateCommission, CommissionStatus, Commissi
 from app.models.business_model import RevenuePolicy, RevenueRecognition
 from app.models.user import User
 from app.services.financial_integrity import FinancialIntegrityError, money
-from app.services.new_model_ledger import Line, PostingType, SourceType, idempotency_key, post_entry, reverse_entry
+from app.services.new_model_ledger import (
+    Line,
+    PostingType,
+    SourceType,
+    idempotency_key,
+    is_reversed,
+    post_entry,
+    reverse_entry,
+)
 from app.services.new_model_reference_data import NEW_MODEL_VERSION
 
 _COMMISSION_TYPE_BY_CATEGORY = {
@@ -36,6 +44,14 @@ _COMMISSION_TYPE_BY_CATEGORY = {
 
 
 COMMISSION_BASE_DEFINITION = "GROSS_LESS_SELLER_BASE"
+
+# A KYC commission is earned when the fee is PAID (owner rule 2026-10-18), before
+# the verification is performed and the fee becomes revenue. Its cost waits in
+# DEFERRED_COMMISSION_COST_ACCOUNT and moves to the expense account when the KYC
+# revenue is recognized (recognize_deferred_commission_cost).
+DEFERRED_COMMISSION_COST_ACCOUNT = "1230"
+COMMISSION_EXPENSE_ACCOUNT = "5001"
+COMMISSION_EXPENSE_RECOGNITION = "COMMISSION_EXPENSE_RECOGNITION"
 
 
 class RevenuePolicyMissing(FinancialIntegrityError):
@@ -178,8 +194,13 @@ def accrue_direct_commission(
     breakdown: RevenueBreakdown,
     deposit_id: Optional[int] = None,
     product_type_id: Optional[int] = None,
+    deferred_cost: bool = False,
 ) -> Optional[AffiliateCommission]:
-    """Create the single level-1 commission for the payer's DIRECT sponsor, once per source."""
+    """Create the single level-1 commission for the payer's DIRECT sponsor, once per source.
+
+    The commission is available at once (APPROVED, unreserved): no time hold.
+    With `deferred_cost` its cost is booked to DEFERRED_COMMISSION_COST_ACCOUNT
+    (the revenue it belongs to is still deferred) instead of the expense account."""
     amount = breakdown.direct_commission
     if amount <= 0:
         return None
@@ -211,7 +232,8 @@ def accrue_direct_commission(
         base_amount=breakdown.commission_base,
         commission_rate=breakdown.commission_rate,
         commission_amount=amount,
-        status=CommissionStatus.APPROVED if (sponsor.usdt_wallet_address or "").strip() else CommissionStatus.PENDING,
+        # Available immediately; whether and where it can be paid is decided by the payout rules.
+        status=CommissionStatus.APPROVED,
         transaction_date=datetime.utcnow(),
         business_model_version=NEW_MODEL_VERSION,
         revenue_category=breakdown.revenue_category,
@@ -226,18 +248,69 @@ def accrue_direct_commission(
         source_id=commission.id,
         posting_type=PostingType.COMMISSION_ACCRUAL,
         lines=[
-            Line("5001", debit=amount, description="Direct affiliate commission expense"),
+            Line(DEFERRED_COMMISSION_COST_ACCOUNT, debit=amount,
+                 description="Direct affiliate commission cost deferred until the verification is performed")
+            if deferred_cost else
+            Line(COMMISSION_EXPENSE_ACCOUNT, debit=amount, description="Direct affiliate commission expense"),
             Line("2001", credit=amount, description=f"Direct affiliate commission payable - User #{sponsor.id}"),
         ],
         description=f"Direct affiliate commission #{commission.id} ({source_type} {source_id})",
     )
+    # Pay it now (its own payout) if the sponsor has an approved wallet; the
+    # scheduler waits a moment so this transaction is committed first.
+    from app.services.cashout_engine import request_cycle
+
+    request_cycle()
     return commission
+
+
+def _commission_entry(db: Session, commission: AffiliateCommission, posting_type: str):
+    from app.models.accounting import JournalEntry
+
+    return (db.query(JournalEntry)
+            .filter(JournalEntry.source_type == SourceType.COMMISSION, JournalEntry.source_id == commission.id,
+                    JournalEntry.posting_type == posting_type).first())
+
+
+def _entry_accounts(db: Session, entry) -> set:
+    from app.models.accounting import ChartOfAccounts, JournalLine
+
+    return {code for (code,) in db.query(ChartOfAccounts.account_code)
+            .join(JournalLine, JournalLine.account_id == ChartOfAccounts.id)
+            .filter(JournalLine.entry_id == entry.id).all()}
+
+
+def cost_is_deferred(db: Session, commission: AffiliateCommission) -> bool:
+    """Is this commission's cost still waiting in the deferred cost account?"""
+    accrual = _commission_entry(db, commission, PostingType.COMMISSION_ACCRUAL)
+    if accrual is None or DEFERRED_COMMISSION_COST_ACCOUNT not in _entry_accounts(db, accrual):
+        return False
+    return _commission_entry(db, commission, COMMISSION_EXPENSE_RECOGNITION) is None
+
+
+def recognize_deferred_commission_cost(db: Session, commission: Optional[AffiliateCommission],
+                                       recognized_at: Optional[datetime] = None):
+    """The revenue the commission belongs to is recognized now: move its cost from
+    the deferred cost account to the expense account, once (Dr 5001 / Cr 1230).
+    Nothing is posted for a commission whose cost was expensed when it was
+    accrued, nor for a cancelled one. Never commits."""
+    if commission is None or commission.status == CommissionStatus.CANCELLED:
+        return None
+    if not cost_is_deferred(db, commission):
+        return None
+    amount = money(commission.commission_amount)
+    return post_entry(
+        db, source_type=SourceType.COMMISSION, source_id=commission.id, posting_type=COMMISSION_EXPENSE_RECOGNITION,
+        lines=[Line(COMMISSION_EXPENSE_ACCOUNT, debit=amount, description="Direct affiliate commission expense"),
+               Line(DEFERRED_COMMISSION_COST_ACCOUNT, credit=amount,
+                    description="Release deferred commission cost (verification performed)")],
+        description=f"Direct affiliate commission #{commission.id}: cost recognized with the revenue",
+        entry_date=recognized_at,
+    )
 
 
 def reverse_direct_commissions(db: Session, *, source_type: str, source_id: int, reason: str) -> list[AffiliateCommission]:
     """Cancel/claw back exactly the commissions of this source (structured match only)."""
-    from app.models.accounting import JournalEntry
-
     rows = (
         db.query(AffiliateCommission)
         .filter(
@@ -253,17 +326,14 @@ def reverse_direct_commissions(db: Session, *, source_type: str, source_id: int,
             continue
         if commission.status == CommissionStatus.APPROVED and str(commission.payout_reference or "").startswith("intent:"):
             raise FinancialIntegrityError("Refund cannot race an unresolved payout intent; reconcile the payout first")
-        accrual = (
-            db.query(JournalEntry)
-            .filter(
-                JournalEntry.source_type == SourceType.COMMISSION,
-                JournalEntry.source_id == commission.id,
-                JournalEntry.posting_type == PostingType.COMMISSION_ACCRUAL,
-            )
-            .first()
-        )
+        accrual = _commission_entry(db, commission, PostingType.COMMISSION_ACCRUAL)
         if commission.status == CommissionStatus.PAID:
-            # Already paid out: the expense stays reversed against a receivable from the member.
+            # Already paid out: the cost is reversed against a receivable from the member
+            # (account 1200, the member is named in the line). It is NOT recovered from
+            # any balance automatically: recovery (repayment or an offset against future
+            # earnings) needs an approved policy.
+            cost_account = (DEFERRED_COMMISSION_COST_ACCOUNT if cost_is_deferred(db, commission)
+                            else COMMISSION_EXPENSE_ACCOUNT)
             post_entry(
                 db,
                 source_type=SourceType.COMMISSION,
@@ -271,14 +341,20 @@ def reverse_direct_commissions(db: Session, *, source_type: str, source_id: int,
                 posting_type=PostingType.REVERSAL,
                 key_suffix="clawback",
                 lines=[
-                    Line("1200", debit=money(commission.commission_amount), description="Receivable - paid commission clawback"),
-                    Line("5001", credit=money(commission.commission_amount), description="Reverse direct commission expense"),
+                    Line("1200", debit=money(commission.commission_amount),
+                         description=f"Receivable - paid commission clawback - User #{commission.user_id}"),
+                    Line(cost_account, credit=money(commission.commission_amount),
+                         description="Reverse direct commission cost"),
                 ],
                 description=f"Clawback of paid direct commission #{commission.id}: {reason}",
                 reverses_entry_id=accrual.id if accrual else None,
             )
-        elif accrual is not None:
-            reverse_entry(db, accrual, reason=reason)
+        else:
+            recognition = _commission_entry(db, commission, COMMISSION_EXPENSE_RECOGNITION)
+            if recognition is not None and not is_reversed(db, recognition):
+                reverse_entry(db, recognition, reason=reason)
+            if accrual is not None:
+                reverse_entry(db, accrual, reason=reason)
         commission.status = CommissionStatus.CANCELLED
     db.flush()
     return rows

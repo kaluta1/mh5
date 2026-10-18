@@ -726,6 +726,22 @@ def payout_min_amount_sync(currency: str, credentials) -> Decimal:
     return _decimal(data["result"], "GET /payout-withdrawal/min-amount")
 
 
+def currency_details_sync(currency: str, credentials) -> Dict[str, Any]:
+    """What the provider reports about one currency (GET /v1/full-currencies):
+    its network and token contract, used to verify the payout asset before any
+    payout is sent. An answer without that currency is an error."""
+    data = _payout_get_sync("full-currencies", credentials)
+    rows = data.get("currencies") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise NowPaymentsError("NowPayments GET /full-currencies: unexpected answer", stage="read")
+    wanted = (normalize_pay_currency(currency) or str(currency)).lower()
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("code") or "").lower() == wanted:
+            return {"code": wanted, "network": row.get("network"), "smart_contract": row.get("smart_contract"),
+                    "enable": row.get("enable")}
+    raise NowPaymentsError("NowPayments GET /full-currencies: payout currency not listed", stage="read")
+
+
 def validate_payout_address_sync(address: str, currency: str, credentials) -> bool:
     """Ask the provider whether it can pay this address in this currency
     (the step its documentation recommends before creating a payout). True

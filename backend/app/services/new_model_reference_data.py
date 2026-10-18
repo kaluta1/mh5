@@ -30,6 +30,9 @@ REFERRAL_POOL_POLICY_NOTES = (
 # (code, name, type, parent code)
 NEW_MODEL_ACCOUNTS = [
     ("1220", "Receivable from external custodian (marketplace buyer funds held; not MyHigh5 cash)", "ASSET", "1000"),
+    # KYC commission posted when the fee is paid, before the verification is performed:
+    # the cost waits here and moves to 5001 when the KYC revenue is recognized.
+    ("1230", "Deferred affiliate commission cost - KYC (verification not yet performed)", "ASSET", "1000"),
     ("2106", "MyHigh5 Leaders rewards payable", "LIABILITY", "2000"),
     ("2114", "Deferred revenue - marketplace markup (order not yet released)", "LIABILITY", "2000"),
     ("2121", "Seller payable - held by external custodian", "LIABILITY", "2000"),

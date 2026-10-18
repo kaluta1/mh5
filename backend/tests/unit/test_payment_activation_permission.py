@@ -302,7 +302,7 @@ LIVE_CHANGES = {
     "max_daily_payout_usd": "9000000",
     "max_single_payout_usd": "900000",
     "max_daily_payout_count": 90000,
-    "min_hours_between_payouts": 0,
+    "min_hours_between_payouts": 1,
     "payout_interval_seconds": 60,
     "retry_backoff_hours": 1,
     "retry_max_attempts": 20,

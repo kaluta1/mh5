@@ -27,6 +27,26 @@ def _journal_entry_date(deposit: Deposit, entry_date: Optional[datetime]) -> dat
     return deposit.validated_at or deposit.created_at or datetime.utcnow()
 
 
+def kyc_deposit_to_recognize(db: Session, user_id: int) -> Optional[Deposit]:
+    """The NEW_V2 KYC payment an approval recognises: the OLDEST validated KYC
+    payment of the member (any KYC product) whose revenue is not recognized yet;
+    the newest validated one when all are. One approval recognises one payment."""
+    from app.services.kyc_fee import KYC_PRODUCT_CODES
+    from app.services.new_model_ledger import PostingType, SourceType, find_entry, idempotency_key
+
+    ids = [row.id for row in db.query(ProductType.id).filter(ProductType.code.in_(KYC_PRODUCT_CODES)).all()]
+    if not ids:
+        return None
+    rows = (db.query(Deposit)
+            .filter(Deposit.user_id == user_id, Deposit.product_type_id.in_(ids),
+                    Deposit.status == DepositStatus.VALIDATED)
+            .order_by(Deposit.id.asc()).all())
+    for row in rows:
+        if find_entry(db, idempotency_key(SourceType.DEPOSIT, row.id, PostingType.RECOGNITION)) is None:
+            return row
+    return rows[-1] if rows else None
+
+
 def get_latest_validated_kyc_deposit(db: Session, user_id: int) -> Optional[Deposit]:
     kyc_pt = db.query(ProductType).filter(ProductType.code == "kyc").first()
     if not kyc_pt:
@@ -497,15 +517,18 @@ class PaymentAccountingService:
         """
         Idempotent: post Step 2 when KYC is approved. Returns True if recognition was posted.
         """
-        deposit = get_latest_validated_kyc_deposit(db, user_id)
+        # Any KYC product (a payment under the older `kyc_verification` row too).
+        deposit = get_latest_validated_kyc_deposit(db, user_id) or kyc_deposit_to_recognize(db, user_id)
         if not deposit:
             logger.warning("post_kyc_verification_recognition: no validated KYC deposit for user %s", user_id)
             return False
         from app.services.new_model_ledger import is_new_model
 
         if is_new_model(getattr(deposit, "business_model_version", None)):
-            # NEW_V2: structured recognition + direct commission (no text-matched idempotency).
+            # NEW_V2: structured recognition (the commission was posted at payment).
             from app.services.new_model_payments import recognize_deferred_deposit
+
+            deposit = kyc_deposit_to_recognize(db, user_id) or deposit
 
             posted = recognize_deferred_deposit(db, deposit, recognized_at=entry_date)
             db.commit()

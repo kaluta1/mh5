@@ -141,4 +141,48 @@ describe('CashoutPanel: network fee terms', () => {
     expect(rows[1]).toHaveTextContent('$4.7126')
     expect(rows[1]).not.toHaveTextContent('estimate')
   })
+
+  it('never shows historical held commissions as available, and shows the wallet approval', async () => {
+    current = summary({
+      status: 'WALLET_APPROVAL_PENDING',
+      balances: { total_earned: 9.6, pending: 0, available: 2, reserved: 1, paid: 1, held: 15.6,
+        available_unpaid: 2, awaiting_wallet_approval: 2, processing: 1 },
+      wallet_approval: { status: 'PENDING', wallet: '0xaaaa...aaaa', network: 'USDT BSC (BEP20)',
+        submitted_at: '2026-10-18T09:00:00', decided_at: null, reason: null },
+    })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.getByTestId('balance-available')).toHaveTextContent('$2.00')
+    expect(screen.getByTestId('balance-awaiting')).toHaveTextContent('$2.00')
+    expect(screen.getByTestId('balance-processing')).toHaveTextContent('$1.00')
+    expect(screen.getByTestId('balance-paid')).toHaveTextContent('$1.00')
+    expect(screen.getByTestId('balance-held')).toHaveTextContent('$15.60')
+    expect(screen.getByTestId('held-note')).toHaveTextContent('not available')
+    expect(screen.getByTestId('wallet-approval')).toHaveTextContent('waiting for approval')
+    expect(screen.getByRole('status')).toHaveTextContent('waiting for approval by MyHigh5')
+  })
+
+  it('shows the reason of a rejected wallet', async () => {
+    current = summary({
+      status: 'WALLET_REJECTED',
+      wallet_approval: { status: 'REJECTED', wallet: '0xaaaa...aaaa', network: 'USDT BSC (BEP20)',
+        submitted_at: '2026-10-18T09:00:00', decided_at: '2026-10-18T10:00:00', reason: 'Exchange deposit address' },
+    })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    expect(await screen.findByTestId('wallet-approval')).toHaveTextContent('Reason: Exchange deposit address')
+  })
+
+  it('links each individual payout to its blockchain transaction', async () => {
+    const hash = '0x' + 'a'.repeat(64)
+    history = [{ id: 7, method: 'CRYPTO', status: 'completed', gross_amount: 1, fee: 0, net_amount: 0.98,
+      requested_at: '2026-10-18T09:00:00', commission_id: 42, tx_hash: hash,
+      explorer_url: `https://bscscan.com/tx/${hash}` }]
+    current = summary({ status: 'AUTOMATIC_PAYOUT_PENDING' }, { accepted: true, accepted_at: '2026-10-09T09:00:00' })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    const link = await screen.findByTestId('tx-link')
+    expect(link).toHaveAttribute('href', `https://bscscan.com/tx/${hash}`)
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link).toHaveTextContent('0xaaaaaa...aaaaaa')
+    expect(screen.getByText('Commission #42')).toBeInTheDocument()
+  })
 })

@@ -145,6 +145,51 @@ def review_held_commission(commission_id: int, body: CommissionReviewBody, reque
             "decided_at": record.decided_at.isoformat()}
 
 
+class WalletDecisionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str = Field(..., max_length=10)
+    note: Optional[str] = Field(default=None, max_length=500)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.get("/wallet-approvals")
+def wallet_approvals(status_filter: Optional[str] = Query(None, alias="status",
+                                                          pattern="^(PENDING|APPROVED|REJECTED|SUPERSEDED)$"),
+                     user_id: Optional[int] = None, skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100),
+                     db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Wallet approval queue (status=PENDING) and the history of decisions."""
+    from app.services import payout_wallet_approval as approvals
+
+    return approvals.listing(db, status=status_filter, user_id=user_id, skip=skip, limit=limit)
+
+
+@admin_router.post("/wallet-approvals/{approval_id}")
+def decide_wallet(approval_id: int, body: WalletDecisionBody, request: Request, db: Session = Depends(get_db),
+                  current_user: User = Depends(require_processor)):
+    """APPROVE or REJECT one submitted payout wallet. Password required, never one's
+    own wallet, once per submission, audited. Approval queues the member's
+    available commissions for their individual payouts at once."""
+    from app.services import payout_wallet_approval as approvals
+
+    try:
+        row = approvals.decide(db, current_user, approval_id, decision=body.decision, note=body.note,
+                               password=body.current_password, ip=client_ip(request))
+    except approvals.WalletApprovalError as exc:
+        code = {"FORBIDDEN": 403, "REAUTH_REQUIRED": 403, "REAUTH_LOCKED": 429, "SELF_ACTION_FORBIDDEN": 403,
+                "NOT_FOUND": 404, "REASON_REQUIRED": 422, "INVALID_DECISION": 422}.get(exc.code, 409)
+        raise HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)}) from None
+    return approvals.view(row, full_address=True)
+
+
+@admin_router.get("/commission-payouts")
+def commission_payouts(limit: int = Query(200, ge=1, le=500), db: Session = Depends(get_db),
+                       _: User = Depends(require_admin)):
+    """Commission-to-payout reconciliation: every current commission with its own
+    payout attempts, and every row where the two do not agree."""
+    return cashout_engine.commission_payout_reconciliation(db, limit=limit)
+
+
 @admin_router.get("/{cashout_id}")
 def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """One cashout with the commissions it holds and the member's other

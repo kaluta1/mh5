@@ -111,7 +111,12 @@ USD_POLICY_MANUAL = "MANUAL_REVIEW"
 
 # The only payout asset the ledger has a treasury account for (1001).
 SUPPORTED_PAYOUT_CURRENCIES: Dict[str, Dict[str, str]] = {
-    "usdtbsc": {"currency": "USDT", "network": "BSC (BEP20)", "treasury_account": "1001"},
+    # USDT BEP20 on BNB Smart Chain (chain id 56), token contract
+    # 0x55d398326f99059fF775485246999027B3197955; verified against the provider's
+    # own currency data before every payout cycle (cashout_engine.verify_payout_asset).
+    "usdtbsc": {"currency": "USDT", "network": "BSC (BEP20)", "treasury_account": "1001",
+                "chain_id": "56", "contract": "0x55d398326f99059fF775485246999027B3197955",
+                "explorer_tx": "https://bscscan.com/tx/"},
 }
 
 CONFIRM_AUTO_PAYOUT = "ENABLE AUTOMATIC PAYOUTS"
@@ -339,7 +344,9 @@ _FIELDS: List[Field] = [
     Field("max_daily_payout_count", "crypto", "int", "Maximum daily payout count",
           "Number of payouts sent in any 24 hours.", _const(100), minimum=_D(1), maximum=_D(100000)),
     Field("min_hours_between_payouts", "crypto", "int", "Minimum interval between payouts",
-          "Time a member waits between two crypto payouts.", _const(24), minimum=_D(0), maximum=_D(8760),
+          "Time a member waits between two crypto payouts. 0 (the default since individual payouts, owner "
+          "rule 2026-10-18): every commission is paid as soon as it is available.", _const(0), minimum=_D(0),
+          maximum=_D(8760),
           unit="hours"),
     Field("retry_backoff_hours", "crypto", "int", "Retry delay after a failed payout",
           "A member whose payout failed is not tried again for this long.",
@@ -1148,6 +1155,39 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     row.version = int(row.version) + 1
     row.updated_by = actor.id
     _audit(db, row, actor_id=actor.id, action="SETTINGS_UPDATED", old=old, new=changed, ip=ip)
+    db.commit()
+    invalidate_runtime()
+    return load(db)
+
+
+PAUSE_REASON_MIN_LENGTH = 10
+
+
+def pause_payouts(db: Session, actor, *, password: Optional[str], reason: str, ip: Optional[str] = None,
+                  now: Optional[datetime] = None) -> PaymentConfig:
+    """Emergency stop: switch automatic payouts OFF at once. Commits.
+
+    Allowed to an administrator who processes cashouts (or manages payment
+    settings), with their current password and a reason. Nothing new is reserved
+    or sent from the next payout step on; payouts already handed to the provider
+    keep being reconciled. Resuming is the ordinary activation of automatic
+    payouts (Finance & Payments, activation permission and confirmation)."""
+    now = now or datetime.utcnow()
+    if not (has_permission(actor, PERMISSION_PROCESS) or has_permission(actor, PERMISSION_MANAGE)):
+        raise PaymentConfigError("FORBIDDEN", f"The {PERMISSION_PROCESS} permission is required.")
+    require_reauth(actor, password)
+    reason = " ".join(str(reason or "").split())
+    if len(reason) < PAUSE_REASON_MIN_LENGTH:
+        raise PaymentConfigError("REASON_REQUIRED", f"Say why (at least {PAUSE_REASON_MIN_LENGTH} characters).")
+    row = _row_for_update(db)
+    if not row.crypto_auto_payout_enabled:
+        db.rollback()
+        return load(db)
+    row.crypto_auto_payout_enabled = False
+    row.version = int(row.version) + 1
+    row.updated_by = actor.id
+    _audit(db, row, actor_id=actor.id, action="PAYOUTS_PAUSED", old={"crypto_auto_payout_enabled": True},
+           new={"crypto_auto_payout_enabled": False, "reason": reason[:300]}, ip=ip)
     db.commit()
     invalidate_runtime()
     return load(db)

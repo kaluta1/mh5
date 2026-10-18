@@ -193,6 +193,15 @@ def init_chart_of_accounts(db: Session):
             "description": "Receivable from AnnualAds if settlement is delayed.",
         },
         {"code": "1200", "name": "Accounts Receivable", "type": AccountType.ASSET, "parent": "1000"},
+        {
+            "code": "1230",
+            "name": "Deferred affiliate commission cost - KYC (verification not yet performed)",
+            "type": AccountType.ASSET,
+            "parent": "1000",
+            "create_only": True,
+            "description": "Direct commission on a paid KYC fee whose verification is not yet performed: Dr 1230, "
+            "Cr 2001 when the fee is paid; Dr 5001, Cr 1230 when the KYC revenue is recognized.",
+        },
         # LIABILITIES (2000)
         {"code": "2000", "name": "Liabilities", "type": AccountType.LIABILITY, "parent": None},
         {

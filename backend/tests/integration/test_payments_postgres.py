@@ -95,6 +95,7 @@ KYC_SESSIONS_SETTING = "e6f7a8b9c0d1_kyc_sessions_per_attempt_setting.py"
 MANUAL_PAYMENTS = "f9b1c3d5e7a9_manual_payment_confirmations.py"
 PAYOUT_REVIEWS = "a8c0e2f4b6d8_commission_payout_reviews.py"
 REFERRAL_GUARDS = "b7d9f1a3c5e7_referral_and_commission_guards.py"
+INDIVIDUAL_PAYOUTS = "c8e0f2a4b6d8_individual_usdt_payouts.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -218,6 +219,7 @@ def schema_snapshot(engine) -> dict:
 
 
 def back_to_production_revision(engine) -> None:
+    migrate(engine, INDIVIDUAL_PAYOUTS, "downgrade")
     migrate(engine, FEE_REVIEW, "downgrade")
     migrate(engine, FEE_SAFETY, "downgrade")
     migrate(engine, BENEFICIARY_FEE, "downgrade")
@@ -343,7 +345,12 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     assert (fifteenth.revision, fifteenth.down_revision, fifteenth.depends_on) == ("b7d9f1a3c5e7", "a8c0e2f4b6d8", None)
     assert fifteenth.branch_labels is None
     heads = [name for name, line in revisions.items() if '"b7d9f1a3c5e7"' in line or "'b7d9f1a3c5e7'" in line]
-    assert heads == []                                             # b7d9f1a3c5e7 is the single head
+    assert heads == [INDIVIDUAL_PAYOUTS]                           # one line, no branch
+    sixteenth = load_migration(INDIVIDUAL_PAYOUTS)
+    assert (sixteenth.revision, sixteenth.down_revision, sixteenth.depends_on) == ("c8e0f2a4b6d8", "b7d9f1a3c5e7", None)
+    assert sixteenth.branch_labels is None
+    heads = [name for name, line in revisions.items() if '"c8e0f2a4b6d8"' in line or "'c8e0f2a4b6d8'" in line]
+    assert heads == []                                             # c8e0f2a4b6d8 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -363,6 +370,7 @@ def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     assert money_fingerprint(engine) == rows_before                 # no commission, cashout, wallet or journal row changed
     # What the migrations build is exactly what the models expect.
     assert schema_snapshot(engine) == as_models_define_it
@@ -402,6 +410,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
         migrate(engine, BENEFICIARY_FEE, "upgrade")
         migrate(engine, FEE_SAFETY, "upgrade")
         migrate(engine, FEE_REVIEW, "upgrade")
+        migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
         assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
     with engine.connect() as c:
         assert c.execute(text("select count(*) from permissions where name in "
@@ -413,6 +422,7 @@ def test_the_migrations_can_be_applied_twice_and_taken_back_on_a_disposable_data
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     assert schema_snapshot(engine) == target and money_fingerprint(engine) == rows
 
 
@@ -424,6 +434,7 @@ def test_a_downgrade_keeps_a_permission_that_a_role_already_holds(pg):
     migrate(engine, BENEFICIARY_FEE, "upgrade")                 # creates the two permissions
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with engine.begin() as c:
         c.execute(text("insert into roles (name, is_system, created_at, updated_at) "
                        "values ('finance', false, now(), now())"))
@@ -525,6 +536,7 @@ def test_the_database_itself_enforces_the_cashout_and_configuration_rules(pg):
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         first = member(db, "m1", method="CRYPTO")
         second = member(db, "m2", method="CRYPTO")
@@ -595,15 +607,19 @@ def test_concurrent_engine_workers_pay_one_member_exactly_once(pg, engine_on):
     reports = in_threads(4, cycle)
     assert not any(isinstance(r, Exception) for r in reports), reports
     outcomes = [code for r in reports for code, n in r["members"].items() for _ in range(n)]
-    assert outcomes.count("SUBMITTED") == 1 and len(provider.created) == 1      # one payout, however many workers
-    assert provider.created[0]["amount"] == Decimal("8.75")
+    # One payout per commission, however many workers: three commissions, three payouts.
+    assert outcomes.count("SUBMITTED") == 3 and len(provider.created) == 3
+    assert sorted(c["amount"] for c in provider.created) == [Decimal("1.25"), Decimal("2.50"), Decimal("5.00")]
+    assert len({c["external_id"] for c in provider.created}) == 3
     with Session() as db:
         rows = db.query(AffiliateCashoutRequest).filter_by(user_id=user_id).all()
-        assert [(r.status, Decimal(str(r.gross_amount))) for r in rows] == [("processing", Decimal("8.75"))]
+        assert sorted((r.status, Decimal(str(r.gross_amount))) for r in rows) == [
+            ("processing", Decimal("1.25")), ("processing", Decimal("2.50")), ("processing", Decimal("5.00"))]
+        assert len({r.commission_id for r in rows}) == 3
         balance = get_commission_balance(db, user_id)
         assert (balance.available, balance.reserved) == (0, Decimal("8.75"))
         references = {c.payout_reference for c in db.query(AffiliateCommission).filter_by(user_id=user_id)}
-        assert len(references) == 1 and None not in references                    # every row reserved once, together
+        assert len(references) == 3 and None not in references                    # every row reserved once, alone
 
 
 def test_concurrent_reconciliation_posts_a_finished_payout_exactly_once(pg, engine_on):
@@ -1111,6 +1127,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
         migrate(engine, BENEFICIARY_FEE, "upgrade")
         migrate(engine, FEE_SAFETY, "upgrade")
         migrate(engine, FEE_REVIEW, "upgrade")
+        migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     assert money_fingerprint(engine) == rows and account_5005(engine) == journal
     with engine.connect() as c:
         row = c.execute(text(
@@ -1127,6 +1144,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
             "or fee_cap is not null or fee_consent_id is not null or provider_fee_mode is not null")).scalar() == 0
     migrate(engine, FEE_SAFETY, "upgrade")                         # the models need it to read the row
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         config = pc.load(db)
         assert config.fee_gate() == "FEE_POLICY_NOT_BENEFICIARY_PAID" and config.crypto_auto_payout_enabled is True
@@ -1138,6 +1156,7 @@ def test_the_beneficiary_fee_migration_is_additive_and_every_default_fails_close
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         accept_terms(db, db.get(User, ids["sponsor"]))
     migrate(engine, FEE_SAFETY, "downgrade")                       # nothing of its own recorded: it can go
@@ -1156,6 +1175,7 @@ def test_the_database_itself_enforces_the_fee_rules(pg):
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")                   # holds one acceptance
         db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
@@ -1410,6 +1430,7 @@ def test_the_database_itself_enforces_the_safety_rules(pg):
     migrate(engine, BENEFICIARY_FEE, "upgrade")
     migrate(engine, FEE_SAFETY, "upgrade")
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")
         db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
@@ -1679,6 +1700,7 @@ def test_the_review_migration_is_additive_and_keeps_every_row(pg):
 
     for _ in range(2):                                             # a re-run after a partial deployment
         migrate(engine, FEE_REVIEW, "upgrade")
+        migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     assert review_columns(engine) == sorted(REVIEW_COLUMNS)
     assert money_fingerprint(engine) == rows and safety_state(engine) == safety
     with engine.connect() as c:
@@ -1696,6 +1718,7 @@ def test_the_review_migration_is_additive_and_keeps_every_row(pg):
     migrate(engine, FEE_REVIEW, "downgrade")                       # nothing recorded yet: it can be taken back
     assert review_columns(engine) == [] and money_fingerprint(engine) == rows
     migrate(engine, FEE_REVIEW, "upgrade")
+    migrate(engine, INDIVIDUAL_PAYOUTS, "upgrade")
     with Session() as db:
         cs.review_fee_exception(db, db.get(AffiliateCashoutRequest, cashout_id), admin=db.get(User, admin_id),
                                 password=PASSWORD, note=REVIEW_NOTE, now=NOW)
@@ -1727,7 +1750,8 @@ def test_the_whole_chain_from_the_production_revision_reaches_the_review_columns
 def test_the_database_itself_enforces_the_review_rules(pg):
     engine, Session = pg
     back_to_production_revision(engine)                            # the schema exactly as the migrations build it
-    for filename in (DUAL_CASHOUT, PAYMENT_CONFIGURATION, BENEFICIARY_FEE, FEE_SAFETY, FEE_REVIEW):
+    for filename in (DUAL_CASHOUT, PAYMENT_CONFIGURATION, BENEFICIARY_FEE, FEE_SAFETY, FEE_REVIEW,
+                     INDIVIDUAL_PAYOUTS):
         migrate(engine, filename, "upgrade")
     with Session() as db:
         user = member(db, "m1", method="CRYPTO")
@@ -1917,7 +1941,8 @@ def test_a_change_racing_the_workers_is_either_before_a_payout_or_after_it_never
         assert reserved == Decimal("5.00") * sent
     # After the change, a worker still holding the old configuration reserves nothing more.
     again = in_threads(6, lambda i: work(i))
-    assert set(again) <= {"CONFIGURATION_CHANGED", "CASHOUT_IN_PROGRESS", "PAYOUT_INTERVAL"}, again
+    # (NOTHING_TO_PAY: the member's only commission is already in its own payout.)
+    assert set(again) <= {"CONFIGURATION_CHANGED", "CASHOUT_IN_PROGRESS", "PAYOUT_INTERVAL", "NOTHING_TO_PAY"}, again
     assert len(provider.created) == sent
 
 

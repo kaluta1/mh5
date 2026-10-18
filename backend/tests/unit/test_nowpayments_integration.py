@@ -1057,6 +1057,13 @@ def test_the_whole_engine_cycle_against_the_documented_provider_answers(ledger, 
         ("POST", "/v1/payout/validate-address"): (200, "OK"),
         ("POST", "/v1/payout"): created,
         ("POST", "/v1/payout/5000000713/verify"): (200, "OK"),
+        # Documented shape of GET /v1/full-currencies (fields per the provider's example).
+        ("GET", "/v1/full-currencies"): (200, {"currencies": [
+            {"id": 1, "code": "USDTBSC", "name": "Tether USD (Binance Smart Chain)", "enable": True,
+             "wallet_regex": "^(0x)[0-9A-Fa-f]{40}$", "priority": 1, "extra_id_exists": False,
+             "extra_id_regex": None, "logo_url": "/images/coins/usdtbsc.svg", "track": True, "cg_id": "tether",
+             "is_maxlimit": False, "network": "bsc",
+             "smart_contract": "0x55d398326f99059fF775485246999027B3197955", "network_precision": "18"}]}),
     })
     assert engine.run_cycle(db, now=NOW)["members"] == {"SUBMITTED": 1}
     row = cashouts(db, user)[0]

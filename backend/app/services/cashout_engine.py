@@ -111,7 +111,6 @@ from app.services import financial_eligibility as fe
 from app.services import nowpayments_service as nowpayments
 from app.services import payment_config
 from app.services.commission_payout_hold import held_clause
-from app.services.commission_payout_service import _intent_reference
 from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
@@ -166,6 +165,20 @@ class NowPaymentsPayoutProvider:
 
     def validate_address(self, address: str, currency: str) -> bool:
         return nowpayments.validate_payout_address_sync(address, currency, self._credentials)
+
+    def currency_details(self, currency: str) -> dict:
+        return nowpayments.currency_details_sync(currency, self._credentials)
+
+
+def commission_intent_reference(db: Session, commission_id: int) -> str:
+    """Deterministic idempotency key of the next payout attempt of ONE commission:
+    intent:c<commission id>-a<attempt number>. The part after "intent:" is the
+    provider's unique_external_id. Attempt n+1 exists only after attempt n was
+    recorded as not paid (failed or cancelled), and the database refuses a second
+    open or paid attempt of the same commission (uq_cashout_commission_live)."""
+    attempts = (db.query(func.count(AffiliateCashoutRequest.id))
+                .filter(AffiliateCashoutRequest.commission_id == int(commission_id)).scalar() or 0)
+    return f"intent:c{int(commission_id)}-a{int(attempts) + 1}"
 
 
 def engine_enabled(db: Session, *, config=None) -> bool:
@@ -295,6 +308,8 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
         return "SKIPPED"
     cashout.provider_status = status[:30] or None
     cashout.last_checked_at = now
+    if details.get("hash") and not cashout.tx_hash:
+        cashout.tx_hash = str(details["hash"]).strip()[:150]     # the blockchain transaction
     problem = evidence_problem(cashout, details)
     if problem is not None:
         # The provider is describing a payout that is not this cashout's. Nothing
@@ -309,6 +324,7 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
         cashout.status = CashoutStatus.UNKNOWN.value
         cashout.failure_code = "PROVIDER_FAILED_NOT_FINAL"
         db.commit()
+        _notify(db, cashout_id, "DELAYED")
         return "PROVIDER_FAILED"
     if status in PROVIDER_PAID:
         try:
@@ -338,11 +354,13 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
         # A fee that is only missing or unverified is left to the recording gate.
         cs.suspend_if_inconsistent(db, cashout)
         db.commit()
+        _notify(db, cashout_id, "COMPLETED")
         return "COMPLETED"
     if status in PROVIDER_NOT_PAID:
         cs.release_reservation(db, cashout, status=CashoutStatus.FAILED.value,
                                failure_code=f"PROVIDER_{status}", actor_id=None, now=now)
         db.commit()
+        _notify(db, cashout_id, "FAILED")
         return "FAILED"
     if cashout.failure_code == "PROVIDER_FAILED_NOT_FINAL" and status in PROVIDER_IN_PROGRESS:
         # The provider resumed a payout it had reported as failed.
@@ -352,7 +370,44 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
     return "PENDING"
 
 
+def _notify(db: Session, cashout_id: int, kind: str) -> None:
+    """Tell the member about a payout outcome. Called AFTER the outcome is
+    committed; never raises (the email outbox is idempotent per payout and kind)."""
+    try:
+        from app.services import payout_notifications
+
+        payout_notifications.payout_outcome(db, cashout_id, kind)
+    except Exception:  # noqa: BLE001 - a notification never changes a payout
+        logger.exception("Cashout %s: %s notification could not be queued", cashout_id, kind)
+        db.rollback()
+
+
+# A payout marked as being handed to the provider but carrying no provider id
+# after this long: the worker stopped between the two (crash, restart). It may or
+# may not exist at the provider, so it becomes UNKNOWN and is LOOKED FOR by its
+# unique reference; it is never sent again.
+INTERRUPTED_AFTER = timedelta(minutes=15)
+
+
+def _mark_interrupted(db: Session, now: datetime) -> int:
+    rows = (db.query(AffiliateCashoutRequest)
+            .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
+                    AffiliateCashoutRequest.status == CashoutStatus.PROCESSING.value,
+                    AffiliateCashoutRequest.provider_batch_id.is_(None),
+                    AffiliateCashoutRequest.requested_at < now - INTERRUPTED_AFTER)
+            .with_for_update().all())
+    for row in rows:
+        row.status = CashoutStatus.UNKNOWN.value
+        row.failure_code = "WORKER_INTERRUPTED"
+        cs._audit(db, record_id=row.id, action="CASHOUT_INTERRUPTED", actor_id=None,
+                  old={"status": CashoutStatus.PROCESSING.value},
+                  new={"status": row.status, "reason": "no provider id after the hand-over; looked up, never resent"})
+    db.commit()
+    return len(rows)
+
+
 def reconcile_open(db: Session, provider, *, now: Optional[datetime] = None) -> Counter:
+    _mark_interrupted(db, now or datetime.utcnow())
     ids = [row.id for row in db.query(AffiliateCashoutRequest.id)
            .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
                    or_(AffiliateCashoutRequest.provider_batch_id.isnot(None),
@@ -435,7 +490,7 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         db.rollback()
         return "ACCOUNT_UNAVAILABLE"
     blocker = _blocker(db, user, now, config)
-    if blocker is None and cs.active_cashout(db, user.id) is not None:
+    if blocker is None and cs.active_pooled_cashout(db, user.id) is not None:
         blocker = "CASHOUT_IN_PROGRESS"
     if blocker is None and _recently_failed(db, user.id, now, config):
         blocker = "RETRY_BACKOFF"
@@ -448,7 +503,29 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         return blocker
 
     cs.release_pending(db, user, now=now, config=config)
-    rows = cs.available_rows(db, user.id)
+    # Owner rule 2026-10-18: every commission is paid by its OWN payout (no
+    # combining). This call pays the oldest available commission that can be paid
+    # on its own; one below the minimum or above the single-payout limit stays
+    # available and unpaid (never combined) and never holds the others back.
+    available = cs.available_rows(db, user.id)
+    if not available:
+        db.commit()
+        return "NOTHING_TO_PAY"
+    own_minimum = cs.crypto_minimum(config=config)
+    provider_minimum = Decimal(str(facts.get("minimum") or 0))
+    ceiling = money(config.max_single_payout_usd)
+    payable_rows = [r for r in available
+                    if max(own_minimum, provider_minimum) <= money(r.commission_amount) <= ceiling]
+    if not payable_rows:
+        db.commit()
+        amounts = [money(r.commission_amount) for r in available]
+        if all(a > ceiling for a in amounts):
+            return "EXCEEDS_SINGLE_LIMIT"
+        if any(own_minimum <= a <= ceiling for a in amounts):
+            return "BELOW_PROVIDER_MINIMUM"
+        return "BELOW_MINIMUM"
+    rows = payable_rows[:1]
+    commission_id = int(rows[0].id)
     amount = cs.rows_total(rows)
 
     def stop(code: str) -> str:
@@ -473,7 +550,7 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     # Ask the provider about THIS payout (its fee for this amount, and the
     # address). Nothing is reserved yet and no lock is held while waiting.
     wallet = cs.wallet_state(user, now, config=config)
-    target, target_currency = str(wallet.address), str(wallet.currency)
+    target, target_currency, approval_id = str(wallet.address), str(wallet.currency), wallet.approval_id
     db.commit()
     try:
         estimate = Decimal(str(provider.network_fee(target_currency, amount)))
@@ -494,13 +571,14 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             return "PROVIDER_ADDRESS_INVALID"
     user = db.query(User).filter(User.id == user_id).with_for_update().one()
     wallet = cs.wallet_state(user, now, config=config)
-    if (wallet.address, wallet.currency) != (target, target_currency) or cs.active_cashout(db, user.id):
+    if ((wallet.address, wallet.currency, wallet.approval_id) != (target, target_currency, approval_id)
+            or not wallet.payable or cs.active_pooled_cashout(db, user.id)):
         db.rollback()
         return "WALLET_CHANGED"
-    rows = cs.available_rows(db, user.id)
+    rows = [row for row in cs.available_rows(db, user.id) if int(row.id) == commission_id]
     if cs.rows_total(rows) != amount:
         db.rollback()
-        return "BALANCE_CHANGED"
+        return "BALANCE_CHANGED"                    # paid, reserved or cancelled meanwhile
     consent = cs.active_fee_consent(db, user.id, config, now)
     if consent is None:
         return stop("FEE_TERMS_REQUIRED")
@@ -532,13 +610,14 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     blocked = blocked or cs.recording_gate(db, locked_config)
     if blocked is not None:
         return stop(blocked)
-    intent_ref = _intent_reference(user.id, None)
+    intent_ref = commission_intent_reference(db, commission_id)
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
                          now=now, wallet=wallet.address, currency=wallet.currency, net=money(expected),
                          network_fee=money(estimate), network_fee_policy=config.network_fee_policy,
-                         beneficiary_fee=plan, audit_extra={"settings_version": int(locked_config.version)})
+                         beneficiary_fee=plan, audit_extra={"settings_version": int(locked_config.version)},
+                         commission_id=commission_id, wallet_approval_id=approval_id)
     if cashout is None:
-        return "CASHOUT_IN_PROGRESS"                # another worker reserved first
+        return "ALREADY_RESERVED"                   # another worker reserved this commission first
     cashout_id = int(cashout.id)
 
     # Committed intent. Re-check the CURRENT state immediately before provider I/O.
@@ -558,8 +637,11 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         still = cs.active_fee_consent(db, user.id, current, now)
         if still is None or int(still.id) != int(cashout.fee_consent_id or 0):
             blocker = "FEE_TERMS_REQUIRED"          # withdrawn or replaced since it was reserved
-    if blocker is None and cs.wallet_state(user, now, config=current).address != cashout.wallet_snapshot:
-        blocker = "WALLET_CHANGED"
+    if blocker is None:
+        # The payout goes only to the exact wallet approval it was reserved under.
+        state = cs.wallet_state(user, now, config=current)
+        if state.address != cashout.wallet_snapshot or state.approval_id != cashout.wallet_approval_id:
+            blocker = "WALLET_CHANGED"
     if blocker is not None:
         cs.release_reservation(db, cashout, status=CashoutStatus.CANCELLED.value, failure_code=blocker,
                                actor_id=None, now=now)
@@ -598,6 +680,7 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             cashout.status = CashoutStatus.UNKNOWN.value
             cashout.failure_code = "PROVIDER_CONFIRMATION_FAILED"
             db.commit()
+            _notify(db, cashout_id, "DELAYED")
             return "OUTCOME_UNKNOWN"
         db.commit()
         return "SUBMITTED"
@@ -612,11 +695,13 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         cs.release_reservation(db, cashout, status=CashoutStatus.FAILED.value, failure_code="PROVIDER_REFUSED",
                                actor_id=None, now=now)
         db.commit()
+        _notify(db, cashout_id, "FAILED")
         return "PROVIDER_REFUSED"
     cashout.status = CashoutStatus.UNKNOWN.value
     cashout.failure_code = "PROVIDER_OUTCOME_UNKNOWN"
     cashout.processed_at = now
     db.commit()
+    _notify(db, cashout_id, "DELAYED")
     return "OUTCOME_UNKNOWN"
 
 
@@ -676,6 +761,11 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             logger.warning("Cashout cycle stopped: the provider refused the payout login")
             report["stopped"] = "PROVIDER_AUTH_FAILED"
             return report
+    problem = verify_payout_asset(provider, currency)
+    if problem is not None:
+        logger.warning("Cashout cycle stopped: payout asset not verified (%s)", problem)
+        report["stopped"] = problem                 # fail closed: never send an unverified token
+        return report
     try:
         # The network fee is asked for each payout, for its own amount (process_member).
         facts = {"balance": Decimal(provider.balance(currency)), "minimum": Decimal(provider.minimum(currency))}
@@ -686,35 +776,125 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
     facts["day_total"], facts["day_count"] = day_usage(db, now)
     db.rollback()
     results: Counter = Counter()
+    stop_all = ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED", "PAYOUTS_SUSPENDED",
+                "FEE_RECONCILIATION_PENDING", "CONFIGURATION_CHANGED")
     for user_id in user_ids:
-        try:
-            outcome = process_member(db, user_id, provider, facts=facts, config=config, now=now)
-        except Exception:  # noqa: BLE001 - one member's failure never stops the others
-            db.rollback()
-            logger.exception("Cashout cycle: member %s failed", user_id)
-            outcome = "ERROR"
-        results[outcome] += 1
-        if outcome in ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED", "PAYOUTS_SUSPENDED",
-                       "FEE_RECONCILIATION_PENDING", "CONFIGURATION_CHANGED"):
+        # Each available commission of the member gets its own payout, one call each.
+        for attempt in range(PAYOUTS_PER_MEMBER_PER_CYCLE):
+            try:
+                outcome = process_member(db, user_id, provider, facts=facts, config=config, now=now)
+            except Exception:  # noqa: BLE001 - one member's failure never stops the others
+                db.rollback()
+                logger.exception("Cashout cycle: member %s failed", user_id)
+                outcome = "ERROR"
+            if attempt and outcome not in ("SUBMITTED", "OUTCOME_UNKNOWN", "PROVIDER_REFUSED", "ERROR") \
+                    and outcome not in stop_all:
+                # The member's first outcome is reported; after a payout, what stops the
+                # next one (nothing left, a limit) is left for the next cycle.
+                break
+            results[outcome] += 1
+            if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
+                # Assume the money left (or may have): never count it for the next payout.
+                sent = (db.query(AffiliateCashoutRequest.gross_amount, AffiliateCashoutRequest.network_fee_estimate)
+                        .filter(AffiliateCashoutRequest.user_id == user_id)
+                        .order_by(AffiliateCashoutRequest.id.desc()).first())
+                gross = money(sent[0] if sent else 0)
+                facts["balance"] -= gross + Decimal(str(sent[1] if sent and sent[1] is not None else 0))
+                facts["day_total"] = money(facts["day_total"] + gross)
+                facts["day_count"] += 1
+                db.rollback()
+            if outcome != "SUBMITTED":
+                break                               # nothing more for this member in this cycle
+        if outcome in stop_all:
             report["stopped"] = outcome             # the same refusal awaits every other member
             break
-        if outcome in ("SUBMITTED", "OUTCOME_UNKNOWN"):
-            # Assume the money left (or may have): never count it for the next member.
-            sent = (db.query(AffiliateCashoutRequest.gross_amount, AffiliateCashoutRequest.network_fee_estimate)
-                    .filter(AffiliateCashoutRequest.user_id == user_id)
-                    .order_by(AffiliateCashoutRequest.id.desc()).first())
-            gross = money(sent[0] if sent else 0)
-            facts["balance"] -= gross + Decimal(str(sent[1] if sent and sent[1] is not None else 0))
-            facts["day_total"] = money(facts["day_total"] + gross)
-            facts["day_count"] += 1
-            db.rollback()
     report["members"] = dict(results)
     return report
+
+
+# How many individual payouts one member may be handed in one cycle (each is one
+# commission). A safety bound only; the next cycle continues with the rest.
+PAYOUTS_PER_MEMBER_PER_CYCLE = 25
+
+# USDT on BNB Smart Chain (BEP20), chain id 56. The ONLY asset automatic payouts
+# send. The contract is compared with what the provider itself reports for its
+# payout currency (GET /v1/full-currencies: network, smart_contract) before any
+# payout of a cycle; anything else stops the cycle.
+PAYOUT_ASSET = {"usdtbsc": {"network": "bsc", "chain_id": 56,
+                            "contract": "0x55d398326f99059ff775485246999027b3197955"}}
+
+
+def verify_payout_asset(provider, currency: str) -> Optional[str]:
+    """None when the provider's payout currency is exactly USDT BEP20 (chain 56)."""
+    expected = PAYOUT_ASSET.get(str(currency or "").lower())
+    if expected is None:
+        return "PAYOUT_ASSET_NOT_SUPPORTED"
+    read = getattr(provider, "currency_details", None)
+    if read is None:
+        return None                                 # a test double without the lookup
+    try:
+        details = read(currency) or {}
+    except Exception:  # noqa: BLE001 - not verified is not sent
+        return "PAYOUT_ASSET_UNVERIFIED"
+    network = str(details.get("network") or "").strip().lower()
+    contract = str(details.get("smart_contract") or "").strip().lower()
+    if network != expected["network"] or contract != expected["contract"]:
+        return "PAYOUT_ASSET_MISMATCH"
+    return None
 
 
 # ---------------------------------------------------------------------------
 # Liability vs provider balance, and what does not add up
 # ---------------------------------------------------------------------------
+
+def commission_payout_reconciliation(db: Session, *, limit: int = 200) -> dict:
+    """Each NEW_V2 commission against its own payout attempts. Read-only.
+
+    Problems listed:
+      PAID_WITHOUT_PAYOUT      commission PAID, no completed payout of it
+      PAYOUT_NOT_POSTED        completed payout, commission not PAID
+      AMOUNT_MISMATCH          completed payout amount differs from the commission
+      COMPLETED_WITHOUT_HASH   completed payout without a transaction hash
+      RESERVED_WITHOUT_PAYOUT  commission reserved, no open payout of it"""
+    from app.models.affiliate import PayoutWalletApproval  # noqa: F401  (model registry)
+
+    commissions = (db.query(AffiliateCommission)
+                   .filter(AffiliateCommission.business_model_version == "NEW_V2")
+                   .order_by(AffiliateCommission.id.desc()).limit(limit).all())
+    ids = [int(c.id) for c in commissions]
+    attempts: dict = {}
+    for row in (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.commission_id.in_(ids or [0]))
+                .order_by(AffiliateCashoutRequest.id.asc()).all()):
+        attempts.setdefault(int(row.commission_id), []).append(row)
+    items, problems = [], []
+    for c in commissions:
+        rows = attempts.get(int(c.id), [])
+        completed = [r for r in rows if r.status == CashoutStatus.COMPLETED.value]
+        open_rows = [r for r in rows if r.status in ACTIVE_CASHOUT_STATUSES]
+        found = []
+        status = c.status.value if hasattr(c.status, "value") else str(c.status)
+        if status == "PAID" and rows and not completed:
+            found.append("PAID_WITHOUT_PAYOUT")     # it had individual attempts, none of them completed
+        if completed and status != "PAID":
+            found.append("PAYOUT_NOT_POSTED")
+        if completed and money(completed[-1].gross_amount) != money(c.commission_amount):
+            found.append("AMOUNT_MISMATCH")
+        if completed and not completed[-1].tx_hash:
+            found.append("COMPLETED_WITHOUT_HASH")
+        if (status == "APPROVED" and str(c.payout_reference or "").startswith("intent:c") and not open_rows):
+            found.append("RESERVED_WITHOUT_PAYOUT")
+        item = {"commission_id": c.id, "user_id": c.user_id, "amount": f"{money(c.commission_amount):.2f}",
+                "status": status, "reserved": bool(c.payout_reference) and status == "APPROVED",
+                "attempts": [{"cashout_id": r.id, "status": r.status, "failure_code": r.failure_code,
+                              "wallet_approval_id": r.wallet_approval_id, "tx_hash": r.tx_hash,
+                              "requested_at": r.requested_at.isoformat() if r.requested_at else None}
+                             for r in rows],
+                "problems": found}
+        items.append(item)
+        if found:
+            problems.append(item)
+    return {"items": items, "problems": problems, "checked": len(items)}
+
 
 def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 200) -> list[dict]:
     """Internal inconsistencies an administrator must look at. Read-only; it
@@ -1016,25 +1196,58 @@ def crypto_payout_status(db: Session) -> dict:
 # Scheduler
 # ---------------------------------------------------------------------------
 
+_ACTIVE_SCHEDULER: Optional["CashoutScheduler"] = None
+
+
+def request_cycle() -> bool:
+    """Ask the running scheduler for a cycle NOW (a commission became payable, a
+    wallet was approved). Safe from any thread; never raises. The database is
+    the queue: a request that is lost (no scheduler, restart) changes nothing,
+    the next periodic tick finds the same payable commissions."""
+    scheduler = _ACTIVE_SCHEDULER
+    if scheduler is None or scheduler._wake is None or scheduler._loop_ref is None:
+        return False
+    try:
+        scheduler._loop_ref.call_soon_threadsafe(scheduler._wake.set)
+        return True
+    except Exception:  # noqa: BLE001 - the periodic tick remains
+        return False
+
+
 class CashoutScheduler:
-    """Runs run_cycle periodically. While the engine is off each tick returns
-    before opening a database session."""
+    """Runs run_cycle periodically, and promptly when request_cycle() is called.
+    Every tick also queues the "commission earned, wallet missing" emails
+    (payout_notifications.sweep), whatever the payout switches. While the engine
+    is off the payout part returns before opening a database session."""
+
+    # A requested cycle waits this long, so the transaction that asked for it
+    # (a payment confirmation, a wallet approval) is committed first.
+    REQUEST_DELAY_SECONDS = 3
 
     def __init__(self, check_interval_seconds: Optional[int] = None):
         # Used until the configured interval can be read (and while the server switch is off).
         self.check_interval = int(check_interval_seconds or 900)
         self.running = False
         self._task = None
+        self._wake: Optional[asyncio.Event] = None
+        self._loop_ref = None
 
     async def start(self):
+        global _ACTIVE_SCHEDULER
         if self.running:
             return
         self.running = True
+        self._wake = asyncio.Event()
+        self._loop_ref = asyncio.get_running_loop()
+        _ACTIVE_SCHEDULER = self
         self._task = asyncio.create_task(self._loop())
         logger.info("Cashout scheduler started (server master switch: %s)", payment_config.crypto_master_switch())
 
     async def stop(self):
+        global _ACTIVE_SCHEDULER
         self.running = False
+        if _ACTIVE_SCHEDULER is self:
+            _ACTIVE_SCHEDULER = None
         if self._task:
             self._task.cancel()
             try:
@@ -1050,7 +1263,19 @@ class CashoutScheduler:
                 await self._run_cycle()
             except Exception:  # noqa: BLE001
                 logger.exception("Cashout cycle failed")
-            await asyncio.sleep(await self._interval())
+            await self._wait(await self._interval())
+
+    async def _wait(self, seconds: int) -> None:
+        """Sleep until the next tick, or until request_cycle() wakes the loop."""
+        if self._wake is None:
+            await asyncio.sleep(seconds)
+            return
+        try:
+            await asyncio.wait_for(self._wake.wait(), timeout=seconds)
+        except asyncio.TimeoutError:
+            return
+        self._wake.clear()
+        await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
 
     async def _interval(self) -> int:
         if not payment_config.crypto_master_switch():
@@ -1071,9 +1296,24 @@ class CashoutScheduler:
             db.close()
 
     async def _run_cycle(self):
+        try:
+            await asyncio.to_thread(self._sweep_notifications)
+        except Exception:  # noqa: BLE001 - emails never stop payouts
+            logger.exception("Commission notification sweep failed")
         if not payment_config.crypto_master_switch():
             return {"enabled": False}
         return await asyncio.to_thread(self._run_once)
+
+    @staticmethod
+    def _sweep_notifications() -> int:
+        from app.db.session import SessionLocal
+        from app.services import payout_notifications
+
+        db = SessionLocal()
+        try:
+            return payout_notifications.sweep(db)
+        finally:
+            db.close()
 
     @staticmethod
     def _run_once() -> dict:

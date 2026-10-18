@@ -265,6 +265,29 @@ def reactivate_payouts(body: ReactivationBody, request: Request, db: Session = D
     return config.settings_view(db)
 
 
+class PauseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(..., max_length=500)
+    current_password: str = Field(default="", max_length=256)
+
+
+@router.post("/payouts/pause")
+def pause_payouts(body: PauseBody, request: Request, db: Session = Depends(get_db),
+                  actor: User = Depends(get_current_active_user)):
+    """Emergency stop of automatic payouts (process_cashouts or manage permission,
+    password, reason). Takes effect before the next payout is reserved; payouts
+    already at the provider keep being reconciled. Resuming is the ordinary
+    activation of automatic payouts."""
+    try:
+        config.pause_payouts(db, actor, password=body.current_password, reason=body.reason,
+                             ip=client_ip(request))
+    except config.PaymentConfigError as exc:
+        db.rollback()
+        raise _http_error(exc) from None
+    return config.settings_view(db)
+
+
 @router.put("/credentials")
 def store_credentials(body: CredentialsBody, request: Request, db: Session = Depends(get_db),
                       actor: User = Depends(get_current_active_user)):

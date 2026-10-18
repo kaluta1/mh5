@@ -178,6 +178,13 @@ async def create_payment(
         # Retired 2026-09-28: no deposit, seat or provider invoice is created.
         raise HTTPException(status_code=410, detail=POOL_RETIRED_MESSAGE)
 
+    if product_code in kyc_fee.RETIRED_KYC_PRODUCT_CODES:
+        # One KYC product is sold (kyc_fee.PRODUCT_CODE, priced by the member KYC fee).
+        # The older product would take a different price for the same verification.
+        raise HTTPException(status_code=409, detail={
+            "code": "KYC_PRODUCT_NOT_SOLD",
+            "message": "This product is not sold. Pay the identity verification fee from the KYC page."})
+
     if product_code == kyc_fee.PRODUCT_CODE and kyc_fee.is_free(db):
         # Free KYC: there is nothing to pay, so no deposit and no provider invoice.
         raise HTTPException(status_code=409, detail={

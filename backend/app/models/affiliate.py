@@ -115,6 +115,9 @@ class AffiliateCommission(Base):
     )
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Bénéficiaire
     source_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  # Générateur
+    # When the beneficiary was emailed that this commission waits for an approved
+    # payout wallet (payout_notifications.sweep): once per commission.
+    wallet_notice_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Lien vers le type de produit (nouvelle approche)
     product_type_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("product_types.id"), nullable=True)
@@ -157,12 +160,22 @@ class AffiliateCashoutRequest(Base):
     """Audit trail for affiliate commission payouts (auto or manual)."""
     __tablename__ = "affiliate_cashout_requests"
     __table_args__ = (
-        # The database itself refuses a second open cashout for a member, so two
-        # workers (or a worker and a request) can never both reserve.
+        # The database itself refuses a second open cashout of SEVERAL commissions
+        # (commission_id IS NULL: USD requests, older crypto payouts) for a member,
+        # so two workers (or a worker and a request) can never both reserve. An
+        # individual payout is limited per commission (uq_cashout_commission_live).
         Index("uq_cashout_one_active_per_user", "user_id", unique=True,
-              postgresql_where=text("status IN ('requested', 'processing', 'unknown')"),
-              sqlite_where=text("status IN ('requested', 'processing', 'unknown')")),
+              postgresql_where=text("commission_id IS NULL AND status IN ('requested', 'processing', 'unknown')"),
+              sqlite_where=text("commission_id IS NULL AND status IN ('requested', 'processing', 'unknown')")),
         Index("uq_cashout_payout_reference", "payout_reference", unique=True),
+        # Individual automatic payouts: at most one attempt per commission that is
+        # open or paid. A failed or cancelled attempt frees the commission for a
+        # new attempt (migration c8e0f2a4b6d8).
+        Index("uq_cashout_commission_live", "commission_id", unique=True,
+              postgresql_where=text("commission_id IS NOT NULL AND status IN "
+                                    "('requested', 'processing', 'unknown', 'completed')"),
+              sqlite_where=text("commission_id IS NOT NULL AND status IN "
+                                "('requested', 'processing', 'unknown', 'completed')")),
     )
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -218,8 +231,48 @@ class AffiliateCashoutRequest(Base):
     fee_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # USD: the member's payout destination details, AES-256-GCM ciphertext only.
     destination_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Individual automatic payout (NULL on payouts of several commissions written
+    # before it): the ONE commission it pays, the administrator-approved wallet it
+    # was bound to when reserved, and the blockchain transaction hash the provider
+    # reported for it.
+    commission_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("affiliate_commissions.id"),
+                                                         nullable=True, index=True)
+    wallet_approval_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payout_wallet_approvals.id"),
+                                                              nullable=True)
+    tx_hash: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
+class PayoutWalletApproval(Base):
+    """An administrator's decision on one payout wallet a member submitted.
+
+    One row per submission (every address change starts a new PENDING row);
+    a decision is taken once and is never edited. users.payout_wallet_approval_id
+    points at the row of the wallet currently on the account; nothing is paid
+    to a wallet whose row is not APPROVED."""
+    __tablename__ = "payout_wallet_approvals"
+    __table_args__ = (
+        Index("uq_payout_wallet_approval_one_pending", "user_id", unique=True,
+              postgresql_where=text("status = 'PENDING'"), sqlite_where=text("status = 'PENDING'")),
+        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'SUPERSEDED')",
+                        name="ck_payout_wallet_approvals_status"),
+        CheckConstraint("decided_by IS NULL OR decided_by <> user_id", name="ck_payout_wallet_approvals_not_self"),
+    )
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    address: Mapped[str] = mapped_column(String(100), nullable=False)
+    currency: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="PENDING")
+    wallet_change_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("payout_wallet_changes.id"),
+                                                            nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    verification_method: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    decided_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    decision_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    superseded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class PayoutWalletChange(Base):

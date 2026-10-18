@@ -98,6 +98,8 @@ CASHOUT_METHODS = (METHOD_CRYPTO, METHOD_USD)
 
 WALLET_MISSING, WALLET_INVALID, WALLET_UNVERIFIED = "MISSING", "INVALID", "UNVERIFIED"
 WALLET_ON_HOLD, WALLET_VERIFIED = "ON_HOLD", "VERIFIED"
+# Administrator approval of the wallet (payout_wallet_approval).
+WALLET_PENDING_APPROVAL, WALLET_REJECTED = "PENDING_APPROVAL", "REJECTED"
 
 VERIFIED_BY_EMAIL, VERIFIED_BY_PASSWORD = "EMAIL", "PASSWORD"
 MAX_DESTINATION_LENGTH = 500
@@ -172,10 +174,11 @@ class WalletState:
     address: Optional[str] = None
     currency: Optional[str] = None
     payable_from: Optional[datetime] = None
+    approval_id: Optional[int] = None     # the administrator approval this wallet is paid under
 
     @property
     def payable(self) -> bool:
-        return self.status == WALLET_VERIFIED
+        return self.status == WALLET_VERIFIED and self.approval_id is not None
 
 
 @dataclass(frozen=True, repr=False)
@@ -207,10 +210,24 @@ def wallet_state(user: User, now: Optional[datetime] = None, *,
     verified_at = user.payout_wallet_verified_at
     if verified_at is None:
         return WalletState(WALLET_UNVERIFIED, address=address, currency=currency)
+    # Owner rule 2026-10-18: an administrator approves every wallet and every change.
+    from app.services import payout_wallet_approval as approvals
+
+    session = object_session(user)
+    submission = approvals.current(session, user.id) if session is not None else None
+    if submission is None or not approvals._same(submission.address, address) or submission.currency != currency:
+        # A wallet saved before approvals existed: it must be submitted again.
+        return WalletState(WALLET_UNVERIFIED, address=address, currency=currency)
+    if submission.status == approvals.REJECTED:
+        return WalletState(WALLET_REJECTED, address=address, currency=currency)
+    if submission.status != approvals.APPROVED:
+        return WalletState(WALLET_PENDING_APPROVAL, address=address, currency=currency)
     payable_from = verified_at + config.wallet_hold
     if now < payable_from:
-        return WalletState(WALLET_ON_HOLD, address=address, currency=currency, payable_from=payable_from)
-    return WalletState(WALLET_VERIFIED, address=address, currency=currency, payable_from=payable_from)
+        return WalletState(WALLET_ON_HOLD, address=address, currency=currency, payable_from=payable_from,
+                           approval_id=submission.id)
+    return WalletState(WALLET_VERIFIED, address=address, currency=currency, payable_from=payable_from,
+                       approval_id=submission.id)
 
 
 def _token_hash(raw: str, user_id: int, address: str, currency: str) -> str:
@@ -225,8 +242,11 @@ def _crypto_payout_open(db: Session, user_id: int) -> bool:
 
 
 def _apply_wallet(db: Session, locked: User, *, address: str, currency: str, method: str, config: PaymentConfig,
-                  ip: Optional[str], now: datetime) -> None:
-    """Make this address the member's payout wallet and start its hold. No commit."""
+                  ip: Optional[str], now: datetime) -> int:
+    """Make this address the member's payout wallet, start its hold and submit it
+    for administrator approval. Returns the approval row id. No commit."""
+    from app.services import payout_wallet_approval as approvals
+
     old_address = (locked.usdt_wallet_address or "").strip() or None
     locked.usdt_wallet_address = address
     locked.payout_currency = currency
@@ -240,6 +260,16 @@ def _apply_wallet(db: Session, locked: User, *, address: str, currency: str, met
            old={"wallet": mask_address(old_address)},
            new={"wallet": mask_address(address), "currency": currency, "verified_by": method,
                 "payable_from": change.payable_from.isoformat()})
+    submission = approvals.submit(db, locked, address=address, currency=currency, method=method,
+                                  wallet_change_id=change.id, ip=ip, now=now)
+    if not locked.cashout_method and config.crypto_cashout_enabled:
+        # Setting a USDT payout wallet is the member's choice of automatic crypto payouts
+        # (owner rule 2026-10-18: no separate withdrawal request). An explicit choice is kept.
+        locked.cashout_method = METHOD_CRYPTO
+        locked.cashout_method_changed_at = now
+        _audit(db, record_id=locked.id, action="CASHOUT_METHOD_CHANGED", actor_id=locked.id, table="users",
+               old={"cashout_method": None}, new={"cashout_method": METHOD_CRYPTO, "by": "PAYOUT_WALLET_SET"})
+    return int(submission.id)
 
 
 def change_payout_wallet(db: Session, user: User, *, address: str, currency: Optional[str], password: str,
@@ -272,9 +302,11 @@ def change_payout_wallet(db: Session, user: User, *, address: str, currency: Opt
     locked = db.query(User).filter(User.id == user.id).with_for_update().one()
     old_address = (locked.usdt_wallet_address or "").strip() or None
     if old_address == new_address and locked.payout_wallet_verified_at is not None:
-        state = wallet_state(locked, now, config=config)   # nothing to change; the hold is not restarted
-        db.rollback()
-        return WalletChangeResult(state)
+        state = wallet_state(locked, now, config=config)
+        if state.status not in (WALLET_REJECTED, WALLET_UNVERIFIED):
+            db.rollback()                                  # nothing to change; the hold is not restarted
+            return WalletChangeResult(state)
+        # A rejected (or never approved) address may be submitted again for a new decision.
     if _crypto_payout_open(db, locked.id):
         db.rollback()
         raise CashoutError("PAYOUT_IN_PROGRESS", "A payout is in progress. Try again when it has finished.")
@@ -289,10 +321,13 @@ def change_payout_wallet(db: Session, user: User, *, address: str, currency: Opt
         raise CashoutError("TOO_MANY_CHANGES", "The payout wallet was changed too often. Try again tomorrow.")
 
     if not config.wallet_email_verification_required:
-        _apply_wallet(db, locked, address=new_address, currency=normalized, method=VERIFIED_BY_PASSWORD,
-                      config=config, ip=ip, now=now)
+        approval_id = _apply_wallet(db, locked, address=new_address, currency=normalized,
+                                    method=VERIFIED_BY_PASSWORD, config=config, ip=ip, now=now)
         db.commit()
         db.refresh(locked)
+        from app.services import payout_notifications
+
+        payout_notifications.wallet_submitted(db, locked, approval_id)
         return WalletChangeResult(wallet_state(locked, now, config=config))
 
     # Newest request only: an earlier unused link stops working.
@@ -362,10 +397,13 @@ def confirm_payout_wallet(db: Session, user: User, token: str, *, ip: Optional[s
     if consumed != 1:
         db.rollback()
         raise _link_invalid()
-    _apply_wallet(db, locked, address=match.address, currency=match.currency, method=VERIFIED_BY_EMAIL,
-                  config=config, ip=ip, now=now)
+    approval_id = _apply_wallet(db, locked, address=match.address, currency=match.currency,
+                                method=VERIFIED_BY_EMAIL, config=config, ip=ip, now=now)
     db.commit()
     db.refresh(locked)
+    from app.services import payout_notifications
+
+    payout_notifications.wallet_submitted(db, locked, approval_id)
     return wallet_state(locked, now, config=config)
 
 
@@ -480,6 +518,17 @@ def active_cashout(db: Session, user_id: int) -> Optional[AffiliateCashoutReques
             .order_by(AffiliateCashoutRequest.id.desc()).first())
 
 
+def active_pooled_cashout(db: Session, user_id: int) -> Optional[AffiliateCashoutRequest]:
+    """An open cashout of several commissions (a USD request, or a crypto payout
+    written before individual payouts). At most one per member (database index);
+    while it is open no individual payout of that member starts."""
+    return (db.query(AffiliateCashoutRequest)
+            .filter(AffiliateCashoutRequest.user_id == user_id,
+                    AffiliateCashoutRequest.commission_id.is_(None),
+                    AffiliateCashoutRequest.status.in_(ACTIVE_CASHOUT_STATUSES))
+            .order_by(AffiliateCashoutRequest.id.desc()).first())
+
+
 def available_rows(db: Session, user_id: int) -> List[AffiliateCommission]:
     """Unreserved APPROVED rows that may be paid (never a held historical row), oldest first, locked."""
     from app.services.commission_payout_hold import payable_clause
@@ -505,7 +554,8 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
             network_fee: Optional[Decimal] = None, network_fee_policy: Optional[str] = None,
             net: Optional[Decimal] = None, destination_ciphertext: Optional[str] = None,
             beneficiary_fee: Optional[dict] = None,
-            audit_extra: Optional[dict] = None) -> Optional[AffiliateCashoutRequest]:
+            audit_extra: Optional[dict] = None, commission_id: Optional[int] = None,
+            wallet_approval_id: Optional[int] = None) -> Optional[AffiliateCashoutRequest]:
     """Reserve these whole rows for ONE new cashout and commit. Returns None
     (after a rollback, with nothing reserved) when the database refused it
     because the member already has an open cashout or the intent exists.
@@ -529,6 +579,7 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
         wallet_snapshot=wallet, payout_currency=currency, payout_reference=intent_ref, requested_at=now,
         network_fee=money(network_fee) if network_fee is not None else None,
         network_fee_policy=network_fee_policy, destination_ciphertext=destination_ciphertext,
+        commission_id=commission_id, wallet_approval_id=wallet_approval_id,
         **(beneficiary_fee or {}))
     db.add(cashout)
     try:
@@ -536,6 +587,7 @@ def reserve(db: Session, user: User, rows: List[AffiliateCommission], *, method:
         _audit(db, record_id=cashout.id, action="CASHOUT_RESERVED", actor_id=user.id, old=None,
                new={"method": method, "gross": str(gross), "fee": str(fee), "net": str(net),
                     "commission_ids": [int(r.id) for r in rows], "wallet": mask_address(wallet),
+                    "wallet_approval_id": wallet_approval_id,
                     "network_fee_policy": network_fee_policy, **(audit_extra or {}),
                     **{name: (_exact(value) if isinstance(value, Decimal) else value)
                        for name, value in (beneficiary_fee or {}).items()}})
@@ -1837,6 +1889,9 @@ def cashout_dict(cashout: AffiliateCashoutRequest, *, admin: bool = False) -> di
         "requested_at": cashout.requested_at.isoformat() if cashout.requested_at else None,
         "processed_at": cashout.processed_at.isoformat() if cashout.processed_at else None,
         "beneficiary_fee": member_fee_view(cashout),
+        "commission_id": cashout.commission_id,
+        "tx_hash": cashout.tx_hash,
+        "explorer_url": explorer_url(cashout),
     }
     if admin:
         out.update({"user_id": cashout.user_id, "provider_status": cashout.provider_status,
@@ -1845,8 +1900,30 @@ def cashout_dict(cashout: AffiliateCashoutRequest, *, admin: bool = False) -> di
                     "reviewed_by": cashout.reviewed_by,
                     "reviewed_at": cashout.reviewed_at.isoformat() if cashout.reviewed_at else None,
                     "has_destination_details": bool(cashout.destination_ciphertext),
-                    "fee_review": fee_review_view(cashout)})
+                    "fee_review": fee_review_view(cashout),
+                    "wallet_approval_id": cashout.wallet_approval_id})
     return out
+
+
+def _wallet_approval_view(db: Session, user: User) -> Optional[dict]:
+    """The member's own view of their wallet's approval: status, when, and the
+    reason of a rejection. The administrator is never named."""
+    from app.services import payout_wallet_approval as approvals
+
+    row = approvals.current(db, user.id)
+    if row is None:
+        return None
+    return {"status": row.status, "wallet": mask_address(row.address), "network": network_label(row.currency),
+            "submitted_at": row.submitted_at.isoformat() if row.submitted_at else None,
+            "decided_at": row.decided_at.isoformat() if row.decided_at else None,
+            "reason": row.decision_note if row.status == approvals.REJECTED else None}
+
+
+def explorer_url(cashout: AffiliateCashoutRequest) -> Optional[str]:
+    asset = payment_config.SUPPORTED_PAYOUT_CURRENCIES.get(str(cashout.payout_currency or ""), {})
+    if not cashout.tx_hash or not asset.get("explorer_tx"):
+        return None
+    return asset["explorer_tx"] + cashout.tx_hash
 
 
 def history(db: Session, user_id: int, *, limit: int = 50) -> List[dict]:
@@ -1865,7 +1942,9 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
     pending = pending_wallet(db, user.id, now)
     ready = destination_ready(user, now, config=config)
     # What the next cashout would pay: available, plus PENDING once a destination exists.
-    payable = money(balance.available + (balance.pending if ready else Decimal("0.00")))
+    # Never a held historical row (they are neither available nor payable).
+    payable = money(balance.available + (balance.pending_payable if ready else Decimal("0.00")))
+    unpaid = money(balance.available + balance.pending_payable)
     crypto_min, usd_min = crypto_minimum(config=config), usd_minimum(config=config)
     minimum = crypto_min if method == METHOD_CRYPTO else usd_min if method == METHOD_USD else None
     open_cashout = active_cashout(db, user.id)
@@ -1886,6 +1965,10 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         status = "METHOD_UNAVAILABLE"
     elif method == METHOD_CRYPTO and wallet.status in (WALLET_MISSING, WALLET_INVALID, WALLET_UNVERIFIED):
         status = "WALLET_CONFIRMATION_PENDING" if pending is not None else "WALLET_REQUIRED"
+    elif method == METHOD_CRYPTO and wallet.status == WALLET_PENDING_APPROVAL:
+        status = "WALLET_APPROVAL_PENDING"
+    elif method == METHOD_CRYPTO and wallet.status == WALLET_REJECTED:
+        status = "WALLET_REJECTED"
     elif method == METHOD_CRYPTO and wallet.status == WALLET_ON_HOLD:
         status = "WALLET_ON_HOLD"
     elif method == METHOD_CRYPTO and terms["available"] and consent is None:
@@ -1904,11 +1987,17 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         "status": status,
         "balances": {
             "total_earned": float(balance.earned_lifetime),
-            "pending": float(balance.pending),
+            # PENDING that may be paid; held historical rows are only in "held".
+            "pending": float(balance.pending_payable),
             "available": float(balance.available),
             "reserved": float(balance.reserved),
             "paid": float(balance.paid_lifetime),
+            "held": float(balance.held),
+            "available_unpaid": float(unpaid),
+            "awaiting_wallet_approval": float(unpaid) if wallet.status == WALLET_PENDING_APPROVAL else 0.0,
+            "processing": float(balance.reserved),
         },
+        "wallet_approval": _wallet_approval_view(db, user),
         "payable_amount": float(payable),
         "minimum": float(minimum) if minimum is not None else None,
         "minimums": {"CRYPTO": float(crypto_min), "USD": float(usd_min)},

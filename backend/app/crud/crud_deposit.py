@@ -16,6 +16,16 @@ def generate_reference() -> str:
     return f"DEP-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
 
+
+def _product_ids(db: Session, product_code: str) -> list:
+    """Product ids that grant `product_code`. A paid `kyc_verification` (an older
+    KYC product still in the catalogue) is a KYC payment like `kyc`: the member
+    paid for a verification attempt, so it opens one (see kyc_fee.KYC_PRODUCT_CODES)."""
+    from app.services.kyc_fee import KYC_PRODUCT_CODES, PRODUCT_CODE as KYC_CODE
+
+    codes = KYC_PRODUCT_CODES if product_code == KYC_CODE else (product_code,)
+    return [row.id for row in db.query(ProductType.id).filter(ProductType.code.in_(codes)).all()]
+
 class CRUDDeposit:
     
     def create_with_reference(
@@ -77,8 +87,8 @@ class CRUDDeposit:
         Récupère un dépôt valide et non utilisé pour un produit spécifique.
         Utilisé pour vérifier si l'utilisateur a payé pour un service.
         """
-        product_type = db.query(ProductType).filter(ProductType.code == product_code).first()
-        if not product_type:
+        product_ids = _product_ids(db, product_code)
+        if not product_ids:
             return None
         
         now = datetime.utcnow()
@@ -86,7 +96,7 @@ class CRUDDeposit:
         return db.query(Deposit).filter(
             and_(
                 Deposit.user_id == user_id,
-                Deposit.product_type_id == product_type.id,
+                Deposit.product_type_id.in_(product_ids),
                 Deposit.status == DepositStatus.VALIDATED,
                 Deposit.is_used == False,
                 # Soit pas d'expiration, soit pas encore expiré
@@ -102,8 +112,8 @@ class CRUDDeposit:
         product_code: str
     ) -> int:
         """Compte le nombre de dépôts valides et non utilisés pour un produit"""
-        product_type = db.query(ProductType).filter(ProductType.code == product_code).first()
-        if not product_type:
+        product_ids = _product_ids(db, product_code)
+        if not product_ids:
             return 0
         
         now = datetime.utcnow()
@@ -111,7 +121,7 @@ class CRUDDeposit:
         return db.query(Deposit).filter(
             and_(
                 Deposit.user_id == user_id,
-                Deposit.product_type_id == product_type.id,
+                Deposit.product_type_id.in_(product_ids),
                 Deposit.status == DepositStatus.VALIDATED,
                 Deposit.is_used == False,
                 (Deposit.expires_at.is_(None) | (Deposit.expires_at > now))
