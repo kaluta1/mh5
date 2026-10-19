@@ -19,6 +19,7 @@ endpoints/cashouts.py (/admin/cashouts).
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -37,6 +38,7 @@ from app.models.user import User
 from app.services import cashout_engine, cashout_service, payment_config as config
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 CONNECTION_TEST_LIMIT, CONNECTION_TEST_WINDOW = 6, 600        # per administrator
 
@@ -296,6 +298,8 @@ def store_credentials(body: CredentialsBody, request: Request, db: Session = Dep
                                          ip=client_ip(request))
     except config.PaymentConfigError as exc:
         db.rollback()
+        # Which rule refused which field, so a refusal can be diagnosed later. Never a value.
+        logger.warning("payment credentials refused: code=%s field=%s admin=%s", exc.code, exc.field, actor.id)
         raise _http_error(exc) from None
     return {"stored": written, "provider": config.provider_view(db)}
 

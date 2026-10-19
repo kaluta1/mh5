@@ -10,6 +10,7 @@ credential, wallet, user and amount is SYNTHETIC.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import pyotp
 import pytest
 
 from app.accounting.distribution_formulas import cashout_fee_and_net
@@ -400,6 +402,103 @@ def test_malformed_credentials_are_rejected(db, values):
     with pytest.raises(pc.PaymentConfigError):
         pc.set_credentials(db, admin, values, password=PASSWORD)
     assert db.query(PaymentCredential).count() == 0
+
+
+def test_the_four_payout_credentials_are_stored_encrypted_and_reported_configured(client, db, monkeypatch):
+    """The API credentials card's request, as production receives it: the four payout values and the
+    administrator's password; pay-in stays on the environment and is not sent."""
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-env-payin-key")
+    admin = member(db, "boss", admin=True)
+    payout = {k: v for k, v in SECRETS.items() if k.startswith("PAYOUT_")}
+    before = {c["name"]: c["stored"] for c in client.get("/api/v1/admin/finance/provider", headers=auth(admin)).json()["credentials"]}
+    assert all(before[name] == "NOT CONFIGURED" for name in payout)
+
+    wrong = client.put("/api/v1/admin/finance/credentials", headers=auth(admin),
+                       json={"values": payout, "current_password": "not-the-password"})
+    assert wrong.status_code == 403 and wrong.json()["detail"]["code"] == "REAUTH_REQUIRED"
+    assert db.query(PaymentCredential).count() == 0
+
+    resp = client.put("/api/v1/admin/finance/credentials", headers=auth(admin),
+                      json={"values": payout, "current_password": PASSWORD})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["stored"] == sorted(payout)
+    rows = {r.name: r for r in db.query(PaymentCredential).all()}
+    assert set(rows) == set(payout)                                       # nothing else, pay-in not stored
+    assert all(payout[n] not in rows[n].ciphertext for n in rows)          # encrypted at rest
+    after = {c["name"]: c for c in client.get("/api/v1/admin/finance/provider", headers=auth(admin)).json()["credentials"]}
+    assert all(after[n]["stored"] == "CONFIGURED" and after[n]["stored_readable"] is True for n in payout)
+    assert after["PAYIN_API_KEY"]["stored"] == "NOT CONFIGURED" and after["PAYIN_API_KEY"]["in_use"] == "CONFIGURED"
+    assert all(v not in resp.text for v in payout.values())
+
+
+@pytest.mark.parametrize("copied", [
+    "JBSW Y3DP EHPK 3PXP", "jbsw y3dp ehpk 3pxp", "JBSW\u00a0Y3DP\u00a0EHPK\u00a03PXP", "JBSW-Y3DP-EHPK-3PXP",
+    "JBSW\tY3DP\nEHPK 3PXP", "\u200bJBSWY3DPEHPK3PXP\u200b",
+    "otpauth://totp/NOWPayments:treasury%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=NOWPayments",
+])
+def test_an_authenticator_key_is_accepted_as_an_authenticator_app_or_password_manager_shows_it(db, copied):
+    admin = member(db, "boss", admin=True)
+    assert pc.set_credentials(db, admin, {"PAYOUT_TOTP_SECRET": copied}, password=PASSWORD) == ["PAYOUT_TOTP_SECRET"]
+    configure(db, payout_credential_source="DATABASE")
+    stored = pc.resolve_credentials(db).get("PAYOUT_TOTP_SECRET")
+    assert stored == "JBSWY3DPEHPK3PXP"
+    # The same key: identical bytes, identical codes to the ones the authenticator app shows.
+    assert pyotp.TOTP(stored).byte_secret() == base64.b32decode("JBSWY3DPEHPK3PXP")
+    assert pyotp.TOTP(stored).at(1_760_000_000) == pyotp.TOTP("JBSWY3DPEHPK3PXP").at(1_760_000_000)
+
+
+@pytest.mark.parametrize("value, why", [
+    ("JBSWY3DPEHPK3PX0", "base32"),                                           # 0 is not base32
+    ("JBSW Y3DP EHPK 3PX1", "base32"),                                        # neither is 1
+    ("JBSWY3DPEHPK3PXP!", "base32"),
+    ("JBSWY3DPEHPK3PXPA", "not a complete"),                                  # 17 characters cannot be decoded
+    ("JBSWY3DPEHPK3PX", "too short"),                                         # 15 characters
+    ("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=SHA256", "cannot sign with"),
+    ("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=8", "cannot sign with"),
+    ("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&period=60", "cannot sign with"),
+    ("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP&counter=1", "not a time-based"),
+    ("otpauth://totp/x?issuer=NOWPayments", "base32"),                        # no secret in the link
+])
+def test_an_authenticator_key_that_could_not_sign_a_payout_is_refused(db, value, why):
+    admin = member(db, "boss", admin=True)
+    with pytest.raises(pc.PaymentConfigError) as refused:
+        pc.set_credentials(db, admin, {"PAYOUT_TOTP_SECRET": value}, password=PASSWORD)
+    assert refused.value.code == "INVALID_VALUE" and refused.value.field == "PAYOUT_TOTP_SECRET"
+    assert why in str(refused.value) and str(refused.value).startswith("Payout authenticator (TOTP) secret:")
+    assert "JBSWY3DPEHPK3PX" not in str(refused.value)                       # the message never repeats the value
+    assert db.query(PaymentCredential).count() == 0
+
+
+def test_the_payout_login_password_is_stored_exactly_as_typed(db):
+    admin = member(db, "boss", admin=True)
+    typed = "pass word\u200bwith  spaces-and-dashes"
+    pc.set_credentials(db, admin, {"PAYOUT_PASSWORD": typed}, password=PASSWORD)
+    configure(db, payout_credential_source="DATABASE")
+    assert pc.resolve_credentials(db).get("PAYOUT_PASSWORD") == typed
+
+
+def test_invisible_characters_copied_with_a_key_or_an_email_are_removed(db):
+    admin = member(db, "boss", admin=True)
+    pc.set_credentials(db, admin, {"PAYOUT_API_KEY": "\u200bSYNTHETIC-PAYOUT-KEY-0003\ufeff",
+                                   "PAYOUT_EMAIL": "treasury@example.com\u00a0"}, password=PASSWORD)
+    configure(db, payout_credential_source="DATABASE")
+    credentials = pc.resolve_credentials(db)
+    assert credentials.get("PAYOUT_API_KEY") == "SYNTHETIC-PAYOUT-KEY-0003"
+    assert credentials.get("PAYOUT_EMAIL") == "treasury@example.com"
+
+
+def test_a_refused_credential_is_named_nothing_is_stored_and_no_value_is_logged(client, db, caplog):
+    admin = member(db, "boss", admin=True)
+    values = {k: v for k, v in SECRETS.items() if k.startswith("PAYOUT_")}
+    values["PAYOUT_TOTP_SECRET"] = "NOT-BASE32-0189"                  # 0, 1, 8 and 9 are not base32
+    with caplog.at_level("INFO"):
+        resp = client.put("/api/v1/admin/finance/credentials", headers=auth(admin),
+                          json={"values": values, "current_password": PASSWORD})
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["field"] == "PAYOUT_TOTP_SECRET" and "base32" in resp.json()["detail"]["message"]
+    assert db.query(PaymentCredential).count() == 0                   # all or nothing: no partial save
+    assert "INVALID_VALUE" in caplog.text and "PAYOUT_TOTP_SECRET" in caplog.text
+    assert all(v not in caplog.text + resp.text for v in values.values()) and PASSWORD not in caplog.text
 
 
 def test_without_the_encryption_key_nothing_is_stored_and_stored_values_are_not_used(db, monkeypatch):

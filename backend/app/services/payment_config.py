@@ -37,6 +37,7 @@ never needs it.
 """
 from __future__ import annotations
 
+import binascii
 import logging
 import re
 import time
@@ -44,7 +45,9 @@ from dataclasses import dataclass, fields as dataclass_fields, replace
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import parse_qs, urlsplit
 
+import pyotp
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -895,13 +898,48 @@ def credential_status(db: Session, config: Optional[PaymentConfig] = None) -> Li
     return out
 
 
+# Zero-width characters that come along when a value is copied from a web page or a password manager.
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"))
+# What the payout signing (nowpayments_service, pyotp.TOTP) produces codes with.
+_TOTP_SIGNING = {"algorithm": "SHA1", "digits": "6", "period": "30"}
+
+
+def _totp_secret(spec: CredentialSpec, text: str) -> str:
+    """The base32 secret exactly as the payout signing will use it, or
+    INVALID_VALUE. Only presentation is removed (grouping, case, the link
+    around it): the decoded key bytes are never changed."""
+    def bad(why: str) -> PaymentConfigError:
+        return PaymentConfigError("INVALID_VALUE", f"{spec.label}: {why}", field=spec.name)
+
+    if text.lower().startswith("otpauth://"):
+        # The whole authenticator link (QR code contents). Its secret is used only when the link asks for
+        # the codes MyHigh5 signs with; other settings would give codes the provider refuses.
+        link = urlsplit(text)
+        query = parse_qs(link.query)
+        if link.netloc.lower() != "totp":
+            raise bad("the authenticator link is not a time-based (TOTP) key.")
+        if any((query.get(name) or [value])[0].strip().upper() != value for name, value in _TOTP_SIGNING.items()):
+            raise bad("the authenticator link uses settings MyHigh5 cannot sign with (SHA1, 6 digits, 30 seconds).")
+        text = (query.get("secret") or [""])[0]
+    # Shown in groups by authenticator apps and password managers: whitespace or hyphens between the groups.
+    # Base32 is case-insensitive, so neither changes the key.
+    text = re.sub(r"[\s-]+", "", text).upper()
+    if not re.fullmatch(r"[A-Z2-7]+=*", text):
+        raise bad("must be a base32 authenticator secret (letters A-Z and digits 2-7 only).")
+    try:
+        pyotp.TOTP(text).byte_secret()            # the decoding the payout signing does
+    except (binascii.Error, ValueError):
+        raise bad("is not a complete base32 authenticator secret.") from None
+    return text
+
+
 def _clean_credential(spec: CredentialSpec, value: Optional[str]) -> str:
-    text = str(value or "").strip()
+    text = str(value or "")
+    if spec.name != "PAYOUT_PASSWORD":            # a password is kept exactly as typed (apart from the ends)
+        text = text.translate(_INVISIBLE)
+    text = text.strip()
     if spec.name == "PAYOUT_TOTP_SECRET":
-        text = text.replace(" ", "").upper()
-        if not re.fullmatch(r"[A-Z2-7]+=*", text):
-            raise PaymentConfigError("INVALID_VALUE", f"{spec.label}: must be a base32 authenticator secret.",
-                                     field=spec.name)
+        text = _totp_secret(spec, text)
     elif spec.name == "PAYOUT_EMAIL":
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", text):
             raise PaymentConfigError("INVALID_VALUE", f"{spec.label}: is not a valid email address.",

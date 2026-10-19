@@ -53,7 +53,7 @@ import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
  */
 type Change = (request: () => Promise<{ status: number; data?: any }>, ok: string, failure: string,
   /** Shows a refusal where the change was made instead of at the top of the page. */
-  onRefused?: (message: string) => void) => Promise<boolean>
+  onRefused?: (message: string, field: string | null) => void) => Promise<boolean>
 
 function PasswordField({ id, value, onChange, disabled }: {
   id: string; value: string; onChange: (value: string) => void; disabled?: boolean
@@ -113,7 +113,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         return true
       }
       const message = financeErrorText(res, failure)
-      if (onRefused) onRefused(message)
+      if (onRefused) onRefused(message, typeof res.data?.detail?.field === 'string' ? res.data.detail.field : null)
       else setError(message)
       return false
     } finally {
@@ -675,20 +675,24 @@ function CredentialsCard({ provider, canManage, busy, change, lockedGroup, permi
   lockedGroup?: string
   permission?: string
 }) {
-  // Write-only: never pre-filled, cleared as soon as it has been sent.
+  // Write-only: never pre-filled. Cleared once stored; kept after a refusal so the one value at fault can be
+  // corrected (the server stores all of them or none).
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [password, setPassword] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<{ message: string; field: string | null } | null>(null)
   const payload = credentialPayload(draft)
   const locked = !canManage || busy || !provider.encryption_key_configured
 
   const store = async () => {
     const values = payload
     const sentPassword = password
-    setDraft({})
     setPassword('')
-    await change(() => api.put(`${FINANCE_BASE}/credentials`, { values, current_password: sentPassword }),
-      'Credentials stored encrypted. They cannot be shown again.', 'The credentials could not be stored.')
+    setRefusal(null)
+    const ok = await change(() => api.put(`${FINANCE_BASE}/credentials`, { values, current_password: sentPassword }),
+      'Credentials stored encrypted. They cannot be shown again.', 'The credentials could not be stored.',
+      (message, field) => setRefusal({ message, field }))
+    if (ok) setDraft({})
   }
 
   const remove = async (name: string) => {
@@ -718,10 +722,18 @@ function CredentialsCard({ provider, canManage, busy, change, lockedGroup, permi
                 Stored: <StatusPill status={c.stored_readable === false ? 'UNREADABLE' : c.stored} />
               </span>
             </div>
-            <input id={`credential-${c.name}`} type="password" autoComplete="new-password" className={inputClass}
+            {/* The email is visible while typed; the secrets are not. Neither is filled in by a browser or a
+                password manager (the site password must never land in a provider field). */}
+            <input id={`credential-${c.name}`} type={c.name === 'PAYOUT_EMAIL' ? 'email' : 'password'}
+              autoComplete={c.name === 'PAYOUT_EMAIL' ? 'off' : 'new-password'} spellCheck={false}
+              data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" className={inputClass}
               placeholder={c.stored === 'CONFIGURED' ? 'Leave blank to keep the stored value' : 'Not stored'}
               value={draft[c.name] ?? ''} disabled={locked || c.group === lockedGroup}
+              aria-invalid={refusal?.field === c.name || undefined}
               onChange={(e) => setDraft({ ...draft, [c.name]: e.target.value })} />
+            {refusal?.field === c.name && (
+              <p className="text-xs text-red-600" data-testid={`credential-error-${c.name}`}>{refusal.message}</p>
+            )}
             {c.group === lockedGroup && (
               <p className="text-xs text-amber-700 dark:text-amber-300" data-testid={`activation-lock-${c.name}`}>
                 Automatic payouts are on: replacing or deleting this credential needs the {permission} permission,
@@ -748,6 +760,16 @@ function CredentialsCard({ provider, canManage, busy, change, lockedGroup, permi
         ))}
         {canManage && (
           <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            {Object.keys(payload).length > 0 && (
+              <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="credentials-to-store">
+                Will be stored: {provider.credentials.filter((c) => c.name in payload).map((c) => c.label).join(', ')}.
+              </p>
+            )}
+            {refusal && (
+              <p role="alert" className="text-sm text-red-600" data-testid="credentials-save-error">
+                Nothing was stored: {refusal.message}
+              </p>
+            )}
             <PasswordField id="credentials-password" value={password} onChange={setPassword} disabled={busy} />
             <Button onClick={() => void store()} disabled={locked || !password || Object.keys(payload).length === 0}>
               Store credentials

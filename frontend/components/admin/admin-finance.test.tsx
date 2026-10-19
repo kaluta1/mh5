@@ -1061,6 +1061,79 @@ describe('AdminFinance: payout credential source', () => {
     expect((screen.getByLabelText('Payout credential source') as HTMLSelectElement).value).toBe('DATABASE')
   })
 
+  const credentialsCard = () => screen.getByRole('heading', { name: 'API credentials' }).closest('div') as HTMLElement
+
+  it('shows a refused credential beside its field, keeps what was typed and sends nothing else', async () => {
+    setup()
+    putMock.mockResolvedValue({ status: 422, data: { detail: { code: 'INVALID_VALUE', field: 'PAYOUT_PASSWORD',
+      message: 'Payout login password: the value is too short or too long.' } } })
+    render(<AdminFinance section="nowpayments" />)
+    // An unsaved choice in Provider settings is not part of the credentials request.
+    fireEvent.change(await screen.findByLabelText('Payout credential source'), { target: { value: 'DATABASE' } })
+    fireEvent.change(screen.getByLabelText('Payout API key'), { target: { value: SECRET } })
+    fireEvent.change(screen.getByLabelText('Payout login password'), { target: { value: 'x' } })
+    fireEvent.change(within(credentialsCard()).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Store credentials' }))
+
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/credentials', {
+      values: { PAYOUT_API_KEY: SECRET, PAYOUT_PASSWORD: 'x' }, current_password: PASSWORD }))
+    expect(await within(credentialsCard()).findByTestId('credentials-save-error')).toHaveTextContent('Nothing was stored')
+    expect(screen.getByTestId('credential-error-PAYOUT_PASSWORD')).toHaveTextContent('too short or too long')
+    expect(screen.getByLabelText('Payout login password')).toHaveAttribute('aria-invalid', 'true')
+    expect((screen.getByLabelText('Payout API key') as HTMLInputElement).value).toBe(SECRET)        // kept, to correct
+    expect((within(credentialsCard()).getByLabelText('Your current password') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Payout credential source') as HTMLSelectElement).value).toBe('DATABASE')
+    expect(document.body.innerHTML).not.toContain(SECRET.slice(0, 10) + '<')                      // never rendered as text
+
+    putMock.mockResolvedValue({ status: 200, data: {} })
+    fireEvent.change(screen.getByLabelText('Payout login password'), { target: { value: 'long enough now' } })
+    fireEvent.change(within(credentialsCard()).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Store credentials' }))
+    expect(await screen.findByText(/Credentials stored encrypted/)).toBeInTheDocument()
+    expect(screen.queryByTestId('credentials-save-error')).toBeNull()
+    expect((screen.getByLabelText('Payout API key') as HTMLInputElement).value).toBe('')            // cleared once stored
+    expect((screen.getByLabelText('Payout login password') as HTMLInputElement).value).toBe('')
+  })
+
+  it('sends exactly the four payout fields that were typed and then shows them stored', async () => {
+    const payout = [['PAYOUT_API_KEY', 'Payout API key'], ['PAYOUT_EMAIL', 'Payout login email'],
+      ['PAYOUT_PASSWORD', 'Payout login password'], ['PAYOUT_TOTP_SECRET', 'Payout authenticator (TOTP) secret']]
+    const all = (stored: string) => [credential('PAYIN_API_KEY', 'Pay-in API key', 'payin', 'NOT CONFIGURED'),
+      credential('IPN_SECRET', 'IPN secret', 'payin', 'NOT CONFIGURED'),
+      ...payout.map(([n, l]) => credential(n, l, 'payout', stored))]
+    let stored = false
+    setup({ p: provider({ credentials: all('NOT CONFIGURED') }) })
+    const served = getMock.getMockImplementation()!
+    getMock.mockImplementation(async (url: string, options?: any) => url.endsWith('/finance/provider') && stored
+      ? { status: 200, data: provider({ credentials: all('CONFIGURED') }) } : served(url, options))
+    putMock.mockImplementation(async () => { stored = true; return { status: 200, data: {} } })
+    render(<AdminFinance section="nowpayments" />)
+
+    const typed: Record<string, string> = { PAYOUT_API_KEY: 'SYNTHETIC-KEY-0001', PAYOUT_EMAIL: 'treasury@example.com',
+      PAYOUT_PASSWORD: 'synthetic pass 0002', PAYOUT_TOTP_SECRET: 'JBSWY3DPEHPK3PXP' }
+    for (const [name, label] of payout) fireEvent.change(await screen.findByLabelText(label), { target: { value: typed[name] } })
+    expect(screen.getByLabelText('Payout login email')).toHaveAttribute('type', 'email')       // visible while typed
+    for (const label of ['Payout API key', 'Payout login password', 'Payout authenticator (TOTP) secret', 'Pay-in API key', 'IPN secret']) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('type', 'password')
+      expect(screen.getByLabelText(label)).toHaveAttribute('data-1p-ignore', 'true')         // no password-manager fill
+    }
+    expect(screen.getByTestId('credentials-to-store')).toHaveTextContent(
+      'Will be stored: Payout API key, Payout login email, Payout login password, Payout authenticator (TOTP) secret.')
+    const store = screen.getByRole('button', { name: 'Store credentials' })
+    expect(store).toBeDisabled()                                                              // no admin password yet
+    fireEvent.change(within(credentialsCard()).getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    fireEvent.click(store)
+
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/credentials',
+      { values: typed, current_password: PASSWORD }))                                        // pay-in fields not sent
+    expect(await screen.findByText(/Credentials stored encrypted/)).toBeInTheDocument()
+    for (const [name] of payout) {
+      await waitFor(() => expect(screen.getByTestId(`credential-status-${name}`)).toHaveTextContent('Stored: Configured'))
+    }
+    expect(screen.getByTestId('credential-status-PAYIN_API_KEY')).toHaveTextContent('Stored: Not configured')
+    for (const value of Object.values(typed)) expect(document.body.innerHTML).not.toContain(value)
+  })
+
   it('reloads the saved source from the server after a successful save', async () => {
     setup()
     let saved = false
