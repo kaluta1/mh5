@@ -870,7 +870,8 @@ def test_a_wallet_change_takes_effect_only_after_the_emailed_link_is_confirmed(c
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["confirmation_required"] is True and data["confirmation_email_sent"] is True
-    assert data["usdt_wallet_address"] == WALLET and data["wallet_status"] == "VERIFIED"      # unchanged so far
+    # The address is unchanged so far, but its approval was withdrawn at once (owner rule 2026-10-19).
+    assert data["usdt_wallet_address"] == WALLET and data["wallet_status"] == "UNVERIFIED"
     assert data["pending_wallet"]["wallet"] == "0xbbbb...bbbb" and data["hold_hours"] == 72
     db.refresh(user)
     assert user.usdt_wallet_address == WALLET and db.query(PayoutWalletChange).count() == 0
@@ -973,13 +974,15 @@ def test_wallet_change_requests_are_limited_and_wait_for_an_open_payout(ledger, 
 
     other = member(db, "m2", method="CRYPTO")
     commission(db, other, "5.00")
-    result = ask(db, other)
     run(db, FakeProvider())                                                       # a payout is now in progress
     with pytest.raises(cs.CashoutError) as busy:
-        cs.confirm_payout_wallet(db, other, result.token, now=NOW + timedelta(minutes=1))
+        ask(db, other)
     assert busy.value.code == "PAYOUT_IN_PROGRESS"
     db.refresh(other)
     assert other.usdt_wallet_address == WALLET and cashouts(db, other)[0].wallet_snapshot == WALLET
+    from app.services import payout_wallet_approval as approvals
+
+    assert approvals.current(db, other.id).status == "APPROVED"                   # a refused request withdraws nothing
 
 
 def test_a_legacy_wallet_is_never_paid_until_it_is_confirmed(client, ledger, engine_on):

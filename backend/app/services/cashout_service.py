@@ -272,6 +272,24 @@ def _apply_wallet(db: Session, locked: User, *, address: str, currency: str, met
     return int(submission.id)
 
 
+def _withdraw_approval_for_change(db: Session, locked: User, address: str, currency: str, *, ip: Optional[str],
+                                  now: datetime) -> None:
+    """Supersede the member's current wallet submission (approved or not) when
+    they ask for a DIFFERENT address. No commit."""
+    from app.services import payout_wallet_approval as approvals
+
+    row = approvals.current(db, locked.id)
+    if row is None or (approvals._same(row.address, address) and row.currency == currency):
+        return
+    previous = row.status
+    row.status, row.superseded_at = approvals.SUPERSEDED, now
+    db.flush()
+    _audit(db, record_id=row.id, action="PAYOUT_WALLET_APPROVAL_WITHDRAWN", actor_id=locked.id,
+           table="payout_wallet_approvals", ip=ip, old={"status": previous, "wallet": mask_address(row.address)},
+           new={"status": approvals.SUPERSEDED, "reason": "WALLET_CHANGE_REQUESTED",
+                "requested_wallet": mask_address(address)})
+
+
 def change_payout_wallet(db: Session, user: User, *, address: str, currency: Optional[str], password: str,
                          ip: Optional[str] = None, now: Optional[datetime] = None) -> WalletChangeResult:
     """Ask to set the member's payout wallet. Commits.
@@ -279,8 +297,9 @@ def change_payout_wallet(db: Session, user: User, *, address: str, currency: Opt
     Authorised by the member's CURRENT password (a stolen session alone cannot
     redirect payouts). With email verification required (the default) nothing
     changes yet: a pending confirmation is recorded and the caller emails its
-    one-time link (send_wallet_confirmation); the wallet in force stays as it
-    is until the link is opened. Otherwise the wallet is set at once. Either
+    one-time link (send_wallet_confirmation); the address on the account stays
+    as it is until the link is opened, but its approval is withdrawn at once, so
+    nothing is paid to the member meanwhile. Otherwise the wallet is set at once. Either
     way a security hold follows before anything is paid to it, nothing is ever
     paid as a result of this call, and the number of requests is limited.
     Refused while a crypto payout of the member is in progress."""
@@ -330,6 +349,10 @@ def change_payout_wallet(db: Session, user: User, *, address: str, currency: Opt
         payout_notifications.wallet_submitted(db, locked, approval_id)
         return WalletChangeResult(wallet_state(locked, now, config=config))
 
+    # Owner rule 2026-10-19: asking for another address withdraws the approval of the
+    # wallet in force at once. Nothing is paid to the member until the new address is
+    # confirmed by email and approved (an abandoned request leaves no approval either).
+    _withdraw_approval_for_change(db, locked, new_address, normalized, ip=ip, now=now)
     # Newest request only: an earlier unused link stops working.
     (db.query(PayoutWalletVerification)
      .filter(PayoutWalletVerification.user_id == locked.id, PayoutWalletVerification.consumed_at.is_(None),

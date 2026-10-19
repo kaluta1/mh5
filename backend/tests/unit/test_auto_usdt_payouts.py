@@ -379,6 +379,81 @@ def test_wallet_change_after_approval_needs_a_fresh_approval_and_stops_payouts(c
     assert provider.created[0]["address"] == OTHER_WALLET
 
 
+def test_a_wallet_change_request_withdraws_the_approval_at_once_and_pauses_payouts(ledger, engine_on):
+    """Owner rule 2026-10-19: asking for another address (email confirmation pending)
+    stops payouts to the old one immediately; the new one needs its email link,
+    an administrator's approval and the 72-hour hold."""
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")                        # approved WALLET (fixture)
+    admin = member(db, "boss", admin=True)
+    old = approvals.current(db, user.id)
+    asked = cs.change_payout_wallet(db, user, address=OTHER_WALLET, currency="usdtbsc", password=PASSWORD, now=NOW)
+    assert asked.pending is True
+    db.refresh(old)
+    db.refresh(user)
+    assert old.status == "SUPERSEDED" and user.usdt_wallet_address == WALLET   # the address is not changed yet
+    withdrawn = db.query(AuditTrail).filter_by(action="PAYOUT_WALLET_APPROVAL_WITHDRAWN").one()
+    assert withdrawn.new_values["reason"] == "WALLET_CHANGE_REQUESTED" and WALLET not in str(withdrawn.new_values)
+    commission(db, user, "2.00")
+    provider = FakeProvider()
+    assert run(db, provider)["members"] == {"WALLET_UNVERIFIED": 1} and provider.created == []
+
+    assert cs.confirm_payout_wallet(db, user, asked.token, now=NOW).status == cs.WALLET_PENDING_APPROVAL
+    assert run(db, provider)["members"] == {"WALLET_PENDING_APPROVAL": 1}
+    approvals.decide(db, admin, approvals.current(db, user.id).id, decision="APPROVE", note=None, password=PASSWORD)
+    hold = timedelta(hours=payment_config.load(db).wallet_hold_hours)
+    assert run(db, provider, now=NOW + hold - timedelta(minutes=1))["members"] == {"WALLET_ON_HOLD": 1}
+    assert run(db, provider, now=NOW + hold + timedelta(minutes=1))["members"] == {"SUBMITTED": 1}
+    assert provider.created[0]["address"] == OTHER_WALLET
+
+
+def test_an_abandoned_change_request_leaves_the_old_address_unapproved(ledger, engine_on):
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    cs.change_payout_wallet(db, user, address=OTHER_WALLET, currency="usdtbsc", password=PASSWORD, now=NOW)
+    commission(db, user, "2.00")
+    later = NOW + timedelta(days=5)                                 # the link expired unused
+    provider = FakeProvider()
+    assert run(db, provider, now=later)["members"] == {"WALLET_UNVERIFIED": 1} and provider.created == []
+    # Going back to the old address is a new submission: email link, approval, hold.
+    again = cs.change_payout_wallet(db, user, address=WALLET, currency="usdtbsc", password=PASSWORD, now=later)
+    assert again.pending is True
+    cs.confirm_payout_wallet(db, user, again.token, now=later)
+    assert approvals.current(db, user.id).status == "PENDING"
+    assert run(db, provider, now=later + timedelta(days=4))["members"] == {"WALLET_PENDING_APPROVAL": 1}
+
+
+def test_asking_again_for_the_approved_address_changes_nothing(ledger, engine_on):
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    approval = approvals.current(db, user.id)
+    same = cs.change_payout_wallet(db, user, address=WALLET, currency="usdtbsc", password=PASSWORD, now=NOW)
+    assert same.pending is False and same.state.status == cs.WALLET_VERIFIED
+    db.refresh(approval)
+    assert approval.status == "APPROVED"
+    commission(db, user, "2.00")
+    assert run(db, FakeProvider())["members"] == {"SUBMITTED": 1}
+
+
+def test_one_approval_pays_every_later_commission_without_a_new_approval_or_hold(ledger, engine_on):
+    """Owner rules 1, 5 and 6: an approved, confirmed wallet is paid every eligible
+    commission, each on its own; neither the approval nor the hold restarts."""
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    approval = approvals.current(db, user.id)
+    confirmed_at = user.payout_wallet_verified_at
+    provider = FakeProvider()
+    commission(db, user, "2.00", when=NOW - timedelta(days=1))
+    assert run(db, provider)["members"] == {"SUBMITTED": 1}
+    commission(db, user, "1.00", when=NOW + timedelta(days=3))
+    assert run(db, provider, now=NOW + timedelta(days=3, hours=1))["members"] == {"SUBMITTED": 1}
+    db.refresh(user)
+    assert [c.wallet_approval_id for c in cashouts(db, user)] == [approval.id, approval.id]
+    assert [c["amount"] for c in provider.created] == [Decimal("2.00"), Decimal("1.00")]
+    assert user.payout_wallet_verified_at == confirmed_at
+    assert db.query(PayoutWalletApproval).filter_by(user_id=user.id).count() == 1
+
+
 def test_a_wallet_changed_after_reservation_is_never_paid(ledger, engine_on, monkeypatch):
     db = ledger
     user = member(db, "m1", method="CRYPTO")

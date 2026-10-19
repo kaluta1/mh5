@@ -145,7 +145,7 @@ export function SettingsWalletTab() {
         addToast(
           data.confirmation_email_sent === false
             ? 'Your request was recorded, but the confirmation email could not be sent. Please try again later.'
-            : 'Check your email: open the confirmation link to confirm this wallet. Your current payout wallet stays in use until then.',
+            : 'Check your email: open the confirmation link to confirm this wallet. Payouts are paused until the new wallet is confirmed and approved.',
           data.confirmation_email_sent === false ? 'error' : 'success'
         )
       } else {
@@ -227,6 +227,10 @@ export function SettingsWalletTab() {
             Open it while signed in to confirm the wallet. The link works once and expires on{' '}
             {new Date(`${walletInfo.pending_wallet.expires_at}Z`).toLocaleString()}. To get a new link, save the wallet
             again.
+          </p>
+          <p className="mt-1" data-testid="pending-wallet-paused">
+            Payouts are paused: nothing is paid to your previous wallet. After you confirm, an administrator reviews
+            the new wallet, and the {walletInfo.hold_hours ?? 72}-hour security hold starts from your confirmation.
           </p>
         </div>
       )}
