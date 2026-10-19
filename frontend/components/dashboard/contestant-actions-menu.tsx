@@ -154,7 +154,7 @@ export function ContestantActionsMenu({
         ) : hasReported ? (
           <DropdownMenuItem disabled className="text-gray-400 dark:text-gray-500 cursor-not-allowed">
             <Flag className="w-4 h-4 mr-2" />
-            {t('dashboard.contests.already_reported') || 'Déjà signalé'}
+            {t('dashboard.contests.already_reported') || 'Already Reported'}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

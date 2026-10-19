@@ -553,7 +553,7 @@ class ContestService {
     } catch (error: any) {
       console.error('Error creating suggested contest:', error)
       // Propager l'erreur avec plus de détails
-      const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors de la création de la suggestion'
+      const errorMessage = error.response?.data?.detail || error.message || 'Error creating the suggestion'
       throw new Error(errorMessage)
     }
   }
@@ -579,7 +579,7 @@ class ContestService {
       return response.data
     } catch (error: any) {
       console.error('Error reporting contestant:', error)
-      const errorMessage = error.response?.data?.detail || error.message || 'Erreur lors du signalement'
+      const errorMessage = error.response?.data?.detail || error.message || 'Error submitting the report'
       throw new Error(errorMessage)
     }
   }

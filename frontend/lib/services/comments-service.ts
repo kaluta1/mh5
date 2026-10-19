@@ -72,7 +72,7 @@ export const commentsService = {
         page_size: data.page_size || limit
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des commentaires:', error)
+      console.error('Error fetching comments:', error)
       return { comments: [], total: 0, page: 1, page_size: limit }
     }
   },
@@ -89,7 +89,7 @@ export const commentsService = {
       )
       return response.data.comments || []
     } catch (error) {
-      console.error('Erreur lors de la récupération des commentaires du média:', error)
+      console.error('Error fetching the media comments:', error)
       return []
     }
   },
@@ -125,7 +125,7 @@ export const commentsService = {
         })) : []
       }
     } catch (error) {
-      console.error('Erreur lors de l\'ajout du commentaire:', error)
+      console.error('Error adding the comment:', error)
       throw error
     }
   },
@@ -144,7 +144,7 @@ export const commentsService = {
       )
       return response.data
     } catch (error) {
-      console.error('Erreur lors de l\'ajout du commentaire au média:', error)
+      console.error('Error adding the comment to the media:', error)
       throw error
     }
   },
@@ -154,7 +154,7 @@ export const commentsService = {
     try {
       await api.delete(`/api/v1/comments/${commentId}`)
     } catch (error) {
-      console.error('Erreur lors de la suppression du commentaire:', error)
+      console.error('Error deleting the comment:', error)
       throw error
     }
   },
@@ -165,7 +165,7 @@ export const commentsService = {
       const response = await api.put(`/api/v1/comments/${commentId}`, { text })
       return response.data
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du commentaire:', error)
+      console.error('Error updating the comment:', error)
       throw error
     }
   },
@@ -176,7 +176,7 @@ export const commentsService = {
       const response = await api.post(`/api/v1/contestants/comment/${commentId}/like`)
       return response.data
     } catch (error) {
-      console.error('Erreur lors du like du commentaire:', error)
+      console.error('Error liking the comment:', error)
       throw error
     }
   },
@@ -187,7 +187,7 @@ export const commentsService = {
       const response = await api.post(`/api/v1/contestants/comment/${commentId}/unlike`)
       return response.data
     } catch (error) {
-      console.error('Erreur lors du retrait du like:', error)
+      console.error('Error removing the like:', error)
       throw error
     }
   },
@@ -220,7 +220,7 @@ export const commentsService = {
         page_size: data.page_size || limit
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des réponses:', error)
+      console.error('Error fetching replies:', error)
       return { comments: [], total: 0, page: 1, page_size: limit }
     }
   },
@@ -236,7 +236,7 @@ export const commentsService = {
       const response = await api.get(`/api/v1/contestants/${contestantId}/commenters`)
       return response.data || []
     } catch (error) {
-      console.error('Erreur lors de la récupération des commentateurs:', error)
+      console.error('Error fetching commenters:', error)
       return []
     }
   }

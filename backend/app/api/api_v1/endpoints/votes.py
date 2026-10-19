@@ -36,7 +36,7 @@ def cast_vote(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     # Vérifier si le vote est autorisé
@@ -57,7 +57,7 @@ def cast_vote(
     if not entry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Participation non trouvée dans ce concours"
+            detail="Entry not found in this contest"
         )
     
     # Vérifier si l'utilisateur peut voter (max 5 votes)
@@ -89,7 +89,7 @@ def cast_vote(
             if active_round and not vote.round_id:
                 vote.round_id = active_round.id
             db.commit()
-            return {"message": "Vote mis à jour avec succès"}
+            return {"message": "Vote updated successfully"}
     
 
     
@@ -107,7 +107,7 @@ def cast_vote(
     # Mise à jour du score total de la participation
     update_entry_score(db, entry_id)
     
-    return {"message": "Vote enregistré avec succès"}
+    return {"message": "Vote recorded successfully"}
 
 
 @router.get("/{contest_id}/my", response_model=List[VoteSchema])

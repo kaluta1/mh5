@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     if (!verificationImageUrl || !uploadedImageUrl) {
       return NextResponse.json(
-        { error: 'verificationImageUrl et uploadedImageUrl sont requis' },
+        { error: 'verificationImageUrl and uploadedImageUrl are required' },
         { status: 400 }
       )
     }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Ownership verification error:', error)
     return NextResponse.json(
-      { error: 'Erreur lors de la vérification' },
+      { error: 'Verification failed' },
       { status: 500 }
     )
   }

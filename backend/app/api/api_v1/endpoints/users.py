@@ -290,7 +290,7 @@ def read_user_by_username(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="User not found"
         )
 
     if current_user.is_admin or current_user.id == user.id:

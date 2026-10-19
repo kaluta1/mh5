@@ -79,7 +79,7 @@ export function PostPoll({ poll, postId }: PostPollProps) {
         <span>{poll.total_votes} vote{poll.total_votes !== 1 ? 's' : ''}</span>
         {poll.expires_at && (
           <span>
-            {isExpired ? 'Expiré' : `Expire ${new Date(poll.expires_at).toLocaleDateString()}`}
+            {isExpired ? 'Expired' : `Expire ${new Date(poll.expires_at).toLocaleDateString()}`}
           </span>
         )}
       </div>

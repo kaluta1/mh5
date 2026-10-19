@@ -42,7 +42,7 @@ export default function FavoritesPage() {
         setFavoriteContestants([])
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des favoris:', error)
+      console.error('Error loading favorites:', error)
       setFavoriteContestants([])
     } finally {
       setPageLoading(false)
@@ -86,7 +86,7 @@ export default function FavoritesPage() {
       await contestService.removeFromFavorites(contestantId)
       setFavoriteContestants(prev => prev.filter(c => c.id !== contestantId))
     } catch (error) {
-      console.error('Erreur lors de la suppression du favori:', error)
+      console.error('Error removing the favorite:', error)
     }
   }
 
@@ -107,7 +107,7 @@ export default function FavoritesPage() {
           {t('dashboard.favorites.title') || 'Mes Favoris'}
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          {t('dashboard.favorites.description_contestants') || 'Organisez vos contestants favoris par glisser-déposer'}
+          {t('dashboard.favorites.description_contestants') || 'Organize your favorite contestants with drag and drop'}
         </p>
       </div>
 
@@ -118,10 +118,10 @@ export default function FavoritesPage() {
             <Star className="w-10 h-10 text-gray-600" />
           </div>
           <h2 className="text-xl font-semibold text-gray-300 mb-2">
-            {t('dashboard.favorites.no_favorites_yet') || 'Aucun favori pour le moment'}
+            {t('dashboard.favorites.no_favorites_yet') || 'No favorites yet'}
           </h2>
           <p className="text-gray-500 max-w-md mx-auto">
-            {t('dashboard.favorites.no_favorites_hint') || 'Ajoutez des contestants à vos favoris depuis la page d\'un concours en cliquant sur l\'étoile.'}
+            {t('dashboard.favorites.no_favorites_hint') || 'Add contestants to your favorites from a contest page by clicking the star.'}
           </p>
           <Button
             onClick={() => router.push('/dashboard/contests')}

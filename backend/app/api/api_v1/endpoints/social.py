@@ -187,7 +187,7 @@ def update_post(
     if post.author_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous n'êtes pas autorisé à modifier ce post"
+            detail="You are not allowed to edit this post"
         )
     
     updated_post = crud_post.update(db, db_obj=post, obj_in=post_in)
@@ -207,7 +207,7 @@ def delete_post(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post introuvable ou non autorisé"
+            detail="Post not found or not allowed"
         )
 
 
@@ -337,7 +337,7 @@ def delete_comment(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire introuvable ou non autorisé"
+            detail="Comment not found or not allowed"
         )
 
 
@@ -396,7 +396,7 @@ def delete_reaction(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réaction introuvable"
+            detail="Reaction not found"
         )
 
 
@@ -565,7 +565,7 @@ def get_group(
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ce groupe est privé. Vous devez être connecté et membre pour y accéder."
+                detail="This group is private. You must be signed in and a member to access it."
             )
         
         is_member = crud_social_group.is_member(db, group.id, user_id)
@@ -574,7 +574,7 @@ def get_group(
         if not is_member and not is_creator:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ce groupe est privé. Vous devez être membre pour y accéder."
+                detail="This group is private. You must be a member to access it."
             )
     
     group_dict = {
@@ -647,7 +647,7 @@ def leave_group(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vous n'êtes pas membre de ce groupe"
+            detail="You are not a member of this group"
         )
 
 
@@ -743,7 +743,7 @@ def get_messages(
     if not isafe.is_group_member(db, group_id, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous devez être membre du groupe pour voir les messages"
+            detail="You must be a member of the group to see the messages"
         )
     
     messages = crud_group_message.get_by_group(

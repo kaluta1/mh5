@@ -12,7 +12,7 @@ const reactions = [
   { type: 'laugh', icon: Laugh, label: 'Haha', color: 'text-yellow-500' },
   { type: 'wow', icon: AlertCircle, label: 'Wow', color: 'text-blue-500' },
   { type: 'sad', icon: Frown, label: 'Triste', color: 'text-gray-500' },
-  { type: 'angry', icon: Angry, label: 'En colère', color: 'text-orange-500' },
+  { type: 'angry', icon: Angry, label: 'Angry', color: 'text-orange-500' },
 ]
 
 interface ReactionButtonProps {

@@ -243,7 +243,7 @@ class KYCSubmissionRequest(BaseModel):
     @validator('date_of_birth')
     def validate_age(cls, v):
         if v and (datetime.now() - v).days < 18 * 365:
-            raise ValueError('L\'utilisateur doit être majeur (18 ans minimum)')
+            raise ValueError('The user must be an adult (at least 18 years old)')
         return v
 
 

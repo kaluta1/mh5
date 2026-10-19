@@ -63,7 +63,7 @@ export default function AdminSeasons() {
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error) {
-      console.error('Erreur lors du chargement des saisons:', error)
+      console.error('Error loading seasons:', error)
       addToast(t('admin.seasons.load_error'), 'error')
     } finally {
       setLoading(false)
@@ -93,7 +93,7 @@ export default function AdminSeasons() {
         level: 'city'
       })
     } catch (error: any) {
-      console.error('Erreur lors de la sauvegarde:', error)
+      console.error('Error while saving:', error)
       let errorMessage = error.response?.data?.detail || error.message || t('admin.seasons.save_error')
       
       // Traduire les messages d'erreur spécifiques
@@ -171,7 +171,7 @@ export default function AdminSeasons() {
       setShowDeleteDialog(false)
       setSeasonToDelete(null)
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error)
+      console.error('Error while deleting:', error)
       addToast(t('admin.seasons.delete_error'), 'error')
     } finally {
       setIsDeleting(false)

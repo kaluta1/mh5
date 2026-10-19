@@ -206,20 +206,20 @@ export function ContestDialog({
         const newErrors: Record<string, string> = {}
 
         if (!formData.name.trim()) {
-            newErrors.name = t('admin.contests.error_name_required') || 'Le nom est obligatoire'
+            newErrors.name = t('admin.contests.error_name_required') || 'Name is required'
         }
         if (!formData.category_id) {
-            newErrors.category_id = t('admin.contests.error_category_required') || 'La catégorie est obligatoire'
+            newErrors.category_id = t('admin.contests.error_category_required') || 'The category is required'
         }
         if (!formData.description.trim()) {
-            newErrors.description = t('admin.contests.error_description_required') || 'La description est obligatoire'
+            newErrors.description = t('admin.contests.error_description_required') || 'Description is required'
         }
         if (!uploadedImage && !formData.image_url) {
             newErrors.image = t('admin.contests.error_image_required') || "L'image est obligatoire"
         }
         // Contest type is required for nomination contests
         if (false) { // contest_mode is always set
-            newErrors.contest_mode = t('admin.contests.error_contest_type_required') || 'Le type de compétition est obligatoire pour les nominations'
+            newErrors.contest_mode = t('admin.contests.error_contest_type_required') || 'The contest type is required for nominations'
         }
 
         setErrors(newErrors)
@@ -288,9 +288,9 @@ export function ContestDialog({
 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                             <TabsList className="grid w-full grid-cols-3 mb-6">
-                                <TabsTrigger value="general">{t('admin.contests.tab_contests') || 'Général'}</TabsTrigger>
+                                <TabsTrigger value="general">{t('admin.contests.tab_contests') || 'Tab Contests'}</TabsTrigger>
                                 <TabsTrigger value="requirements">{t('admin.contests.verification_requirements') || 'Requis'}</TabsTrigger>
-                                <TabsTrigger value="media">{t('admin.contests.media_requirements') || 'Médias'}</TabsTrigger>
+                                <TabsTrigger value="media">{t('admin.contests.media_requirements') || 'Media Requirements'}</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="general" className="space-y-4">
@@ -314,7 +314,7 @@ export function ContestDialog({
                                 <div className={isNomination ? 'grid grid-cols-2 gap-4' : ''}>
                                     <div>
                                         <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                            {t('admin.contests.category') || 'Catégorie'} <span className="text-red-500">*</span>
+                                            {t('admin.contests.category') || 'Category'} <span className="text-red-500">*</span>
                                         </label>
                                         <Select
                                             value={formData.category_id?.toString() || ''}
@@ -329,7 +329,7 @@ export function ContestDialog({
                                             }}
                                         >
                                             <SelectTrigger className={`dark:bg-gray-700 dark:border-gray-600 dark:text-white ${errors.category_id ? 'border-red-500' : ''}`}>
-                                                <SelectValue placeholder={t('admin.contests.select_category') || 'Sélectionner une catégorie'} />
+                                                <SelectValue placeholder={t('admin.contests.select_category') || 'Select Category'} />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {categories.map((category) => (
@@ -371,7 +371,7 @@ export function ContestDialog({
                                             onValueChange={(value) => setFormData({ ...formData, season_id: value })}
                                         >
                                             <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                                <SelectValue placeholder={t('admin.contests.select_season') || 'Sélectionner une saison'} />
+                                                <SelectValue placeholder={t('admin.contests.select_season') || 'Select Season'} />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {seasons.map((season) => (
@@ -397,8 +397,8 @@ export function ContestDialog({
                                                 <SelectItem value="none">{t('admin.contests.none') || 'Tous'}</SelectItem>
                                                 <SelectItem value="male_only">{t('admin.contests.male_only') || 'Hommes uniquement'}</SelectItem>
                                                 <SelectItem value="female_only">{t('admin.contests.female_only') || 'Femmes uniquement'}</SelectItem>
-                                                <SelectItem value="geographic">{t('admin.contests.geographic') || 'Géographique'}</SelectItem>
-                                                <SelectItem value="age_restricted">{t('admin.contests.age_restricted') || 'Restreint par âge'}</SelectItem>
+                                                <SelectItem value="geographic">{t('admin.contests.geographic') || 'Geographic'}</SelectItem>
+                                                <SelectItem value="age_restricted">{t('admin.contests.age_restricted') || 'Age Restricted'}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -505,7 +505,7 @@ export function ContestDialog({
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                            {t('admin.contests.verification_type') || 'Type de vérification'}
+                                            {t('admin.contests.verification_type') || 'Verification Type'}
                                         </label>
                                         <Select
                                             value={formData.verification_type}
@@ -559,7 +559,7 @@ export function ContestDialog({
                                             onChange={(e) => setFormData({ ...formData, requires_visual_verification: e.target.checked })}
                                             className="rounded border-gray-300"
                                         />
-                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_visual') || 'Vérification Visuelle'}</span>
+                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_visual') || 'Visuelle'}</span>
                                     </label>
                                     <label className="flex items-center gap-2">
                                         <input
@@ -568,7 +568,7 @@ export function ContestDialog({
                                             onChange={(e) => setFormData({ ...formData, requires_voice_verification: e.target.checked })}
                                             className="rounded border-gray-300"
                                         />
-                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_voice') || 'Vérification Vocale'}</span>
+                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_voice') || 'Vocale'}</span>
                                     </label>
                                     <label className="flex items-center gap-2">
                                         <input
@@ -577,7 +577,7 @@ export function ContestDialog({
                                             onChange={(e) => setFormData({ ...formData, requires_brand_verification: e.target.checked })}
                                             className="rounded border-gray-300"
                                         />
-                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_brand') || 'Vérification de Marque'}</span>
+                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_brand') || 'Verification Brand'}</span>
                                     </label>
                                     <label className="flex items-center gap-2">
                                         <input
@@ -586,7 +586,7 @@ export function ContestDialog({
                                             onChange={(e) => setFormData({ ...formData, requires_content_verification: e.target.checked })}
                                             className="rounded border-gray-300"
                                         />
-                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_content') || 'Vérification de Contenu'}</span>
+                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.verification_content') || 'Verification Content'}</span>
                                     </label>
                                 </div>
 
@@ -650,7 +650,7 @@ export function ContestDialog({
                                             onChange={(e) => setFormData({ ...formData, requires_video: e.target.checked })}
                                             className="rounded border-gray-300"
                                         />
-                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.requires_video') || 'Vidéo Requise'}</span>
+                                        <span className="text-sm dark:text-gray-200">{t('admin.contests.requires_video') || 'Requires Video'}</span>
                                     </label>
                                 </div>
 
@@ -658,7 +658,7 @@ export function ContestDialog({
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                                {t('admin.contests.video_max_duration') || 'Durée max vidéo (sec)'}
+                                                {t('admin.contests.video_max_duration') || 'Maximum video duration (seconds)'}
                                             </label>
                                             <Input
                                                 type="number"
@@ -669,7 +669,7 @@ export function ContestDialog({
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                                {t('admin.contests.video_max_size_mb') || 'Taille max vidéo (MB)'}
+                                                {t('admin.contests.video_max_size_mb') || 'Maximum video size (MB)'}
                                             </label>
                                             <Input
                                                 type="number"

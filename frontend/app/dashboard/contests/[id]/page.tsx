@@ -643,10 +643,10 @@ export default function ContestDetailPage() {
       await contestService.deleteContestant(Number(contestantId))
       // Refetch REST data
       await fetchContestDetails()
-      showToast(t('common.deleted_successfully') || `Candidature supprimée avec succès`, 'success')
+      showToast(t('common.deleted_successfully') || `Deleted Successfully`, 'success')
     } catch (err: any) {
       // Error during deletion
-      const errorMessage = err?.response?.data?.detail || err?.message || t('common.delete_error') || 'Erreur lors de la suppression'
+      const errorMessage = err?.response?.data?.detail || err?.message || t('common.delete_error') || 'Could not delete submission.'
       showToast(errorMessage, 'error')
       throw err
     }
@@ -692,7 +692,7 @@ export default function ContestDetailPage() {
             )
           }
         })
-        showToast(t('dashboard.contests.removed_from_favorites') || 'Contestant retiré des favoris', 'success')
+        showToast(t('dashboard.contests.removed_from_favorites') || 'Contestant removed from favorites', 'success')
       } else {
         if (favorites.length >= 5) {
           showToast(t('dashboard.contests.favorite_limit_reached'), 'error')
@@ -710,10 +710,10 @@ export default function ContestDetailPage() {
             )
           }
         })
-        showToast(t('dashboard.contests.added_to_favorites') || 'Contestant ajouté aux favoris', 'success')
+        showToast(t('dashboard.contests.added_to_favorites') || 'Contestant added to favorites', 'success')
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'Une erreur est survenue'
+      const errorMessage = error.response?.data?.detail || 'An error occurred'
       showToast(errorMessage, 'error')
       // Error updating favorites
     }
@@ -1206,10 +1206,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_participation_verification') || 'Vérification requise'}
+                                    {t('dashboard.contests.tip_participation_verification') || 'Verification required'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_participation_verification_desc') || 'Assurez-vous que votre compte est vérifié pour participer.'}
+                                    {t('dashboard.contests.tip_participation_verification_desc') || 'Make sure your account is verified to participate.'}
                                   </p>
                                 </div>
                               </div>
@@ -1222,10 +1222,10 @@ export default function ContestDetailPage() {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                    {t('dashboard.contests.tip_participation_quality') || 'Qualité du contenu'}
+                                    {t('dashboard.contests.tip_participation_quality') || 'Content quality'}
                                   </h4>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {t('dashboard.contests.tip_participation_quality_desc') || 'Partagez votre meilleur contenu pour maximiser vos chances de gagner.'}
+                                    {t('dashboard.contests.tip_participation_quality_desc') || 'Share your best content to maximize your chances of winning.'}
                                   </p>
                                 </div>
                               </div>

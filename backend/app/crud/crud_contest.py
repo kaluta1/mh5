@@ -1075,15 +1075,15 @@ class CRUDContest:
         # Récupérer les informations du concours
         contest = self.get(db, id=contest_id)
         if not contest:
-            return {"success": False, "error": "Concours non trouvé"}
+            return {"success": False, "error": "Contest not found"}
         
         # Vérifier si le concours est ouvert aux inscriptions
         if not contest.is_submission_open:
-            return {"success": False, "error": "Les inscriptions pour ce concours sont fermées"}
+            return {"success": False, "error": "Registrations for this contest are closed"}
         
         # Vérifier le nombre maximum de participations par utilisateur
         if existing_entry >= contest.max_entries_per_user:
-            return {"success": False, "error": f"Vous avez déjà atteint le nombre maximum de participations ({contest.max_entries_per_user})"}
+            return {"success": False, "error": f"You have already reached the maximum number of entries ({contest.max_entries_per_user})"}
         
         # Créer la participation
         entry = ContestEntry(

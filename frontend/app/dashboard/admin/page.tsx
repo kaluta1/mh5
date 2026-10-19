@@ -212,7 +212,7 @@ export default function AdminDashboard() {
       setStats(combinedStats)
       setUserProgressData(progressResponse?.data || [])
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error)
+      console.error('Error loading statistics:', error)
       // En cas d'erreur, initialiser avec des valeurs par défaut
       setStats({
         deposits: { total_amount: 0, total_count: 0, chart_data: [] },
@@ -257,7 +257,7 @@ export default function AdminDashboard() {
         setUserProgressData(response.data || [])
       }
     } catch (error) {
-      console.error(`Erreur lors du chargement des données ${chartType}:`, error)
+      console.error(`Error loading ${chartType} data:`, error)
     } finally {
       setLoadingCharts(prev => ({ ...prev, [chartType]: false }))
     }
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
     { name: t('admin.users.user'), value: stats.reports.by_type.user },
     { name: t('admin.contestants.title'), value: stats.reports.by_type.contestant },
     { name: t('admin.dashboard.comments'), value: stats.reports.by_type.comment },
-    { name: 'Média', value: stats.reports.by_type.media }
+    { name: 'Media', value: stats.reports.by_type.media }
   ].filter(item => item.value > 0) : []
 
   const periods: { value: PeriodType; label: string }[] = [
@@ -318,7 +318,7 @@ export default function AdminDashboard() {
     { value: 'week', label: t('admin.dashboard.periods.week') || 'Semaine' },
     { value: 'month', label: t('admin.dashboard.periods.month') || 'Mois' },
     { value: 'year', label: t('admin.dashboard.periods.year') || 'Year' },
-    { value: 'custom', label: t('admin.dashboard.statistics.custom') || 'Personnalisé' }
+    { value: 'custom', label: t('admin.dashboard.statistics.custom') || 'Custom' }
   ]
 
   return (
@@ -337,7 +337,7 @@ export default function AdminDashboard() {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              <span className="font-medium text-gray-700 dark:text-gray-300">{t('admin.dashboard.statistics.period') || 'Période:'}</span>
+              <span className="font-medium text-gray-700 dark:text-gray-300">{t('admin.dashboard.statistics.period') || 'Period'}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {periods.map((p) => (
@@ -522,7 +522,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
-                  {t('admin.dashboard.statistics.no_data_available') || 'Aucune donnée disponible'}
+                  {t('admin.dashboard.statistics.no_data_available') || 'No data available'}
               </div>
       )}
             </CardContent>
@@ -615,7 +615,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
-                  {t('admin.dashboard.statistics.no_data_available') || 'Aucune donnée disponible'}
+                  {t('admin.dashboard.statistics.no_data_available') || 'No data available'}
         </div>
       )}
             </CardContent>
@@ -716,7 +716,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="flex justify-center items-center h-[300px] text-gray-500 dark:text-gray-400">
-                  {t('admin.dashboard.statistics.no_data_available') || 'Aucune donnée disponible'}
+                  {t('admin.dashboard.statistics.no_data_available') || 'No data available'}
                 </div>
               )}
             </CardContent>

@@ -77,7 +77,7 @@ export default function CategoriesPage() {
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error: any) {
-      console.error('Erreur lors du chargement des catégories:', error)
+      console.error('Error loading categories:', error)
       addToast(error.response?.data?.detail || t('admin.categories.categories_load_error') || 'Error loading categories', 'error')
     } finally {
       setLoading(false)
@@ -198,7 +198,7 @@ export default function CategoriesPage() {
       handleCloseDialog()
       fetchCategories()
     } catch (error: any) {
-      console.error('Erreur lors de la sauvegarde:', error)
+      console.error('Error while saving:', error)
       const errorMessage = error.response?.data?.detail || t('admin.categories.category_update_error') || 'Error saving'
       addToast(errorMessage, 'error')
     } finally {
@@ -220,7 +220,7 @@ export default function CategoriesPage() {
       addToast(t('admin.categories.category_deleted') || 'Category deleted successfully', 'success')
       fetchCategories()
     } catch (error: any) {
-      console.error('Erreur lors de la suppression:', error)
+      console.error('Error while deleting:', error)
       const errorMessage = error.response?.data?.detail || t('admin.categories.category_delete_error') || 'Error deleting'
       addToast(errorMessage, 'error')
     }

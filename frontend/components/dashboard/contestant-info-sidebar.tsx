@@ -209,7 +209,7 @@ export function ContestantInfoSidebar({
         <>
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wider">
-              {t('dashboard.contests.reactions') || 'Réactions'}
+              {t('dashboard.contests.reactions') || 'Reactions'}
             </h3>
             <ReactionsButton
               contestantId={contestantId}

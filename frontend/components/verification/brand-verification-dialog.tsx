@@ -60,14 +60,14 @@ export function BrandVerificationDialog({
 
     // Check file type first (images and PDFs)
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      setError(t('verification.invalid_file_type') || 'Type de fichier invalide. Seules les images et PDF sont acceptés.')
+      setError(t('verification.invalid_file_type') || 'Invalid file type. Please upload a supported file.')
       return
     }
 
     // Check file size
     if (file.size > maxSizeMb * 1024 * 1024) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      setError(t('verification.file_too_large_with_size') || `Le fichier est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
+      setError(t('verification.file_too_large_with_size') || `The file is too large (${fileSizeMB} MB). Maximum size: ${maxSizeMb} MB`)
       return
     }
 
@@ -81,12 +81,12 @@ export function BrandVerificationDialog({
 
   const handleSubmit = async () => {
     if (!brandName.trim()) {
-      setError(t('verification.brand_name_required') || 'Le nom de la marque est requis')
+      setError(t('verification.brand_name_required') || 'The brand name is required')
       return
     }
 
     if (!description.trim()) {
-      setError(t('verification.description_required') || 'La description est requise')
+      setError(t('verification.description_required') || 'Description is required')
       return
     }
 
@@ -127,7 +127,7 @@ export function BrandVerificationDialog({
       onComplete(verificationData)
     } catch (err) {
       console.error('Brand verification error:', err)
-      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Erreur lors de la soumission'))
+      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Submit Error'))
     } finally {
       setIsUploading(false)
     }
@@ -149,11 +149,11 @@ export function BrandVerificationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Award className="w-5 h-5 text-myhigh5-primary" />
-            {t('verification.brand_verification') || 'Vérification de marque'}
+            {t('verification.brand_verification') || 'Brand Verification'}
           </DialogTitle>
           <DialogDescription>
             {t('verification.brand_verification_description') || 
-              'Prouvez votre affiliation à une marque ou organisation.'}
+              'Prove your affiliation with a brand or organization.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -162,7 +162,7 @@ export function BrandVerificationDialog({
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               {t('verification.brand_instructions') || 
-                'Fournissez des informations sur votre marque ou organisation et une preuve de votre affiliation.'}
+                'Brand Instructions'}
             </p>
           </div>
 
@@ -177,7 +177,7 @@ export function BrandVerificationDialog({
                 type="text"
                 value={brandName}
                 onChange={(e) => setBrandName(e.target.value)}
-                placeholder="Nom de votre marque ou organisation"
+                placeholder="Your brand or organization name"
                 className="flex-1"
               />
             </div>
@@ -203,7 +203,7 @@ export function BrandVerificationDialog({
           {/* Role */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('verification.your_role') || 'Votre rôle (optionnel)'}
+              {t('verification.your_role') || 'Your Role'}
             </label>
             <Input
               type="text"
@@ -216,13 +216,13 @@ export function BrandVerificationDialog({
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('verification.brand_description') || 'Description de votre affiliation'} *
+              {t('verification.brand_description') || 'Description of your affiliation'} *
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('verification.brand_description_placeholder') || 
-                'Expliquez votre lien avec cette marque...'}
+                'Explain your connection to this brand...'}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary resize-none"
             />
@@ -240,10 +240,10 @@ export function BrandVerificationDialog({
                   <ImageIcon className="w-8 h-8 text-myhigh5-primary" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {t('verification.document_uploaded') || 'Document uploadé'}
+                      {t('verification.document_uploaded') || 'Document Uploaded'}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {t('verification.click_change') || 'Cliquez pour changer'}
+                      {t('verification.click_change') || 'Click to change'}
                     </p>
                   </div>
                   <button
@@ -262,7 +262,7 @@ export function BrandVerificationDialog({
               >
                 <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('verification.click_upload_document') || 'Cliquez pour ajouter un document'}
+                  {t('verification.click_upload_document') || 'Click to upload a document'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Images ou PDF - Max {maxSizeMb}MB

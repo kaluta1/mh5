@@ -175,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('refresh_token')
           cacheService.clear()
           setUser(null)
-          logger.debug('Session expirée ou token invalide')
+          logger.debug('Session expired or invalid token')
         } else if (isRetryable && retryCount < 1) {
           logger.warn('Backend indisponible, nouvel essai dans 3s...')
           await new Promise((r) => setTimeout(r, 3000))
@@ -184,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (isRetryable) {
           logger.warn('Backend temporairement indisponible')
         } else {
-          logger.error("Erreur lors de la vérification de l'authentification", error)
+          logger.error("Error checking authentication", error)
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
           cacheService.clear()
@@ -271,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (status === 401) {
           await logout()
         } else {
-          logger.warn('Rafraîchissement utilisateur impossible (backend indisponible?)', error)
+          logger.warn('Unable to refresh the user (backend unavailable?)', error)
         }
       }
     }

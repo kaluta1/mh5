@@ -81,11 +81,11 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
       const newErrors: typeof errors = {}
 
       if (!user.date_of_birth) {
-        newErrors.dateOfBirth = t('profile_setup.dob_required') || 'La date de naissance est requise'
+        newErrors.dateOfBirth = t('profile_setup.dob_required') || 'Date of birth is required'
       }
 
       if (!user.gender) {
-        newErrors.gender = t('profile_setup.gender_required') || 'Le genre est requis'
+        newErrors.gender = t('profile_setup.gender_required') || 'Gender is required'
       }
 
       setErrors(newErrors)
@@ -97,11 +97,11 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
 
     const dateStr = formatDate(day, month, year)
     if (!dateStr) {
-      newErrors.dateOfBirth = t('profile_setup.dob_required') || 'La date de naissance est requise'
+      newErrors.dateOfBirth = t('profile_setup.dob_required') || 'Date of birth is required'
     }
 
     if (!gender.trim()) {
-      newErrors.gender = t('profile_setup.gender_required') || 'Le genre est requis'
+      newErrors.gender = t('profile_setup.gender_required') || 'Gender is required'
     }
 
     setErrors(newErrors)
@@ -120,7 +120,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (!token) {
-        addToast(t('profile_setup.session_expired') || 'Session expirée', 'error')
+        addToast(t('profile_setup.session_expired') || 'Session expired', 'error')
         return
       }
 
@@ -142,7 +142,7 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
           addToast(error.detail, 'info')
           return
         }
-        throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
+        throw new Error(error.detail || t('profile_setup.update_error') || 'Update failed')
       }
 
       // Rafraîchir les données utilisateur
@@ -150,11 +150,11 @@ export function SettingsDemographicsTab({ user, onUpdate }: SettingsDemographics
         await onUpdate()
       }
 
-      addToast(t('profile_setup.success') || 'Informations mises à jour avec succès!', 'success')
+      addToast(t('profile_setup.success') || 'Success', 'success')
       setErrors({})
     } catch (err: any) {
       console.error('Erreur:', err)
-      addToast(err.message || 'Erreur lors de la mise à jour des informations', 'error')
+      addToast(err.message || 'Error updating the information', 'error')
     } finally {
       setIsLoading(false)
     }

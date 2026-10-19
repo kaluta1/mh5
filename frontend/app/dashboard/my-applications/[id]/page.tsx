@@ -116,7 +116,7 @@ function DescriptionWithPopover({ description, maxLength = 200 }: { description:
         >
           <div className="space-y-2">
             <h4 className="font-semibold text-sm text-gray-900 dark:text-white">
-              {t('dashboard.contests.my_applications.details') || 'Description complète'}
+              {t('dashboard.contests.my_applications.details') || 'Description'}
             </h4>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
               {fullText}
@@ -170,7 +170,7 @@ function MyApplicationDetailPage() {
         
         const contestantData = await contestService.getContestantById(Number(applicationId))
         if (!contestantData) {
-          setError(t('common.error_loading') || 'Erreur lors du chargement')
+          setError(t('common.error_loading') || 'Error Loading')
           return
         }
         
@@ -190,8 +190,8 @@ function MyApplicationDetailPage() {
         }
       } catch (err: any) {
         console.error('Error loading contestant:', err)
-        setError(err?.response?.data?.detail || t('common.error_loading') || 'Erreur lors du chargement')
-        addToast(t('common.error_loading') || 'Erreur lors du chargement', 'error')
+        setError(err?.response?.data?.detail || t('common.error_loading') || 'Error Loading')
+        addToast(t('common.error_loading') || 'Error Loading', 'error')
       } finally {
         setPageLoading(false)
       }
@@ -267,7 +267,7 @@ function MyApplicationDetailPage() {
     setIsDeleting(true)
     try {
       await contestService.deleteContestant(Number(applicationId))
-      addToast(t('common.deleted_successfully') || 'Candidature supprimée', 'success')
+      addToast(t('common.deleted_successfully') || 'Deleted Successfully', 'success')
       router.push('/dashboard/my-applications')
     } catch (err: any) {
       console.error('Error deleting:', err)
@@ -313,7 +313,7 @@ function MyApplicationDetailPage() {
       }
 
       setComments(prev => Array.isArray(prev) ? [newComment, ...prev] : [newComment])
-      addToast(t('common.success') || 'Commentaire ajouté', 'success')
+      addToast(t('common.success') || 'Success', 'success')
     } catch (err) {
       console.error('Error posting comment:', err)
       addToast(t('common.error') || 'Erreur', 'error')
@@ -337,7 +337,7 @@ function MyApplicationDetailPage() {
             {t('common.error') || 'Erreur'}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {error || t('common.error_loading') || 'Erreur lors du chargement'}
+            {error || t('common.error_loading') || 'Error Loading'}
           </p>
           <Button onClick={() => router.push('/dashboard/my-applications')}>
             {t('common.back') || 'Retour'}
@@ -392,7 +392,7 @@ function MyApplicationDetailPage() {
                 <Link href={`/dashboard/contests/${contestant.contest_id}/apply?edit=true&contestantId=${applicationId}`}>
                   <Button variant="outline" className="flex items-center gap-2">
                     <Edit className="w-4 h-4" />
-                    {t('common.edit') || 'Éditer'}
+                    {t('common.edit') || 'Edit'}
                   </Button>
                 </Link>
                 <Button
@@ -427,11 +427,11 @@ function MyApplicationDetailPage() {
             if (isFavorite) {
               await api.delete(`/api/v1/contestants/${applicationId}/favorite`)
               setIsFavorite(false)
-              addToast(t('dashboard.contests.removed_from_favorites') || 'Retiré des favoris', 'success')
+              addToast(t('dashboard.contests.removed_from_favorites') || 'Contestant removed from favorites', 'success')
             } else {
               await api.post(`/api/v1/contestants/${applicationId}/favorite`)
               setIsFavorite(true)
-              addToast(t('dashboard.contests.added_to_favorites') || 'Ajouté aux favoris', 'success')
+              addToast(t('dashboard.contests.added_to_favorites') || 'Contestant added to favorites', 'success')
             }
           } catch (error: any) {
             console.error('Error toggling favorite:', error)
@@ -457,7 +457,7 @@ function MyApplicationDetailPage() {
                 {contestant.reactions_count || 0}
               </p>
               <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400">
-                {t('dashboard.contests.reactions') || 'Réactions'}
+                {t('dashboard.contests.reactions') || 'Reactions'}
               </p>
             </div>
             <div className="text-center md:text-left">
@@ -508,7 +508,7 @@ function MyApplicationDetailPage() {
                     }`}
                   >
                     <Eye className="w-4 h-4" />
-                    {t('dashboard.contests.my_applications.details') || 'Détails'}
+                    {t('dashboard.contests.my_applications.details') || 'Description'}
                   </button>
                   <button
                     onClick={() => setActiveTab('reactions')}
@@ -519,7 +519,7 @@ function MyApplicationDetailPage() {
                     }`}
                   >
                     <Users className="w-4 h-4" />
-                    {t('dashboard.contests.reactions') || 'Réactions'}
+                    {t('dashboard.contests.reactions') || 'Reactions'}
                     {reactionDetails && (
                       <Badge className="ml-auto bg-white/20 text-white">
                         {Object.values(reactionDetails.reactions_by_type).reduce((acc, arr) => acc + arr.length, 0)}
@@ -623,7 +623,7 @@ function MyApplicationDetailPage() {
                       ))
                     ) : (
                       <p className="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">
-                        {t('dashboard.contests.no_reactions') || 'Aucune réaction pour le moment'}
+                        {t('dashboard.contests.no_reactions') || 'No Reactions'}
                       </p>
                     )}
                   </div>
@@ -645,7 +645,7 @@ function MyApplicationDetailPage() {
                           {contestant.reactions_count || 0}
                         </p>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {t('dashboard.contests.reactions') || 'Réactions'}
+                          {t('dashboard.contests.reactions') || 'Reactions'}
                         </p>
                       </div>
                       <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
@@ -713,7 +713,7 @@ function MyApplicationDetailPage() {
                       </>
                     ) : (
                       <p className="text-center text-gray-500 dark:text-gray-400 py-4 text-sm">
-                        {t('dashboard.contests.my_applications.no_shares') || 'Aucun partage pour le moment'}
+                        {t('dashboard.contests.my_applications.no_shares') || 'No Shares'}
                       </p>
                     )}
                   </div>
@@ -737,7 +737,7 @@ function MyApplicationDetailPage() {
               {allMedia.length > 0 && (
                 <Card className="p-6">
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    {t('dashboard.contests.my_applications.media') || 'Médias'}
+                    {t('dashboard.contests.my_applications.media') || 'Media'}
                   </h2>
                   <MediaGallery
                     images={images}
@@ -788,7 +788,7 @@ function MyApplicationDetailPage() {
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         title={`⚠️ ${t('common.confirm_delete') || 'Confirmer la suppression'}`}
-        message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.'}
+        message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Are you sure you want to delete this application? This action cannot be undone.'}
         confirmText={t('common.delete') || 'Delete'}
         cancelText={t('common.cancel') || 'Cancel'}
         onConfirm={handleDelete}

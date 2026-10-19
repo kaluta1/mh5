@@ -467,7 +467,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
         )
       }
     } catch (err: any) {
-      console.error('Erreur lors de la soumission:', err)
+      console.error('Submission error:', err)
       const detail = err?.response?.data?.detail
       const errorDetail =
         (typeof detail === 'string' ? detail : detail?.message) || err?.message || 'Submission failed'
@@ -761,7 +761,7 @@ export function ParticipationForm({ contestId, onSubmit, onCancel, isSubmitting:
                       ))}
                     </select>
                   ) : (
-                    <input type="text" disabled placeholder={t('participation.select_country_first') || "Sélectionnez d'abord un pays"}
+                    <input type="text" disabled placeholder={t('participation.select_country_first') || "Select a country first"}
                       className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 cursor-not-allowed border-gray-300 dark:border-gray-600" />
                   )}
                 </div>

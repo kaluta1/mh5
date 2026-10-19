@@ -109,10 +109,10 @@ export default function AboutMobilePage() {
             <div className="max-w-4xl mx-auto text-center text-white">
               <Heart className="w-12 h-12 mx-auto mb-4 animate-pulse" />
               <h1 className="text-3xl md:text-4xl font-black mb-4">
-                {t('pages.about.title') || "À Propos de MyHigh5"}
+                {t('pages.about.title') || "About MyHigh5"}
               </h1>
               <p className="text-lg md:text-xl opacity-90 leading-relaxed">
-                {t('pages.about.subtitle') || "La première plateforme mondiale de concours qui connecte les talents du monde entier, du niveau local au niveau mondial."}
+                {t('pages.about.subtitle') || "The first global contest platform connecting talents worldwide, from local to global level."}
               </p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function AboutMobilePage() {
                 {t('pages.about.mission.title') || "Notre Mission"}
               </h2>
               <p className="text-base text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-                {t('pages.about.mission.description') || "Démocratiser l'accès aux concours et permettre à chaque talent de briller sur la scène mondiale. Du concours de beauté local au championnat mondial, nous créons des opportunités pour tous."}
+                {t('pages.about.mission.description') || "Democratize access to contests and allow every talent to shine on the world stage. From local beauty contests to world championships, we create opportunities for everyone."}
               </p>
               <ul className="space-y-3">
                 {(missionFeatures[language] || missionFeatures.en).map((item, i) => (
@@ -167,7 +167,7 @@ export default function AboutMobilePage() {
                 {t('pages.about.values.title') || "Nos Valeurs"}
               </h2>
               <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                {t('pages.about.values.subtitle') || "Les principes qui guident chacune de nos décisions"}
+                {t('pages.about.values.subtitle') || "The principles that guide each of our decisions"}
               </p>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
@@ -196,10 +196,10 @@ export default function AboutMobilePage() {
           <div className="container px-4 md:px-6">
             <div className="text-center mb-8">
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-3">
-                {t('pages.about.team.title') || "Notre Équipe"}
+                {t('pages.about.team.title') || "Our Team"}
               </h2>
               <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                {t('pages.about.team.subtitle') || "Des passionnés dédiés à votre succès"}
+                {t('pages.about.team.subtitle') || "Passionate people dedicated to your success"}
               </p>
             </div>
             <div className={`grid grid-cols-1 ${team.length > 1 ? "md:grid-cols-2" : ""} gap-6 max-w-3xl mx-auto`}>

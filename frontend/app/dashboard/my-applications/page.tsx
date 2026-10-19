@@ -111,7 +111,7 @@ export default function MyApplicationsPage() {
 
         setApplications(userApplications)
       } catch (err: any) {
-        console.error('Erreur lors du chargement des candidatures:', err)
+        console.error('Error loading applications:', err)
         // Technical detail stays in the console; the member gets a plain message and a retry.
         setApplications([])
         setHasMore(false)
@@ -196,11 +196,11 @@ export default function MyApplicationsPage() {
     try {
       await contestService.deleteContestant(appId)
       setApplications(applications.filter(app => app.id !== appId))
-      addToast(t('common.deleted_successfully') || 'Candidature supprimée', 'success')
+      addToast(t('common.deleted_successfully') || 'Deleted Successfully', 'success')
       setDeleteConfirmId(null)
     } catch (err: any) {
-      console.error('Erreur lors de la suppression:', err)
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Erreur lors de la suppression'
+      console.error('Error while deleting:', err)
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Error while deleting'
       addToast(errorMessage, 'error')
     } finally {
       setIsDeleting(false)
@@ -253,7 +253,7 @@ export default function MyApplicationsPage() {
       setApplications(prev => [...prev, ...newApps])
       setHasMore(more.length === 10)
     } catch (err) {
-      console.error('Erreur chargement suivant:', err)
+      console.error('Error loading the next page:', err)
     } finally {
       setLoadingMore(false)
     }
@@ -371,7 +371,7 @@ export default function MyApplicationsPage() {
               handleViewDetails(app)
             }}
             className="h-8"
-            title={t('dashboard.contests.my_applications.view_details') || 'Voir les détails'}
+            title={t('dashboard.contests.my_applications.view_details') || 'View Details'}
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -380,7 +380,7 @@ export default function MyApplicationsPage() {
               variant="outline"
               size="sm"
               className="h-8"
-              title={t('common.edit') || 'Éditer'}
+              title={t('common.edit') || 'Edit'}
             >
               <Edit className="w-4 h-4" />
             </Button>

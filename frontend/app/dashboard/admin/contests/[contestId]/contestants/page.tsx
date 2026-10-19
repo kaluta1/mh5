@@ -27,7 +27,7 @@ function ContestContestantsPage() {
         const response = await api.get(`/api/v1/admin/contests/${contestId}`)
         setContest(response.data)
       } catch (error) {
-        console.error('Erreur lors du chargement du concours:', error)
+        console.error('Error loading the contest:', error)
       } finally {
         setLoading(false)
       }

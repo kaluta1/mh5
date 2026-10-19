@@ -182,12 +182,12 @@ export function ContestantsList({
           </div>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
             {searchQuery 
-              ? t('dashboard.contests.no_contestants_found') || 'Aucun participant trouvé'
-              : t('dashboard.contests.no_contestants') || 'Aucun participant pour le moment'}
+              ? t('dashboard.contests.no_contestants_found') || 'No contestants found'
+              : t('dashboard.contests.no_contestants') || 'No Contestants'}
           </p>
           {!searchQuery && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('dashboard.contests.participate') || 'Soyez le premier à concourir !'}
+              {t('dashboard.contests.participate') || 'Participate'}
             </p>
           )}
         </div>

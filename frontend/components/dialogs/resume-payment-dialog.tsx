@@ -106,7 +106,7 @@ export function ResumePaymentDialog({
         setPaymentConfirmed(true)
         onPaymentCompleted?.()
       } else if (data.status === 'expired') {
-        setError(t('payment.payment_expired') || 'Ce paiement a expiré')
+        setError(t('payment.payment_expired') || 'Payment Expired')
       } else if (data.status === 'failed') {
         setError(
           t('payment.creation_failed') ||
@@ -124,7 +124,7 @@ export function ResumePaymentDialog({
       setLastCheckTime(new Date())
     } catch (err) {
       console.error('Error fetching payment details:', err)
-      setError(t('payment.fetch_error') || 'Erreur lors du chargement des détails')
+      setError(t('payment.fetch_error') || 'Fetch Error')
     } finally {
       setIsLoading(false)
     }
@@ -156,20 +156,20 @@ export function ResumePaymentDialog({
 
       if (data.is_confirmed || data.status === 'validated') {
         setPaymentConfirmed(true)
-        setStatusMessage(t('payment.confirming') || 'Paiement confirmé !')
+        setStatusMessage(t('payment.confirming') || 'Confirming')
         stopPolling()
         setTimeout(() => {
           onPaymentCompleted?.()
         }, 2000)
       } else if (data.status === 'expired') {
-        setError(t('payment.payment_expired') || 'Ce paiement a expiré')
+        setError(t('payment.payment_expired') || 'Payment Expired')
         stopPolling()
       } else if (data.payment_status === 'partially_paid') {
-        setStatusMessage(t('payment.partially_paid') || 'Paiement partiel reçu')
+        setStatusMessage(t('payment.partially_paid') || 'Partially Paid')
       } else if (data.payment_status === 'waiting') {
         setStatusMessage(t('payment.waiting_payment') || 'Waiting for payment...')
       } else if (data.payment_status === 'confirming') {
-        setStatusMessage(t('payment.confirming') || 'Paiement détecté, confirmation...')
+        setStatusMessage(t('payment.confirming') || 'Confirming')
       } else if (data.pay_address?.trim()) {
         setPaymentDetails((prev) => prev ?? data)
       }
@@ -232,8 +232,8 @@ export function ResumePaymentDialog({
             )}
             <span className="truncate">
               {paymentConfirmed 
-                ? (t('payment.success_title') || 'Paiement confirmé')
-                : (t('payment.payment_instructions') || 'Instructions de paiement')
+                ? (t('payment.success_title') || 'Payment confirmed!')
+                : (t('payment.payment_instructions') || 'Payment instructions')
               }
             </span>
           </DialogTitle>
@@ -264,7 +264,7 @@ export function ResumePaymentDialog({
             </div>
             <div className="text-center">
               <p className="text-gray-600 dark:text-gray-400">
-                {t('payment.success_description') || 'Votre paiement a été confirmé.'}
+                {t('payment.success_description') || 'Your payment has been received and confirmed.'}
               </p>
             </div>
             <Button onClick={() => onOpenChange(false)} className="w-full">
@@ -291,7 +291,7 @@ export function ResumePaymentDialog({
             {/* Amount */}
             <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-3 sm:p-4 text-center border border-myhigh5-primary/20">
               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">
-                {t('payment.amount_to_send') || 'Montant à envoyer'}
+                {t('payment.amount_to_send') || 'Amount To Send'}
               </p>
               <p className="text-xl sm:text-2xl font-bold text-myhigh5-primary break-all">
                 {paymentDetails.pay_amount} {paymentDetails.pay_currency.toUpperCase()}
@@ -304,7 +304,7 @@ export function ResumePaymentDialog({
             {/* Address */}
             <div>
               <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('payment.receiving_address') || 'Adresse de réception'}
+                {t('payment.receiving_address') || 'Receiving Address'}
               </p>
               <div className="flex items-start gap-2 p-2 sm:p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
                 <code className="text-[10px] sm:text-xs flex-1 break-all text-gray-900 dark:text-white font-mono leading-relaxed">
@@ -331,7 +331,7 @@ export function ResumePaymentDialog({
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                 <p className="text-[10px] sm:text-xs text-blue-700 dark:text-blue-300">
-                  {t('payment.auto_checking') || 'Vérification auto'}
+                  {t('payment.auto_checking') || 'Auto Checking'}
                 </p>
               </div>
               {lastCheckTime && (

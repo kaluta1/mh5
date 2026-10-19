@@ -30,7 +30,7 @@ def create_club(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vérification d'identité et de domicile requise pour créer un club"
+            detail="Identity and address verification is required to create a club"
         )
     
     club = crud_clubs.fan_club.create_with_owner(
@@ -68,7 +68,7 @@ def get_club(
     if not club:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Club non trouvé"
+            detail="Club not found"
         )
     
     # Vérifier les permissions d'accès
@@ -79,7 +79,7 @@ def get_club(
     if not access["can_view"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé"
+            detail="Access denied"
         )
     
     return club
@@ -100,7 +100,7 @@ def update_club(
     if not club:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Club non trouvé"
+            detail="Club not found"
         )
     
     if not crud_clubs.fan_club.can_manage(db=db, club_id=club_id, user_id=current_user.id):
@@ -179,7 +179,7 @@ def create_club_content(
     if not crud_clubs.fan_club.can_create_content(db=db, club_id=club_id, user_id=current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante pour créer du contenu"
+            detail="You do not have permission to create content"
         )
     
     content = crud_clubs.club_content.create_with_author(
@@ -306,7 +306,7 @@ def add_club_admin(
     if not club or club.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seul le propriétaire peut ajouter des administrateurs"
+            detail="Only the owner can add administrators"
         )
     
     admin = crud_clubs.club_admin.create_with_club(

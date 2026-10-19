@@ -32,7 +32,7 @@ vi.mock('@/lib/config', () => ({ getEffectiveApiUrl: () => 'https://example.test
 import ContestantsListPage from './page'
 
 const ERROR_COPY = 'Could not load participants. Please try again.'
-const EMPTY_COPY = 'No Nominators Found'
+const EMPTY_COPY = 'No nominations found'
 
 beforeEach(() => {
   mocks.getContest.mockReset()
@@ -58,7 +58,7 @@ describe('all-contestants page participant states', () => {
     expect(alert).not.toHaveTextContent('status code 500')
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
     expect(screen.queryByText(EMPTY_COPY)).not.toBeInTheDocument()
-    expect(screen.queryByText('No Contestants Found')).not.toBeInTheDocument()
+    expect(screen.queryByText('No contestants found')).not.toBeInTheDocument()
   })
 
   it('ERROR then retry: a successful [] afterwards shows the genuine empty state', async () => {

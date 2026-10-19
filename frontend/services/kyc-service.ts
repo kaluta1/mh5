@@ -139,7 +139,7 @@ class KYCService {
           const detail = typeof error.detail === 'object' && error.detail !== null ? error.detail : { message: error.detail }
           throw new KYCPaymentRequiredError({
             type: 'payment_required',
-            message: (detail as { message?: string }).message || 'Paiement requis pour la vérification KYC',
+            message: (detail as { message?: string }).message || 'Payment is required for KYC verification',
             available_attempts: (detail as { available_attempts?: number }).available_attempts || 0,
             price: (detail as { price?: number }).price || 10,
             currency: (detail as { currency?: string }).currency || 'USD',
@@ -252,7 +252,7 @@ class KYCService {
           return {
             status: null,
             can_start: true,
-            message: 'Aucune vérification KYC trouvée'
+            message: 'No KYC verification found'
           } as any
         }
         const error = await response.json()

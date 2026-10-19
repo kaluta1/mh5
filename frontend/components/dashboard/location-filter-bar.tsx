@@ -253,7 +253,7 @@ export function LocationFilterBar({
                                         className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 cursor-pointer"
                                     >
                                         <Check className={`w-4 h-4 shrink-0 ${(!filterCountry || filterCountry === 'all') ? 'opacity-100 text-blue-400' : 'opacity-0'}`} />
-                                        {t('dashboard.contests.all_countries') || 'Tous les pays'}
+                                        {t('dashboard.contests.all_countries') || 'All countries'}
                                     </button>
                                 )}
                                 {/* Liste filtrée */}
@@ -274,7 +274,7 @@ export function LocationFilterBar({
                                     ))
                                 ) : (
                                     <div className="px-2 py-4 text-center text-sm text-gray-500">
-                                        {t('dashboard.contests.no_country_found' ) || 'Aucun pays trouvé'}
+                                        {t('dashboard.contests.no_country_found' ) || 'No country found'}
                                     </div>
                                 )}
                             </div>

@@ -48,10 +48,10 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
     // Validation
     const newErrors: { name?: string; category?: string } = {}
     if (!name.trim()) {
-      newErrors.name = t('dashboard.contests.suggest_contest.error.name_required') || 'Le nom du concours est requis'
+      newErrors.name = t('dashboard.contests.suggest_contest.error.name_required') || 'Name Required'
     }
     if (!category) {
-      newErrors.category = t('dashboard.contests.suggest_contest.error.category_required') || 'La catégorie est requise'
+      newErrors.category = t('dashboard.contests.suggest_contest.error.category_required') || 'Category Required'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -70,7 +70,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
       })
 
       addToast(
-        t('dashboard.contests.suggest_contest.success') || 'Votre suggestion a été envoyée avec succès !',
+        t('dashboard.contests.suggest_contest.success') || 'Success',
         'success'
       )
 
@@ -83,7 +83,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
     } catch (error: any) {
       console.error('Error creating suggested contest:', error)
       
-      let errorMessage = t('dashboard.contests.suggest_contest.error.submit_error') || 'Erreur lors de l\'envoi de la suggestion'
+      let errorMessage = t('dashboard.contests.suggest_contest.error.submit_error') || 'Submit Error'
       
       if (error.response) {
         // Erreur HTTP avec réponse
@@ -92,13 +92,13 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
         } else if (error.response.status === 401 || error.response.status === 403) {
           errorMessage = error.response.data?.detail || 'Permission insuffisante'
         } else if (error.response.status >= 500) {
-          errorMessage = t('dashboard.contests.suggest_contest.error.server_error') || 'Erreur serveur. Veuillez réessayer plus tard.'
+          errorMessage = t('dashboard.contests.suggest_contest.error.server_error') || 'Server Error'
         } else {
           errorMessage = error.response.data?.detail || errorMessage
         }
       } else if (error.request) {
         // Requête envoyée mais pas de réponse
-        errorMessage = t('dashboard.contests.suggest_contest.error.network_error') || 'Erreur de connexion. Vérifiez votre connexion internet.'
+        errorMessage = t('dashboard.contests.suggest_contest.error.network_error') || 'Network Error'
       } else {
         // Erreur lors de la configuration de la requête
         errorMessage = error.message || errorMessage
@@ -136,10 +136,10 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl text-gray-900 dark:text-white">
             <Lightbulb className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-            {t('dashboard.contests.suggest_contest.title') || 'Suggérer un concours'}
+            {t('dashboard.contests.suggest_contest.title') || 'Suggest a contest'}
           </DialogTitle>
           <DialogDescription>
-            {t('dashboard.contests.suggest_contest.description') || 'Proposez une idée de concours à notre équipe'}
+            {t('dashboard.contests.suggest_contest.description') || 'Suggest a contest idea to our team'}
           </DialogDescription>
         </DialogHeader>
 
@@ -155,7 +155,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
                 setName(e.target.value)
                 if (errors.name) setErrors({ ...errors, name: undefined })
               }}
-              placeholder={t('dashboard.contests.suggest_contest.name_placeholder') || 'Ex: Concours de beauté 2024'}
+              placeholder={t('dashboard.contests.suggest_contest.name_placeholder') || 'e.g. Beauty Contest 2026'}
               className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               disabled={isSubmitting}
             />
@@ -172,7 +172,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('dashboard.contests.suggest_contest.description_placeholder') || 'Décrivez votre idée de concours...'}
+              placeholder={t('dashboard.contests.suggest_contest.description_placeholder') || 'Describe your contest idea...'}
               className="flex min-h-[100px] w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={isSubmitting}
             />
@@ -180,7 +180,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
 
           <div className="space-y-2">
             <Label htmlFor="category">
-              {t('dashboard.contests.suggest_contest.category_label') || 'Catégorie'} *
+              {t('dashboard.contests.suggest_contest.category_label') || 'Category'} *
             </Label>
             <Select
               value={category}
@@ -191,7 +191,7 @@ export function SuggestContestDialog({ open, onOpenChange }: SuggestContestDialo
               disabled={isSubmitting}
             >
               <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                <SelectValue placeholder={t('dashboard.contests.suggest_contest.category_placeholder') || 'Sélectionnez une catégorie'} />
+                <SelectValue placeholder={t('dashboard.contests.suggest_contest.category_placeholder') || 'Select a category'} />
               </SelectTrigger>
               <SelectContent className="dark:bg-gray-700">
                 {CONTEST_CATEGORIES.map((cat) => (

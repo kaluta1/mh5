@@ -168,7 +168,7 @@ function ContestantDetailContent() {
       } catch (err) {
         console.error('Error loading contestant:', err)
         setRestriction(getContentRestriction(err))
-        setError('Erreur lors du chargement des détails du contestant')
+        setError('Error loading the contestant details')
       } finally {
         setPageLoading(false)
       }
@@ -342,7 +342,7 @@ function ContestantDetailContent() {
       console.error('Error handling reaction:', error)
       setToast({
         type: 'error',
-        message: error?.response?.data?.detail || 'Erreur lors de l\'ajout de la réaction'
+        message: error?.response?.data?.detail || 'Error adding the reaction'
       })
     }
   }
@@ -430,7 +430,7 @@ function ContestantDetailContent() {
         )
         setToast({
           type: 'success',
-          message: t('contestant_detail.vote_success') || 'Vote enregistré avec succès!'
+          message: t('contestant_detail.vote_success') || 'Vote recorded successfully!'
         })
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'max_votes_reached') {
@@ -447,13 +447,13 @@ function ContestantDetailContent() {
           type: 'success',
           message:
             t('dashboard.contests.vote_replaced') ||
-            'Vote enregistré (remplace votre 5e choix).'
+            'Vote Replaced'
         })
         window.dispatchEvent(new Event('vote-changed'))
       } else if (result.code === 'already_voted') {
         setToast({
           type: 'error',
-          message: t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.'
+          message: t('dashboard.contests.already_voted_error') || 'You have already voted for this participant.'
         })
       }
     } catch (error: any) {
@@ -468,18 +468,18 @@ function ContestantDetailContent() {
       if (errorDetail) {
         const errorLower = String(errorDetail).toLowerCase()
 
-        if (errorLower.includes('vote') && errorLower.includes('ouvert')) {
-          errorMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
+        if (errorLower.includes('vote') && (errorLower.includes('ouvert') || errorLower.includes('not open'))) {
+          errorMessage = t('dashboard.contests.voting_not_open') || 'Voting is not open yet'
         } else if (errorLower.includes('déjà voté') || errorLower.includes('already voted')) {
-          errorMessage = t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.'
+          errorMessage = t('dashboard.contests.already_voted_error') || 'You have already voted for this participant.'
         } else if (errorLower.includes('propre candidature') || errorLower.includes('own entry')) {
-          errorMessage = t('dashboard.contests.cannot_vote_own') || 'Vous ne pouvez pas voter pour votre propre candidature.'
+          errorMessage = t('dashboard.contests.cannot_vote_own') || 'You cannot vote for your own entry.'
         } else if (errorLower.includes('masculins') && errorLower.includes('féminines') && errorLower.includes('voter')) {
-          errorMessage = t('dashboard.contests.vote_gender_restriction_male') || 'Ce concours est réservé aux participants masculins. Seules les participantes féminines peuvent voter.'
+          errorMessage = t('dashboard.contests.vote_gender_restriction_male') || 'This contest is for male participants. Only female members can vote.'
         } else if (errorLower.includes('féminines') && errorLower.includes('masculins') && errorLower.includes('voter')) {
-          errorMessage = t('dashboard.contests.vote_gender_restriction_female') || 'Ce concours est réservé aux participantes féminines. Seuls les participants masculins peuvent voter.'
+          errorMessage = t('dashboard.contests.vote_gender_restriction_female') || 'This contest is for female participants. Only male members can vote.'
         } else if (errorLower.includes('genre') && errorLower.includes('voter')) {
-          errorMessage = t('dashboard.contests.vote_gender_not_set') || 'Votre profil ne contient pas d\'information de genre. Veuillez compléter votre profil pour voter dans ce concours.'
+          errorMessage = t('dashboard.contests.vote_gender_not_set') || 'Please complete your profile gender to vote.'
         } else {
           errorMessage = String(errorDetail)
         }
@@ -665,21 +665,21 @@ function ContestantDetailContent() {
               setIsFavorite(false)
               setToast({
                 type: 'success',
-                message: 'Retiré des favoris'
+                message: 'Removed from favorites'
               })
             } else {
               await api.post(`/api/v1/contestants/${contestantId}/favorite`)
               setIsFavorite(true)
               setToast({
                 type: 'success',
-                message: 'Ajouté aux favoris'
+                message: 'Added to favorites'
               })
             }
           } catch (error: any) {
             console.error('Error toggling favorite:', error)
             setToast({
               type: 'error',
-              message: error?.response?.data?.detail || 'Erreur lors de la modification des favoris'
+              message: error?.response?.data?.detail || 'Error updating favorites'
             })
           }
         }}
@@ -787,7 +787,7 @@ function ContestantDetailContent() {
                     <button
                       onClick={() => setShowInfoDialog(!showInfoDialog)}
                       className="flex-shrink-0 w-9 h-9 p-0 bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl flex items-center justify-center transition-all duration-200"
-                      title="Détails"
+                      title="Details"
                     >
                       <Info className="w-4 h-4" />
                     </button>

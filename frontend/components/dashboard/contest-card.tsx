@@ -360,7 +360,7 @@ export const ContestCard = React.memo(function ContestCard({
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}
+                    {t('dashboard.contests.kyc_required_description') || 'Only members with a verified identity can take part in this contest'}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -381,7 +381,7 @@ export const ContestCard = React.memo(function ContestCard({
                   </DialogTrigger>
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
-                  <p className="text-xs">{t('dashboard.contests.tooltip_info') || 'Voir les détails et les conditions du concours'}</p>
+                  <p className="text-xs">{t('dashboard.contests.tooltip_info') || 'View the contest details and rules'}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -454,7 +454,7 @@ export const ContestCard = React.memo(function ContestCard({
                         <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                           <Calendar className="w-5 h-5 text-blue-400" />
                           <div>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.submission_start') || 'Début des inscriptions'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.submission_start') || 'Submission Start'}</p>
                             <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(participationStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
                         </div>
@@ -472,7 +472,7 @@ export const ContestCard = React.memo(function ContestCard({
                         <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                           <Calendar className="w-5 h-5 text-purple-400" />
                           <div>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.voting_start') || 'Début du vote'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">{t('dashboard.contests.voting_start') || 'Voting Start'}</p>
                             <p className="text-gray-800 dark:text-white font-medium text-sm">{new Date(votingStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                           </div>
                         </div>
@@ -498,8 +498,8 @@ export const ContestCard = React.memo(function ContestCard({
                         <div className="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-3">
                           <ShieldCheck className="w-5 h-5 text-emerald-300" />
                           <div>
-                            <p className="text-emerald-300 font-medium text-sm">{t('dashboard.contests.kyc_required') || 'Identité vérifiée'}</p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.kyc_required_description') || 'Seuls les participants avec une identité vérifiée peuvent participer à ce concours'}</p>
+                            <p className="text-emerald-300 font-medium text-sm">{t('dashboard.contests.kyc_required') || 'KYC'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.kyc_required_description') || 'Only members with a verified identity can take part in this contest'}</p>
                           </div>
                         </div>
                       )}
@@ -508,7 +508,7 @@ export const ContestCard = React.memo(function ContestCard({
                           <Eye className="w-5 h-5 text-blue-300" />
                           <div>
                             <p className="text-blue-300 font-medium text-sm">{t('dashboard.contests.visual_verification') || 'Photo de vous'}</p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.visual_verification_description') || 'Une photo de vous est obligatoire pour participer à ce concours'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.visual_verification_description') || 'A photo of yourself is required to take part in this contest'}</p>
                           </div>
                         </div>
                       )}
@@ -516,8 +516,8 @@ export const ContestCard = React.memo(function ContestCard({
                         <div className="flex items-center gap-2 bg-purple-500/20 border border-purple-500/30 rounded-lg p-3">
                           <Mic className="w-5 h-5 text-purple-300" />
                           <div>
-                            <p className="text-purple-300 font-medium text-sm">{t('dashboard.contests.voice_verification') || 'Vérification vocale'}</p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.voice_verification_description') || 'Une vérification vocale est obligatoire pour participer à ce concours'}</p>
+                            <p className="text-purple-300 font-medium text-sm">{t('dashboard.contests.voice_verification') || 'Voice Verification'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.voice_verification_description') || 'A voice verification is required to take part in this contest'}</p>
                           </div>
                         </div>
                       )}
@@ -525,8 +525,8 @@ export const ContestCard = React.memo(function ContestCard({
                         <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 rounded-lg p-3">
                           <Trophy className="w-5 h-5 text-amber-300" />
                           <div>
-                            <p className="text-amber-300 font-medium text-sm">{t('dashboard.contests.brand_verification') || 'Marque vérifiée'}</p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.brand_verification_description') || 'Seules les marques vérifiées peuvent participer à ce concours'}</p>
+                            <p className="text-amber-300 font-medium text-sm">{t('dashboard.contests.brand_verification') || 'Verified brand'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.brand_verification_description') || 'Only verified brands can participate in this contest'}</p>
                           </div>
                         </div>
                       )}
@@ -535,7 +535,7 @@ export const ContestCard = React.memo(function ContestCard({
                           <FileCheck className="w-5 h-5 text-cyan-300" />
                           <div>
                             <p className="text-cyan-300 font-medium text-sm">{t('dashboard.contests.content_verification') || 'Contenu original'}</p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.content_verification_description') || 'Seul le contenu original est autorisé pour participer à ce concours'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.content_verification_description') || 'Only original content is allowed in this contest'}</p>
                           </div>
                         </div>
                       )}
@@ -551,7 +551,7 @@ export const ContestCard = React.memo(function ContestCard({
                                   : `< ${maxAge} ${t('dashboard.contests.years') || 'ans'}`
                               }
                             </p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.age_restriction_description') || 'Seuls les participants dans la tranche d\'âge spécifiée peuvent participer'}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">{t('dashboard.contests.age_restriction_description') || 'Only participants in the specified age range can participate.'}</p>
                           </div>
                         </div>
                       )}
@@ -591,7 +591,7 @@ export const ContestCard = React.memo(function ContestCard({
                     : status === 'country'
                       ? (t('dashboard.contests.tooltip_level_country') || 'Concours au niveau national')
                       : status === 'regional'
-                        ? (t('dashboard.contests.tooltip_level_regional') || 'Concours au niveau régional')
+                        ? (t('dashboard.contests.tooltip_level_regional') || 'Regional-level contest')
                         : status === 'continental'
                           ? (t('dashboard.contests.tooltip_level_continental') || 'Concours au niveau continental')
                           : (t('dashboard.contests.tooltip_level_global') || 'Concours au niveau mondial')}
@@ -610,7 +610,7 @@ export const ContestCard = React.memo(function ContestCard({
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.tooltip_open') || 'Les inscriptions sont actuellement ouvertes. Vous pouvez participer à ce concours.'}
+                    {t('dashboard.contests.tooltip_open') || 'Entries are open. You can join this contest.'}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -634,7 +634,7 @@ export const ContestCard = React.memo(function ContestCard({
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.tooltip_contestants') || `${contestants.toLocaleString()} participant${contestants > 1 ? 's' : ''} dans ce concours`}
+                    {t('dashboard.contests.tooltip_contestants') || `${contestants.toLocaleString()} participant${contestants > 1 ? 's' : ''} in this contest`}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -649,7 +649,7 @@ export const ContestCard = React.memo(function ContestCard({
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.tooltip_votes') || `${received.toLocaleString()} vote${received > 1 ? 's' : ''} reçu${received > 1 ? 's' : ''} au total`}
+                    {t('dashboard.contests.tooltip_votes') || `${received.toLocaleString()} vote${received > 1 ? 's' : ''} received in total`}
                   </p>
                 </TooltipContent>
               </Tooltip>

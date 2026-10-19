@@ -54,19 +54,19 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
       const newErrors: typeof errors = {}
 
       if (!continent.trim()) {
-        newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
+        newErrors.continent = t('profile_setup.continent_required') || 'Continent is required'
       }
 
       if (!region.trim()) {
-        newErrors.region = t('profile_setup.region_required') || 'La région est requise'
+        newErrors.region = t('profile_setup.region_required') || 'Region Required'
       }
 
       if (!country.trim()) {
-        newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
+        newErrors.country = t('profile_setup.country_required') || 'Country Required'
       }
 
       if (!city.trim()) {
-        newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+        newErrors.city = t('profile_setup.city_required') || 'City Required'
       }
 
       setErrors(newErrors)
@@ -133,7 +133,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         setHasParticipation(hasPart)
       }
     } catch (err) {
-      console.error('Erreur lors de la vérification de la participation:', err)
+      console.error('Error checking participation:', err)
     } finally {
       setIsCheckingParticipation(false)
     }
@@ -143,19 +143,19 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
     const newErrors: typeof errors = {}
 
     if (!continent.trim()) {
-      newErrors.continent = t('profile_setup.continent_required') || 'Le continent est requis'
+      newErrors.continent = t('profile_setup.continent_required') || 'Continent is required'
     }
 
     if (!region.trim()) {
-      newErrors.region = t('profile_setup.region_required') || 'La région est requise'
+      newErrors.region = t('profile_setup.region_required') || 'Region Required'
     }
 
     if (!country.trim()) {
-      newErrors.country = t('profile_setup.country_required') || 'Le pays est requis'
+      newErrors.country = t('profile_setup.country_required') || 'Country Required'
     }
 
     if (!city.trim()) {
-      newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+      newErrors.city = t('profile_setup.city_required') || 'City Required'
     }
 
     setErrors(newErrors)
@@ -174,7 +174,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (!token) {
-        addToast(t('profile_setup.session_expired') || 'Session expirée', 'error')
+        addToast(t('profile_setup.session_expired') || 'Session expired', 'error')
         return
       }
 
@@ -194,7 +194,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
+        throw new Error(error.detail || t('profile_setup.update_error') || 'Update failed')
       }
 
       // Rafraîchir les données utilisateur
@@ -202,11 +202,11 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
         await onUpdate()
       }
 
-      addToast(t('profile_setup.success') || 'Localisation mise à jour avec succès!', 'success')
+      addToast(t('profile_setup.success') || 'Success', 'success')
       setErrors({})
     } catch (err: any) {
       console.error('Erreur:', err)
-      addToast(err.message || 'Erreur lors de la mise à jour de la localisation', 'error')
+      addToast(err.message || 'Error updating the location', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -243,10 +243,10 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
           <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-blue-900 dark:text-blue-200">
-              {t('settings.location_locked_title') || 'Localisation verrouillée'}
+              {t('settings.location_locked_title') || 'Location locked'}
             </p>
             <p className="text-sm text-blue-800 dark:text-blue-300">
-              {t('settings.location_locked_message') || 'Vous avez déjà participé à un concours. Votre localisation ne peut pas être modifiée.'}
+              {t('settings.location_locked_message') || 'You have already taken part in a contest, so your location cannot be changed.'}
             </p>
           </div>
         </div>
@@ -267,7 +267,7 @@ export function SettingsLocationTab({ user, onUpdate }: SettingsLocationTabProps
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
-                {t('settings.region') || 'Région'}
+                {t('settings.region') || 'Region'}
               </label>
               <div className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
                 {region || '-'}

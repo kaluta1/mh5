@@ -68,7 +68,7 @@ export function VerificationRequirementsDialog({
   if (requirements.requiresKyc) {
     verificationItems.push({
       id: 'kyc',
-      label: t('verification.kyc_verification') || 'Vérification KYC',
+      label: t('verification.kyc_verification') || 'Kyc Verification',
       icon: <Shield className="w-5 h-5" />,
       required: true,
       completed: userVerifications.isKycVerified || false,
@@ -80,7 +80,7 @@ export function VerificationRequirementsDialog({
   if (requirements.requiresVisualVerification) {
     verificationItems.push({
       id: 'visual',
-      label: t('verification.visual_verification') || 'Vérification visuelle (Selfie)',
+      label: t('verification.visual_verification') || 'Visual Verification',
       icon: <Camera className="w-5 h-5" />,
       required: true,
       completed: userVerifications.hasVisualVerification || false,
@@ -92,7 +92,7 @@ export function VerificationRequirementsDialog({
   if (requirements.requiresVoiceVerification) {
     verificationItems.push({
       id: 'voice',
-      label: t('verification.voice_verification') || 'Vérification vocale',
+      label: t('verification.voice_verification') || 'Voice Verification',
       icon: <Mic className="w-5 h-5" />,
       required: true,
       completed: userVerifications.hasVoiceVerification || false,
@@ -104,7 +104,7 @@ export function VerificationRequirementsDialog({
   if (requirements.requiresBrandVerification) {
     verificationItems.push({
       id: 'brand',
-      label: t('verification.brand_verification') || 'Vérification de marque',
+      label: t('verification.brand_verification') || 'Brand Verification',
       icon: <Award className="w-5 h-5" />,
       required: true,
       completed: userVerifications.hasBrandVerification || false,
@@ -116,7 +116,7 @@ export function VerificationRequirementsDialog({
   if (requirements.requiresContentVerification) {
     verificationItems.push({
       id: 'content',
-      label: t('verification.content_ownership') || 'Propriété du contenu',
+      label: t('verification.content_ownership') || 'Content Ownership',
       icon: <FileCheck className="w-5 h-5" />,
       required: true,
       completed: userVerifications.hasContentVerification || false,
@@ -133,10 +133,10 @@ export function VerificationRequirementsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-myhigh5-primary" />
-            {t('verification.requirements_title') || 'Vérifications requises'}
+            {t('verification.requirements_title') || 'Required verifications'}
           </DialogTitle>
           <DialogDescription>
-            {t('verification.requirements_description') || 'Ce concours nécessite les vérifications suivantes pour participer.'}
+            {t('verification.requirements_description') || 'This contest requires the following verifications to take part.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,7 +192,7 @@ export function VerificationRequirementsDialog({
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {item.completed 
-                        ? (t('verification.completed') || 'Complété') 
+                        ? (t('verification.completed') || 'Completed') 
                         : (t('verification.required') || 'Requis')}
                     </p>
                   </div>
@@ -207,7 +207,7 @@ export function VerificationRequirementsDialog({
                     onClick={item.onVerify}
                     className="text-amber-600 border-amber-300 hover:bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/30"
                   >
-                    {t('verification.verify') || 'Vérifier'}
+                    {t('verification.verify') || 'Verify'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 )}
@@ -220,7 +220,7 @@ export function VerificationRequirementsDialog({
             <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                {t('verification.incomplete_warning') || 'Complétez toutes les vérifications pour pouvoir participer.'}
+                {t('verification.incomplete_warning') || 'Incomplete Warning'}
               </p>
             </div>
           )}

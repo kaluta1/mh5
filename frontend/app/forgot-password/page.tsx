@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
       await authService.requestPasswordReset(email)
       setIsSuccess(true)
       addToast(
-        t('auth.forgot_password.success') || 'Un email de réinitialisation a été envoyé',
+        t('auth.forgot_password.success') || 'A reset link has been sent if this email is registered',
         'success'
       )
     } catch (error: any) {
@@ -54,17 +54,17 @@ export default function ForgotPasswordPage() {
                 <CheckCircle className="w-16 h-16 text-green-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                {t('auth.forgot_password.success_title') || 'Email envoyé !'}
+                {t('auth.forgot_password.success_title') || 'Check your email'}
               </h2>
               <p className="text-center text-gray-700 dark:text-gray-200 mb-6">
-                {t('auth.forgot_password.success_message') || 'Si cet email existe dans notre système, vous recevrez un lien de réinitialisation de mot de passe.'}
+                {t('auth.forgot_password.success_message') || 'If this email exists in our system, you will receive a password reset link shortly.'}
               </p>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
-                {t('auth.forgot_password.check_spam') || 'Vérifiez votre dossier spam si vous ne recevez pas l\'email.'}
+                {t('auth.forgot_password.check_spam') || 'Check your spam folder if you do not see the email within a few minutes.'}
               </p>
               <Link href="/login">
                 <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                  {t('auth.login.title') || 'Retour à la connexion'}
+                  {t('auth.login.title') || 'Welcome Back'}
                 </Button>
               </Link>
             </div>
@@ -76,10 +76,10 @@ export default function ForgotPasswordPage() {
                   {t('common.back') || 'Retour'}
                 </Link>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  {t('auth.forgot_password.title') || 'Mot de passe oublié ?'}
+                  {t('auth.forgot_password.title') || 'Forgot your password?'}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {t('auth.forgot_password.description') || 'Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.'}
+                  {t('auth.forgot_password.description') || 'Enter your email address and we will send you a link to reset your password.'}
                 </p>
               </div>
 
@@ -113,14 +113,14 @@ export default function ForgotPasswordPage() {
                       {t('common.submitting') || 'Envoi en cours...'}
                     </>
                   ) : (
-                    t('auth.forgot_password.send_reset_link') || 'Envoyer le lien de réinitialisation'
+                    t('auth.forgot_password.send_reset_link') || 'Send reset link'
                   )}
                 </Button>
               </form>
 
               <div className="mt-6 text-center">
                 <Link href="/login" className="text-sm text-blue-500 hover:text-blue-600">
-                  {t('auth.forgot_password.remember_password') || 'Vous vous souvenez de votre mot de passe ?'}
+                  {t('auth.forgot_password.remember_password') || 'Remember your password?'}
                 </Link>
               </div>
             </>
@@ -129,7 +129,7 @@ export default function ForgotPasswordPage() {
 
         <div className="mt-6 text-center">
           <Link href="/" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-500">
-            {t('common.back') || 'Retour à l\'accueil'}
+            {t('common.back') || 'Back'}
           </Link>
         </div>
       </div>

@@ -172,11 +172,11 @@ export default function AffiliatesListPage() {
   const getKycStatusBadge = (status: KYCStatusType | undefined) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       none: {
-        label: t('dashboard.affiliates.kyc_none') || 'Non initié',
+        label: t('dashboard.affiliates.kyc_none') || 'Kyc None',
         className: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
       },
       pending: {
-        label: t('dashboard.affiliates.kyc_pending') || 'En attente',
+        label: t('dashboard.affiliates.kyc_pending') || 'Pending',
         className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
       },
       in_progress: {
@@ -184,19 +184,19 @@ export default function AffiliatesListPage() {
         className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
       },
       approved: {
-        label: t('dashboard.affiliates.kyc_approved') || 'Vérifié',
+        label: t('dashboard.affiliates.kyc_approved') || 'Kyc Approved',
         className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
       },
       rejected: {
-        label: t('dashboard.affiliates.kyc_rejected') || 'Rejeté',
+        label: t('dashboard.affiliates.kyc_rejected') || 'Kyc Rejected',
         className: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
       },
       expired: {
-        label: t('dashboard.affiliates.kyc_expired') || 'Expiré',
+        label: t('dashboard.affiliates.kyc_expired') || 'Kyc Expired',
         className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
       },
       requires_review: {
-        label: t('dashboard.affiliates.kyc_requires_review') || 'À revoir',
+        label: t('dashboard.affiliates.kyc_requires_review') || 'Under review',
         className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
       }
     }
@@ -253,10 +253,10 @@ export default function AffiliatesListPage() {
               <div className="w-10 h-10 rounded-xl bg-myhigh5-primary flex items-center justify-center shadow-lg shadow-myhigh5-primary/25">
                 <Users className="w-5 h-5 text-white" />
               </div>
-              {t('dashboard.affiliates.all_affiliates') || 'Tous les affiliés'}
+              {t('dashboard.affiliates.all_affiliates') || 'All Affiliates'}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              {totalCount} {t('dashboard.affiliates.affiliates_found') || 'affiliés trouvés'}
+              {totalCount} {t('dashboard.affiliates.affiliates_found') || 'Affiliates Found'}
             </p>
           </div>
         </div>
@@ -284,7 +284,7 @@ export default function AffiliatesListPage() {
               {t('business_model.direct_body')}
             </p>
             <div className="flex items-center justify-between pt-2 border-t border-gray-700 dark:border-gray-600">
-              <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Gagné'}:</span>
+              <span className="text-xs text-gray-400">{t('dashboard.affiliates.earned') || 'Earned'}:</span>
               <span className="font-bold text-blue-400">{formatCurrency(levelStats[1]?.commissions || 0)}</span>
             </div>
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
@@ -305,9 +305,9 @@ export default function AffiliatesListPage() {
           </div>
           {/* Tooltip */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-            <p className="font-semibold mb-1">{t('dashboard.affiliates.active_tooltip_title') || 'Affiliés Actifs'}</p>
+            <p className="font-semibold mb-1">{t('dashboard.affiliates.active_tooltip_title') || 'Active affiliates'}</p>
             <p className="text-gray-300 text-xs">
-              {t('dashboard.affiliates.active_tooltip_desc') || 'Utilisateurs ayant un compte actif et pouvant générer des commissions.'}
+              {t('dashboard.affiliates.active_tooltip_desc') || 'Members with an active account who can generate commissions.'}
             </p>
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
           </div>
@@ -322,14 +322,14 @@ export default function AffiliatesListPage() {
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {kycStats?.approved || 0}
               </p>
-              <p className="text-xs text-gray-500">{t('dashboard.affiliates.kyc_verified') || 'KYC Vérifiés'}</p>
+              <p className="text-xs text-gray-500">{t('dashboard.affiliates.kyc_verified') || 'Kyc Verified'}</p>
             </div>
           </div>
           {/* Tooltip */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-            <p className="font-semibold mb-1">{t('dashboard.affiliates.kyc_verified_tooltip_title') || 'KYC Vérifiés'}</p>
+            <p className="font-semibold mb-1">{t('dashboard.affiliates.kyc_verified_tooltip_title') || 'KYC verified'}</p>
             <p className="text-gray-300 text-xs">
-              {t('dashboard.affiliates.kyc_verified_tooltip_desc') || 'Affiliés ayant complété avec succès la vérification d\'identité (KYC approuvé).'}
+              {t('dashboard.affiliates.kyc_verified_tooltip_desc') || 'Affiliates who have completed identity verification (KYC approved).'}
             </p>
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
           </div>
@@ -351,7 +351,7 @@ export default function AffiliatesListPage() {
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <p className="font-semibold mb-1">{t('dashboard.affiliates.commissions_tooltip_title') || 'Total Commissions'}</p>
             <p className="text-gray-300 text-xs">
-              {t('dashboard.affiliates.commissions_tooltip_desc') || 'Somme de toutes les commissions gagnées grâce à votre réseau d\'affiliation.'}
+              {t('dashboard.affiliates.commissions_tooltip_desc') || 'The total of all commissions earned through your affiliate network.'}
             </p>
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
           </div>
@@ -396,7 +396,7 @@ export default function AffiliatesListPage() {
             onChange={(e) => setStatusFilter(e.target.value || null)}
             className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm"
           >
-            <option value="">{t('dashboard.affiliates.all_statuses') || 'Tous les statuts'}</option>
+            <option value="">{t('dashboard.affiliates.all_statuses') || 'All statuses'}</option>
             <option value="active">{t('dashboard.affiliates.active')}</option>
             <option value="inactive">{t('dashboard.affiliates.inactive') || 'Inactif'}</option>
           </select>
@@ -408,13 +408,13 @@ export default function AffiliatesListPage() {
             className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm"
           >
             <option value="">{t('dashboard.affiliates.all_kyc_statuses') || 'Tous KYC'}</option>
-            <option value="none">{t('dashboard.affiliates.kyc_none') || 'Non initié'}</option>
-            <option value="pending">{t('dashboard.affiliates.kyc_pending') || 'En attente'}</option>
+            <option value="none">{t('dashboard.affiliates.kyc_none') || 'Kyc None'}</option>
+            <option value="pending">{t('dashboard.affiliates.kyc_pending') || 'Pending'}</option>
             <option value="in_progress">{t('dashboard.affiliates.kyc_in_progress') || 'En cours'}</option>
-            <option value="approved">{t('dashboard.affiliates.kyc_approved') || 'Vérifié'}</option>
-            <option value="rejected">{t('dashboard.affiliates.kyc_rejected') || 'Rejeté'}</option>
-            <option value="expired">{t('dashboard.affiliates.kyc_expired') || 'Expiré'}</option>
-            <option value="requires_review">{t('dashboard.affiliates.kyc_requires_review') || 'À revoir'}</option>
+            <option value="approved">{t('dashboard.affiliates.kyc_approved') || 'Kyc Approved'}</option>
+            <option value="rejected">{t('dashboard.affiliates.kyc_rejected') || 'Kyc Rejected'}</option>
+            <option value="expired">{t('dashboard.affiliates.kyc_expired') || 'Kyc Expired'}</option>
+            <option value="requires_review">{t('dashboard.affiliates.kyc_requires_review') || 'Under review'}</option>
           </select>
         </div>
       </div>
@@ -425,30 +425,30 @@ export default function AffiliatesListPage() {
         <div className="hidden md:grid md:grid-cols-5 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400">
           {/* Affilié */}
           <div className="col-span-2 relative group cursor-help">
-            <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.affiliate') || 'Affilié'}</span>
+            <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.affiliate') || 'Affiliate'}</span>
             <div className="absolute top-full left-0 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_affiliate_hint') || 'Informations sur le membre de votre réseau'}
+              {t('dashboard.affiliates.col_affiliate_hint') || 'Details of the member in your network'}
             </div>
           </div>
           {/* KYC */}
           <div className="text-center relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.kyc_status_label') || 'KYC'}</span>
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_kyc_hint') || 'Statut de vérification d\'identité (commission perçue si approuvé)'}
+              {t('dashboard.affiliates.col_kyc_hint') || 'Identity verification status (commission earned once approved)'}
             </div>
           </div>
           {/* Gains */}
           <div className="text-center relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.earnings')}</span>
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_earnings_hint') || 'Commission que vous avez gagnée grâce à cet affilié'}
+              {t('dashboard.affiliates.col_earnings_hint') || 'Commission you earned from this affiliate'}
             </div>
           </div>
           {/* Statut */}
           <div className="text-center relative group cursor-help">
             <span className="border-b border-dashed border-gray-400">{t('dashboard.affiliates.status') || 'Statut'}</span>
             <div className="absolute top-full right-0 mt-2 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {t('dashboard.affiliates.col_status_hint') || 'Statut du compte utilisateur (actif ou inactif)'}
+              {t('dashboard.affiliates.col_status_hint') || 'Account status (active or inactive)'}
             </div>
           </div>
         </div>
@@ -523,10 +523,10 @@ export default function AffiliatesListPage() {
               <Users className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {t('dashboard.affiliates.no_results') || 'Aucun résultat'}
+              {t('dashboard.affiliates.no_results') || 'No Results'}
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
-              {t('dashboard.affiliates.try_different_filters') || 'Essayez avec des filtres différents'}
+              {t('dashboard.affiliates.try_different_filters') || 'Try different filters'}
             </p>
           </div>
         )}

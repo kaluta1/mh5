@@ -335,7 +335,7 @@ export function ContestantCard({
       if (result.success) {
         setIsLiked(true)
         setCurrentVotes(prev => prev + 1)
-        addToast(t('dashboard.contests.vote_success') || 'Vote enregistré avec succès!', 'success')
+        addToast(t('dashboard.contests.vote_success') || 'Vote recorded successfully!', 'success')
         onVote()
       } else if (result.code === 'max_votes_reached') {
         // Replace 5th vote automatically (no confirmation)
@@ -346,25 +346,25 @@ export function ContestantCard({
         )
         setIsLiked(true)
         setCurrentVotes(prev => prev + 1)
-        addToast(t('dashboard.contests.vote_replaced') || 'Vote enregistré (remplace le 5e choix).', 'success')
+        addToast(t('dashboard.contests.vote_replaced') || 'Vote Replaced', 'success')
         onVote()
       } else if (result.code === 'already_voted') {
-        addToast(t('dashboard.contests.already_voted_error') || 'Vous avez déjà voté pour ce participant.', 'info')
+        addToast(t('dashboard.contests.already_voted_error') || 'You have already voted for this participant.', 'info')
       }
     } catch (error: any) {
       console.error('Error voting:', error)
       const errorMessage = error.response?.data?.detail || ''
       const errorStr = typeof errorMessage === 'string' ? errorMessage : (errorMessage.message || '')
 
-      let toastMessage = t('dashboard.contests.vote_error') || 'Erreur lors du vote. Veuillez réessayer.'
+      let toastMessage = t('dashboard.contests.vote_error') || 'Vote Error'
       const errorLower = errorStr.toLowerCase()
 
       if ((errorLower.includes('vote') && errorLower.includes('ouvert')) || errorLower.includes('not started yet') || errorLower.includes('has ended') || errorLower.includes('voting is not open')) {
-        toastMessage = t('dashboard.contests.voting_not_open') || 'Le vote n\'est pas encore ouvert pour ce concours.'
+        toastMessage = t('dashboard.contests.voting_not_open') || 'Voting is not open yet'
       } else if (errorLower.includes('propre candidature') || errorLower.includes('own')) {
-        toastMessage = t('dashboard.contests.cannot_vote_own') || 'Vous ne pouvez pas voter pour votre propre candidature.'
+        toastMessage = t('dashboard.contests.cannot_vote_own') || 'You cannot vote for your own entry.'
       } else if (errorLower.includes('gender') || errorLower.includes('genre')) {
-        toastMessage = t('dashboard.contests.vote_gender_not_set') || 'Veuillez compléter votre profil pour voter.'
+        toastMessage = t('dashboard.contests.vote_gender_not_set') || 'Please complete your profile gender to vote.'
       } else if (errorStr) {
         toastMessage = errorStr
       }
@@ -381,7 +381,7 @@ export function ContestantCard({
       if (selectedReaction === reactionType) {
         await reactionsService.removeReaction(Number(id))
         setSelectedReaction(null)
-        addToast(t('dashboard.contests.reaction_removed') || 'Réaction supprimée', 'success')
+        addToast(t('dashboard.contests.reaction_removed') || 'Reaction removed', 'success')
       } else {
         // Sinon, on ajoute ou met à jour la réaction
         await reactionsService.addReaction(Number(id), reactionType as 'like' | 'love' | 'wow' | 'dislike')
@@ -393,7 +393,7 @@ export function ContestantCard({
           dislike: t('dashboard.contests.dislike') || 'Je n\'aime pas'
         }
         addToast(
-          `${t('dashboard.contests.reaction_added') || 'Réaction ajoutée'}: ${reactionLabels[reactionType] || reactionType}`,
+          `${t('dashboard.contests.reaction_added') || 'Reaction added'}: ${reactionLabels[reactionType] || reactionType}`,
           'success'
         )
       }
@@ -402,7 +402,7 @@ export function ContestantCard({
       setReactionsCount(stats.total_reactions)
     } catch (error: any) {
       console.error('Error handling reaction:', error)
-      addToast(error.response?.data?.detail || 'Erreur lors de l\'ajout de la réaction', 'error')
+      addToast(error.response?.data?.detail || 'Error adding the reaction', 'error')
     }
   }
 
@@ -596,7 +596,7 @@ export function ContestantCard({
                     <button
                       onClick={prevImage}
                       className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      aria-label="Image précédente"
+                      aria-label="Previous image"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -631,7 +631,7 @@ export function ContestantCard({
                             ? 'bg-white w-4'
                             : 'bg-white/50 hover:bg-white/75'
                           }`}
-                        aria-label={`Aller à l'image ${idx + 1}`}
+                        aria-label={`Go to image ${idx + 1}`}
                       />
                     ))}
                   </div>
@@ -679,7 +679,7 @@ export function ContestantCard({
                       </h3>
                     </TooltipTrigger>
                     <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
-                      <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'Voir le profil du participant'}</p>
+                      <p className="text-xs">{t('dashboard.contests.tooltip_author') || 'View participant profile'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -703,8 +703,8 @@ export function ContestantCard({
                   <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                     <p className="text-xs">
                       {currentUserId === userId
-                        ? (t('dashboard.contests.tooltip_votes_author') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''}. Survolez pour voir la liste.`)
-                        : (t('dashboard.contests.tooltip_votes') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} reçu${currentVotes > 1 ? 's' : ''} au total`)}
+                        ? (t('dashboard.contests.tooltip_votes_author') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} received. Hover to see the list.`)
+                        : (t('dashboard.contests.tooltip_votes') || `${currentVotes} vote${currentVotes > 1 ? 's' : ''} received in total`)}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -746,25 +746,25 @@ export function ContestantCard({
                 {(() => {
                   switch (voteRestrictionReason) {
                     case 'voting_not_open':
-                      return t('dashboard.contests.voting_not_open') || "Le vote n'est pas encore ouvert pour ce concours."
+                      return t('dashboard.contests.voting_not_open') || "Voting is not open yet"
                     case 'already_voted':
-                      return t('dashboard.contests.already_voted_message') || "Vous avez d\u00e9j\u00e0 vot\u00e9 pour ce participant."
+                      return t('dashboard.contests.already_voted_message') || "You have already voted for this contestant."
                     case 'own_contestant':
-                      return t('dashboard.contests.restriction_own_contestant_desc') || 'Vous ne pouvez pas voter pour votre propre candidature.'
+                      return t('dashboard.contests.restriction_own_contestant_desc') || 'You cannot vote for your own contestant'
                     case 'not_authenticated':
-                      return t('dashboard.contests.restriction_not_authenticated_desc') || 'Veuillez vous connecter pour voter.'
+                      return t('dashboard.contests.restriction_not_authenticated_desc') || 'Please login to vote'
                     case 'different_city':
-                      return t('dashboard.contests.restriction_different_city_desc') || 'Vous ne pouvez voter que pour les candidats de votre ville.'
+                      return t('dashboard.contests.restriction_different_city_desc') || 'You can only vote for contestants from your city'
                     case 'different_country':
-                      return t('dashboard.contests.restriction_different_country_desc') || 'Vous ne pouvez voter que pour les candidats de votre pays.'
+                      return t('dashboard.contests.restriction_different_country_desc') || 'You can only vote for contestants from your country'
                     case 'different_region':
-                      return t('dashboard.contests.restriction_different_region_desc') || 'Vous ne pouvez voter que pour les candidats de votre r\u00e9gion.'
+                      return t('dashboard.contests.restriction_different_region_desc') || 'You can only vote for contestants from your region'
                     case 'different_continent':
-                      return t('dashboard.contests.restriction_different_continent_desc') || 'Vous ne pouvez voter que pour les candidats de votre continent.'
+                      return t('dashboard.contests.restriction_different_continent_desc') || 'You can only vote for contestants from your continent'
                     case 'geographic_restriction':
                       return t('dashboard.contests.restriction_geographic_desc') || 'Restriction g\u00e9ographique.'
                     default:
-                      return t('dashboard.contests.cannot_vote') || 'Le vote est indisponible.'
+                      return t('dashboard.contests.cannot_vote') || 'Cannot vote'
                   }
                 })()}
               </p>
@@ -915,7 +915,7 @@ export function ContestantCard({
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         title={t('dashboard.contests.delete') || 'Delete'}
-        message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Êtes-vous sûr de vouloir supprimer cette candidature ? Cette action ne peut pas être annulée.'}
+        message={t('dashboard.contests.my_applications.delete_confirm_message') || 'Are you sure you want to delete this application? This action cannot be undone.'}
         confirmText={t('dashboard.contests.delete') || 'Delete'}
         cancelText={t('common.cancel') || 'Cancel'}
         onConfirm={async () => {
@@ -924,10 +924,10 @@ export function ContestantCard({
             try {
               await onDelete()
               setShowDeleteDialog(false)
-              addToast(t('common.deleted_successfully') || 'Candidature supprimée avec succès', 'success')
+              addToast(t('common.deleted_successfully') || 'Deleted Successfully', 'success')
             } catch (error: any) {
               console.error('Error deleting:', error)
-              const errorMessage = error?.response?.data?.detail || error?.message || t('common.delete_error') || 'Erreur lors de la suppression'
+              const errorMessage = error?.response?.data?.detail || error?.message || t('common.delete_error') || 'Could not delete submission.'
               addToast(errorMessage, 'error')
             } finally {
               setIsDeleting(false)

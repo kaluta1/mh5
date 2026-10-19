@@ -283,7 +283,7 @@ def join_via_referral(
             detail=result["error"]
         )
     
-    return {"message": "Inscription réussie dans le programme d'affiliation"}
+    return {"message": "Successfully joined the affiliate program"}
 
 
 @router.get("/genealogy/{levels}")
@@ -362,7 +362,7 @@ def send_invitation(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cet email est déjà enregistré sur la plateforme"
+            detail="This email is already registered on the platform"
         )
     
     # Vérifier si une invitation en attente existe déjà
@@ -372,7 +372,7 @@ def send_invitation(
     if existing_invitation:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Une invitation est déjà en attente pour cet email"
+            detail="An invitation is already pending for this email"
         )
     
     # Récupérer le code de parrainage de l'utilisateur
@@ -380,7 +380,7 @@ def send_invitation(
     if not referral_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous n'avez pas de code de parrainage"
+            detail="You do not have a referral code"
         )
     
     # Durable daily cap per member: invitations go to addresses the member
@@ -415,7 +415,7 @@ def send_invitation(
     return InvitationSendResult(
         success=True,
         email=invitation_in.email,
-        message="Invitation envoyée avec succès",
+        message="Invitation sent successfully",
         invitation_id=invitation_obj.id
     )
 
@@ -435,7 +435,7 @@ def send_bulk_invitations(
     if not referral_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous n'avez pas de code de parrainage"
+            detail="You do not have a referral code"
         )
     
     inviter_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username or "Un ami"
@@ -459,7 +459,7 @@ def send_bulk_invitations(
             results.append(InvitationSendResult(
                 success=False,
                 email=email,
-                message="Email déjà enregistré"
+                message="Email already registered"
             ))
             continue
         
@@ -471,7 +471,7 @@ def send_bulk_invitations(
             results.append(InvitationSendResult(
                 success=False,
                 email=email,
-                message="Invitation déjà envoyée"
+                message="Invitation already sent"
             ))
             continue
         
@@ -499,7 +499,7 @@ def send_bulk_invitations(
         results.append(InvitationSendResult(
             success=True,
             email=email,
-            message="Invitation envoyée",
+            message="Invitation sent",
             invitation_id=invitation_obj.id
         ))
     
@@ -579,10 +579,10 @@ def cancel_invitation(
     if not invitation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitation non trouvée ou déjà traitée"
+            detail="Invitation not found or already processed"
         )
     
-    return {"message": "Invitation annulée"}
+    return {"message": "Invitation cancelled"}
 
 
 class AcceptAgreementRequest(BaseModel):
@@ -605,13 +605,13 @@ def accept_affiliate_agreement(
     if current_user.affiliate_agreement_accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="L'accord d'affiliation a déjà été accepté"
+            detail="The affiliate agreement has already been accepted"
         )
     
     if not request.accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous devez accepter l'accord pour continuer"
+            detail="You must accept the agreement to continue"
         )
     
     # Mettre à jour le statut
@@ -622,7 +622,7 @@ def accept_affiliate_agreement(
     
     return {
         "success": True,
-        "message": "Accord d'affiliation accepté avec succès",
+        "message": "Affiliate agreement accepted successfully",
         "accepted_at": current_user.affiliate_agreement_accepted_at.isoformat() if current_user.affiliate_agreement_accepted_at else None
     }
 

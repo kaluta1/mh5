@@ -52,19 +52,19 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
     const newErrors: typeof errors = {}
 
     if (!currentPassword.trim()) {
-      newErrors.currentPassword = t('settings.password.current_required') || 'Le mot de passe actuel est requis'
+      newErrors.currentPassword = t('settings.password.current_required') || 'Current password is required'
     }
 
     if (!newPassword.trim()) {
-      newErrors.newPassword = t('settings.password.new_required') || 'Le nouveau mot de passe est requis'
+      newErrors.newPassword = t('settings.password.new_required') || 'New password is required'
     } else if (!isPasswordValid()) {
       newErrors.newPassword = t('auth.register.errors.password_requirements') || 'Password must include an uppercase letter, a lowercase letter, a number and a special character'
     }
 
     if (!confirmPassword.trim()) {
-      newErrors.confirmPassword = t('settings.password.confirm_required') || 'La confirmation du mot de passe est requise'
+      newErrors.confirmPassword = t('settings.password.confirm_required') || 'Password confirmation is required'
     } else if (newPassword !== confirmPassword) {
-      newErrors.confirmPassword = t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas'
+      newErrors.confirmPassword = t('settings.password.mismatch') || 'Passwords do not match'
     }
 
     setErrors(newErrors)
@@ -94,7 +94,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
     }
 
     if (currentPassword === newPassword) {
-      addToast(t('settings.password.same_password') || 'Le nouveau mot de passe doit être différent de l\'ancien', 'error')
+      addToast(t('settings.password.same_password') || 'Same Password', 'error')
       return
     }
 
@@ -103,7 +103,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (!token) {
-        addToast(t('settings.password.session_expired') || 'Session expirée', 'error')
+        addToast(t('settings.password.session_expired') || 'Session Expired', 'error')
         return
       }
 
@@ -128,7 +128,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         } catch {
           // No usable body: the next request will ask the member to sign in again.
         }
-        addToast(t('settings.password.success') || 'Mot de passe modifié avec succès', 'success')
+        addToast(t('settings.password.success') || 'Success', 'success')
         // Reset form
         setCurrentPassword('')
         setNewPassword('')
@@ -143,11 +143,11 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         })
       } else {
         const data = await response.json()
-        addToast(data.detail || t('settings.password.error') || 'Erreur lors du changement de mot de passe', 'error')
+        addToast(data.detail || t('settings.password.error') || 'Error', 'error')
       }
     } catch (error) {
       console.error('Error changing password:', error)
-      addToast(t('settings.password.error') || 'Erreur lors du changement de mot de passe', 'error')
+      addToast(t('settings.password.error') || 'Error', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -161,10 +161,10 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
           <Shield className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
           <div>
             <h4 className="font-medium text-blue-900 dark:text-blue-100">
-              {t('settings.password.security_info') || 'Sécurité de votre compte'}
+              {t('settings.password.security_info') || 'Security Info'}
             </h4>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-              {t('settings.password.security_description') || 'Pour protéger votre compte, utilisez un mot de passe fort et unique.'}
+              {t('settings.password.security_description') || 'To protect your account, use a strong and unique password.'}
             </p>
           </div>
         </div>
@@ -237,7 +237,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         {newPassword && (
           <div className="mt-2 space-y-1">
             <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('auth.register.password_requirements_title') || 'Le mot de passe doit contenir :'}
+              {t('auth.register.password_requirements_title') || 'Password must include:'}
             </p>
             <div className="space-y-0.5">
               <div className={`text-xs flex items-center gap-2 ${passwordErrors.hasMinLength ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -278,7 +278,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
       {/* Confirm Password */}
       <div>
         <label className={`block text-sm font-medium mb-2 ${errors.confirmPassword ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
-          {t('settings.password.confirm') || 'Confirmer le nouveau mot de passe'} *
+          {t('settings.password.confirm') || 'Confirm new password'} *
         </label>
         <div className="relative">
           <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${errors.confirmPassword || (confirmPassword.length > 0 && newPassword !== confirmPassword) ? 'text-red-400' : confirmPassword.length > 0 && newPassword === confirmPassword ? 'text-green-400' : 'text-gray-400'}`} />
@@ -309,7 +309,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
         )}
         {confirmPassword.length > 0 && !errors.confirmPassword && newPassword !== confirmPassword && (
           <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-            {t('settings.password.mismatch') || 'Les mots de passe ne correspondent pas'}
+            {t('settings.password.mismatch') || 'Passwords do not match'}
           </p>
         )}
       </div>
@@ -327,7 +327,7 @@ export function SettingsPasswordTab({ user }: SettingsPasswordTabProps) {
               {t('settings.password.saving') || 'Modification...'}
             </span>
           ) : (
-            t('settings.password.save') || 'Modifier le mot de passe'
+            t('settings.password.save') || 'Change password'
           )}
         </Button>
       </div>

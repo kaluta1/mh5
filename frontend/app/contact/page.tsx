@@ -377,7 +377,7 @@ export default function ContactPage() {
       // Reset success message après 5 secondes
       setTimeout(() => setIsSubmitted(false), 5000)
     } catch (error: any) {
-      console.error('Erreur complète lors de l\'envoi du message:', error)
+      console.error('Full error while sending the message:', error)
       console.error('Erreur response:', error?.response)
       console.error('Erreur message:', error?.message)
       console.error('Erreur status:', error?.response?.status)
@@ -453,7 +453,7 @@ export default function ContactPage() {
                 {t('pages.contact.title') || "Contactez-nous"}
               </h1>
               <p className="text-xl opacity-90">
-                {t('pages.contact.subtitle') || "Notre équipe est là pour vous aider. Nous répondons généralement sous 24h."}
+                {t('pages.contact.subtitle') || "Our team is here to help. We usually respond within 24 hours."}
               </p>
             </div>
           </div>
@@ -489,7 +489,7 @@ export default function ContactPage() {
             {/* Contact Form */}
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
-                {t('pages.contact.form.title') || "Envoyez-nous un message"}
+                {t('pages.contact.form.title') || "Send us a message"}
               </h2>
               
               {isSubmitted ? (
@@ -553,7 +553,7 @@ export default function ContactPage() {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {t('pages.contact.form.category') || "Catégorie"}
+                      {t('pages.contact.form.category') || "Category"}
                       <span className="text-red-500 ml-1">*</span>
                     </label>
                     <select
@@ -648,7 +648,7 @@ export default function ContactPage() {
             {/* FAQ Section */}
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
-                {t('pages.contact.faq.title') || "Questions Fréquentes"}
+                {t('pages.contact.faq.title') || "Frequently Asked Questions"}
               </h2>
               <div className="space-y-4">
                 {faqItems.map((item, index) => (
@@ -709,7 +709,7 @@ export default function ContactPage() {
           <div className="container px-4 md:px-6">
             <div className="text-center mb-10">
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                {t('pages.contact.categories.title') || "Comment pouvons-nous vous aider ?"}
+                {t('pages.contact.categories.title') || "How can we help you?"}
               </h2>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">

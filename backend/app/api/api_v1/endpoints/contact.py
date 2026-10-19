@@ -38,7 +38,7 @@ def create_contact_message(
     if message_in.category not in valid_categories:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Catégorie invalide. Catégories valides: {', '.join(valid_categories)}"
+            detail=f"Invalid category. Valid categories: {', '.join(valid_categories)}"
         )
     
     try:
@@ -93,6 +93,6 @@ def create_contact_message(
         logger.error(f"Erreur lors de la création du message de contact: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Une erreur est survenue lors de l'enregistrement de votre message. Veuillez réessayer."
+            detail="Your message could not be saved. Please try again."
         )
 

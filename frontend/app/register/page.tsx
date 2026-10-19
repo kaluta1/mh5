@@ -132,7 +132,7 @@ function RegisterPageContent() {
     // Seulement lettres, chiffres et underscores
     const usernameRegex = /^[a-zA-Z0-9_]*$/
     if (value && !usernameRegex.test(value)) {
-      setUsernameError(t('auth.register.errors.username_invalid_chars') || 'Seuls les lettres, chiffres et underscores sont autorisés')
+      setUsernameError(t('auth.register.errors.username_invalid_chars') || 'Only letters, numbers, and underscores are allowed')
       setFieldErrors(prev => ({ ...prev, username: true }))
     } else {
       setUsernameError('')
@@ -229,7 +229,7 @@ function RegisterPageContent() {
 
     if (!formData.country) {
       errors.country = true
-      errorMessage = t('auth.register.errors.location_required') || 'Veuillez sélectionner votre pays'
+      errorMessage = t('auth.register.errors.location_required') || 'Please select your country'
     }
 
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
@@ -266,7 +266,7 @@ function RegisterPageContent() {
       const usernameRegex = /^[a-zA-Z0-9_]*$/
       if (!usernameRegex.test(formData.username)) {
         errors.username = true
-        errorMessage = t('auth.register.errors.username_invalid_chars') || 'Seuls les lettres, chiffres et underscores sont autorisés'
+        errorMessage = t('auth.register.errors.username_invalid_chars') || 'Only letters, numbers, and underscores are allowed'
       }
     }
     
@@ -378,7 +378,7 @@ function RegisterPageContent() {
       }
       
       // Capturer les différents formats d'erreur
-      let errorMessage = t('auth.registerError') || 'Une erreur est survenue lors de l\'inscription'
+      let errorMessage = t('auth.registerError') || 'Registration failed. Please try again.'
       
       if (err.response?.data) {
         const data = err.response.data
@@ -412,7 +412,7 @@ function RegisterPageContent() {
       } else if (err.message) {
         // Erreur réseau ou autre
         if (err.message === 'Network Error') {
-          errorMessage = t('common.network_error') || 'Erreur de connexion. Vérifiez votre connexion internet.'
+          errorMessage = t('common.network_error') || 'Network Error'
         } else {
           errorMessage = mapErrorToTranslation(err.message)
         }
@@ -483,7 +483,7 @@ function RegisterPageContent() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {t('auth.referral_bonus') || 'Vous avez été parrainé !'}
+                    {t('auth.referral_bonus') || 'You were referred!'}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
                     {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>
@@ -577,9 +577,9 @@ function RegisterPageContent() {
                         if (originalValue !== cleanedValue) {
                           // Vérifier si c'est un espace
                           if (originalValue.includes(' ')) {
-                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Les espaces ne sont pas autorisés')
+                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Spaces are not allowed')
                           } else {
-                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés')
+                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Invalid characters')
                           }
                           setShowSpaceWarning(true)
                           setTimeout(() => {
@@ -596,9 +596,9 @@ function RegisterPageContent() {
                           e.preventDefault()
                           // Vérifier si c'est un espace
                           if (e.key === ' ') {
-                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Les espaces ne sont pas autorisés')
+                            setSpaceWarningMessage(t('auth.register.username_space_not_allowed') || 'Spaces are not allowed')
                           } else {
-                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés')
+                            setSpaceWarningMessage(t('auth.register.username_no_spaces_warning') || 'Invalid characters')
                           }
                           setShowSpaceWarning(true)
                           setTimeout(() => {
@@ -621,7 +621,7 @@ function RegisterPageContent() {
                     ) : showSpaceWarning ? (
                       <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <span>⚠️</span>
-                        {spaceWarningMessage || t('auth.register.username_no_spaces_warning') || 'Caractères non autorisés'}
+                        {spaceWarningMessage || t('auth.register.username_no_spaces_warning') || 'Invalid characters'}
                       </p>
                     ) : (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -658,7 +658,7 @@ function RegisterPageContent() {
                   {formData.password && (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('auth.register.password_requirements_title') || 'Le mot de passe doit contenir :'}
+                        {t('auth.register.password_requirements_title') || 'Password must include:'}
                       </p>
                       <div className="space-y-0.5">
                         <div className={`text-xs flex items-center gap-2 ${formData.password.length >= PASSWORD_MIN_LENGTH ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>

@@ -82,14 +82,14 @@ class CRUDVote:
         # Vérifier si l'étape permet encore les votes
         stage = db.query(ContestStage).filter(ContestStage.id == stage_id).first()
         if not stage:
-            return {"can_vote": False, "reason": "Étape non trouvée"}
+            return {"can_vote": False, "reason": "Stage not found"}
         
         now = datetime.utcnow()
         if now < stage.voting_start:
-            return {"can_vote": False, "reason": "Le vote n'a pas encore commencé"}
+            return {"can_vote": False, "reason": "Voting has not started yet"}
         
         if now > stage.voting_end:
-            return {"can_vote": False, "reason": "Le vote est terminé"}
+            return {"can_vote": False, "reason": "Voting has ended"}
         
         # Vérifier si l'utilisateur est participant dans cette étape
         is_contestant = db.query(Contestant).filter(
@@ -101,9 +101,9 @@ class CRUDVote:
         ).first()
         
         if is_contestant:
-            return {"can_vote": False, "reason": "Les participants ne peuvent pas voter dans leur propre étape"}
+            return {"can_vote": False, "reason": "Participants cannot vote in their own stage"}
         
-        return {"can_vote": True, "reason": "Éligible pour voter"}
+        return {"can_vote": True, "reason": "Eligible to vote"}
 
     def update_vote(
         self, 

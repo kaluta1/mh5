@@ -70,11 +70,11 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       const newErrors: typeof errors = {}
 
       if (!user.first_name?.trim()) {
-        newErrors.firstName = t('profile_setup.first_name_required') || 'Le prénom est requis'
+        newErrors.firstName = t('profile_setup.first_name_required') || 'First name is required'
       }
 
       if (!user.last_name?.trim()) {
-        newErrors.lastName = t('profile_setup.last_name_required') || 'Le nom est requis'
+        newErrors.lastName = t('profile_setup.last_name_required') || 'Last name is required'
       }
 
       if (!user.avatar_url) {
@@ -82,11 +82,11 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       }
 
       if (!user.bio?.trim()) {
-        newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
+        newErrors.bio = t('profile_setup.bio_required') || 'Bio is required'
       }
 
       if (!user.city?.trim()) {
-        newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+        newErrors.city = t('profile_setup.city_required') || 'City Required'
       }
 
       setErrors(newErrors)
@@ -97,11 +97,11 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     const newErrors: typeof errors = {}
 
     if (!firstName.trim()) {
-      newErrors.firstName = t('profile_setup.first_name_required') || 'Le prénom est requis'
+      newErrors.firstName = t('profile_setup.first_name_required') || 'First name is required'
     }
 
     if (!lastName.trim()) {
-      newErrors.lastName = t('profile_setup.last_name_required') || 'Le nom est requis'
+      newErrors.lastName = t('profile_setup.last_name_required') || 'Last name is required'
     }
 
     if (!avatarUrl) {
@@ -109,11 +109,11 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
     }
 
     if (!bio.trim()) {
-      newErrors.bio = t('profile_setup.bio_required') || 'La bio est requise'
+      newErrors.bio = t('profile_setup.bio_required') || 'Bio is required'
     }
 
     if (!city.trim()) {
-      newErrors.city = t('profile_setup.city_required') || 'La ville est requise'
+      newErrors.city = t('profile_setup.city_required') || 'City Required'
     }
 
     setErrors(newErrors)
@@ -132,7 +132,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (!token) {
-        addToast(t('profile_setup.session_expired') || 'Session expirée', 'error')
+        addToast(t('profile_setup.session_expired') || 'Session expired', 'error')
         return
       }
 
@@ -153,7 +153,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour')
+        throw new Error(error.detail || t('profile_setup.update_error') || 'Update failed')
       }
 
       // Rafraîchir les données utilisateur
@@ -161,11 +161,11 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
         await onUpdate()
       }
 
-      addToast(t('profile_setup.success') || 'Profil mis à jour avec succès!', 'success')
+      addToast(t('profile_setup.success') || 'Success', 'success')
       setErrors({})
     } catch (err: any) {
       console.error('Erreur:', err)
-      addToast(err.message || 'Erreur lors de la mise à jour du profil', 'error')
+      addToast(err.message || 'Error updating the profile', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -365,13 +365,13 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-            {t('profile_setup.first_name') || 'Prénom'} *
+            {t('profile_setup.first_name') || 'First Name'} *
           </label>
           <input
             type="text"
             value={firstName}
             onChange={(e) => handleFieldChange('firstName', e.target.value)}
-            placeholder={t('profile_setup.first_name_placeholder') || 'Votre prénom'}
+            placeholder={t('profile_setup.first_name_placeholder') || 'Your first name'}
             disabled={isLoading}
             className={`w-full px-4 py-3 border rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${errors.firstName
                 ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500'
@@ -416,7 +416,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
         <textarea
           value={bio}
           onChange={(e) => handleFieldChange('bio', e.target.value)}
-          placeholder={t('profile_setup.bio_placeholder') || 'Parlez un peu de vous...'}
+          placeholder={t('profile_setup.bio_placeholder') || 'Tell us a little about yourself...'}
           maxLength={500}
           rows={4}
           disabled={isLoading}
@@ -427,7 +427,7 @@ export function SettingsProfileTab({ user, onUpdate }: SettingsProfileTabProps) 
         />
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {bio.length}/500 {t('profile_setup.characters') || 'caractères'}
+            {bio.length}/500 {t('profile_setup.characters') || 'Characters'}
           </p>
           {errors.bio && (
             <p className="text-sm text-red-600 dark:text-red-400">

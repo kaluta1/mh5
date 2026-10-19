@@ -115,7 +115,7 @@ export default function RegisterModal({ open, onOpenChange, onSwitchToLogin }: R
         // Gérer les erreurs simples avec un message detail
         setError(err.response.data.detail)
       } else {
-        setError('Erreur lors de l\'inscription')
+        setError('Registration failed')
       }
     } finally {
       setIsLoading(false)

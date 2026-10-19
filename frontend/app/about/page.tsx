@@ -118,10 +118,10 @@ export default function AboutPage() {
             <div className="max-w-4xl mx-auto text-center text-white">
               <Heart className="w-16 h-16 mx-auto mb-6 animate-pulse" />
               <h1 className="text-4xl md:text-6xl font-black mb-6">
-                {t('pages.about.title') || "À Propos de MyHigh5"}
+                {t('pages.about.title') || "About MyHigh5"}
               </h1>
               <p className="text-xl md:text-2xl opacity-90 leading-relaxed">
-                {t('pages.about.subtitle') || "La première plateforme mondiale de concours qui connecte les talents du monde entier, du niveau local au niveau mondial."}
+                {t('pages.about.subtitle') || "The first global contest platform connecting talents worldwide, from local to global level."}
               </p>
             </div>
           </div>
@@ -156,7 +156,7 @@ export default function AboutPage() {
                 {t('pages.about.mission.title') || "Notre Mission"}
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-                {t('pages.about.mission.description') || "Démocratiser l'accès aux concours et permettre à chaque talent de briller sur la scène mondiale. Du concours de beauté local au championnat mondial, nous créons des opportunités pour tous."}
+                {t('pages.about.mission.description') || "Democratize access to contests and allow every talent to shine on the world stage. From local beauty contests to world championships, we create opportunities for everyone."}
               </p>
               <ul className="space-y-4">
                 {(missionFeatures[language] || missionFeatures.en).map((item, i) => (
@@ -197,7 +197,7 @@ export default function AboutPage() {
                 {t('pages.about.values.title') || "Nos Valeurs"}
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                {t('pages.about.values.subtitle') || "Les principes qui guident chacune de nos décisions"}
+                {t('pages.about.values.subtitle') || "The principles that guide each of our decisions"}
               </p>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -226,10 +226,10 @@ export default function AboutPage() {
           <div className="container px-4 md:px-6">
             <div className="text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                {t('pages.about.team.title') || "Notre Équipe"}
+                {t('pages.about.team.title') || "Our Team"}
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                {t('pages.about.team.subtitle') || "Des passionnés dédiés à votre succès"}
+                {t('pages.about.team.subtitle') || "Passionate people dedicated to your success"}
               </p>
             </div>
             <div className={`grid grid-cols-1 ${team.length > 1 ? "md:grid-cols-2" : ""} gap-6 max-w-4xl mx-auto`}>
@@ -269,7 +269,7 @@ export default function AboutPage() {
               {t('pages.about.cta.title') || "Rejoignez l'Aventure MyHigh5"}
             </h2>
             <p className="text-lg opacity-90 mb-8 max-w-2xl mx-auto">
-              {t('pages.about.cta.subtitle') || "Faites partie d'une communauté mondiale de talents et commencez votre parcours vers le sommet."}
+              {t('pages.about.cta.subtitle') || "Be part of a global community of talents and start your journey to the top."}
             </p>
             <Button 
               size="lg"

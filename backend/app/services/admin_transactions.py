@@ -21,7 +21,7 @@ def _deposit_to_row(deposit) -> dict[str, Any]:
         "amount": float(deposit.amount),
         "currency": deposit.currency or "",
         "status": deposit.status.value if deposit.status else "",
-        "description": f"Dépôt - {deposit.product_type.name if deposit.product_type else 'N/A'}",
+        "description": f"Deposit - {deposit.product_type.name if deposit.product_type else 'N/A'}",
         "reference": deposit.order_id,
         "created_at": deposit.created_at.isoformat() if deposit.created_at else None,
         "processed_at": deposit.validated_at.isoformat() if deposit.validated_at else None,

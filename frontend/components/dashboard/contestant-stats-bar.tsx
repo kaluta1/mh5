@@ -55,7 +55,7 @@ export function ContestantStatsBar({
     {
       key: 'videos',
       value: videos,
-      label: t('contestant_detail.videos') || t('dashboard.contests.videos') || 'Vidéos',
+      label: t('contestant_detail.videos') || t('dashboard.contests.videos') || 'Videos',
       icon: <Video className="w-4 h-4 text-white" />,
       bg: 'bg-red-500'
     },

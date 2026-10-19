@@ -102,7 +102,7 @@ export function VoiceVerificationDialog({
       
     } catch (err) {
       console.error('Microphone error:', err)
-      setError(t('verification.microphone_error') || 'Impossible d\'accéder au microphone')
+      setError(t('verification.microphone_error') || 'Unable to access the microphone')
     }
   }
 
@@ -153,7 +153,7 @@ export function VoiceVerificationDialog({
     // Check file size
     if (recordedAudio.size > maxSizeMb * 1024 * 1024) {
       const fileSizeMB = (recordedAudio.size / (1024 * 1024)).toFixed(2)
-      setError(t('verification.file_too_large_with_size') || `L'enregistrement est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
+      setError(t('verification.file_too_large_with_size') || `The recording is too large (${fileSizeMB} MB). Maximum size: ${maxSizeMb} MB`)
       return
     }
     
@@ -208,7 +208,7 @@ export function VoiceVerificationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mic className="w-5 h-5 text-myhigh5-primary" />
-            {t('verification.voice_verification') || 'Vérification vocale'}
+            {t('verification.voice_verification') || 'Voice Verification'}
           </DialogTitle>
           <DialogDescription>
             {t('verification.voice_instructions') || `Enregistrez votre voix pendant quelques secondes (max ${maxDurationSeconds}s).`}
@@ -259,9 +259,9 @@ export function VoiceVerificationDialog({
 
             {/* Status text */}
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-              {mode === 'idle' && (t('verification.tap_to_record') || 'Appuyez pour enregistrer')}
+              {mode === 'idle' && (t('verification.tap_to_record') || 'Tap to record')}
               {mode === 'recording' && (t('verification.recording') || 'Enregistrement en cours...')}
-              {mode === 'preview' && (t('verification.recording_complete') || 'Enregistrement terminé')}
+              {mode === 'preview' && (t('verification.recording_complete') || 'Recording complete')}
             </p>
           </div>
 
@@ -289,7 +289,7 @@ export function VoiceVerificationDialog({
                   ) : (
                     <>
                       <Play className="w-4 h-4 mr-2" />
-                      {t('verification.play') || 'Écouter'}
+                      {t('verification.play') || 'Play'}
                     </>
                   )}
                 </Button>

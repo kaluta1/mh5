@@ -44,7 +44,7 @@ def get_contest_type(
     if not contest_type:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Type de concours non trouvé"
+            detail="Contest type not found"
         )
     return contest_type
 
@@ -92,7 +92,7 @@ def get_contest_season(
     if not season:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Saison de concours non trouvée"
+            detail="Contest season not found"
         )
     return season
 
@@ -136,7 +136,7 @@ def get_contest_stage(
     if not stage:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Étape de concours non trouvée"
+            detail="Contest stage not found"
         )
     return stage
 
@@ -200,7 +200,7 @@ def get_contestant_profile(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Participant non trouvé"
+            detail="Participant not found"
         )
     return contestant
 
@@ -228,7 +228,7 @@ def submit_content(
     if not crud_contestants.contestant.is_submission_period_open(db=db, contestant_id=contestant_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La période de soumission est fermée"
+            detail="The submission period is closed"
         )
     
     submission = crud_contestants.contest_submission.create_with_contestant(
@@ -331,4 +331,4 @@ def recommend_new_contest(
         justification=recommendation["justification"]
     )
     
-    return {"message": "Recommandation soumise avec succès", "id": result.id}
+    return {"message": "Recommendation submitted successfully", "id": result.id}

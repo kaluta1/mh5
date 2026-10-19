@@ -160,7 +160,7 @@ export function ReactionsButton({ contestantId, selectedReaction, onReactionSele
               </div>
             ) : (
               <div className="text-sm text-gray-500 dark:text-gray-400 py-2">
-                {t('dashboard.contests.no_reactions') || 'Aucune réaction'}
+                {t('dashboard.contests.no_reactions') || 'No Reactions'}
               </div>
             )}
           </div>

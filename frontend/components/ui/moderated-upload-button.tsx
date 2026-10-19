@@ -31,7 +31,7 @@ export function ModeratedUploadButton({
   verificationImageUrl,
   className = '',
   buttonText = 'Choisir un fichier',
-  uploadingText = 'Modération et upload...',
+  uploadingText = 'Moderating and uploading...',
   allowedContentText = 'Images uniquement'
 }: ModeratedUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -113,12 +113,12 @@ export function ModeratedUploadButton({
         ) : status === 'error' ? (
           <>
             <AlertTriangle className="w-4 h-4 mr-2" />
-            Erreur de modération
+            Moderation error
           </>
         ) : status === 'success' ? (
           <>
             <CheckCircle className="w-4 h-4 mr-2" />
-            Upload réussi
+            Upload successful
           </>
         ) : (
           <>
@@ -135,7 +135,7 @@ export function ModeratedUploadButton({
       {/* Afficher les erreurs de modération */}
       {status === 'error' && moderationFlags.length > 0 && (
         <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
-          <p className="text-red-700 dark:text-red-300 font-medium">Contenu rejeté :</p>
+          <p className="text-red-700 dark:text-red-300 font-medium">Content rejected:</p>
           <ul className="list-disc list-inside text-red-600 dark:text-red-400">
             {moderationFlags.map((flag, idx) => (
               <li key={idx}>{flag.description}</li>

@@ -55,7 +55,7 @@ def mark_notification_as_read(
     if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification non trouvée"
+            detail="Notification not found"
         )
     
     return notification
@@ -68,5 +68,5 @@ def mark_all_notifications_as_read(
 ) -> dict:
     """Marque toutes les notifications comme lues"""
     count = crud_notification.mark_all_as_read(db, user_id=current_user.id)
-    return {"message": f"{count} notification(s) marquée(s) comme lue(s)", "count": count}
+    return {"message": f"{count} notification(s) marked as read", "count": count}
 

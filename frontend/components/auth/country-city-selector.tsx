@@ -328,7 +328,7 @@ export function CountryCitySelector({
           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           required
         >
-          <option value="">Sélectionner un continent</option>
+          <option value="">Select a continent</option>
           {continents.map((continent) => (
             <option key={continent} value={continent}>
               {continent}
@@ -355,7 +355,7 @@ export function CountryCitySelector({
             disabled={loading || countries.length === 0}
             required
           >
-            <option value="">{loading ? 'Chargement...' : 'Sélectionner un pays'}</option>
+            <option value="">{loading ? 'Chargement...' : 'Select a country'}</option>
             {countries.map((country) => (
               <option key={country.code} value={country.code}>
                 {country.name}
@@ -370,7 +370,7 @@ export function CountryCitySelector({
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             <MapPin className="inline mr-2 h-4 w-4" />
-            Région
+            Region
           </label>
           <select
             value={selectedRegion}
@@ -378,7 +378,7 @@ export function CountryCitySelector({
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary disabled:opacity-50"
             disabled={loading}
           >
-            <option value="">Toutes les régions</option>
+            <option value="">All regions</option>
             {regions.map((region) => (
               <option key={region.code} value={region.code}>
                 {region.name}
@@ -402,7 +402,7 @@ export function CountryCitySelector({
             disabled={loading || cities.length === 0}
             required
           >
-            <option value="">{loading ? 'Chargement...' : 'Sélectionner une ville'}</option>
+            <option value="">{loading ? 'Chargement...' : 'Select a city'}</option>
             {cities.map((city) => (
               <option key={city.code} value={city.code}>
                 {city.name}

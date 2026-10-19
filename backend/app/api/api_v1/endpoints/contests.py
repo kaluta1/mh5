@@ -92,7 +92,7 @@ def create_contest(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante pour créer un concours"
+            detail="You do not have permission to create a contest"
         )
     
     new_contest = contest.create(db=db, obj_in=contest_in)
@@ -745,7 +745,7 @@ def get_contest_rounds(
     if not contest_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     # Get rounds with stats for this contest
@@ -803,7 +803,7 @@ def read_contest(
     if not contest_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     merged_country = filter_country if filter_country is not None else country
@@ -842,7 +842,7 @@ def read_contest(
     if not enriched_contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     # Enrich with current user participation (non-fatal — roster already loaded)
@@ -933,14 +933,14 @@ def update_contest(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante pour mettre à jour un concours"
+            detail="You do not have permission to update a contest"
         )
     
     contest_obj = contest.get(db=db, id=contest_id)
     if not contest_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     updated_contest = contest.update(db=db, db_obj=contest_obj, obj_in=contest_in)
@@ -965,14 +965,14 @@ def delete_contest(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante pour supprimer un concours"
+            detail="You do not have permission to delete a contest"
         )
     
     contest_obj = contest.get(db=db, id=contest_id)
     if not contest_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     deleted_contest = contest.remove(db=db, id=contest_id)

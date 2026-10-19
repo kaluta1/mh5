@@ -15,7 +15,7 @@ export default function NotFound() {
   const quickLinks = [
     { href: '/', label: t('navigation.home') || 'Accueil', icon: Home },
     { href: '/contests', label: t('navigation.contests') || 'Concours', icon: Trophy },
-    { href: '/about', label: t('navigation.about') || 'À propos', icon: HelpCircle },
+    { href: '/about', label: t('navigation.about') || 'About', icon: HelpCircle },
   ]
 
   return (
@@ -39,7 +39,7 @@ export default function NotFound() {
             {t('not_found.title') || 'Page introuvable'}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-            {t('not_found.description') || 'Désolé, la page que vous recherchez n\'existe pas ou a été déplacée.'}
+            {t('not_found.description') || 'Sorry, the page you are looking for does not exist or has been moved.'}
           </p>
 
           {/* Actions */}
@@ -92,7 +92,7 @@ export default function NotFound() {
           {/* Message d'aide */}
           <div className="mt-8 p-4 bg-myhigh5-blue-50 dark:bg-myhigh5-blue-900/20 rounded-lg border border-myhigh5-blue-200 dark:border-myhigh5-blue-800">
             <p className="text-sm text-myhigh5-blue-800 dark:text-myhigh5-blue-300">
-              {t('not_found.help_text') || 'Si vous pensez qu\'il s\'agit d\'une erreur, veuillez contacter notre support.'}
+              {t('not_found.help_text') || 'If you think this is a mistake, please contact our support team.'}
             </p>
           </div>
         </div>

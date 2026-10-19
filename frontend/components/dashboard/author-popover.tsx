@@ -152,7 +152,7 @@ export function AuthorPopover({ userId, name, avatar, country, city, rank, votes
                 )}
                 {authorDetails?.date_of_birth && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400 w-20">{t('dashboard.contests.age') || 'Âge'}:</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400 w-20">{t('dashboard.contests.age') || 'Age'}:</span>
                     <span className="text-sm text-gray-900 dark:text-white">
                       {calculateAge(authorDetails.date_of_birth)} {t('dashboard.contests.years') || 'ans'}
                     </span>

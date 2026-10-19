@@ -95,7 +95,7 @@ def get_current_admin_user(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Privilèges administrateur requis"
+            detail="Administrator privileges required"
         )
     return current_user
 
@@ -231,7 +231,7 @@ def get_current_moderator_user(
         if not check_user_permission(current_user, 'view_users'):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Privilèges modérateur requis"
+                detail="Moderator privileges required"
             )
     return current_user
 

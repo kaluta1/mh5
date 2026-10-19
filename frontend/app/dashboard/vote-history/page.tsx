@@ -70,7 +70,7 @@ export default function VoteHistoryPage() {
           }
         ])
       } catch (err) {
-        setError('Erreur lors du chargement de l\'historique')
+        setError('Error loading the history')
         console.error(err)
       } finally {
         setPageLoading(false)
@@ -139,7 +139,7 @@ export default function VoteHistoryPage() {
             {t('contestant_detail.vote_history')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Consultez tous vos votes et réactions
+            View all your votes and reactions
           </p>
         </div>
       </div>
@@ -159,7 +159,7 @@ export default function VoteHistoryPage() {
               {t('contestant_detail.no_votes')}
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              Commencez à voter pour voir votre historique ici
+              Start voting to see your history here
             </p>
           </div>
         ) : (

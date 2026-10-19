@@ -493,7 +493,7 @@ async def get_invoice(
 
     from app.services.invoice_renderer import render_invoice_html
 
-    user_lang = lang or getattr(current_user, "preferred_language", "fr") or "fr"
+    user_lang = lang or getattr(current_user, "preferred_language", "en") or "en"
     product = db.query(ProductType).filter(ProductType.id == deposit.product_type_id).first()
     product_name = product.name if product else "Service"
     billed_user = deposit.user or current_user

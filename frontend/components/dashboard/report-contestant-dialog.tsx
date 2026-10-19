@@ -58,12 +58,12 @@ export function ReportContestantDialog({
 
     const newErrors: { reason?: string; description?: string } = {}
     if (!reason.trim()) {
-      newErrors.reason = t('dashboard.contests.report_contestant.error.reason_required') || 'Veuillez s\u00e9lectionner une raison'
+      newErrors.reason = t('dashboard.contests.report_contestant.error.reason_required') || 'Please select a reason'
     }
     if (!description.trim()) {
-      newErrors.description = t('dashboard.contests.report_contestant.error.description_required') || 'La description est requise'
+      newErrors.description = t('dashboard.contests.report_contestant.error.description_required') || 'Description is required'
     } else if (description.trim().length < 10) {
-      newErrors.description = t('dashboard.contests.report_contestant.error.description_min_length') || 'La description doit contenir au moins 10 caract\u00e8res'
+      newErrors.description = t('dashboard.contests.report_contestant.error.description_min_length') || 'Description must be at least 10 characters'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -91,7 +91,7 @@ export function ReportContestantDialog({
     } catch (error: any) {
       console.error('Error reporting contestant:', error)
 
-      let errorMessage = t('dashboard.contests.report_contestant.error.submit_error') || 'Erreur lors de l\'envoi du signalement'
+      let errorMessage = t('dashboard.contests.report_contestant.error.submit_error') || 'Submit Error'
 
       if (error.response) {
         if (error.response.status === 400) {
@@ -99,12 +99,12 @@ export function ReportContestantDialog({
         } else if (error.response.status === 401 || error.response.status === 403) {
           errorMessage = error.response.data?.detail || 'Permission insuffisante'
         } else if (error.response.status >= 500) {
-          errorMessage = t('dashboard.contests.report_contestant.error.server_error') || 'Erreur serveur. Veuillez r\u00e9essayer plus tard.'
+          errorMessage = t('dashboard.contests.report_contestant.error.server_error') || 'Server Error'
         } else {
           errorMessage = error.response.data?.detail || errorMessage
         }
       } else if (error.request) {
-        errorMessage = t('dashboard.contests.report_contestant.error.network_error') || 'Erreur de connexion. V\u00e9rifiez votre connexion internet.'
+        errorMessage = t('dashboard.contests.report_contestant.error.network_error') || 'Network Error'
       } else {
         errorMessage = error.message || errorMessage
       }
@@ -139,7 +139,7 @@ export function ReportContestantDialog({
               {t('dashboard.contests.report_contestant.title') || 'Signaler un participant'}
             </DialogTitle>
             <DialogDescription className="text-gray-600 dark:text-gray-400 mt-2">
-              {t('dashboard.contests.report_contestant.description') || 'D\u00e9crivez la raison de votre signalement. Notre \u00e9quipe examinera votre demande.'}
+              {t('dashboard.contests.report_contestant.description') || 'Describe the reason for your report. Our team will review your request.'}
             </DialogDescription>
           </DialogHeader>
           {contestantTitle && (
@@ -160,7 +160,7 @@ export function ReportContestantDialog({
                 {t('dashboard.contests.report_contestant.success_title') || 'Signalement envoy\u00e9'}
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {t('dashboard.contests.report_contestant.success') || 'Votre signalement a \u00e9t\u00e9 envoy\u00e9 avec succ\u00e8s. Merci pour votre vigilance !'}
+                {t('dashboard.contests.report_contestant.success') || 'Your report was submitted successfully. Thank you for helping keep the community safe!'}
               </p>
             </div>
           </div>
@@ -211,7 +211,7 @@ export function ReportContestantDialog({
                   setDescription(e.target.value)
                   if (errors.description) setErrors({ ...errors, description: undefined })
                 }}
-                placeholder={t('dashboard.contests.report_contestant.description_placeholder') || 'D\u00e9crivez en d\u00e9tail la raison de votre signalement...'}
+                placeholder={t('dashboard.contests.report_contestant.description_placeholder') || 'Describe in detail the reason for your report...'}
                 className={`flex min-h-[100px] w-full rounded-lg border ${errors.description ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 dark:border-gray-600 focus:ring-blue-500'} bg-white dark:bg-gray-700/50 px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-0 transition-shadow resize-none disabled:cursor-not-allowed disabled:opacity-50`}
                 disabled={isSubmitting}
                 maxLength={2000}

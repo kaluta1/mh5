@@ -42,7 +42,7 @@ def get_continent(
     if not continent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Continent non trouvé"
+            detail="Continent not found"
         )
     return continent
 
@@ -88,7 +88,7 @@ def get_region(
     if not region:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Région non trouvée"
+            detail="Region not found"
         )
     return region
 
@@ -134,7 +134,7 @@ def get_country(
     if not country:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pays non trouvé"
+            detail="Country not found"
         )
     return country
 
@@ -151,7 +151,7 @@ def get_country_by_code(
     if not country:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pays non trouvé"
+            detail="Country not found"
         )
     return country
 
@@ -197,7 +197,7 @@ def get_city(
     if not city:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ville non trouvée"
+            detail="City not found"
         )
     return city
 
@@ -253,7 +253,7 @@ def get_geography_hierarchy(
     if not hierarchy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Hiérarchie géographique non trouvée"
+            detail="Geographic hierarchy not found"
         )
     return hierarchy
 

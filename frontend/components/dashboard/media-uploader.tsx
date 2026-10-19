@@ -25,7 +25,7 @@ export function MediaUploader({
     // Vérifier le type de fichier
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm']
     if (!validTypes.includes(file.type)) {
-      setError(t('dashboard.contests.participation_form.error.invalid_file_type') || 'Type de fichier invalide. Formats acceptés: JPEG, PNG, GIF, MP4, WebM')
+      setError(t('dashboard.contests.participation_form.error.invalid_file_type') || 'Invalid file type. Accepted formats: JPEG, PNG, GIF, MP4, WebM')
       return
     }
 
@@ -33,7 +33,7 @@ export function MediaUploader({
     const maxSizeMB = 100
     if (file.size > maxSizeMB * 1024 * 1024) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      setError(t('dashboard.contests.participation_form.error.file_too_large_with_size') || `Le fichier est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMB}MB`)
+      setError(t('dashboard.contests.participation_form.error.file_too_large_with_size') || `The file is too large (${fileSizeMB} MB). Maximum size: ${maxSizeMB} MB`)
       return
     }
 

@@ -277,7 +277,7 @@ def guard_group_message(db: Session, user: User, group_id: int, text: Optional[s
 
     if not is_group_member(db, group_id, user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Vous devez être membre du groupe pour envoyer des messages")
+                            detail="You must be a member of the group to send messages")
     if reply_to_id is not None and visible_group_message(db, user, reply_to_id, group_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message introuvable")
     members = db.query(User).join(GroupMember, GroupMember.user_id == User.id).filter(

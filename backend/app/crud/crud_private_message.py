@@ -439,7 +439,7 @@ class CRUDGroupInvitation:
         # Vérifier si déjà membre
         from app.crud.crud_social import crud_social_group
         if crud_social_group.is_member(db, group_id, invitee_id):
-            raise ValueError("L'utilisateur est déjà membre du groupe")
+            raise ValueError("The user is already a member of the group")
         
         # Vérifier si invitation en attente
         existing = db.query(GroupInvitation).filter(
@@ -449,7 +449,7 @@ class CRUDGroupInvitation:
         ).first()
         
         if existing:
-            raise ValueError("Une invitation est déjà en attente")
+            raise ValueError("An invitation is already pending")
         
         db_obj = GroupInvitation(
             group_id=group_id,

@@ -213,7 +213,7 @@ def create_contestant_comment(
         logger.warning(f"Comment rejected: {flags_desc}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Commentaire rejeté: {flags_desc}"
+            detail=f"Comment rejected: {flags_desc}"
         )
     
     comment = comment_crud.create_comment(
@@ -328,7 +328,7 @@ def create_media_comment(
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Commentaire rejeté: {flags_desc}"
+            detail=f"Comment rejected: {flags_desc}"
         )
     
     # Pour maintenant, on stocke le commentaire au niveau du contestant
@@ -399,7 +399,7 @@ def update_comment(
         flags_desc = ", ".join([f.description for f in text_moderation.flags])
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Commentaire rejeté: {flags_desc}"
+            detail=f"Comment rejected: {flags_desc}"
         )
     
     updated_comment = comment_crud.update_comment(db, comment_id, comment_data.content)

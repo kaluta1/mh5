@@ -70,7 +70,7 @@ export default function AdminContests() {
       // Silently handle timeout errors
       if (error?.code !== 'ECONNABORTED' && error?.message && !error?.message?.includes('timeout')) {
         console.warn('Error loading shared data', error)
-        addToast(t('admin.common.load_error') || 'Erreur de chargement des données', 'error')
+        addToast(t('admin.common.load_error') || 'Load Error', 'error')
       }
     } finally {
       setLoadingShared(false)
@@ -90,7 +90,7 @@ export default function AdminContests() {
               </h1>
             </div>
             <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium">
-              {t('admin.contests.description') || 'Gérez vos concours et les rounds associés'}
+              {t('admin.contests.description') || 'Manage your contests and their rounds'}
             </p>
           </div>
         </div>

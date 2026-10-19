@@ -96,7 +96,7 @@ class SocialSocketService:
             """Rejoindre une room de groupe"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             group_id = data.get("group_id")
             if not group_id:
@@ -107,7 +107,7 @@ class SocialSocketService:
             try:
                 is_member = crud_social_group.is_member(db, group_id, user_id)
                 if not is_member:
-                    return {"error": "Non membre du groupe"}
+                    return {"error": "Not a member of the group"}
                 
                 room_name = f"group_{group_id}"
                 await self.sio.enter_room(sid, room_name)
@@ -129,7 +129,7 @@ class SocialSocketService:
             """Nouveau post créé"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             post_id = data.get("post_id")
             if not post_id:
@@ -172,7 +172,7 @@ class SocialSocketService:
             """Nouvelle réaction sur un post ou commentaire"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             post_id = data.get("post_id")
             comment_id = data.get("comment_id")
@@ -232,7 +232,7 @@ class SocialSocketService:
             """Nouveau commentaire sur un post"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             post_id = data.get("post_id")
             comment_id = data.get("comment_id")
@@ -275,7 +275,7 @@ class SocialSocketService:
             """Envoyer un message dans un groupe"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             group_id = data.get("group_id")
             message_id = data.get("message_id")
@@ -294,7 +294,7 @@ class SocialSocketService:
                 # Vérifier que l'utilisateur est membre du groupe
                 is_member = crud_social_group.is_member(db, group_id, user_id)
                 if not is_member:
-                    return {"error": "Non membre du groupe"}
+                    return {"error": "Not a member of the group"}
                 
                 # Récupérer les informations du message
                 sender = db.query(User).filter(User.id == user_id).first()
@@ -321,7 +321,7 @@ class SocialSocketService:
             """Marquer un message comme lu"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             message_id = data.get("message_id")
             if not message_id:
@@ -350,7 +350,7 @@ class SocialSocketService:
             """Rejoindre une room de conversation"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             conversation_id = data.get("conversation_id")
             if not conversation_id:
@@ -379,7 +379,7 @@ class SocialSocketService:
                     has_access = participant is not None
                 
                 if not has_access:
-                    return {"error": "Accès non autorisé"}
+                    return {"error": "Unauthorized access"}
                 
                 room_name = f"conversation_{conversation_id}"
                 await self.sio.enter_room(sid, room_name)
@@ -401,7 +401,7 @@ class SocialSocketService:
             """Envoyer un message privé (via Socket.IO)"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             conversation_id = data.get("conversation_id")
             message_id = data.get("message_id")
@@ -424,7 +424,7 @@ class SocialSocketService:
                 
                 # Vérifier que l'utilisateur est l'expéditeur
                 if message.sender_id != user_id:
-                    return {"error": "Vous n'êtes pas l'expéditeur de ce message"}
+                    return {"error": "You are not the sender of this message"}
                 # Phase 9: the message must belong to THIS conversation (no
                 # re-routing an allowed message into someone else's conversation).
                 if str(message.conversation_id) != str(conversation_id):
@@ -453,7 +453,7 @@ class SocialSocketService:
                 recipient_ids = [rid for rid in recipient_ids if isafe.can_contact(
                     db, sender, db.query(User).filter(User.id == rid).first()).allowed]
                 if not recipient_ids:
-                    return {"error": "Accès non autorisé"}
+                    return {"error": "Unauthorized access"}
 
                 message_data = {
                     "message_id": message.id,
@@ -481,7 +481,7 @@ class SocialSocketService:
             """Marquer un message privé comme lu"""
             user_id = self.user_sessions.get(sid)
             if not user_id:
-                return {"error": "Non authentifié"}
+                return {"error": "Not authenticated"}
             
             message_id = data.get("message_id")
             if not message_id:

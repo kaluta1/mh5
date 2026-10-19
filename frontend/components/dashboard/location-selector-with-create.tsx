@@ -84,7 +84,7 @@ export function LocationSelectorWithCreate({
       const data = await locationService.getContinents()
       setContinents(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des continents', 'error')
+      addToast('Error loading continents', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -108,7 +108,7 @@ export function LocationSelectorWithCreate({
       const data = await locationService.getCountriesByRegion(regionId)
       setCountries(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des pays', 'error')
+      addToast('Error loading countries', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -120,7 +120,7 @@ export function LocationSelectorWithCreate({
       const data = await locationService.getCitiesByCountry(countryId)
       setCities(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des villes', 'error')
+      addToast('Error loading cities', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -230,7 +230,7 @@ export function LocationSelectorWithCreate({
               setShowContinentDropdown(true)
             }}
             onFocus={() => setShowContinentDropdown(true)}
-            placeholder="Sélectionner ou créer un continent"
+            placeholder="Select or create a continent"
             disabled={isLoading || isLoadingData}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           />
@@ -251,7 +251,7 @@ export function LocationSelectorWithCreate({
                   </button>
                 ))
               ) : (
-                <div className="px-4 py-2 text-gray-500 dark:text-gray-400">Aucun résultat</div>
+                <div className="px-4 py-2 text-gray-500 dark:text-gray-400">No results</div>
               )}
             </div>
             {continentInput.trim() && !filteredContinents.some((c) => c.name.toLowerCase() === continentInput.toLowerCase()) && (
@@ -271,7 +271,7 @@ export function LocationSelectorWithCreate({
       {selectedContinent && (
         <div className="relative">
           <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            Région/État *
+            Region/State *
           </label>
           <div className="relative">
             <input
@@ -282,7 +282,7 @@ export function LocationSelectorWithCreate({
                 setShowRegionDropdown(true)
               }}
               onFocus={() => setShowRegionDropdown(true)}
-              placeholder="Sélectionner ou créer une région"
+              placeholder="Select or create a region"
               disabled={isLoading || isLoadingData}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
@@ -303,7 +303,7 @@ export function LocationSelectorWithCreate({
                     </button>
                   ))
                 ) : (
-                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">Aucun résultat</div>
+                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">No results</div>
                 )}
               </div>
               {regionInput.trim() && !filteredRegions.some((r) => r.name.toLowerCase() === regionInput.toLowerCase()) && (
@@ -335,7 +335,7 @@ export function LocationSelectorWithCreate({
                 setShowCountryDropdown(true)
               }}
               onFocus={() => setShowCountryDropdown(true)}
-              placeholder="Sélectionner ou créer un pays"
+              placeholder="Select or create a country"
               disabled={isLoading || isLoadingData}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
@@ -356,7 +356,7 @@ export function LocationSelectorWithCreate({
                     </button>
                   ))
                 ) : (
-                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">Aucun résultat</div>
+                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">No results</div>
                 )}
               </div>
               {countryInput.trim() && !filteredCountries.some((c) => c.name.toLowerCase() === countryInput.toLowerCase()) && (
@@ -388,7 +388,7 @@ export function LocationSelectorWithCreate({
                 setShowCityDropdown(true)
               }}
               onFocus={() => setShowCityDropdown(true)}
-              placeholder="Sélectionner ou créer une ville"
+              placeholder="Select or create a city"
               disabled={isLoading || isLoadingData}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             />
@@ -409,7 +409,7 @@ export function LocationSelectorWithCreate({
                     </button>
                   ))
                 ) : (
-                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">Aucun résultat</div>
+                  <div className="px-4 py-2 text-gray-500 dark:text-gray-400">No results</div>
                 )}
               </div>
               {cityInput.trim() && !filteredCities.some((c) => c.name.toLowerCase() === cityInput.toLowerCase()) && (

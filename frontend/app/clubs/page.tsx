@@ -33,7 +33,7 @@ const demoClubs = [
   {
     id: "1",
     name: "Elite Beauty Club",
-    description: "Club exclusif pour les passionnés de beauté et mode",
+    description: "An exclusive club for beauty and fashion enthusiasts",
     memberCount: 1250,
     category: "beauty",
     isPrivate: true,
@@ -45,7 +45,7 @@ const demoClubs = [
   {
     id: "2", 
     name: "Sports Champions",
-    description: "Communauté des champions sportifs du monde entier",
+    description: "A community of sports champions from around the world",
     memberCount: 3400,
     category: "sports",
     isPrivate: false,
@@ -57,7 +57,7 @@ const demoClubs = [
   {
     id: "3",
     name: "Music Creators Hub",
-    description: "Espace créatif pour les artistes musicaux émergents",
+    description: "A creative space for emerging music artists",
     memberCount: 2100,
     category: "music",
     isPrivate: true,
@@ -69,7 +69,7 @@ const demoClubs = [
   {
     id: "4",
     name: "Pet Lovers Paradise",
-    description: "Le paradis des amoureux des animaux de compagnie",
+    description: "A paradise for pet lovers",
     memberCount: 5600,
     category: "pets",
     isPrivate: false,
@@ -93,7 +93,7 @@ const demoClubs = [
   {
     id: "6",
     name: "Talent Showcase",
-    description: "Découvrez et partagez vos talents uniques",
+    description: "Discover and share your unique talents",
     memberCount: 4200,
     category: "talent",
     isPrivate: false,
@@ -175,7 +175,7 @@ export default function ClubsPage() {
                 {t('pages.clubs.title') || "Fan Clubs Exclusifs"}
               </h1>
               <p className="text-xl opacity-90 mb-8">
-                {t('pages.clubs.subtitle') || "Rejoignez des communautés passionnées et accédez à du contenu exclusif"}
+                {t('pages.clubs.subtitle') || "Join passionate communities and access exclusive content"}
               </p>
               
               {/* Features */}
@@ -190,7 +190,7 @@ export default function ClubsPage() {
                 </div>
                 <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
                   <TrendingUp className="w-5 h-5" />
-                  <span className="text-sm">{t('pages.clubs.features.affiliate') || "Programme Affilié"}</span>
+                  <span className="text-sm">{t('pages.clubs.features.affiliate') || "Affiliate Program"}</span>
                 </div>
               </div>
             </div>
@@ -250,7 +250,7 @@ export default function ClubsPage() {
             <div className="text-center py-16">
               <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
               <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                {t('pages.clubs.no_results') || "Aucun club trouvé"}
+                {t('pages.clubs.no_results') || "No club found"}
               </h3>
               <p className="text-gray-500">
                 {t('pages.clubs.try_different_filter') || "Essayez un autre filtre"}
@@ -330,17 +330,17 @@ export default function ClubsPage() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div className="text-white">
                 <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                  {t('pages.clubs.cta.title') || "Créez votre propre Club"}
+                  {t('pages.clubs.cta.title') || "Create your own Club"}
                 </h2>
                 <p className="text-lg opacity-90 mb-6">
-                  {t('pages.clubs.cta.subtitle') || "Monétisez votre contenu, gérez votre communauté et gagnez grâce au programme d'affiliation."}
+                  {t('pages.clubs.cta.subtitle') || "Monetize your content, manage your community and earn through the affiliate program."}
                 </p>
                 <ul className="space-y-3 mb-8">
                   <li className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                       <Wallet className="w-3 h-3" />
                     </div>
-                    <span>{t('pages.clubs.cta.feature1') || "Paiements sécurisés via DSP"}</span>
+                    <span>{t('pages.clubs.cta.feature1') || "Secure payments via DSP"}</span>
                   </li>
                   <li className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
@@ -352,7 +352,7 @@ export default function ClubsPage() {
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                       <TrendingUp className="w-3 h-3" />
                     </div>
-                    <span>{t('pages.clubs.cta.feature3') || "Commission d'affiliation directe sur les ventes"}</span>
+                    <span>{t('pages.clubs.cta.feature3') || "Direct affiliate commission on sales"}</span>
                   </li>
                 </ul>
                 <Button 

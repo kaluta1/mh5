@@ -237,7 +237,7 @@ function processSightengineResponse(data: any): ModerationResult {
         type: 'adult',
         severity: nudityScore > 0.8 ? 'high' : 'medium',
         confidence: nudityScore,
-        description: 'Contenu adulte détecté'
+        description: 'Adult content detected'
       })
     }
   }
@@ -251,7 +251,7 @@ function processSightengineResponse(data: any): ModerationResult {
         type: 'violence',
         severity: violenceScore > 0.85 ? 'high' : 'medium',
         confidence: violenceScore,
-        description: 'Contenu violent détecté'
+        description: 'Violent content detected'
       })
     }
   }
@@ -265,7 +265,7 @@ function processSightengineResponse(data: any): ModerationResult {
         type: 'gore',
         severity: goreScore > 0.7 ? 'high' : 'medium',
         confidence: goreScore,
-        description: 'Contenu gore/sanglant détecté'
+        description: 'Graphic or gory content detected'
       })
     }
   }
@@ -279,7 +279,7 @@ function processSightengineResponse(data: any): ModerationResult {
         type: 'weapons',
         severity: 'medium',
         confidence: weaponScore,
-        description: 'Arme détectée'
+        description: 'Weapon detected'
       })
     }
   }
@@ -293,7 +293,7 @@ function processSightengineResponse(data: any): ModerationResult {
         type: 'offensive',
         severity: 'medium',
         confidence: offensiveScore,
-        description: 'Contenu offensant détecté'
+        description: 'Offensive content detected'
       })
     }
   }
@@ -415,7 +415,7 @@ function processAudioModerationResult(data: any): AudioModerationResult {
             type: 'hate',
             severity: confidence > 0.8 ? 'high' : 'medium',
             confidence,
-            description: 'Discours haineux détecté'
+            description: 'Hate speech detected'
           })
         }
         
@@ -425,7 +425,7 @@ function processAudioModerationResult(data: any): AudioModerationResult {
             type: 'offensive',
             severity: confidence > 0.8 ? 'high' : 'medium',
             confidence,
-            description: 'Langage vulgaire détecté'
+            description: 'Vulgar language detected'
           })
           // Profanity léger ne bloque pas forcément
           if (confidence > 0.8) {
@@ -440,7 +440,7 @@ function processAudioModerationResult(data: any): AudioModerationResult {
             type: 'violence',
             severity: confidence > 0.8 ? 'high' : 'medium',
             confidence,
-            description: 'Contenu violent ou menaces détectées'
+            description: 'Violent content or threats detected'
           })
         }
         
@@ -451,7 +451,7 @@ function processAudioModerationResult(data: any): AudioModerationResult {
             type: 'selfharm',
             severity: 'high',
             confidence,
-            description: 'Contenu d\'automutilation détecté'
+            description: 'Self-harm content detected'
           })
         }
         
@@ -461,7 +461,7 @@ function processAudioModerationResult(data: any): AudioModerationResult {
             type: 'offensive',
             severity: 'medium',
             confidence,
-            description: 'Contenu sensible détecté'
+            description: 'Sensitive content detected'
           })
         }
       }

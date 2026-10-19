@@ -50,7 +50,7 @@ def add_member_by_email_or_username(
     if user_role not in [GroupMemberRole.ADMIN, GroupMemberRole.OWNER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seuls les administrateurs peuvent ajouter des membres"
+            detail="Only administrators can add members"
         )
     
     # Find user by email or username
@@ -60,19 +60,19 @@ def add_member_by_email_or_username(
         if not user_to_add:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Aucun utilisateur trouvé avec l'email: {member_request.email}"
+                detail=f"No user found with the email: {member_request.email}"
             )
     elif member_request.username:
         user_to_add = crud_user.get_by_username(db, member_request.username)
         if not user_to_add:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Aucun utilisateur trouvé avec le nom d'utilisateur: {member_request.username}"
+                detail=f"No user found with the username: {member_request.username}"
             )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous devez fournir soit un email, soit un nom d'utilisateur"
+            detail="You must provide either an email or a username"
         )
 
     # Phase 9: adding someone to a group is direct contact by the adder.
@@ -90,7 +90,7 @@ def add_member_by_email_or_username(
         )
         return {
             "success": True,
-            "message": f"Utilisateur {user_to_add.username or user_to_add.email} ajouté au groupe",
+            "message": f"User {user_to_add.username or user_to_add.email} added to the group",
             "member_id": member.id,
             "user": {
                 "id": user_to_add.id,
@@ -128,13 +128,13 @@ def get_invitation_link(
     if user_role not in [GroupMemberRole.ADMIN, GroupMemberRole.OWNER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seuls les administrateurs peuvent obtenir le lien d'invitation"
+            detail="Only administrators can get the invitation link"
         )
     
     if not group.invite_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ce groupe n'a pas de code d'invitation"
+            detail="This group has no invitation code"
         )
     
     # Build invitation link path (frontend will construct full URL)
@@ -163,14 +163,14 @@ def join_group_by_invitation_link(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lien d'invitation invalide ou expiré"
+            detail="Invalid or expired invitation link"
         )
     
     # Check if already a member
     if crud_social_group.is_member(db, group.id, current_user.id):
         return {
             "success": True,
-            "message": "Vous êtes déjà membre de ce groupe",
+            "message": "You are already a member of this group",
             "group_id": group.id,
             "group_name": group.name
         }
@@ -179,7 +179,7 @@ def join_group_by_invitation_link(
     if group.max_members and group.member_count >= group.max_members:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le groupe est complet"
+            detail="The group is full"
         )
     
     # Add member
@@ -192,7 +192,7 @@ def join_group_by_invitation_link(
         )
         return {
             "success": True,
-            "message": f"Vous avez rejoint le groupe '{group.name}'",
+            "message": f"You joined the group '{group.name}'",
             "group_id": group.id,
             "group_name": group.name,
             "member_id": member.id
@@ -219,7 +219,7 @@ def get_group_members(
     if not crud_social_group.is_member(db, group_id, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous devez être membre du groupe pour voir la liste des membres"
+            detail="You must be a member of the group to see the member list"
         )
     
     group = crud_social_group.get(db, group_id)
@@ -283,7 +283,7 @@ def update_member_role(
     if current_role != GroupMemberRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seul le propriétaire du groupe peut modifier les rôles"
+            detail="Only the group owner can change roles"
         )
     
     # Get the member
@@ -304,7 +304,7 @@ def update_member_role(
     
     return {
         "success": True,
-        "message": f"Rôle mis à jour vers {new_role.value}",
+        "message": f"Role updated to {new_role.value}",
         "member_id": member.id,
         "new_role": new_role.value
     }
@@ -327,7 +327,7 @@ def remove_member(
     if current_role not in [GroupMemberRole.ADMIN, GroupMemberRole.OWNER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Seuls les administrateurs peuvent retirer des membres"
+            detail="Only administrators can remove members"
         )
     
     # Can't remove owner
@@ -335,7 +335,7 @@ def remove_member(
     if target_role == GroupMemberRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le propriétaire du groupe ne peut pas être retiré"
+            detail="The group owner cannot be removed"
         )
     
     # Remove member
@@ -348,5 +348,5 @@ def remove_member(
     
     return {
         "success": True,
-        "message": "Membre retiré du groupe"
+        "message": "Member removed from the group"
     }

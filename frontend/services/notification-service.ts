@@ -88,7 +88,7 @@ class NotificationService {
       const response = await api.patch(`/api/v1/notifications/${notificationId}/read`)
       return response.data
     } catch (error) {
-      console.error('Erreur lors du marquage de la notification comme lue:', error)
+      console.error('Error marking the notification as read:', error)
       throw error
     }
   }
@@ -101,7 +101,7 @@ class NotificationService {
       const response = await api.patch('/api/v1/notifications/read-all')
       return response.data
     } catch (error) {
-      console.error('Erreur lors du marquage de toutes les notifications comme lues:', error)
+      console.error('Error marking all notifications as read:', error)
       throw error
     }
   }

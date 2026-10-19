@@ -48,22 +48,22 @@ export function SelfieVerificationDialog({
   const getTitle = () => {
     switch (verificationType) {
       case 'selfie_with_pet':
-        return t('verification.selfie_with_pet') || 'Selfie avec votre animal'
+        return t('verification.selfie_with_pet') || 'Selfie with your pet'
       case 'selfie_with_document':
         return t('verification.selfie_with_document') || 'Selfie avec document'
       default:
-        return t('verification.selfie') || 'Selfie de vérification'
+        return t('verification.selfie') || 'Selfie'
     }
   }
 
   const getInstructions = () => {
     switch (verificationType) {
       case 'selfie_with_pet':
-        return t('verification.selfie_pet_instructions') || 'Prenez une photo claire de vous avec votre animal de compagnie.'
+        return t('verification.selfie_pet_instructions') || 'Take a clear photo of yourself with your pet.'
       case 'selfie_with_document':
-        return t('verification.selfie_document_instructions') || 'Prenez une photo de vous avec une pièce d\'identité visible.'
+        return t('verification.selfie_document_instructions') || 'Take a photo of yourself holding a visible identity document.'
       default:
-        return t('verification.selfie_instructions') || 'Prenez une photo claire de votre visage, bien éclairé.'
+        return t('verification.selfie_instructions') || 'Take a clear, well-lit photo of your face.'
     }
   }
 
@@ -80,7 +80,7 @@ export function SelfieVerificationDialog({
       setMode('camera')
     } catch (err) {
       console.error('Camera error:', err)
-      setError(t('verification.camera_error') || 'Impossible d\'accéder à la caméra')
+      setError(t('verification.camera_error') || 'Unable to access the camera')
     }
   }
 
@@ -114,14 +114,14 @@ export function SelfieVerificationDialog({
 
     // Check file type first
     if (!file.type.startsWith('image/')) {
-      setError(t('verification.invalid_file_type') || 'Type de fichier invalide. Seules les images sont acceptées.')
+      setError(t('verification.invalid_file_type') || 'Invalid file type. Please upload a supported file.')
       return
     }
 
     // Check file size
     if (file.size > maxSizeMb * 1024 * 1024) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      setError(t('verification.file_too_large_with_size') || `La photo est trop volumineuse (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
+      setError(t('verification.file_too_large_with_size') || `The photo is too large (${fileSizeMB} MB). Maximum size: ${maxSizeMb} MB`)
       return
     }
 
@@ -210,7 +210,7 @@ export function SelfieVerificationDialog({
                   onClick={startCamera}
                 >
                   <Camera className="w-8 h-8 text-myhigh5-primary" />
-                  <span>{t('verification.use_camera') || 'Utiliser la caméra'}</span>
+                  <span>{t('verification.use_camera') || 'Use Camera'}</span>
                 </Button>
                 <Button 
                   variant="outline" 

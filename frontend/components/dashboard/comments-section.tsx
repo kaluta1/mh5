@@ -136,7 +136,7 @@ export function CommentsSection({
       setCurrentCount(prev => prev + 1)
       if (onCountChange) onCountChange(currentCount + 1)
       
-      addToast(t('dashboard.contests.comment_added') || 'Commentaire ajouté', 'success')
+      addToast(t('dashboard.contests.comment_added') || 'Comment Added', 'success')
     } catch (error: any) {
       console.error('Error adding comment:', error)
       // Restaurer le texte en cas d'erreur
@@ -174,7 +174,7 @@ export function CommentsSection({
       setCurrentCount(prev => prev + 1)
       if (onCountChange) onCountChange(currentCount + 1)
       
-      addToast(t('dashboard.contests.reply_added') || 'Réponse ajoutée', 'success')
+      addToast(t('dashboard.contests.reply_added') || 'Reply Added', 'success')
     } catch (error: any) {
       console.error('Error adding reply:', error)
       addToast(error.response?.data?.detail || (t('dashboard.contests.reply_add_error') || 'Error adding reply'), 'error')

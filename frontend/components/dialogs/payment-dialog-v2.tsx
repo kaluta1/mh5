@@ -348,7 +348,7 @@ export function PaymentDialog({
       ))
     } catch (error) {
       setRecipients(prev => prev.map(r => 
-        r.id === id ? { ...r, verifiedUser: null, isVerifying: false, error: t('payment.user_not_found') || 'Utilisateur non trouvé' } : r
+        r.id === id ? { ...r, verifiedUser: null, isVerifying: false, error: t('payment.user_not_found') || 'User not found' } : r
       ))
     }
   }
@@ -384,7 +384,7 @@ export function PaymentDialog({
 
     const method = paymentMethods.find((m) => m.id === methodId)
     if (method?.category === 'card') {
-      alert(t('payment.card_coming_soon') || 'Paiement par carte bientôt disponible')
+      alert(t('payment.card_coming_soon') || 'Card payments coming soon')
       return
     }
     if (method?.category === 'bank') {
@@ -396,7 +396,7 @@ export function PaymentDialog({
     try {
       const token = localStorage.getItem('access_token')
       if (!token) {
-        setPaymentError(t('common.login_required') || 'Veuillez vous connecter')
+        setPaymentError(t('common.login_required') || 'Login Required')
         return
       }
 
@@ -439,7 +439,7 @@ export function PaymentDialog({
       setStep('payment')
     } catch (error) {
       logger.error('Payment creation error', error)
-      setPaymentError(error instanceof Error ? error.message : 'Erreur lors de la création du paiement')
+      setPaymentError(error instanceof Error ? error.message : 'Error creating the payment')
     } finally {
       setIsLoading(false)
     }
@@ -536,15 +536,15 @@ export function PaymentDialog({
                   </div>
                 )}
                 {step === 'recipients' && (t('payment.buy_services') || 'Acheter des services')}
-                {step === 'method' && (t('payment.payment_method') || 'Méthode de paiement')}
-                {step === 'payment' && (t('payment.payment_instructions') || 'Instructions de paiement')}
-                {step === 'success' && (t('payment.success_title') || 'Paiement confirmé')}
+                {step === 'method' && (t('payment.payment_method') || 'Payment Method')}
+                {step === 'payment' && (t('payment.payment_instructions') || 'Payment instructions')}
+                {step === 'success' && (t('payment.success_title') || 'Payment confirmed!')}
               </DialogTitle>
               {step !== 'success' && (
                 <DialogDescription className="mt-1 text-sm">
-                  {step === 'recipients' && (t('payment.recipients_description') || 'Sélectionnez les services que vous souhaitez acheter')}
-                  {step === 'method' && (t('payment.method_description') || 'Choisissez votre méthode de paiement préférée')}
-                  {step === 'payment' && (t('payment.instructions_description') || 'Scannez le QR code ou copiez l\'adresse')}
+                  {step === 'recipients' && (t('payment.recipients_description') || 'Select the services you want to buy')}
+                  {step === 'method' && (t('payment.method_description') || 'Choose your preferred payment method')}
+                  {step === 'payment' && (t('payment.instructions_description') || 'Follow the instructions below to complete your payment.')}
                 </DialogDescription>
               )}
             </DialogHeader>
@@ -588,7 +588,7 @@ export function PaymentDialog({
               {/* Section header */}
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('payment.select_for_myself') || 'Pour moi-même'} <span className="text-gray-400 font-normal">({t('common.optional') || 'optionnel'})</span>
+                  {t('payment.select_for_myself') || 'For myself'} <span className="text-gray-400 font-normal">({t('common.optional') || 'optionnel'})</span>
                 </p>
                 {includeMyself && (
                   <button 
@@ -635,7 +635,7 @@ export function PaymentDialog({
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">KYC Service</h4>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('payment.kyc_description') || 'Vérification d\'identité'}
+                        {t('payment.kyc_description') || 'Identity verification'}
                       </p>
                     </div>
                     <span className="text-sm font-bold text-myhigh5-primary">${kycPriceUsd}</span>
@@ -690,7 +690,7 @@ export function PaymentDialog({
                 </div>
                 <div className="relative flex justify-center">
                   <span className="px-3 bg-white dark:bg-gray-900 text-xs text-gray-400 uppercase tracking-wide">
-                    {t('payment.pay_for_others') || 'Ou payer pour d\'autres'}
+                    {t('payment.pay_for_others') || 'Or pay for others'}
                   </span>
                 </div>
               </div>
@@ -704,7 +704,7 @@ export function PaymentDialog({
                         <Users className="w-4 h-4 text-gray-500" />
                       </div>
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('payment.recipient') || 'Bénéficiaire'} #{index + 1}
+                        {t('payment.recipient') || 'Recipient'} #{index + 1}
                       </span>
                     </div>
                     <Button
@@ -721,7 +721,7 @@ export function PaymentDialog({
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <Input
-                        placeholder={t('payment.username_or_email') || "Nom d'utilisateur ou email"}
+                        placeholder={t('payment.username_or_email') || 'Username or email'}
                         value={recipient.usernameOrEmail}
                         onChange={(e) => updateRecipient(recipient.id, 'usernameOrEmail', e.target.value)}
                         onBlur={() => verifyUser(recipient.id)}
@@ -792,7 +792,7 @@ export function PaymentDialog({
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('payment.total') || 'Total'}</p>
                     <p className="text-xs text-gray-500">
-                      {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'bénéficiaire(s)'}
+                      {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'service(s)'}
                     </p>
                   </div>
                   <span className="text-3xl font-bold text-myhigh5-primary">
@@ -826,7 +826,7 @@ export function PaymentDialog({
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {t('payment.total_to_pay') || 'Total à payer'}
+                      {t('payment.total_to_pay') || 'Total to pay'}
                     </p>
                     <p className="text-xs text-gray-500">
                       {(includeMyself ? 1 : 0) + recipients.length} {t('payment.recipients_count') || 'service(s)'}
@@ -845,7 +845,7 @@ export function PaymentDialog({
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-myhigh5-primary" />
                   <span className="ml-3 text-gray-600 dark:text-gray-400">
-                    {t('payment.creating_payment') || 'Création du paiement...'}
+                    {t('payment.creating_payment') || 'Creating Payment'}
                   </span>
                 </div>
               )}
@@ -892,7 +892,7 @@ export function PaymentDialog({
 
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
-                      {t('payment.other_methods') || 'Autres méthodes'}
+                      {t('payment.other_methods') || 'Other Methods'}
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {paymentMethods.filter(m => m.category !== 'crypto').map((method) => (
@@ -907,7 +907,7 @@ export function PaymentDialog({
                           </div>
                           <span className="text-sm font-medium text-gray-900 dark:text-white">{method.name}</span>
                           <span className="absolute top-1 right-1 text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-500 px-1.5 py-0.5 rounded">
-                            {t('common.coming_soon') || 'Bientôt'}
+                            {t('common.coming_soon') || 'Coming Soon'}
                           </span>
                         </button>
                       ))}
@@ -1022,17 +1022,17 @@ export function PaymentDialog({
               {/* Success Message */}
               <div className="text-center">
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-                  {t('payment.success_title') || 'Paiement confirmé !'}
+                  {t('payment.success_title') || 'Payment confirmed!'}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('payment.success_description') || 'Votre paiement a été reçu et confirmé.'}
+                  {t('payment.success_description') || 'Your payment has been received and confirmed.'}
                 </p>
               </div>
 
               {/* Amount Summary */}
               <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center border border-green-200 dark:border-green-800">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('payment.amount_paid') || 'Montant payé'}
+                  {t('payment.amount_paid') || 'Amount Paid'}
                 </p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   ${totalAmount.toFixed(2)} USD
@@ -1060,10 +1060,10 @@ export function PaymentDialog({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t('payment.confirm_close_title') || 'Fermer le paiement ?'}
+              {t('payment.confirm_close_title') || 'Close the payment?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('payment.confirm_close_description') || 'Votre progression sera perdue. Êtes-vous sûr de vouloir fermer ?'}
+              {t('payment.confirm_close_description') || 'Your progress will be lost. Are you sure you want to close?'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

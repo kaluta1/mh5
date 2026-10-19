@@ -229,7 +229,7 @@ class CRUDKYCVerification:
             # Créer un log d'audit
             self._create_audit_log(
                 db, verification_id, "approved", 
-                "Vérification approuvée", 
+                "Verification approved", 
                 admin_user_id, True
             )
         
@@ -259,7 +259,7 @@ class CRUDKYCVerification:
             # Créer un log d'audit
             self._create_audit_log(
                 db, verification_id, "rejected", 
-                f"Vérification rejetée: {reason}", 
+                f"Verification rejected: {reason}", 
                 admin_user_id, True
             )
         

@@ -1352,7 +1352,7 @@ def generate_monthly(
         new_round = generate_monthly_round(db=db, target_date=target_date)
         return new_round
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
 
 @router.post("/", response_model=round_schema.Round)

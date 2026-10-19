@@ -95,7 +95,7 @@ export default function NotificationsPage() {
         }
       }
     } catch (error: any) {
-      console.error('Erreur lors du chargement des notifications:', error)
+      console.error('Error loading notifications:', error)
       if (isMountedRef.current) {
         addToast(error?.response?.data?.detail || 'Something went wrong', 'error')
       }
@@ -150,7 +150,7 @@ export default function NotificationsPage() {
       
       addToast('Notification marked as read', 'success')
     } catch (error: any) {
-      console.error('Erreur lors du marquage de la notification comme lue:', error)
+      console.error('Error marking the notification as read:', error)
       addToast(error?.response?.data?.detail || 'Something went wrong', 'error')
     } finally {
       setIsMarkingAsRead(null)
@@ -168,7 +168,7 @@ export default function NotificationsPage() {
       
       addToast('All notifications marked as read', 'success')
     } catch (error: any) {
-      console.error('Erreur lors du marquage de toutes les notifications comme lues:', error)
+      console.error('Error marking all notifications as read:', error)
       addToast(error?.response?.data?.detail || 'Something went wrong', 'error')
     } finally {
       setIsMarkingAllAsRead(false)

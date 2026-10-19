@@ -122,7 +122,7 @@ async def upload_media(
         if not content_type.startswith(("image/", "video/")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le fichier doit être une image ou une vidéo",
+                detail="The file must be an image or a video",
             )
 
         media_info = await store_media(file, current_user.id)
@@ -203,7 +203,7 @@ def read_media(
     if not media:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Média non trouvé",
+            detail="Media not found",
         )
     if media.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
@@ -227,7 +227,7 @@ def delete_media(
     if not media:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Média non trouvé",
+            detail="Media not found",
         )
     if media.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(

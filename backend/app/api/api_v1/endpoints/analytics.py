@@ -189,7 +189,7 @@ def get_dashboard_analytics(
     
     # Croissance des affiliés par mois (6 derniers mois)
     affiliates_growth = []
-    months_fr = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+    months_fr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     
     for i in range(5, -1, -1):
         month_date = today - timedelta(days=i*30)

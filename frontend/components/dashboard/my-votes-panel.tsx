@@ -158,7 +158,7 @@ export default function MyVotesPanel({ contestId, onVoteChanged }: MyVotesPanelP
           </span>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {t('dashboard.contests.no_votes_yet') || 'Votez pour vos contestants préférés !'}
+          {t('dashboard.contests.no_votes_yet') || 'Vote for your favorite contestants!'}
         </p>
       </div>
     )
@@ -287,7 +287,7 @@ export default function MyVotesPanel({ contestId, onVoteChanged }: MyVotesPanelP
           )}
           {votes.length > 1 && (
             <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center pt-1">
-              {t('dashboard.contests.drag_to_reorder') || 'Glissez pour réordonner'}
+              {t('dashboard.contests.drag_to_reorder') || 'Drag to reorder'}
             </p>
           )}
         </div>

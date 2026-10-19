@@ -103,7 +103,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
       )
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (error) {
-      logger.error('Erreur lors du marquage de la notification comme lue:', error)
+      logger.error('Error marking the notification as read:', error)
     } finally {
       setIsMarkingAsRead(null)
     }
@@ -118,7 +118,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
-      logger.error('Erreur lors du marquage de toutes les notifications comme lues:', error)
+      logger.error('Error marking all notifications as read:', error)
     } finally {
       setIsLoading(false)
     }
@@ -262,7 +262,7 @@ export function NotificationDropdown({ className }: NotificationDropdownProps) {
             className="w-full justify-center gap-2 text-myhigh5-primary hover:text-myhigh5-primary hover:bg-myhigh5-primary/10"
           >
             <span className="text-sm font-medium">
-              {t('notifications.view_all') || 'Voir toutes les notifications'}
+              {t('notifications.view_all') || 'View all notifications'}
             </span>
             <ArrowRight className="h-4 w-4" />
           </Button>

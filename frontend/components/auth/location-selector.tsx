@@ -35,12 +35,12 @@ export function LocationSelector({
       try {
         const data = await getAllCountries()
         if (data.length === 0) {
-          setError('Impossible de charger les pays. Vérifiez votre connexion.')
+          setError('Unable to load countries. Check your connection.')
         }
         setCountries(data)
       } catch (err) {
-        console.error('Erreur lors du chargement des pays:', err)
-        setError('Erreur lors du chargement des pays')
+        console.error('Error loading countries:', err)
+        setError('Error loading countries')
       } finally {
         setLoading(false)
       }
@@ -95,7 +95,7 @@ export function LocationSelector({
           required
         >
           <option value="">
-            {loading ? 'Chargement des pays...' : countries.length === 0 ? 'Erreur de chargement' : 'Sélectionner un pays'}
+            {loading ? 'Loading countries...' : countries.length === 0 ? 'Loading error' : 'Select a country'}
           </option>
           {countries.map((country) => (
             <option key={country.code} value={country.code}>
@@ -123,7 +123,7 @@ export function LocationSelector({
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           >
-            <option value="">Sélectionner une ville</option>
+            <option value="">Select a city</option>
             {cities.map((city) => (
               <option key={city} value={city}>
                 {city}

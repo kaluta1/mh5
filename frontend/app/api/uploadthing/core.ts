@@ -220,7 +220,7 @@ export const ourFileRouter = {
             
             // Retourner une erreur avec les détails
             throw new UploadThingError(
-              `Contenu rejeté: ${moderation.flags.map(f => f.description).join(', ')}`
+              `Content rejected: ${moderation.flags.map(f => f.description).join(', ')}`
             );
           }
         } catch (error) {

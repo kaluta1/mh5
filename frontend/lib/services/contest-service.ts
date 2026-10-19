@@ -151,7 +151,7 @@ class ContestService {
 
       return response.data
     } catch (error) {
-      console.error(`Erreur lors de la récupération du concours ${id}:`, error)
+      console.error(`Error fetching contest ${id}:`, error)
       throw error
     }
   }
@@ -169,7 +169,7 @@ class ContestService {
 
       return response.data
     } catch (error) {
-      console.error('Erreur lors de la création du concours:', error)
+      console.error('Error creating the contest:', error)
       throw error
     }
   }
@@ -195,7 +195,7 @@ class ContestService {
 
       return response.data
     } catch (error) {
-      console.error(`Erreur lors de la mise à jour du concours ${id}:`, error)
+      console.error(`Error updating contest ${id}:`, error)
       throw error
     }
   }
@@ -213,7 +213,7 @@ class ContestService {
       cacheService.invalidate('/api/v1/admin/contests')
       cacheService.invalidate('/api/v1/contests/')
     } catch (error) {
-      console.error(`Erreur lors de la suppression du concours ${id}:`, error)
+      console.error(`Error deleting contest ${id}:`, error)
       throw error
     }
   }
@@ -253,7 +253,7 @@ class ContestService {
 
       return response.data
     } catch (error) {
-      console.error('Erreur lors de la récupération des concours filtrés:', error)
+      console.error('Error fetching filtered contests:', error)
       throw error
     }
   }

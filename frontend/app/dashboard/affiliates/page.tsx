@@ -407,7 +407,7 @@ export default function AffiliatesPage() {
             </div>
           </div>
           <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">
-            {totalCommissions.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+            {totalCommissions.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('dashboard.affiliates.total_commissions')}</p>
         </div>
@@ -432,7 +432,7 @@ export default function AffiliatesPage() {
               {t('dashboard.affiliates.your_referral_links') || 'Vos liens de parrainage'}
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              {t('dashboard.affiliates.links_description') || 'Copiez et partagez ces liens pour parrainer de nouveaux utilisateurs'}
+              {t('dashboard.affiliates.links_description') || 'Copy and share these links to refer new users'}
             </DialogDescription>
           </DialogHeader>
           
@@ -493,7 +493,7 @@ export default function AffiliatesPage() {
                 <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
                   <UserPlus className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 dark:text-blue-400" />
                 </div>
-                <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.link_register') || "Lien d'inscription"}</span>
+                <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{t('dashboard.affiliates.link_register') || 'Registration link'}</span>
               </div>
               <div className="flex gap-2">
                 <div
@@ -628,7 +628,7 @@ export default function AffiliatesPage() {
                 }`}
               >
                 <Users className="w-4 h-4" />
-                {t('dashboard.affiliates.your_affiliates') || 'Affiliés'}
+                {t('dashboard.affiliates.your_affiliates') || 'Affiliates'}
                 {directAffiliates > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 text-xs bg-myhigh5-primary/10 text-myhigh5-primary rounded-full">
                     {directAffiliates}
@@ -774,7 +774,7 @@ export default function AffiliatesPage() {
                       <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {t('dashboard.affiliates.sent_on') || 'Envoyé le'}{' '}
+                          {t('dashboard.affiliates.sent_on') || 'Sent on'}{' '}
                           {new Date(invitation.sent_at).toLocaleDateString(localeMap[language] || 'en-US', {
                             day: 'numeric',
                             month: 'short',
@@ -814,7 +814,7 @@ export default function AffiliatesPage() {
                   {t('dashboard.affiliates.no_pending') || 'Aucune invitation en attente'}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  {t('dashboard.affiliates.send_invitation_desc') || 'Envoyez des invitations à vos amis pour les parrainer'}
+                  {t('dashboard.affiliates.send_invitation_desc') || 'Send invitations to your friends to refer them'}
                 </p>
                 <Button 
                   onClick={() => setShowInviteDialog(true)}

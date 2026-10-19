@@ -1634,7 +1634,7 @@ function ContestsPageContent() {
               )}
               {!hasMore && allContests.length > 0 && (
                 <span className="text-gray-500 dark:text-gray-400">
-                  {t('admin.contests.all_loaded') || `${totalContests} concours affichés`}
+                  {t('admin.contests.all_loaded') || `${totalContests} contests shown`}
                 </span>
               )}
             </div>

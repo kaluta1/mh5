@@ -63,7 +63,7 @@ export function MediaComments({
           <Image className="w-3 h-3 text-purple-400" />
         )}
         <span className="text-xs text-gray-400">
-          {mediaType === 'video' ? 'Commentaires vidéo' : 'Commentaires photo'}
+          {mediaType === 'video' ? 'Video comments' : 'Photo comments'}
         </span>
       </div>
 

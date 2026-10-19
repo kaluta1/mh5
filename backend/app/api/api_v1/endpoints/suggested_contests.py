@@ -26,27 +26,27 @@ def create_suggested_contest(
     if not suggested_contest_in.name or not suggested_contest_in.name.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le nom du concours est requis et ne peut pas être vide"
+            detail="The contest name is required and cannot be empty"
         )
     
     if not suggested_contest_in.category or not suggested_contest_in.category.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La catégorie est requise et ne peut pas être vide"
+            detail="The category is required and cannot be empty"
         )
     
     # Validation de la longueur du nom
     if len(suggested_contest_in.name.strip()) > 255:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le nom du concours ne peut pas dépasser 255 caractères"
+            detail="The contest name cannot exceed 255 characters"
         )
     
     # Validation de la longueur de la catégorie
     if len(suggested_contest_in.category.strip()) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La catégorie ne peut pas dépasser 100 caractères"
+            detail="The category cannot exceed 100 characters"
         )
     
     try:
@@ -62,7 +62,7 @@ def create_suggested_contest(
         print(f"Erreur lors de la création d'une suggestion de concours: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Une erreur est survenue lors de la création de la suggestion. Veuillez réessayer plus tard."
+            detail="The suggestion could not be created. Please try again later."
         )
 
 
@@ -114,7 +114,7 @@ def read_suggested_contest(
     if not suggestion:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion de concours non trouvée"
+            detail="Contest suggestion not found"
         )
     return suggestion
 
@@ -134,14 +134,14 @@ def update_suggested_contest(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante. Seuls les administrateurs peuvent modifier les suggestions."
+            detail="Insufficient permission. Only administrators can edit suggestions."
         )
     
     suggestion = suggested_contest.get(db=db, id=suggested_contest_id)
     if not suggestion:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion de concours non trouvée"
+            detail="Contest suggestion not found"
         )
     
     try:
@@ -170,14 +170,14 @@ def delete_suggested_contest(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante. Seuls les administrateurs peuvent supprimer les suggestions."
+            detail="Insufficient permission. Only administrators can delete suggestions."
         )
     
     suggestion = suggested_contest.get(db=db, id=suggested_contest_id)
     if not suggestion:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Suggestion de concours non trouvée"
+            detail="Contest suggestion not found"
         )
     
     suggested_contest.remove(db=db, id=suggested_contest_id)

@@ -49,7 +49,7 @@ export function ImagePreviewDialog({
 
         {/* Click to close hint */}
         <div className="absolute bottom-4 left-0 right-0 text-center text-sm text-gray-500 dark:text-gray-400">
-          Cliquez pour fermer
+          Click to close
         </div>
       </div>
     </div>

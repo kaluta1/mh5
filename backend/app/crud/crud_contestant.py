@@ -1237,7 +1237,7 @@ class CRUDContestant:
         # Récupérer l'utilisateur pour copier ses données géographiques
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise ValueError("Utilisateur non trouvé")
+            raise ValueError("User not found")
         
         # Créer la candidature avec les données géographiques et le genre de l'utilisateur
         author_gender_value = None
@@ -1397,7 +1397,7 @@ class CRUDContestant:
         if existing:
             return {
                 "eligible": False,
-                "reason": "Vous êtes déjà inscrit à ce concours"
+                "reason": "You are already registered for this contest"
             }
         
         # D'abord, essayer de récupérer comme un Contest (table contest)
@@ -1408,14 +1408,14 @@ class CRUDContestant:
             if not contest.is_active:
                 return {
                     "eligible": False,
-                    "reason": "Ce concours n'est pas actif"
+                    "reason": "This contest is not active"
                 }
             
             # Vérifier is_submission_open
             if not contest.is_submission_open:
                 return {
                     "eligible": False,
-                    "reason": "Les inscriptions sont fermées pour ce concours"
+                    "reason": "Registrations are closed for this contest"
                 }
             
             # Vérifier les dates de soumission via le Round actif
@@ -1435,7 +1435,7 @@ class CRUDContestant:
                 if today < start_date:
                     return {
                         "eligible": False,
-                        "reason": "La période d'inscription n'a pas encore commencé"
+                        "reason": "The registration period has not started yet"
                     }
             
             if submission_end_date:
@@ -1445,7 +1445,7 @@ class CRUDContestant:
                 if today > end_date:
                     return {
                         "eligible": False,
-                        "reason": "La période d'inscription est terminée"
+                        "reason": "The registration period has ended"
                     }
             
             return {
@@ -1458,7 +1458,7 @@ class CRUDContestant:
         if not season:
             return {
                 "eligible": False,
-                "reason": "Concours non trouvé"
+                "reason": "Contest not found"
             }
         
         # ContestSeason n'a pas de dates de soumission par défaut, on vérifie juste s'il existe
@@ -1829,7 +1829,7 @@ class CRUDContestSubmission:
         # TODO: Implémenter l'upload vers le service de stockage
         return {
             "success": False,
-            "error": "L'upload de fichiers n'est pas encore implémenté"
+            "error": "File upload is not available yet"
         }
 
 

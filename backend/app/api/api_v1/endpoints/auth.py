@@ -50,7 +50,7 @@ REGISTRATION_ACCEPTED_MESSAGE = ("Registration received. Check your inbox for an
                                  "your address.")
 VERIFICATION_SENT_MESSAGE = ("If this address belongs to an account that still needs to be confirmed, "
                              "a new confirmation link has been sent.")
-RESET_SENT_MESSAGE = "Si cet email existe, un lien de réinitialisation a été envoyé"
+RESET_SENT_MESSAGE = "If this email exists, a reset link has been sent"
 INVALID_LINK_MESSAGE = "This link is invalid, has expired or has already been used."
 
 
@@ -128,7 +128,7 @@ def register_user(
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ce nom d'utilisateur est déjà pris."
+                detail="This username is already taken."
             )
 
     email_taken = auth_security.email_in_use(db, user_in.email)
@@ -217,14 +217,14 @@ def register_user(
         if 'username' in error_str and 'email' not in error_str:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ce nom d'utilisateur est déjà pris."
+                detail="This username is already taken."
             )
         if 'email' in error_str:
             # A concurrent registration for the same address won the race.
             return _registration_accepted(user_in.email)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Erreur lors de la création du compte. Veuillez réessayer."
+            detail="The account could not be created. Please try again."
         )
 
     # Mettre à jour la langue préférée
@@ -324,7 +324,7 @@ def verify_email(
         idempotency_key=f"auth.welcome:user:{user.id}",
     )
 
-    return {"message": "Email vérifié avec succès", "code": "EMAIL_VERIFIED"}
+    return {"message": "Email verified successfully", "code": "EMAIL_VERIFIED"}
 
 
 @router.post("/resend-verification", response_model=PasswordResetResponse)
@@ -607,13 +607,13 @@ def confirm_password_reset(
     except auth_tokens.AuthTokenError as exc:
         db.rollback()
         logger.info("Password reset refused (%s)", exc.reason)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token invalide ou expiré")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
     # A reset sets a NEW password (as a password change does). Refused before anything is
     # written: the rollback leaves the link unused, so it can be used again with another password.
     if verify_password(password_reset.new_password, user.hashed_password):
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Le nouveau mot de passe doit être différent de l'ancien")
+                            detail="The new password must be different from the old one")
 
     version = auth_security.set_password(db, user, password_reset.new_password,
                                          action=auth_security.AUDIT_PASSWORD_RESET, ip=ip)
@@ -632,7 +632,7 @@ def confirm_password_reset(
     )
 
     return PasswordResetResponse(
-        message="Mot de passe réinitialisé avec succès"
+        message="Password reset successfully"
     )
 
 @router.get("/me", response_model=User)
@@ -661,7 +661,7 @@ def validate_token(
     if not payload or not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide ou expiré",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
@@ -707,7 +707,7 @@ def change_password(
     if password_data.current_password == password_data.new_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le nouveau mot de passe doit être différent de l'ancien"
+            detail="The new password must be different from the old one"
         )
 
     ip = client_ip(request)
@@ -728,7 +728,7 @@ def change_password(
     )
 
     return PasswordChangeResponse(
-        message="Mot de passe modifié avec succès",
+        message="Password changed successfully",
         access_token=create_access_token(
             subject=current_user.id,
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),

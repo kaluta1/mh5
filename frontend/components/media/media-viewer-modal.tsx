@@ -105,7 +105,7 @@ export function MediaViewerModal({
                   onClick={handlePrevious}
                   disabled={currentIndex === 0}
                   className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-2.5 md:p-3 rounded-full bg-black/60 hover:bg-black/80 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100 backdrop-blur-md border border-white/20 hover:border-white/30"
-                  aria-label="Précédent"
+                  aria-label="Previous"
                 >
                   <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
                 </button>

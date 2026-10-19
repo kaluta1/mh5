@@ -79,7 +79,7 @@ export function ContestDetailsHeader({
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
-                <p className="text-xs">{t('dashboard.contests.tooltip_info') || 'Voir les détails et les conditions du concours'}</p>
+                <p className="text-xs">{t('dashboard.contests.tooltip_info') || 'View the contest details and rules'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -102,7 +102,7 @@ export function ContestDetailsHeader({
                       : contest.level === 'country'
                       ? (t('dashboard.contests.tooltip_level_country') || 'Concours au niveau national')
                       : contest.level === 'regional'
-                      ? (t('dashboard.contests.tooltip_level_regional') || 'Concours au niveau régional')
+                      ? (t('dashboard.contests.tooltip_level_regional') || 'Regional-level contest')
                       : contest.level === 'continental'
                       ? (t('dashboard.contests.tooltip_level_continental') || 'Concours au niveau continental')
                       : (t('dashboard.contests.tooltip_level_global') || 'Concours au niveau mondial')}
@@ -126,8 +126,8 @@ export function ContestDetailsHeader({
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
                     {contest.is_submission_open 
-                      ? (t('dashboard.contests.tooltip_open') || 'Le concours est actuellement ouvert. Vous pouvez concourir à ce concours.')
-                      : (t('dashboard.contests.tooltip_closed') || 'Le concours est fermé. Les inscriptions ne sont plus acceptées.')}
+                      ? (t('dashboard.contests.tooltip_open') || 'Entries are open. You can join this contest.')
+                      : (t('dashboard.contests.tooltip_closed') || 'This contest is closed. Entries are no longer accepted.')}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -142,7 +142,7 @@ export function ContestDetailsHeader({
                   </TooltipTrigger>
                   <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                     <p className="text-xs">
-                      {t('dashboard.contests.tooltip_voting_open') || 'Le vote est actuellement ouvert. Vous pouvez voter pour les participants.'}
+                      {t('dashboard.contests.tooltip_voting_open') || 'Voting is open. You can vote for the contestants.'}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -158,7 +158,7 @@ export function ContestDetailsHeader({
                 </TooltipTrigger>
                 <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
                   <p className="text-xs">
-                    {t('dashboard.contests.tooltip_contestants') || `${participantsCount} participant${participantsCount > 1 ? 's' : ''} dans ce concours`}
+                    {t('dashboard.contests.tooltip_contestants') || `${participantsCount} participant${participantsCount > 1 ? 's' : ''} in this contest`}
                   </p>
                 </TooltipContent>
               </Tooltip>

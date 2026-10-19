@@ -58,7 +58,7 @@ export function ShareDialog({ isOpen, onOpenChange, shareLink, title, descriptio
             {t('dashboard.contests.share_title') || 'Partager ce participant'}
           </DialogTitle>
           <DialogDescription className="text-gray-600 dark:text-gray-400">
-            {t('dashboard.contests.share_description') || 'Partagez ce participant avec vos amis et votre réseau'}
+            {t('dashboard.contests.share_description') || 'Share this contestant with your friends and network'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-4">
@@ -80,7 +80,7 @@ export function ShareDialog({ isOpen, onOpenChange, shareLink, title, descriptio
                 {linkCopied ? (
                   <>
                     <Check className="w-4 h-4" />
-                    {t('dashboard.contests.copied') || 'Copié'}
+                    {t('dashboard.contests.copied') || 'Copied'}
                   </>
                 ) : (
                   <>

@@ -234,10 +234,10 @@ def _refuse_closed(verification) -> None:
     if verification and verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Complétez l’étape justificatif de domicile avant de relancer la vérification d’identité.",
+            detail="Complete the proof-of-address step before restarting identity verification.",
         )
     if verification and verification.status == KYCStatus.APPROVED:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Votre identité est déjà vérifiée")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your identity is already verified")
 
 
 @router.post("/initiate")
@@ -357,7 +357,7 @@ async def initiate_shufti_verification(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Vous avez atteint le nombre maximum de tentatives ({verification.max_attempts}). Veuillez contacter le support."
+            detail=f"You have reached the maximum number of attempts ({verification.max_attempts}). Please contact support."
         )
 
     valid_payment = None
@@ -375,7 +375,7 @@ async def initiate_shufti_verification(
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
-                    "message": "Vous devez payer pour effectuer la vérification KYC",
+                    "message": "Payment is required to complete KYC verification",
                     "available_attempts": available_count,
                     "price": float(fee_amount),
                     "currency": fee_currency
@@ -491,7 +491,7 @@ async def initiate_shufti_verification(
             if row is not None and int(row.attempt_sessions_count or 0) > 0:
                 row.attempt_sessions_count = int(row.attempt_sessions_count) - 1
             db.commit()
-        err = result.get("error", "Erreur lors de l'initialisation de la vérification")
+        err = result.get("error", "Verification could not be started")
         err_l = (err or "").lower()
         if is_kaluta_active():
             if "not configured" in err_l or "kaluta_api_key" in err_l or "disabled" in err_l:
@@ -748,7 +748,7 @@ async def get_kyc_status_detailed(
         return {
             "status": None,
             "can_start": True,
-            "message": "Aucune vérification KYC trouvée",
+            "message": "No KYC verification found",
             # The fee is shown before the member starts.
             "available_payments": paid,
             "has_valid_payment": paid > 0,
@@ -850,7 +850,7 @@ def submit_kyc_verification(
     if existing_verification and existing_verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Une vérification KYC est déjà en cours pour cet utilisateur"
+            detail="A KYC verification is already in progress for this user"
         )
     
     # Créer la nouvelle vérification
@@ -898,7 +898,7 @@ def get_kyc_status(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune vérification KYC trouvée pour cet utilisateur"
+            detail="No KYC verification found for this user"
         )
     
     return KYCStatusResponse(
@@ -928,7 +928,7 @@ def get_kyc_submission(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune vérification KYC trouvée pour cet utilisateur"
+            detail="No KYC verification found for this user"
         )
     
     # Récupérer le document associé
@@ -964,14 +964,14 @@ def get_kyc_verification(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée"
+            detail="KYC verification not found"
         )
     
     # Vérifier que l'utilisateur peut accéder à cette vérification
     if verification.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé à cette vérification"
+            detail="You are not allowed to access this verification"
         )
     
     # Récupérer les documents associés
@@ -1002,19 +1002,19 @@ def upload_kyc_document(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée"
+            detail="KYC verification not found"
         )
     
     if verification.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé à cette vérification"
+            detail="You are not allowed to access this verification"
         )
     
     if verification.status not in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Impossible de télécharger des documents pour cette vérification"
+            detail="Documents cannot be uploaded for this verification"
         )
     
     # TODO: Implémenter le stockage des fichiers (S3, local, etc.)
@@ -1050,7 +1050,7 @@ def upload_kyc_document(
         verification_update = KYCVerificationUpdate(status=KYCStatus.IN_PROGRESS)
         crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=verification_update)
     
-    return {"message": "Documents téléchargés avec succès"}
+    return {"message": "Documents uploaded successfully"}
 
 
 # Endpoints administrateur
@@ -1102,7 +1102,7 @@ def admin_kyc_verification_detail(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée",
+            detail="KYC verification not found",
         )
 
     u = db.query(User).filter(User.id == verification.user_id).first()
@@ -1198,7 +1198,7 @@ def approve_kyc_verification(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée"
+            detail="KYC verification not found"
         )
     
     if verification.status not in [
@@ -1209,7 +1209,7 @@ def approve_kyc_verification(
     ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cette vérification ne peut pas être approuvée"
+            detail="This verification cannot be approved"
         )
     
     result = crud_kyc.kyc_verification.approve_verification(
@@ -1249,7 +1249,7 @@ def reject_kyc_verification(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée"
+            detail="KYC verification not found"
         )
     
     if verification.status not in [
@@ -1260,7 +1260,7 @@ def reject_kyc_verification(
     ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cette vérification ne peut pas être rejetée"
+            detail="This verification cannot be rejected"
         )
     
     result = crud_kyc.kyc_verification.reject_verification(
@@ -1311,7 +1311,7 @@ def get_verification_audit_logs(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification KYC non trouvée"
+            detail="KYC verification not found"
         )
     
     return crud_kyc.kyc_audit_log.get_by_verification(db, verification_id=verification_id)
@@ -1483,7 +1483,7 @@ async def shufti_pro_webhook(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification non trouvée"
+            detail="Verification not found"
         )
     
     # Traiter les résultats selon l'événement
@@ -1508,7 +1508,7 @@ async def shufti_pro_webhook(
         if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
             return KYCWebhookResponse(success=True, message="Stale webhook ignored", verification_id=verification.id)
         # Rejeter automatiquement
-        reason = webhook_data.declined_reason or "Vérification échouée"
+        reason = webhook_data.declined_reason or "Verification failed"
         crud_kyc.kyc_verification.reject_verification(
             db, verification_id=verification.id, reason=reason
         )
@@ -1531,7 +1531,7 @@ async def shufti_pro_webhook(
 
     return KYCWebhookResponse(
         success=True,
-        message="Webhook traité avec succès",
+        message="Webhook processed successfully",
         verification_id=verification.id
     )
 

@@ -104,7 +104,7 @@ export default function ReportsPage() {
       // Mettre en cache (TTL de 5 minutes)
       cacheService.set(endpoint, data, params, 5 * 60 * 1000)
     } catch (error: any) {
-      console.error('Erreur lors du chargement des reports:', error)
+      console.error('Error loading reports:', error)
       addToast(error.response?.data?.detail || t('admin.reports.load_error') || 'Error loading reports', 'error')
     } finally {
       setLoading(false)

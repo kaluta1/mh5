@@ -70,7 +70,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
       const data = await geographyService.getContinents()
       setContinents(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des continents', 'error')
+      addToast('Error loading continents', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -94,7 +94,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
       const data = await geographyService.getCountriesByRegion(regionId)
       setCountries(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des pays', 'error')
+      addToast('Error loading countries', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -106,7 +106,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
       const data = await geographyService.getCitiesByCountry(countryId)
       setCities(data)
     } catch (err) {
-      addToast('Erreur lors du chargement des villes', 'error')
+      addToast('Error loading cities', 'error')
     } finally {
       setIsLoadingData(false)
     }
@@ -126,7 +126,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
           disabled={isLoading || isLoadingData}
         >
-          <option value="">Sélectionner un continent</option>
+          <option value="">Select a continent</option>
           {continents.map((continent) => (
             <option key={continent.id} value={continent.id}>
               {continent.name}
@@ -139,7 +139,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
       {selectedContinent && (
         <div>
           <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            Région/État *
+            Region/State *
           </label>
           <select
             value={selectedRegion}
@@ -147,7 +147,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
-            <option value="">Sélectionner une région</option>
+            <option value="">Select a region</option>
             {regions.map((region) => (
               <option key={region.id} value={region.id}>
                 {region.name}
@@ -169,7 +169,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
-            <option value="">Sélectionner un pays</option>
+            <option value="">Select a country</option>
             {countries.map((country) => (
               <option key={country.id} value={country.id}>
                 {country.name}
@@ -191,7 +191,7 @@ export function LocationSelector({ onLocationSelected, isLoading }: LocationSele
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             disabled={isLoading || isLoadingData}
           >
-            <option value="">Sélectionner une ville</option>
+            <option value="">Select a city</option>
             {cities.map((city) => (
               <option key={city.id} value={city.id}>
                 {city.name}

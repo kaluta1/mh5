@@ -197,7 +197,7 @@ export default function SearchPage() {
         <aside className="space-y-4 bg-white/90 dark:bg-gray-900/70 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 h-fit shadow-sm">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white tracking-wide">
-              {t('dashboard.search.recent_searches') || 'Recherches récentes'}
+              {t('dashboard.search.recent_searches') || 'Recent Searches'}
             </h2>
             {searchHistory.length > 0 && (
               <button
@@ -219,7 +219,7 @@ export default function SearchPage() {
 
           {searchHistory.length === 0 ? (
             <p className="text-xs text-gray-500 dark:text-gray-500">
-              {t('dashboard.search.no_history') || 'Aucune recherche récente.'}
+              {t('dashboard.search.no_history') || 'No History'}
             </p>
           ) : (
             <ul className="space-y-1 max-h-80 overflow-y-auto text-sm">

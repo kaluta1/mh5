@@ -48,7 +48,7 @@ async def create_verification(
             flags_desc = ", ".join([f.description for f in moderation_result.flags])
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Média rejeté par la modération: {flags_desc}"
+                detail=f"Media rejected by moderation: {flags_desc}"
             )
     
     verification = verification_crud.create(db, current_user.id, verification_in)
@@ -117,14 +117,14 @@ async def get_verification(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification non trouvée"
+            detail="Verification not found"
         )
     
     # Vérifier que l'utilisateur a accès
     if verification.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé"
+            detail="Unauthorized access"
         )
     
     return verification
@@ -143,14 +143,14 @@ async def delete_verification(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification non trouvée"
+            detail="Verification not found"
         )
     
     # Seul le propriétaire ou un admin peut supprimer
     if verification.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé"
+            detail="Unauthorized access"
         )
     
     verification_crud.delete(db, verification_id)
@@ -195,7 +195,7 @@ async def update_verification_status(
     if not verification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vérification non trouvée"
+            detail="Verification not found"
         )
     
     updated = verification_crud.update_status(

@@ -350,14 +350,14 @@ async def share_username_short(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="User not found"
         )
 
     contestant = _get_latest_user_contestant(db, user.id)
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune participation trouvée pour cet utilisateur"
+            detail="No entries found for this user"
         )
 
     redirect_path = f"/c/{contestant.id}"
@@ -466,7 +466,7 @@ async def share_register(
     
     # Titre et description
     title = "Rejoignez MyHighFive"
-    description = "Participez à des concours, gagnez des prix et rejoignez une communauté passionnée !"
+    description = "Take part in contests, win prizes and join a passionate community!"
     image_url = _DEFAULT_OG_IMAGE
     
     # Générer le HTML avec métadonnées Open Graph
@@ -590,7 +590,7 @@ async def share_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contestant non trouvé"
+            detail="Contestant not found"
         )
     
     share_page_url = f"{_SITE_BASE}/s/c/{contestant_id}"
@@ -752,7 +752,7 @@ async def share_profile(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="User not found"
         )
     
     flutter_url = f"{_SITE_BASE}/{username}"

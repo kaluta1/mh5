@@ -78,17 +78,17 @@ export function CommentItem({
         await commentsService.unlikeComment(comment.id)
         setIsLiked(false)
         setLikeCount(prev => Math.max(0, prev - 1))
-        addToast(t('dashboard.contests.like_removed') || 'Like retiré', 'success')
+        addToast(t('dashboard.contests.like_removed') || 'Like Removed', 'success')
       } else {
         await commentsService.likeComment(comment.id)
         setIsLiked(true)
         setLikeCount(prev => prev + 1)
-        addToast(t('dashboard.contests.like_added') || 'Like ajouté', 'success')
+        addToast(t('dashboard.contests.like_added') || 'Like Added', 'success')
       }
       if (onUpdate) onUpdate(Number(comment.id))
     } catch (error: any) {
       console.error('Error toggling like:', error)
-      addToast(error.response?.data?.detail || 'Erreur lors du like', 'error')
+      addToast(error.response?.data?.detail || 'Error liking', 'error')
     }
   }
 
@@ -113,7 +113,7 @@ export function CommentItem({
       await loadReplies()
     } catch (error: any) {
       console.error('Error adding reply:', error)
-      addToast(error.response?.data?.detail || 'Erreur lors de l\'ajout de la réponse', 'error')
+      addToast(error.response?.data?.detail || 'Error adding the reply', 'error')
     } finally {
       setIsSubmittingReply(false)
     }
@@ -174,7 +174,7 @@ export function CommentItem({
                 {isReply && (
                   <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                     <Reply className="w-3 h-3" />
-                    <span>{t('dashboard.contests.reply') || 'Réponse'}</span>
+                    <span>{t('dashboard.contests.reply') || 'Reply'}</span>
                   </span>
                 )}
               </div>
@@ -231,7 +231,7 @@ export function CommentItem({
                   onMentionSelect={(username) => {
                   }}
                   users={commenters}
-                  placeholder={t('dashboard.contests.reply_placeholder') || 'Écrire une réponse...'}
+                  placeholder={t('dashboard.contests.reply_placeholder') || 'Write a reply...'}
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary focus:border-transparent transition-all"
                   disabled={isSubmittingReply}
                 />
@@ -250,7 +250,7 @@ export function CommentItem({
                     disabled={!replyText.trim() || isSubmittingReply}
                     className="px-4 py-1.5 text-sm bg-myhigh5-primary hover:bg-myhigh5-primary-dark text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {isSubmittingReply ? t('dashboard.contests.sending') || 'Envoi...' : t('dashboard.contests.reply') || 'Répondre'}
+                    {isSubmittingReply ? t('dashboard.contests.sending') || 'Envoi...' : t('dashboard.contests.reply') || 'Reply'}
                   </button>
                 </div>
               </div>
@@ -274,8 +274,8 @@ export function CommentItem({
                   className="text-xs text-myhigh5-primary dark:text-myhigh5-primary-light hover:underline font-medium"
                 >
                   {expandedReplies 
-                    ? (t('dashboard.contests.hide_replies') || `Masquer ${comment.reply_count} réponse(s)`).replace('{count}', String(comment.reply_count))
-                    : (t('dashboard.contests.show_replies') || `Voir ${comment.reply_count} réponse(s)`).replace('{count}', String(comment.reply_count))
+                    ? (t('dashboard.contests.hide_replies') || `Hide ${comment.reply_count} replies`).replace('{count}', String(comment.reply_count))
+                    : (t('dashboard.contests.show_replies') || `View ${comment.reply_count} replies`).replace('{count}', String(comment.reply_count))
                   }
                 </button>
               </div>

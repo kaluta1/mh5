@@ -26,7 +26,7 @@ def create_voting_type(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission insuffisante pour créer un type de vote"
+            detail="You do not have permission to create a voting type"
         )
     
     try:
@@ -90,7 +90,7 @@ def read_voting_type(
     if not voting_type_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Type de vote non trouvé"
+            detail="Voting type not found"
         )
     return voting_type_obj
 
@@ -117,7 +117,7 @@ def update_voting_type(
     if not voting_type_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Type de vote non trouvé"
+            detail="Voting type not found"
         )
     
     try:
@@ -153,7 +153,7 @@ def delete_voting_type(
     if not voting_type_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Type de vote non trouvé"
+            detail="Voting type not found"
         )
     
     voting_type.remove(db=db, id=voting_type_id)

@@ -25,7 +25,7 @@ export default function MicroservicesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Construction className="h-5 w-5" />
-            {t('common.coming_soon') || 'Bientôt disponible'}
+            {t('common.coming_soon') || 'Coming Soon'}
           </CardTitle>
         </CardHeader>
         <CardContent>

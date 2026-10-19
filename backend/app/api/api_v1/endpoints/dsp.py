@@ -153,7 +153,7 @@ def get_digital_product(
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produit non trouvé"
+            detail="Product not found"
         )
     return product
 
@@ -173,7 +173,7 @@ def create_digital_product(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vérification d'identité et de domicile requise pour vendre"
+            detail="Identity and address verification is required to sell"
         )
     
     product = crud_dsp.digital_product.create_with_seller(
@@ -197,7 +197,7 @@ def update_digital_product(
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produit non trouvé"
+            detail="Product not found"
         )
     
     if product.seller_id != current_user.id:
@@ -287,7 +287,7 @@ def create_product_review(
     if not has_purchased:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous devez acheter le produit pour laisser un avis"
+            detail="You must buy the product to leave a review"
         )
     
     review = crud_dsp.product_review.create_with_reviewer(

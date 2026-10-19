@@ -191,7 +191,7 @@ function KYCPageContent() {
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
 
       if (!token) {
-        setError(t('kyc.login_required') || 'Veuillez vous connecter pour continuer')
+        setError(t('kyc.login_required') || 'Please sign in to continue')
         setIsInitiating(false)
         return
       }
@@ -240,7 +240,7 @@ function KYCPageContent() {
         setKycProvider(result.provider || kycData?.kyc_provider || 'kaluta')
         setVerificationUrl(result.verification_url)
       } else {
-        setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
+        setError(t('kyc.init_error') || 'Unable to start verification')
       }
     } catch (err) {
       // Gérer l'erreur de paiement requis
@@ -250,7 +250,7 @@ function KYCPageContent() {
         // Don't log payment required errors - they're expected
       } else {
         logger.error('Error initiating verification:', err)
-        setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+        setError(err instanceof Error ? err.message : t('common.error') || 'Error')
       }
     } finally {
       setIsInitiating(false)
@@ -393,14 +393,14 @@ function KYCPageContent() {
         setKycProvider(result.provider || 'kaluta')
         setVerificationUrl(result.verification_url)
       } else {
-        setError(t('kyc.init_error') || 'Impossible de démarrer la vérification')
+        setError(t('kyc.init_error') || 'Unable to start verification')
       }
     } catch (err) {
       if (err instanceof KYCPaymentRequiredError) {
         setShowPaymentDialog(true)
       } else {
         logger.error('KYC initiate after payment:', err)
-        setError(err instanceof Error ? err.message : t('common.error') || 'Une erreur est survenue')
+        setError(err instanceof Error ? err.message : t('common.error') || 'Error')
       }
     } finally {
       setIsInitiating(false)
@@ -429,10 +429,10 @@ function KYCPageContent() {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {t('kyc.verification_in_progress') || 'Vérification d\'identité'}
+                  {t('kyc.verification_in_progress') || 'Verification in progress'}
                 </h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('kyc.follow_instructions') || 'Suivez les étapes ci-dessous'}
+                  {t('kyc.follow_instructions') || 'Follow the steps below'}
                 </p>
               </div>
             </div>
@@ -485,7 +485,7 @@ function KYCPageContent() {
           <div className="mt-4 text-center space-y-2">
             <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
               <Shield className="w-3 h-3" />
-              {t('kyc.secure_verification') || 'Vérification sécurisée et chiffrée'}
+              {t('kyc.secure_verification') || 'Secure verification by our certified partner'}
             </p>
             <Button
               type="button"
@@ -524,10 +524,10 @@ function KYCPageContent() {
               <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-              {t('kyc.already_verified') || 'Identité vérifiée'}
+              {t('kyc.already_verified') || 'Identity verified'}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {t('kyc.already_verified_description') || 'Votre identité a été vérifiée avec succès. Vous pouvez maintenant profiter de toutes les fonctionnalités.'}
+              {t('kyc.already_verified_description') || 'Your identity has been successfully verified. You can now enjoy all features.'}
             </p>
             <Button
               onClick={() => router.push('/dashboard')}
@@ -677,10 +677,10 @@ function KYCPageContent() {
               <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-              {t('kyc.verification_in_progress') || 'Vérification en cours'}
+              {t('kyc.verification_in_progress') || 'Verification in progress'}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {t('kyc.verification_continue_description') || 'Vous avez une vérification en cours. Vous pouvez la continuer ou actualiser le statut.'}
+              {t('kyc.verification_continue_description') || 'You have a verification in progress. You can continue it or refresh the status.'}
             </p>
 
             {error && (
@@ -731,7 +731,7 @@ function KYCPageContent() {
                 ) : (
                   <>
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    {t('kyc.continue_verification') || 'Continuer la vérification'}
+                    {t('kyc.continue_verification') || 'Continue verification'}
                   </>
                 )}
               </Button>
@@ -777,12 +777,12 @@ function KYCPageContent() {
               {t('kyc.max_attempts_reached') || 'Nombre maximum de tentatives atteint'}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {t('kyc.max_attempts_can_pay') || 'Vous avez utilisé vos tentatives gratuites. Vous pouvez acheter des tentatives supplémentaires pour continuer.'}
+              {t('kyc.max_attempts_can_pay') || 'You have used your free attempts. You can purchase additional attempts to continue.'}
             </p>
             
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('kyc.attempts_used') || 'Tentatives utilisées'}: <span className="font-semibold">{kycData.attempts_count}/{kycData.max_attempts}</span>
+                {t('kyc.attempts_used') || 'Attempts used'}: <span className="font-semibold">{kycData.attempts_count}/{kycData.max_attempts}</span>
               </p>
             </div>
 
@@ -799,18 +799,18 @@ function KYCPageContent() {
               <div className="flex items-center gap-2 mb-2">
                 <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  {t('kyc.buy_attempts') || 'Acheter des tentatives supplémentaires'}
+                  {t('kyc.buy_attempts') || 'Buy additional attempts'}
                 </p>
               </div>
               <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                {t('kyc.price_per_attempt') || 'Prix par tentative'}: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
+                {t('kyc.price_per_attempt') || 'Price per attempt'}: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
               </p>
               <Button
                 onClick={() => setShowPaymentDialog(true)}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <CreditCard className="w-4 h-4 mr-2" />
-                {t('kyc.pay_and_retry') || 'Payer et réessayer'}
+                {t('kyc.pay_and_retry') || 'Pay and retry'}
               </Button>
             </div>
 
@@ -846,21 +846,21 @@ function KYCPageContent() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
               {kycData?.max_attempts_reached 
-                ? (t('kyc.max_attempts_reached') || 'Tentatives épuisées')
-                : (t('kyc.payment_required') || 'Paiement requis')
+                ? (t('kyc.max_attempts_reached') || 'Attempts exhausted')
+                : (t('kyc.payment_required') || 'Payment required')
               }
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {kycData?.max_attempts_reached 
-                ? (t('kyc.max_attempts_reached_description') || 'Vous avez utilisé toutes vos tentatives gratuites. Pour continuer la vérification, veuillez payer les frais de vérification.')
-                : (t('kyc.payment_required_description') || 'Pour effectuer la vérification d\'identité, veuillez d\'abord payer les frais de vérification.')
+                ? (t('kyc.max_attempts_reached_description') || 'You have used all your free attempts. To continue verification, please pay the verification fee.')
+                : (t('kyc.payment_required_description') || 'To complete identity verification, please pay the verification fee first.')
               }
             </p>
             
             {/* Prix de la vérification */}
             <div className="bg-gradient-to-r from-myhigh5-primary/10 to-myhigh5-secondary/10 border border-myhigh5-primary/20 rounded-xl p-4 mb-6">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                {t('kyc.verification_fee') || 'Frais de vérification'}
+                {t('kyc.verification_fee') || 'Verification fee'}
               </p>
               <p className="text-2xl font-bold text-myhigh5-primary">
                 {formatKycFee(kycData, t('kyc.fee_free') || 'Free')}
@@ -881,7 +881,7 @@ function KYCPageContent() {
                 className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
                 <CreditCard className="w-4 h-4 mr-2" />
-                {t('kyc.pay_now') || 'Payer maintenant'}
+                {t('kyc.pay_now') || 'Pay now'}
               </Button>
               <Button
                 onClick={() => router.push('/dashboard')}
@@ -914,17 +914,17 @@ function KYCPageContent() {
               <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-              {t('kyc.verification_rejected') || 'Vérification refusée'}
+              {t('kyc.verification_rejected') || 'Verification rejected'}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {t('kyc.verification_rejected_description') || 'Votre demande de vérification a été refusée. Vous pouvez soumettre une nouvelle demande.'}
+              {t('kyc.verification_rejected_description') || 'Your verification request was rejected. You can submit a new request.'}
             </p>
             
             {/* Afficher les tentatives restantes */}
             {kycData?.attempts_remaining !== undefined && kycData.attempts_remaining > 0 && (
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  {t('kyc.attempts_remaining') || 'Tentatives restantes'}: <span className="font-bold">{kycData.attempts_remaining}</span> / {kycData.max_attempts}
+                  {t('kyc.attempts_remaining') || 'Attempts remaining'}: <span className="font-bold">{kycData.attempts_remaining}</span> / {kycData.max_attempts}
                 </p>
               </div>
             )}
@@ -935,11 +935,11 @@ function KYCPageContent() {
                 <div className="flex items-center gap-2 mb-2">
                   <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    Paiement requis pour une nouvelle tentative
+                    Payment required for a new attempt
                   </p>
                 </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                  Prix: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
+                  Price: <span className="font-bold">{formatKycFee(kycData, t('kyc.fee_free') || 'Free')}</span>
                 </p>
                 <Button
                   onClick={() => setShowPaymentDialog(true)}
@@ -947,7 +947,7 @@ function KYCPageContent() {
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Payer maintenant
+                  Pay now
                 </Button>
               </div>
             )}
@@ -955,7 +955,7 @@ function KYCPageContent() {
             {kycData?.rejection_reason && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 text-left">
                 <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
-                  {t('kyc.rejection_reason') || 'Raison du refus'}:
+                  {t('kyc.rejection_reason') || 'Reason for rejection'}:
                 </p>
                 <p className="text-sm text-red-700 dark:text-red-300">
                   {kycData.rejection_reason}
@@ -1038,7 +1038,7 @@ function KYCPageContent() {
         {/* Process Steps */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 md:p-8 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">
-            {t('kyc.verification_steps') || 'Comment ça marche ?'}
+            {t('kyc.verification_steps') || 'How it works'}
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1059,10 +1059,10 @@ function KYCPageContent() {
                 <FileCheck className="w-7 h-7 text-purple-600 dark:text-purple-400" />
               </div>
               <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                {t('kyc.step_2_title') || '2. Document d\'identité'}
+                {t('kyc.step_2_title') || '2. Identity document'}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('kyc.step_2_desc') || 'Prenez en photo votre pièce d\'identité'}
+                {t('kyc.step_2_desc') || 'Take a photo of your ID document'}
               </p>
             </div>
 
@@ -1071,10 +1071,10 @@ function KYCPageContent() {
                 <Camera className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                {t('kyc.step_3_title') || '3. Selfie de vérification'}
+                {t('kyc.step_3_title') || '3. Verification selfie'}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('kyc.step_3_desc') || 'Prenez un selfie pour confirmer votre identité'}
+                {t('kyc.step_3_desc') || 'Take a selfie to confirm your identity'}
               </p>
             </div>
           </div>
@@ -1083,17 +1083,17 @@ function KYCPageContent() {
         {/* Documents acceptés */}
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-8">
           <h3 className="font-medium text-gray-900 dark:text-white mb-4 text-center">
-            {t('kyc.accepted_documents') || 'Documents acceptés'}
+            {t('kyc.accepted_documents') || 'Accepted documents'}
           </h3>
           <div className="flex flex-wrap justify-center gap-3">
             <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-              {t('kyc.doc_passport') || 'Passeport'}
+              {t('kyc.doc_passport') || 'Passport'}
             </span>
             <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-              {t('kyc.doc_id_card') || "Carte d'identité"}
+              {t('kyc.doc_id_card') || 'National ID card'}
             </span>
             <span className="px-4 py-2 bg-white dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-              {t('kyc.doc_driving_license') || 'Permis de conduire'}
+              {t('kyc.doc_driving_license') || "Driver's license"}
             </span>
           </div>
         </div>
@@ -1128,18 +1128,18 @@ function KYCPageContent() {
             {isInitiating ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                {t('kyc.initiating') || 'Démarrage...'}
+                {t('kyc.initiating') || 'Starting...'}
               </>
             ) : (
               <>
                 <Shield className="w-5 h-5 mr-2" />
-                {t('kyc.start_verification') || 'Démarrer la vérification'}
+                {t('kyc.start_verification') || 'Start verification'}
               </>
             )}
           </Button>
           
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-            {t('kyc.secure_verification') || 'Vérification sécurisée par notre partenaire certifié'}
+            {t('kyc.secure_verification') || 'Secure verification by our certified partner'}
           </p>
         </div>
       </div>

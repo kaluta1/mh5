@@ -54,7 +54,7 @@ class PasswordResetResponse(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "message": "Si cet email existe, un lien de réinitialisation a été envoyé"
+                "message": "If this email exists, a reset link has been sent"
             }
         }
 

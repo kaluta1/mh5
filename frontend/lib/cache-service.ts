@@ -60,7 +60,7 @@ class CacheService {
         }
       }
     } catch (error) {
-      console.warn('Erreur lors du chargement du cache:', error)
+      console.warn('Error loading the cache:', error)
     }
   }
 
@@ -77,7 +77,7 @@ class CacheService {
       })
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(cacheObj))
     } catch (error) {
-      console.warn('Erreur lors de la sauvegarde du cache:', error)
+      console.warn('Error saving the cache:', error)
       // Si localStorage est plein, nettoyer les anciennes entrées
       this.cleanExpired()
     }

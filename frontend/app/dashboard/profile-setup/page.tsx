@@ -43,12 +43,12 @@ export default function ProfileSetupPage() {
 
     // Validation
     if (!firstName.trim()) {
-      addToast(t('profile_setup.first_name_required') || 'Le prénom est requis', 'error')
+      addToast(t('profile_setup.first_name_required') || 'First name is required', 'error')
       return
     }
 
     if (!lastName.trim()) {
-      addToast(t('profile_setup.last_name_required') || 'Le nom est requis', 'error')
+      addToast(t('profile_setup.last_name_required') || 'Last name is required', 'error')
       return
     }
 
@@ -58,22 +58,22 @@ export default function ProfileSetupPage() {
     }
 
     if (!bio.trim()) {
-      addToast(t('profile_setup.bio_required') || 'La bio est requise', 'error')
+      addToast(t('profile_setup.bio_required') || 'Bio is required', 'error')
       return
     }
 
     if (!dateOfBirth) {
-      addToast(t('profile_setup.dob_required') || 'La date de naissance est requise', 'error')
+      addToast(t('profile_setup.dob_required') || 'Date of birth is required', 'error')
       return
     }
 
     if (!gender) {
-      addToast(t('profile_setup.gender_required') || 'Le genre est requis', 'error')
+      addToast(t('profile_setup.gender_required') || 'Gender is required', 'error')
       return
     }
 
     if (!cityId) {
-      addToast(t('profile_setup.city_required') || 'La ville est requise', 'error')
+      addToast(t('profile_setup.city_required') || 'City Required', 'error')
       return
     }
 
@@ -82,7 +82,7 @@ export default function ProfileSetupPage() {
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
       if (!token) {
-        addToast(t('profile_setup.session_expired') || 'Session expirée', 'error')
+        addToast(t('profile_setup.session_expired') || 'Session expired', 'error')
         router.push('/login')
         return
       }
@@ -109,10 +109,10 @@ export default function ProfileSetupPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.detail || t('profile_setup.update_error') || 'Erreur lors de la mise à jour du profil')
+        throw new Error(error.detail || t('profile_setup.update_error') || 'Update failed')
       }
 
-      addToast(t('profile_setup.success') || 'Profil configuré avec succès!', 'success')
+      addToast(t('profile_setup.success') || 'Success', 'success')
 
       // Rediriger vers le contest ou le dashboard
       const contestId = typeof window !== 'undefined' ? sessionStorage.getItem('contestId') : null
@@ -124,7 +124,7 @@ export default function ProfileSetupPage() {
       }
     } catch (err: any) {
       console.error('Erreur:', err)
-      addToast(err.message || 'Erreur lors de la configuration du profil', 'error')
+      addToast(err.message || 'Error setting up the profile', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -139,7 +139,7 @@ export default function ProfileSetupPage() {
             {t('common.profile_setup') || 'Configuration du Profil'}
           </h1>
           <p className="text-gray-400">
-            {t('common.profile_setup_description') || 'Complétez votre profil pour pouvoir participer aux concours'}
+            {t('common.profile_setup_description') || 'Complete your profile to take part in contests'}
           </p>
         </div>
 
@@ -150,13 +150,13 @@ export default function ProfileSetupPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('profile_setup.first_name') || 'Prénom'} *
+                  {t('profile_setup.first_name') || 'First Name'} *
                 </label>
                 <input
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder={t('profile_setup.first_name_placeholder') || 'Votre prénom'}
+                  placeholder={t('profile_setup.first_name_placeholder') || 'Your first name'}
                   disabled={isLoading}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
                 />
@@ -223,14 +223,14 @@ export default function ProfileSetupPage() {
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, 500))}
-                placeholder={t('profile_setup.bio_placeholder') || 'Parlez un peu de vous...'}
+                placeholder={t('profile_setup.bio_placeholder') || 'Tell us a little about yourself...'}
                 maxLength={500}
                 rows={4}
                 disabled={isLoading}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary resize-none"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {bio.length}/500 {t('profile_setup.characters') || 'caractères'}
+                {bio.length}/500 {t('profile_setup.characters') || 'Characters'}
               </p>
             </div>
 
@@ -260,7 +260,7 @@ export default function ProfileSetupPage() {
                   { value: 'male', label: t('profile_setup.male') || 'Homme' },
                   { value: 'female', label: t('profile_setup.female') || 'Femme' },
                   { value: 'other', label: t('profile_setup.other') || 'Autre' },
-                  { value: 'prefer_not_to_say', label: t('profile_setup.prefer_not_to_say') || 'Préfère ne pas dire' },
+                  { value: 'prefer_not_to_say', label: t('profile_setup.prefer_not_to_say') || 'Prefer not to say' },
                 ].map((option) => (
                   <label
                     key={option.value}
@@ -324,7 +324,7 @@ export default function ProfileSetupPage() {
         {/* Info Box */}
         <div className="mt-8 bg-blue-900/20 border border-blue-800 rounded-lg p-4">
           <p className="text-blue-200 text-sm">
-            ℹ️ {t('profile_setup.info') || 'Ces informations sont requises pour participer aux concours. Vous pourrez les modifier ultérieurement dans vos paramètres de profil.'}
+            ℹ️ {t('profile_setup.info') || 'Info'}
           </p>
         </div>
       </div>

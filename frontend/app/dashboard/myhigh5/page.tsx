@@ -308,7 +308,7 @@ export default function MyHigh5Page() {
           ),
         )
       } catch (error) {
-        console.error('Erreur lors du chargement des votes:', error)
+        console.error('Error loading votes:', error)
         setSeasonsData([])
       } finally {
         setPageLoading(false)
@@ -336,7 +336,7 @@ export default function MyHigh5Page() {
           ),
         )
       } catch (error) {
-        console.error('Erreur lors du rafraîchissement des votes:', error)
+        console.error('Error refreshing votes:', error)
       }
     }
     window.addEventListener('vote-changed', handler)
@@ -355,7 +355,7 @@ export default function MyHigh5Page() {
         )) as HistoryResponse
         setHistoryData(response.history || [])
       } catch (error) {
-        console.error('Erreur lors du chargement de l\'historique:', error)
+        console.error('Error loading the history:', error)
         setHistoryData([])
       } finally {
         setHistoryLoading(false)
@@ -435,7 +435,7 @@ export default function MyHigh5Page() {
       // Notify other panels (e.g. Top High5) so leaderboards refresh immediately.
       window.dispatchEvent(new Event('vote-changed'))
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de l\'ordre:', error)
+      console.error('Error saving the order:', error)
       addToast(t('dashboard.myhigh5.order_error') || 'Error saving order', 'error')
       const response = (await contestService.getMyHigh5Votes(
         activeLevel,

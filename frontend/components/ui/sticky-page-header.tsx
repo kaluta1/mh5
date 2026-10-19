@@ -67,7 +67,7 @@ export function StickyPageHeader({
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="bg-white text-gray-900 border-gray-200 shadow-lg dark:bg-gray-800 dark:text-white dark:border-gray-700">
-                <p className="text-xs">{infoTooltip || t('dashboard.contests.tooltip_info') || 'Voir les détails'}</p>
+                <p className="text-xs">{infoTooltip || t('dashboard.contests.tooltip_info') || 'View the contest details and rules'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

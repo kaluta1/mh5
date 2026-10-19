@@ -46,8 +46,8 @@ class NewsletterService {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Une erreur est survenue' }))
-      throw new Error(error.detail || 'Erreur lors de l\'abonnement à la newsletter')
+      const error = await response.json().catch(() => ({ detail: 'An error occurred' }))
+      throw new Error(error.detail || 'Newsletter subscription failed')
     }
 
     return response.json()
@@ -62,8 +62,8 @@ class NewsletterService {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Une erreur est survenue' }))
-      throw new Error(error.detail || 'Erreur lors de la désinscription')
+      const error = await response.json().catch(() => ({ detail: 'An error occurred' }))
+      throw new Error(error.detail || 'Unsubscribe failed')
     }
 
     return response.json()

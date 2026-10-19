@@ -36,13 +36,13 @@ def cast_vote(
     if not stage:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Étape de concours non trouvée"
+            detail="Contest stage not found"
         )
     
     if stage.status != ContestStatus.VOTING_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le vote n'est pas ouvert pour cette étape"
+            detail="Voting is not open for this stage"
         )
     
     # Vérifier si le contest associé permet le vote
@@ -75,7 +75,7 @@ def cast_vote(
     if existing_vote:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous avez déjà voté pour ce participant"
+            detail="You have already voted for this participant"
         )
     
     # Créer le vote
@@ -125,13 +125,13 @@ def update_vote(
     if not vote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vote non trouvé"
+            detail="Vote not found"
         )
     
     if vote.voter_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous ne pouvez modifier que vos propres votes"
+            detail="You can only change your own votes"
         )
     
     updated_vote = crud_voting.update_vote(
@@ -193,7 +193,7 @@ def get_contestant_voting_stats(
     if not stats:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Statistiques non trouvées pour ce participant"
+            detail="No statistics found for this participant"
         )
     return stats
 
@@ -212,7 +212,7 @@ def get_contestant_voting_profile(
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profil non trouvé pour ce participant"
+            detail="No profile found for this participant"
         )
     return profile
 
@@ -229,7 +229,7 @@ def get_voting_analytics(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès réservé aux administrateurs"
+            detail="Administrators only"
         )
     
     analytics = crud_voting.get_voting_analytics(
@@ -252,7 +252,7 @@ def delete_vote(
     if not vote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vote non trouvé"
+            detail="Vote not found"
         )
     
     if vote.voter_id != current_user.id and not current_user.is_admin:

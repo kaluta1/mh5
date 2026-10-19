@@ -56,7 +56,7 @@ export function ContestList({ seasons, categories }: ContestListProps) {
             }
             // Only show toast for non-timeout errors
             if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
-                addToast(t('admin.contests.load_error') || 'Erreur lors du chargement des concours', 'error')
+                addToast(t('admin.contests.load_error') || 'Load Error', 'error')
             }
         } finally {
             setLoading(false)
@@ -106,10 +106,10 @@ export function ContestList({ seasons, categories }: ContestListProps) {
         if (!deleteContestId) return
         try {
             await contestService.deleteContest(deleteContestId)
-            addToast(t('admin.contests.delete_success') || 'Concours supprimé avec succès', 'success')
+            addToast(t('admin.contests.delete_success') || 'Delete Success', 'success')
             fetchContests()
         } catch (error) {
-            addToast(t('admin.contests.delete_error') || 'Erreur lors de la suppression', 'error')
+            addToast(t('admin.contests.delete_error') || 'Error deleting', 'error')
         } finally {
             setShowDeleteDialog(false)
             setDeleteContestId(null)
@@ -128,10 +128,10 @@ export function ContestList({ seasons, categories }: ContestListProps) {
 
         if (editingContest && editingContest.id) {
             await contestService.updateContest(editingContest.id, dataToSend)
-            addToast(t('admin.contests.update_success') || 'Concours mis à jour avec succès', 'success')
+            addToast(t('admin.contests.update_success') || 'Update Success', 'success')
         } else {
             await contestService.createContest(dataToSend)
-            addToast(t('admin.contests.create_success') || 'Concours créé avec succès', 'success')
+            addToast(t('admin.contests.create_success') || 'Create Success', 'success')
         }
         fetchContests()
     }
@@ -238,7 +238,7 @@ export function ContestList({ seasons, categories }: ContestListProps) {
                 onOpenChange={setShowDeleteDialog}
                 onConfirm={handleConfirmDelete}
                 title={t('admin.contests.confirm_delete') || 'Confirmer la suppression'}
-                message={t('admin.contests.delete_warning') || 'Cette action est irréversible. Voulez-vous vraiment supprimer ce concours ?'}
+                message={t('admin.contests.delete_warning') || 'Delete Warning'}
             />
         </div>
     )

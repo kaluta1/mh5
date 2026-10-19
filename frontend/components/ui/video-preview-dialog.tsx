@@ -360,14 +360,14 @@ export function VideoPreviewDialog({
                   : 'text-amber-600 dark:text-amber-300'
               }`}>
                 {voteRestrictionReason === 'voting_not_open'
-                  ? (t('dashboard.contests.voting_not_open') || "Le vote n'est pas encore ouvert pour ce concours.")
+                  ? (t('dashboard.contests.voting_not_open') || "Voting is not open yet")
                   : voteRestrictionReason === 'already_voted'
-                  ? (t('dashboard.contests.already_voted_message') || 'Vous avez d\u00e9j\u00e0 vot\u00e9 pour ce participant.')
+                  ? (t('dashboard.contests.already_voted_message') || 'You have already voted for this contestant.')
                   : voteRestrictionReason === 'own_contestant'
-                  ? (t('dashboard.contests.restriction_own_contestant_desc') || 'Vous ne pouvez pas voter pour votre propre candidature.')
+                  ? (t('dashboard.contests.restriction_own_contestant_desc') || 'You cannot vote for your own contestant')
                   : voteRestrictionReason === 'not_authenticated'
-                  ? (t('dashboard.contests.restriction_not_authenticated_desc') || 'Veuillez vous connecter pour voter.')
-                  : (t('dashboard.contests.cannot_vote') || 'Le vote est indisponible.')}
+                  ? (t('dashboard.contests.restriction_not_authenticated_desc') || 'Please login to vote')
+                  : (t('dashboard.contests.cannot_vote') || 'Cannot vote')}
               </p>
             </div>
           )}

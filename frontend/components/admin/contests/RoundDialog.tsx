@@ -237,7 +237,7 @@ export function RoundDialog({
                                         <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.city_season') || 'Saison Ville'}</span>
                                         <div className="col-span-2 grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Début'}</label>
+                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Start Date'}</label>
                                                 <Input type="date" value={formData.city_season_start_date} onChange={(e) => setFormData({ ...formData, city_season_start_date: e.target.value })} className="h-8 dark:bg-gray-700" />
                                             </div>
                                             <div>
@@ -252,7 +252,7 @@ export function RoundDialog({
                                         <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.country_season') || 'Saison Pays'}</span>
                                         <div className="col-span-2 grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Début'}</label>
+                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Start Date'}</label>
                                                 <Input type="date" value={formData.country_season_start_date} onChange={(e) => setFormData({ ...formData, country_season_start_date: e.target.value })} className="h-8 dark:bg-gray-700" />
                                             </div>
                                             <div>
@@ -264,10 +264,10 @@ export function RoundDialog({
 
                                     {/* Regional Season */}
                                     <div className="grid grid-cols-3 gap-2 items-center">
-                                        <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.regional_season') || 'Saison Régionale'}</span>
+                                        <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.regional_season') || 'Regional Season'}</span>
                                         <div className="col-span-2 grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Début'}</label>
+                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Start Date'}</label>
                                                 <Input type="date" value={formData.regional_start_date} onChange={(e) => setFormData({ ...formData, regional_start_date: e.target.value })} className="h-8 dark:bg-gray-700" />
                                             </div>
                                             <div>
@@ -282,7 +282,7 @@ export function RoundDialog({
                                         <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.continental_season') || 'Saison Continentale'}</span>
                                         <div className="col-span-2 grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Début'}</label>
+                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Start Date'}</label>
                                                 <Input type="date" value={formData.continental_start_date} onChange={(e) => setFormData({ ...formData, continental_start_date: e.target.value })} className="h-8 dark:bg-gray-700" />
                                             </div>
                                             <div>
@@ -297,7 +297,7 @@ export function RoundDialog({
                                         <span className="text-xs font-semibold text-blue-900 dark:text-blue-200">{t('admin.rounds.global_season') || 'Saison Mondiale'}</span>
                                         <div className="col-span-2 grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Début'}</label>
+                                                <label className="block text-[10px] mb-1 opacity-70">{t('admin.rounds.start_date') || 'Start Date'}</label>
                                                 <Input type="date" value={formData.global_start_date} onChange={(e) => setFormData({ ...formData, global_start_date: e.target.value })} className="h-8 dark:bg-gray-700" />
                                             </div>
                                             <div>

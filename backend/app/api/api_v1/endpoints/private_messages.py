@@ -156,7 +156,7 @@ def get_conversation(
     if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé à cette conversation"
+            detail="You are not allowed to access this conversation"
         )
     
     # Construire la réponse
@@ -229,7 +229,7 @@ def create_or_get_direct_conversation(
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous ne pouvez pas créer une conversation avec vous-même"
+            detail="You cannot start a conversation with yourself"
         )
     from app.services import interaction_safety as isafe
 
@@ -280,7 +280,7 @@ def get_conversation_messages(
     if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé"
+            detail="Unauthorized access"
         )
     
     messages = crud_private_message.get_by_conversation(
@@ -382,7 +382,7 @@ def send_private_message(
     if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé"
+            detail="Unauthorized access"
         )
 
     # Phase 9: an existing conversation (direct or group) never bypasses the
@@ -477,7 +477,7 @@ def invite_user_to_group(
     if not crud_social_group.is_member(db, group_id, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous devez être membre du groupe pour inviter des utilisateurs"
+            detail="You must be a member of the group to invite users"
         )
     from app.services import interaction_safety as isafe
 
@@ -581,7 +581,7 @@ def accept_invitation(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitation introuvable ou déjà traitée"
+            detail="Invitation not found or already processed"
         )
 
 
@@ -598,6 +598,6 @@ def reject_invitation(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitation introuvable ou déjà traitée"
+            detail="Invitation not found or already processed"
         )
 

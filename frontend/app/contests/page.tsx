@@ -373,10 +373,10 @@ function ContestsPageContent() {
               </div>
 
               <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">
-                {t('pages.contests.title') || "Découvrez nos Concours"}
+                {t('pages.contests.title') || "Discover Our Contests"}
               </h1>
               <p className="text-xl md:text-2xl opacity-90 mb-10 max-w-2xl mx-auto leading-relaxed">
-                {t('pages.contests.subtitle') || "Participez à des compétitions passionnantes du niveau local au niveau mondial"}
+                {t('pages.contests.subtitle') || "Join exciting competitions from local to global level"}
               </p>
 
               {/* Stats Cards */}
@@ -483,7 +483,7 @@ function ContestsPageContent() {
                       {t('dashboard.contests.sort_votes') || 'Plus de votes'}
                     </SelectItem>
                     <SelectItem value="date">
-                      {t('dashboard.contests.sort_date') || 'Plus récent'}
+                      {t('dashboard.contests.sort_date') || 'Newest'}
                     </SelectItem>
                     <SelectItem value="name">
                       {t('dashboard.contests.sort_name') || 'Nom (A-Z)'}
@@ -522,12 +522,12 @@ function ContestsPageContent() {
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                 {activeTab === "all"
-                  ? t('pages.contests.all_contests') || "Tous les concours"
+                  ? t('pages.contests.all_contests') || "All Contests"
                   : `${t('pages.contests.contests_filter') || "Concours"} ${contestTypes.find(t => t.id === activeTab)?.label}`
                 }
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
-                {filteredContests.length} {t('pages.contests.results') || "résultat"}{filteredContests.length > 1 ? "s" : ""}
+                {filteredContests.length} {t('pages.contests.results') || "Results"}{filteredContests.length > 1 ? "s" : ""}
               </p>
             </div>
           </div>
@@ -544,10 +544,10 @@ function ContestsPageContent() {
                 <Trophy className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
-                {t('pages.contests.no_results') || "Aucun concours trouvé"}
+                {t('pages.contests.no_results') || "No contest found"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                {t('pages.contests.try_different_filter') || "Essayez un autre filtre ou terme de recherche"}
+                {t('pages.contests.try_different_filter') || "Try another filter or search term"}
               </p>
               <Button
                 variant="outline"
@@ -558,7 +558,7 @@ function ContestsPageContent() {
                 }}
                 className="mt-4"
               >
-                {t('pages.contests.reset_filters') || "Réinitialiser les filtres"}
+                {t('pages.contests.reset_filters') || "Reset Filters"}
               </Button>
             </div>
           ) : (
@@ -626,14 +626,14 @@ function ContestsPageContent() {
             <div className="relative z-10 text-center text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
                 <Users className="w-4 h-4" />
-                <span className="text-sm font-medium">{t('pages.contests.join_community') || "Rejoignez la communauté"}</span>
+                <span className="text-sm font-medium">{t('pages.contests.join_community') || "Join Community"}</span>
               </div>
 
               <h2 className="text-3xl md:text-5xl font-black mb-6 leading-tight">
-                {t('pages.contests.cta.title') || "Prêt à participer ?"}
+                {t('pages.contests.cta.title') || "Ready to participate?"}
               </h2>
               <p className="text-lg md:text-xl opacity-90 mb-10 max-w-2xl mx-auto leading-relaxed">
-                {t('pages.contests.cta.subtitle') || "Créez votre compte gratuitement et commencez à participer aux concours dès aujourd'hui !"}
+                {t('pages.contests.cta.subtitle') || "Create your free account and start competing today!"}
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -643,7 +643,7 @@ function ContestsPageContent() {
                   className="bg-white text-myhigh5-primary hover:bg-gray-100 font-bold px-10 py-7 text-lg rounded-xl shadow-2xl hover:shadow-white/20 transition-all hover:-translate-y-1"
                 >
                   <Users className="w-5 h-5 mr-2" />
-                  {t('pages.contests.cta.button') || "Créer mon compte"}
+                  {t('pages.contests.cta.button') || "Create my account"}
                 </Button>
                 <Button
                   size="lg"
@@ -673,7 +673,7 @@ function ContestsPageContent() {
               {t('pages.contests.auth_required_title') || "Connexion requise"}
             </DialogTitle>
             <DialogDescription className="text-center text-base mt-2">
-              {t('pages.contests.auth_required_description') || "Vous devez être connecté pour participer aux concours ou voir les participants."}
+              {t('pages.contests.auth_required_description') || "You need to be signed in to take part in contests or view the contestants."}
             </DialogDescription>
           </DialogHeader>
 
@@ -683,12 +683,12 @@ function ContestsPageContent() {
                 <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-blue-900 dark:text-blue-100">
                   <p className="font-semibold mb-1">
-                    {t('pages.contests.auth_required_benefits_title') || "En vous connectant, vous pourrez :"}
+                    {t('pages.contests.auth_required_benefits_title') || "When you sign in, you can:"}
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
                     <li>{t('pages.contests.auth_required_benefit_participate') || "Participer aux concours"}</li>
                     <li>{t('pages.contests.auth_required_benefit_view_contestants') || "Voir les participants"}</li>
-                    <li>{t('pages.contests.auth_required_benefit_vote') || "Voter pour vos favoris"}</li>
+                    <li>{t('pages.contests.auth_required_benefit_vote') || "Vote for your favorites"}</li>
                     <li>{t('pages.contests.auth_required_benefit_comment') || "Commenter et interagir"}</li>
                   </ul>
                 </div>
@@ -710,7 +710,7 @@ function ContestsPageContent() {
                 className="w-full border-2 border-myhigh5-primary text-myhigh5-primary hover:bg-myhigh5-primary/10 font-semibold h-12"
               >
                 <UserPlus className="w-5 h-5 mr-2" />
-                {t('pages.contests.auth_required_register') || "Créer un compte"}
+                {t('pages.contests.auth_required_register') || "Create an account"}
               </Button>
             </div>
           </div>

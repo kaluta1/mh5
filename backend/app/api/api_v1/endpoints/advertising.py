@@ -30,7 +30,7 @@ def create_ad_campaign(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vérification d'identité et de domicile requise pour créer des campagnes"
+            detail="Identity and address verification is required to create campaigns"
         )
     
     campaign = crud_advertising.ad_campaign.create_with_advertiser(
@@ -68,7 +68,7 @@ def get_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campagne non trouvée"
+            detail="Campaign not found"
         )
     
     if campaign.advertiser_id != current_user.id and not current_user.is_admin:
@@ -95,7 +95,7 @@ def update_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campagne non trouvée"
+            detail="Campaign not found"
         )
     
     if campaign.advertiser_id != current_user.id:

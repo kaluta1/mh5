@@ -62,8 +62,8 @@ export default function SuggestedContestsPage() {
       const response = await api.get(`/api/v1/admin/suggested-contests?${params.toString()}`)
       setSuggestions(response.data || [])
     } catch (error: any) {
-      console.error('Erreur lors du chargement des suggestions:', error)
-      addToast(error.response?.data?.detail || t('admin.suggested_contests.load_error') || 'Erreur lors du chargement des suggestions', 'error')
+      console.error('Error loading suggestions:', error)
+      addToast(error.response?.data?.detail || t('admin.suggested_contests.load_error') || 'Error loading suggestions', 'error')
     } finally {
       setLoading(false)
     }
@@ -72,11 +72,11 @@ export default function SuggestedContestsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"><Clock className="h-3 w-3 mr-1" />{t('admin.suggested_contests.pending') || 'En attente'}</Badge>
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"><Clock className="h-3 w-3 mr-1" />{t('admin.suggested_contests.pending') || 'Pending'}</Badge>
       case 'approved':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"><CheckCircle2 className="h-3 w-3 mr-1" />{t('admin.suggested_contests.approved') || 'Approuvé'}</Badge>
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"><CheckCircle2 className="h-3 w-3 mr-1" />{t('admin.suggested_contests.approved') || 'Approved'}</Badge>
       case 'rejected':
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.suggested_contests.rejected') || 'Rejeté'}</Badge>
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.suggested_contests.rejected') || 'Rejected'}</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -103,7 +103,7 @@ export default function SuggestedContestsPage() {
               {t('admin.suggested_contests.title') || 'Suggestions de Concours'}
             </h1>
             <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium mt-1">
-              {t('admin.suggested_contests.description') || 'Gérez les suggestions de concours proposées par les utilisateurs'}
+              {t('admin.suggested_contests.description') || 'Manage the contest suggestions submitted by members'}
             </p>
           </div>
         </div>
@@ -135,21 +135,21 @@ export default function SuggestedContestsPage() {
                 size="sm"
                 onClick={() => setStatusFilter('pending')}
               >
-                {t('admin.suggested_contests.pending') || 'En attente'}
+                {t('admin.suggested_contests.pending') || 'Pending'}
               </Button>
               <Button
                 variant={statusFilter === 'approved' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setStatusFilter('approved')}
               >
-                {t('admin.suggested_contests.approved') || 'Approuvés'}
+                {t('admin.suggested_contests.approved') || 'Approved'}
               </Button>
               <Button
                 variant={statusFilter === 'rejected' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setStatusFilter('rejected')}
               >
-                {t('admin.suggested_contests.rejected') || 'Rejetés'}
+                {t('admin.suggested_contests.rejected') || 'Rejected'}
               </Button>
             </div>
           </div>
@@ -167,8 +167,8 @@ export default function SuggestedContestsPage() {
             <Lightbulb className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">
               {searchTerm 
-                ? (t('admin.suggested_contests.no_suggestions_found') || 'Aucune suggestion trouvée')
-                : (t('admin.suggested_contests.no_suggestions') || 'Aucune suggestion pour le moment')}
+                ? (t('admin.suggested_contests.no_suggestions_found') || 'No suggestions found')
+                : (t('admin.suggested_contests.no_suggestions') || 'No suggestions yet')}
             </p>
           </CardContent>
         </Card>
@@ -241,7 +241,7 @@ export default function SuggestedContestsPage() {
                     }}
                   >
                     <Eye className="h-4 w-4 mr-2" />
-                    {t('admin.suggested_contests.details') || 'Détails'}
+                    {t('admin.suggested_contests.details') || 'Details'}
                   </Button>
                 </div>
               </CardContent>
@@ -257,7 +257,7 @@ export default function SuggestedContestsPage() {
             <DialogHeader>
               <DialogTitle>{selectedSuggestion.name}</DialogTitle>
               <DialogDescription>
-                {t('admin.suggested_contests.contest_suggestion_details') || 'Détails de la suggestion de concours'}
+                {t('admin.suggested_contests.contest_suggestion_details') || 'Contest suggestion details'}
               </DialogDescription>
             </DialogHeader>
             
@@ -268,13 +268,13 @@ export default function SuggestedContestsPage() {
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">{t('admin.suggested_contests.category') || 'Catégorie'}</h4>
+                <h4 className="font-semibold mb-2">{t('admin.suggested_contests.category') || 'Category'}</h4>
                 <p className="text-sm">{selectedSuggestion.category}</p>
               </div>
 
               {selectedSuggestion.description && (
                 <div>
-                  <h4 className="font-semibold mb-2">{t('admin.suggested_contests.description') || 'Description'}</h4>
+                  <h4 className="font-semibold mb-2">{t('admin.suggested_contests.description') || 'Manage the contest suggestions submitted by members'}</h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">{selectedSuggestion.description}</p>
                 </div>
               )}
@@ -300,7 +300,7 @@ export default function SuggestedContestsPage() {
                         )}
                         {selectedSuggestion.author.is_verified && (
                           <Badge variant="outline" className="mt-1 bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
-                            {t('admin.suggested_contests.verified') || 'Vérifié'}
+                            {t('admin.suggested_contests.verified') || 'Verified'}
                           </Badge>
                         )}
                       </div>
@@ -326,7 +326,7 @@ export default function SuggestedContestsPage() {
                   </p>
                   {selectedSuggestion.updated_at && (
                     <p className="text-gray-600 dark:text-gray-400">
-                      <span className="font-medium">{t('admin.suggested_contests.updated_at') || 'Modifié le'}:</span>{' '}
+                      <span className="font-medium">{t('admin.suggested_contests.updated_at') || 'Updated At'}:</span>{' '}
                       {new Date(selectedSuggestion.updated_at).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',

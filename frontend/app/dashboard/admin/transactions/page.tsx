@@ -107,8 +107,8 @@ export default function TransactionsPage() {
       // Mettre en cache (TTL de 2 minutes car les transactions changent souvent)
       cacheService.set(endpoint, data, params, 2 * 60 * 1000)
     } catch (error: any) {
-      console.error('Erreur lors du chargement des transactions:', error)
-      addToast(error.response?.data?.detail || t('admin.transactions.load_error') || 'Erreur lors du chargement des transactions', 'error')
+      console.error('Error loading transactions:', error)
+      addToast(error.response?.data?.detail || t('admin.transactions.load_error') || 'Error loading transactions', 'error')
     } finally {
       setLoading(false)
     }
@@ -136,8 +136,8 @@ export default function TransactionsPage() {
       // Invalider le cache pour cette recherche
       cacheService.invalidate(endpoint)
     } catch (error: any) {
-      console.error('Erreur lors de la recherche:', error)
-      addToast(error.response?.data?.detail || t('admin.transactions.load_error') || 'Erreur lors du chargement des transactions', 'error')
+      console.error('Search error:', error)
+      addToast(error.response?.data?.detail || t('admin.transactions.load_error') || 'Error loading transactions', 'error')
     } finally {
       setLoading(false)
     }
@@ -244,9 +244,9 @@ export default function TransactionsPage() {
 
   const getTypeBadge = (type: string) => {
     const typeConfig: Record<string, { label: string; variant: string; icon: any }> = {
-      deposit: { label: t('admin.transactions.type.deposit') || 'Dépôt', variant: 'green', icon: ArrowDownCircle },
+      deposit: { label: t('admin.transactions.type.deposit') || 'Deposit', variant: 'green', icon: ArrowDownCircle },
       withdrawal: { label: t('admin.transactions.type.withdrawal') || 'Retrait', variant: 'red', icon: ArrowUpCircle },
-      entry_fee: { label: t('admin.transactions.type.entry_fee') || 'Frais d\'entrée', variant: 'blue', icon: FileText },
+      entry_fee: { label: t('admin.transactions.type.entry_fee') || 'Entry fee', variant: 'blue', icon: FileText },
       prize_payout: { label: t('admin.transactions.type.prize_payout') || 'Gain', variant: 'yellow', icon: DollarSign },
       commission: { label: t('admin.transactions.type.commission') || 'Commission', variant: 'purple', icon: DollarSign },
       refund: { label: t('admin.transactions.type.refund') || 'Remboursement', variant: 'gray', icon: ArrowDownCircle }
@@ -276,22 +276,22 @@ export default function TransactionsPage() {
     switch (status) {
       case 'pending':
       case 'PENDING':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"><Clock className="h-3 w-3 mr-1" />{t('admin.transactions.status.pending') || 'En attente'}</Badge>
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"><Clock className="h-3 w-3 mr-1" />{t('admin.transactions.status.pending') || 'Pending'}</Badge>
       case 'completed':
       case 'COMPLETED':
       case 'validated':
       case 'VALIDATED':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"><CheckCircle2 className="h-3 w-3 mr-1" />{t('admin.transactions.status.completed') || 'Complété'}</Badge>
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"><CheckCircle2 className="h-3 w-3 mr-1" />{t('admin.transactions.status.completed') || 'Completed'}</Badge>
       case 'failed':
       case 'FAILED':
       case 'rejected':
       case 'REJECTED':
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.transactions.status.failed') || 'Échoué'}</Badge>
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.transactions.status.failed') || 'Failed'}</Badge>
       case 'cancelled':
       case 'CANCELLED':
       case 'expired':
       case 'EXPIRED':
-        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.transactions.status.cancelled') || 'Annulé'}</Badge>
+        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400"><XCircle className="h-3 w-3 mr-1" />{t('admin.transactions.status.cancelled') || 'Cancelled'}</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -354,7 +354,7 @@ export default function TransactionsPage() {
               {t('admin.transactions.title') || 'Gestion des Transactions'}
             </h1>
             <p className="text-myhigh5-primary/90 dark:text-myhigh5-secondary/80 font-medium mt-1">
-              {t('admin.transactions.description') || 'Consultez toutes les transactions (dépôts, retraits, etc.)'}
+              {t('admin.transactions.description') || 'View all transactions (deposits, withdrawals and more)'}
             </p>
           </div>
         </div>
@@ -367,7 +367,7 @@ export default function TransactionsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder={t('admin.transactions.search_placeholder') || 'Rechercher par référence, description, utilisateur...'}
+                placeholder={t('admin.transactions.search_placeholder') || 'Search by reference, description or user...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyPress={(e) => {
@@ -382,10 +382,10 @@ export default function TransactionsPage() {
                 onChange={(e) => setTypeFilter(e.target.value)}
                 className="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-myhigh5-primary focus:border-myhigh5-primary sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                <option value="all">{t('admin.transactions.all_types') || 'Tous les types'}</option>
-                <option value="deposit">{t('admin.transactions.type.deposit') || 'Dépôt'}</option>
+                <option value="all">{t('admin.transactions.all_types') || 'All types'}</option>
+                <option value="deposit">{t('admin.transactions.type.deposit') || 'Deposit'}</option>
                 <option value="withdrawal">{t('admin.transactions.type.withdrawal') || 'Retrait'}</option>
-                <option value="entry_fee">{t('admin.transactions.type.entry_fee') || 'Frais d\'entrée'}</option>
+                <option value="entry_fee">{t('admin.transactions.type.entry_fee') || 'Entry fee'}</option>
                 <option value="prize_payout">{t('admin.transactions.type.prize_payout') || 'Gain'}</option>
                 <option value="commission">{t('admin.transactions.type.commission') || 'Commission'}</option>
                 <option value="refund">{t('admin.transactions.type.refund') || 'Remboursement'}</option>
@@ -395,13 +395,13 @@ export default function TransactionsPage() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-myhigh5-primary focus:border-myhigh5-primary sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                <option value="all">{t('admin.transactions.all_statuses') || 'Tous les statuts'}</option>
-                <option value="pending">{t('admin.transactions.status.pending') || 'En attente'}</option>
-                <option value="completed">{t('admin.transactions.status.completed') || 'Complété'}</option>
-                <option value="validated">{t('admin.transactions.status.completed') || 'Validé'}</option>
-                <option value="failed">{t('admin.transactions.status.failed') || 'Échoué'}</option>
-                <option value="rejected">{t('admin.transactions.status.failed') || 'Rejeté'}</option>
-                <option value="cancelled">{t('admin.transactions.status.cancelled') || 'Annulé'}</option>
+                <option value="all">{t('admin.transactions.all_statuses') || 'All statuses'}</option>
+                <option value="pending">{t('admin.transactions.status.pending') || 'Pending'}</option>
+                <option value="completed">{t('admin.transactions.status.completed') || 'Completed'}</option>
+                <option value="validated">{t('admin.transactions.status.completed') || 'Validated'}</option>
+                <option value="failed">{t('admin.transactions.status.failed') || 'Failed'}</option>
+                <option value="rejected">{t('admin.transactions.status.failed') || 'Rejected'}</option>
+                <option value="cancelled">{t('admin.transactions.status.cancelled') || 'Cancelled'}</option>
               </select>
               <Button onClick={handleSearch}>
                 {t('admin.transactions.search') || 'Rechercher'}
@@ -442,8 +442,8 @@ export default function TransactionsPage() {
             <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">
               {searchTerm || typeFilter !== 'all' || statusFilter !== 'all' 
-                ? (t('admin.transactions.no_transactions_found') || 'Aucune transaction trouvée')
-                : (t('admin.transactions.no_transactions') || 'Aucune transaction pour le moment')}
+                ? (t('admin.transactions.no_transactions_found') || 'No transactions found')
+                : (t('admin.transactions.no_transactions') || 'No transactions yet')}
             </p>
           </CardContent>
         </Card>
@@ -477,7 +477,7 @@ export default function TransactionsPage() {
                     }}
                   >
                     <Eye className="h-4 w-4 mr-2" />
-                    {t('admin.transactions.details') || 'Détails'}
+                    {t('admin.transactions.details') || 'Details'}
                   </Button>
                 </div>
               </CardHeader>
@@ -513,7 +513,7 @@ export default function TransactionsPage() {
                   {/* Payment Method */}
                   {transaction.payment_method && (
                     <div className="space-y-2">
-                      <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300">{t('admin.transactions.payment_method') || 'Méthode de paiement'}</h4>
+                      <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300">{t('admin.transactions.payment_method') || 'Payment Method'}</h4>
                       <p className="text-sm">{transaction.payment_method}</p>
                     </div>
                   )}
@@ -534,7 +534,7 @@ export default function TransactionsPage() {
                     {transaction.reference && (
                       <div className="flex items-center gap-1">
                         <FileText className="h-3 w-3" />
-                        <span>{t('admin.transactions.reference') || 'Réf.'}: {transaction.reference}</span>
+                        <span>{t('admin.transactions.reference') || 'Reference'}: {transaction.reference}</span>
                       </div>
                     )}
                   </div>
@@ -550,9 +550,9 @@ export default function TransactionsPage() {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{t('admin.transactions.transaction_details') || 'Détails de la transaction'} #{selectedTransaction.id}</DialogTitle>
+              <DialogTitle>{t('admin.transactions.transaction_details') || 'Transaction Details'} #{selectedTransaction.id}</DialogTitle>
               <DialogDescription>
-                {t('admin.transactions.transaction_details_description') || 'Informations complètes sur la transaction'}
+                {t('admin.transactions.transaction_details_description') || 'Full details of the transaction'}
               </DialogDescription>
             </DialogHeader>
             
@@ -578,7 +578,7 @@ export default function TransactionsPage() {
 
               {selectedTransaction.description && (
                 <div>
-                  <h4 className="font-semibold mb-2">{t('admin.transactions.description') || 'Description'}</h4>
+                  <h4 className="font-semibold mb-2">{t('admin.transactions.description') || 'View all transactions (deposits, withdrawals and more)'}</h4>
                   <p className="text-sm text-gray-600 dark:text-gray-400">{selectedTransaction.description}</p>
                 </div>
               )}
@@ -613,7 +613,7 @@ export default function TransactionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 {selectedTransaction.payment_method && (
                   <div>
-                    <h4 className="font-semibold mb-2">{t('admin.transactions.payment_method') || 'Méthode de paiement'}</h4>
+                    <h4 className="font-semibold mb-2">{t('admin.transactions.payment_method') || 'Payment Method'}</h4>
                     <p className="text-sm">{selectedTransaction.payment_method}</p>
                   </div>
                 )}
@@ -625,7 +625,7 @@ export default function TransactionsPage() {
                 )}
                 {selectedTransaction.reference && (
                   <div>
-                    <h4 className="font-semibold mb-2">{t('admin.transactions.reference') || 'Référence'}</h4>
+                    <h4 className="font-semibold mb-2">{t('admin.transactions.reference') || 'Reference'}</h4>
                     <p className="text-sm font-mono">{selectedTransaction.reference}</p>
                   </div>
                 )}
@@ -637,7 +637,7 @@ export default function TransactionsPage() {
                 )}
                 {selectedTransaction.external_payment_id && (
                   <div>
-                    <h4 className="font-semibold mb-2">{t('admin.transactions.external_payment_id') || 'ID Paiement Externe'}</h4>
+                    <h4 className="font-semibold mb-2">{t('admin.transactions.external_payment_id') || 'External payment ID'}</h4>
                     <p className="text-sm font-mono">{selectedTransaction.external_payment_id}</p>
                   </div>
                 )}
@@ -652,18 +652,18 @@ export default function TransactionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-semibold mb-2">{t('admin.transactions.created_at') || 'Created on'}</h4>
-                  <p className="text-sm">{new Date(selectedTransaction.created_at).toLocaleString('fr-FR')}</p>
+                  <p className="text-sm">{new Date(selectedTransaction.created_at).toLocaleString('en-US')}</p>
                 </div>
                 {selectedTransaction.processed_at && (
                   <div>
                     <h4 className="font-semibold mb-2">{t('admin.transactions.processed_at') || 'Processed on'}</h4>
-                    <p className="text-sm">{new Date(selectedTransaction.processed_at).toLocaleString('fr-FR')}</p>
+                    <p className="text-sm">{new Date(selectedTransaction.processed_at).toLocaleString('en-US')}</p>
                   </div>
                 )}
                 {selectedTransaction.validated_at && (
                   <div>
-                    <h4 className="font-semibold mb-2">{t('admin.transactions.validated_at') || 'Validé le'}</h4>
-                    <p className="text-sm">{new Date(selectedTransaction.validated_at).toLocaleString('fr-FR')}</p>
+                    <h4 className="font-semibold mb-2">{t('admin.transactions.validated_at') || 'Validated At'}</h4>
+                    <p className="text-sm">{new Date(selectedTransaction.validated_at).toLocaleString('en-US')}</p>
                   </div>
                 )}
               </div>

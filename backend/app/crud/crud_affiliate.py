@@ -203,7 +203,7 @@ class CRUDAffiliateTree:
         # Vérifier si l'utilisateur n'est pas déjà dans l'arbre
         existing = self.get_by_user(db, user_id)
         if existing:
-            return {"success": False, "error": "Utilisateur déjà inscrit dans le programme"}
+            return {"success": False, "error": "User already enrolled in the program"}
         
         # Trouver le parrain par son code
         sponsor = db.query(User).filter(
@@ -214,7 +214,7 @@ class CRUDAffiliateTree:
             return {"success": False, "error": "Code de parrainage invalide"}
         
         if sponsor.id == user_id:
-            return {"success": False, "error": "Vous ne pouvez pas vous parrainer vous-même"}
+            return {"success": False, "error": "You cannot refer yourself"}
         
         # Récupérer l'arbre du parrain pour calculer le path
         try:
@@ -553,7 +553,7 @@ class CRUDAffiliateCommission:
                 "product_type_code": product_type.code if product_type else None,
                 "product_type_name": product_type.name if product_type else None,
                 "source_user_id": c.source_user_id,
-                "source_user_name": source_user.full_name or source_user.username if source_user else "Utilisateur",
+                "source_user_name": source_user.full_name or source_user.username if source_user else "User",
                 "source_user_username": source_user.username if source_user else None,
                 "source_user_avatar": source_user.avatar_url if source_user else None,
                 "deposit_id": c.deposit_id,
@@ -569,23 +569,23 @@ class CRUDAffiliateCommission:
         """Génère une description pour la commission."""
         # Si le produit est lié, utiliser son nom
         if product_type:
-            level_str = "direct" if commission.level == 1 else f"niveau {commission.level}"
-            return f"Commission {level_str} sur {product_type.name}"
+            level_str = "direct" if commission.level == 1 else f"level {commission.level}"
+            return f"{level_str.capitalize()} commission on {product_type.name}"
         
         # Sinon, utiliser le type de commission (legacy)
         type_descriptions = {
-            CommissionType.AD_REVENUE: "Commission sur revenus publicitaires",
-            CommissionType.CLUB_MEMBERSHIP: "Commission sur abonnement club",
-            CommissionType.SHOP_PURCHASE: "Commission sur achat boutique",
-            CommissionType.CONTEST_PARTICIPATION: "Commission sur participation concours",
-            CommissionType.KYC_PAYMENT: "Commission sur paiement KYC",
-            CommissionType.EFM_MEMBERSHIP: "Commission sur abonnement EFM",
-            CommissionType.FOUNDING_MEMBERSHIP_FEE: "Commission sur adhésion Founding Member (100$)",
-            CommissionType.ANNUAL_MEMBERSHIP_FEE: "Commission sur cotisation annuelle (50$)",
-            CommissionType.MONTHLY_REVENUE_POOL: "Part du pool mensuel (10% revenus nets)",
-            CommissionType.ANNUAL_PROFIT_POOL: "Part du pool annuel (20% profits)"
+            CommissionType.AD_REVENUE: "Commission on advertising revenue",
+            CommissionType.CLUB_MEMBERSHIP: "Commission on club membership",
+            CommissionType.SHOP_PURCHASE: "Commission on shop purchase",
+            CommissionType.CONTEST_PARTICIPATION: "Commission on contest participation",
+            CommissionType.KYC_PAYMENT: "Commission on KYC payment",
+            CommissionType.EFM_MEMBERSHIP: "Commission on EFM membership",
+            CommissionType.FOUNDING_MEMBERSHIP_FEE: "Commission on Founding Member membership ($100)",
+            CommissionType.ANNUAL_MEMBERSHIP_FEE: "Commission on annual membership fee ($50)",
+            CommissionType.MONTHLY_REVENUE_POOL: "Share of the monthly pool (10% of net revenue)",
+            CommissionType.ANNUAL_PROFIT_POOL: "Share of the annual pool (20% of profits)"
         }
-        return type_descriptions.get(commission.commission_type, "Commission d'affiliation")
+        return type_descriptions.get(commission.commission_type, "Affiliate commission")
 
 
 class CRUDReferralLink:

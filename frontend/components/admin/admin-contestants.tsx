@@ -182,7 +182,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         return prev
       })
     } catch (error) {
-      console.error('Erreur lors du chargement des commentaires:', error)
+      console.error('Error loading comments:', error)
       // En cas d'erreur, initialiser avec un tableau vide
       setSelectedContestant(prev => {
         if (prev && prev.id === contestantId) {
@@ -214,7 +214,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       const response = await api.get(endpoint)
       setContestants(response.data)
     } catch (error) {
-      console.error('Erreur lors du chargement des candidats:', error)
+      console.error('Error loading contestants:', error)
     } finally {
       setLoading(false)
     }
@@ -230,7 +230,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
           .filter((r: RoundOption) => !Number.isNaN(r.id))
       )
     } catch (error) {
-      console.error('Erreur lors du chargement des rounds:', error)
+      console.error('Error loading rounds:', error)
       setRoundOptions([])
     }
   }
@@ -241,7 +241,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       setUsers(response.data)
     } catch (error: any) {
       if (error?.response?.status !== 403) {
-        addToast(t('admin.contestants.users_load_error') || 'Erreur lors du chargement des utilisateurs', 'error')
+        addToast(t('admin.contestants.users_load_error') || 'Error loading users', 'error')
       }
       setUsers([])
     }
@@ -260,8 +260,8 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         }
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des saisons:', error)
-      addToast(t('admin.contestants.seasons_load_error') || 'Erreur lors du chargement des saisons', 'error')
+      console.error('Error loading seasons:', error)
+      addToast(t('admin.contestants.seasons_load_error') || 'Error loading seasons', 'error')
     } finally {
       setLoadingSeasons(false)
     }
@@ -280,7 +280,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         setSelectedLevel(uniqueLevels[0])
       }
     } catch (error) {
-      console.error('Erreur lors du chargement de toutes les saisons:', error)
+      console.error('Error loading all seasons:', error)
     }
   }
 
@@ -302,11 +302,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         })
       }
       
-      addToast(t('admin.contestants.approve_success') || 'Candidat approuvé avec succès', 'success')
+      addToast(t('admin.contestants.approve_success') || 'Approve Success', 'success')
       await fetchContestants()
     } catch (error) {
       console.error('Erreur lors de l\'approbation:', error)
-      addToast(t('admin.contestants.approve_error') || 'Erreur lors de l\'approbation du candidat', 'error')
+      addToast(t('admin.contestants.approve_error') || 'Error approving the contestant', 'error')
     } finally {
       setLoadingContestantId(null)
       setLoadingAction(null)
@@ -327,11 +327,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         })
       }
       
-      addToast(t('admin.contestants.reject_success') || 'Candidat rejeté avec succès', 'success')
+      addToast(t('admin.contestants.reject_success') || 'Reject Success', 'success')
       await fetchContestants()
     } catch (error) {
-      console.error('Erreur lors du rejet:', error)
-      addToast(t('admin.contestants.reject_error') || 'Erreur lors du rejet du candidat', 'error')
+      console.error('Error rejecting:', error)
+      addToast(t('admin.contestants.reject_error') || 'Error rejecting the contestant', 'error')
     } finally {
       setLoadingContestantId(null)
       setLoadingAction(null)
@@ -353,11 +353,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         })
       }
       
-      addToast(t('admin.contestants.status_update_success') || 'Statut du candidat mis à jour avec succès', 'success')
+      addToast(t('admin.contestants.status_update_success') || 'Contestant status updated successfully', 'success')
       await fetchContestants()
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du statut:', error)
-      addToast(t('admin.contestants.status_update_error') || 'Erreur lors de la mise à jour du statut', 'error')
+      console.error('Error updating the status:', error)
+      addToast(t('admin.contestants.status_update_error') || 'Error updating the status', 'error')
     } finally {
       setLoadingContestantId(null)
       setLoadingAction(null)
@@ -375,10 +375,10 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
           comments: selectedContestant.comments?.filter(c => c.id !== commentId) || []
         })
       }
-      addToast(t('admin.contestants.comment_delete_success') || 'Commentaire supprimé avec succès', 'success')
+      addToast(t('admin.contestants.comment_delete_success') || 'Comment deleted successfully', 'success')
     } catch (error) {
-      console.error('Erreur lors de la suppression du commentaire:', error)
-      addToast(t('admin.contestants.comment_delete_error') || 'Erreur lors de la suppression du commentaire', 'error')
+      console.error('Error deleting the comment:', error)
+      addToast(t('admin.contestants.comment_delete_error') || 'Error deleting the comment', 'error')
     }
   }
 
@@ -393,10 +393,10 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
           comments: selectedContestant.comments?.filter(c => c.id !== commentId) || []
         })
       }
-      addToast(t('admin.contestants.comment_hide_success') || 'Commentaire caché avec succès', 'success')
+      addToast(t('admin.contestants.comment_hide_success') || 'Comment hidden successfully', 'success')
     } catch (error) {
-      console.error('Erreur lors du masquage du commentaire:', error)
-      addToast(t('admin.contestants.comment_hide_error') || 'Erreur lors du masquage du commentaire', 'error')
+      console.error('Error hiding the comment:', error)
+      addToast(t('admin.contestants.comment_hide_error') || 'Error hiding the comment', 'error')
     }
   }
 
@@ -405,11 +405,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       await api.put(`/api/v1/admin/comments/${commentId}/show`)
       
       // Refresh contestants to show the comment again
-      addToast(t('admin.contestants.comment_show_success') || 'Commentaire affiché avec succès', 'success')
+      addToast(t('admin.contestants.comment_show_success') || 'Comment shown successfully', 'success')
       await fetchContestants()
     } catch (error) {
-      console.error('Erreur lors de l\'affichage du commentaire:', error)
-      addToast(t('admin.contestants.comment_show_error') || 'Erreur lors de l\'affichage du commentaire', 'error')
+      console.error('Error showing the comment:', error)
+      addToast(t('admin.contestants.comment_show_error') || 'Error showing the comment', 'error')
     }
   }
 
@@ -418,11 +418,11 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       await api.put(`/api/v1/admin/comments/${commentId}/restore`)
       
       // Refresh contestants to show the comment again
-      addToast(t('admin.contestants.comment_restore_success') || 'Commentaire restauré avec succès', 'success')
+      addToast(t('admin.contestants.comment_restore_success') || 'Comment restored successfully', 'success')
       await fetchContestants()
     } catch (error) {
-      console.error('Erreur lors de la restauration du commentaire:', error)
-      addToast(t('admin.contestants.comment_restore_error') || 'Erreur lors de la restauration du commentaire', 'error')
+      console.error('Error restoring the comment:', error)
+      addToast(t('admin.contestants.comment_restore_error') || 'Error restoring the comment', 'error')
     }
   }
 
@@ -446,18 +446,18 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
 
       if (editingContestant) {
         await api.put(`/api/v1/admin/contestants/${editingContestant.id}`, payload)
-        addToast(t('admin.contestants.update_success') || 'Candidat mis à jour avec succès', 'success')
+        addToast(t('admin.contestants.update_success') || 'Update Success', 'success')
       } else {
         // The backend re-validates that this contest belongs to the season.
         await api.post('/api/v1/admin/contestants', { ...payload, contest_id: entryContest.contestId })
-        addToast(t('admin.contestants.create_success') || 'Candidat créé avec succès', 'success')
+        addToast(t('admin.contestants.create_success') || 'Create Success', 'success')
       }
       
       setShowForm(false)
       setEditingContestant(null)
       await fetchContestants()
     } catch (error: any) {
-      console.error('Erreur lors de la sauvegarde:', error)
+      console.error('Error while saving:', error)
       const errorMessage = error.response?.data?.detail || error.message || (t('admin.contestants.save_error') || 'Error saving order')
       addToast(errorMessage, 'error')
     } finally {
@@ -504,9 +504,9 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string }> = {
-      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En attente' },
-      verified: { bg: 'bg-green-100', text: 'text-green-800', label: 'Vérifié' },
-      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejeté' }
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
+      verified: { bg: 'bg-green-100', text: 'text-green-800', label: 'Verified' },
+      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' }
     }
     const badge = badges[status] || badges.pending
     return <span className={`px-2 py-1 rounded text-sm font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
@@ -539,7 +539,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
   const handleBulkApprove = async (ids: number[]) => {
     const uniqueIds = Array.from(new Set(ids))
     if (uniqueIds.length === 0) {
-      addToast(t('admin.contestants.bulk_no_selection') || 'Aucun candidat sélectionné', 'error')
+      addToast(t('admin.contestants.bulk_no_selection') || 'No contestant selected', 'error')
       return
     }
 
@@ -560,7 +560,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
       setSelectedContestantIds((prev) => prev.filter((id) => !uniqueIds.includes(id)))
 
       addToast(
-        `${approvedCount}/${matchedCount} ${t('admin.contestants.bulk_approve_success') || 'candidats approuvés avec succès'}`,
+        `${approvedCount}/${matchedCount} ${t('admin.contestants.bulk_approve_success') || 'candidates approved successfully'}`,
         'success'
       )
     } catch (error) {
@@ -585,7 +585,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
           </h1>
         </div>
         <p className="text-white dark:text-gray-300 font-medium">
-          {t('admin.contestants.description') || 'Approuvez ou rejetez les candidatures'}
+          {t('admin.contestants.description') || 'Approve or reject applications'}
         </p>
       </div>
 
@@ -678,14 +678,14 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               onClick={() => setFilter('pending')}
               className={filter === 'pending' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
             >
-              {t('admin.contestants.pending') || 'En attente'}
+              {t('admin.contestants.pending') || 'Pending'}
             </Button>
             <Button
               variant={filter === 'verified' ? 'default' : 'outline'}
               onClick={() => setFilter('verified')}
               className={filter === 'verified' ? 'bg-green-600 hover:bg-green-700' : ''}
             >
-              {t('admin.contestants.verified') || 'Vérifiés'}
+              {t('admin.contestants.verified') || 'Verified'}
             </Button>
           </div>
         </div>
@@ -701,7 +701,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
             ) : (
               <CheckCircle2 className="h-4 w-4 mr-2" />
             )}
-            {t('admin.contestants.approve_selected') || 'Approuver la sélection'} ({selectedContestantIds.length})
+            {t('admin.contestants.approve_selected') || 'Approve Selected'} ({selectedContestantIds.length})
           </Button>
           <Button
             size="sm"
@@ -709,7 +709,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
             onClick={() => handleBulkApprove(pendingFilteredContestants.map((c) => c.id))}
             disabled={bulkApproving || pendingFilteredContestants.length === 0}
           >
-            {t('admin.contestants.approve_all_pending') || 'Approuver tous les en attente'} ({pendingFilteredContestants.length})
+            {t('admin.contestants.approve_all_pending') || 'Approve all pending'} ({pendingFilteredContestants.length})
           </Button>
         </div>
       </div>
@@ -736,7 +736,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   required
                 >
                   <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    <SelectValue placeholder={t('admin.contestants.select_user') || 'Sélectionner un utilisateur'} />
+                    <SelectValue placeholder={t('admin.contestants.select_user') || 'Select User'} />
                   </SelectTrigger>
                   <SelectContent>
                     {users.map((user) => (
@@ -755,7 +755,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 </label>
                 {availableLevels.length === 0 ? (
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.contestants.no_seasons_available') || 'Aucune saison disponible. Veuillez créer une saison d\'abord.'}
+                    {t('admin.contestants.no_seasons_available') || 'No season available. Please create a season first.'}
                   </div>
                 ) : (
                   <Select
@@ -777,7 +777,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                         <SelectItem value="country">{t('admin.seasons.level_country') || 'Pays'}</SelectItem>
                       )}
                       {availableLevels.includes('regional') && (
-                        <SelectItem value="regional">{t('admin.seasons.level_regional') || 'Régional'}</SelectItem>
+                        <SelectItem value="regional">{t('admin.seasons.level_regional') || 'Level Regional'}</SelectItem>
                       )}
                       {availableLevels.includes('continent') && (
                         <SelectItem value="continent">{t('admin.seasons.level_continent') || 'Continent'}</SelectItem>
@@ -808,7 +808,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                     disabled={availableSeasons.length === 0}
                   >
                     <SelectTrigger className="dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                      <SelectValue placeholder={availableSeasons.length === 0 ? (t('admin.contestants.no_seasons_for_level') || 'Aucune saison disponible pour ce niveau') : (t('admin.contestants.select_season') || 'Sélectionner une saison')} />
+                      <SelectValue placeholder={availableSeasons.length === 0 ? (t('admin.contestants.no_seasons_for_level') || 'No season available for this level') : (t('admin.contestants.select_season') || 'Select Season')} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableSeasons.map((season) => (
@@ -870,9 +870,9 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">{t('admin.contestants.status_pending') || 'En attente'}</SelectItem>
-                    <SelectItem value="verified">{t('admin.contestants.status_verified') || 'Vérifié'}</SelectItem>
-                    <SelectItem value="rejected">{t('admin.contestants.status_rejected') || 'Rejeté'}</SelectItem>
+                    <SelectItem value="pending">{t('admin.contestants.status_pending') || 'Pending'}</SelectItem>
+                    <SelectItem value="verified">{t('admin.contestants.status_verified') || 'Status Verified'}</SelectItem>
+                    <SelectItem value="rejected">{t('admin.contestants.status_rejected') || 'Status Rejected'}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -893,7 +893,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                   disabled={isSubmitting || (!editingContestant && Boolean(formData.season_id) && !entryContest.ready)}
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {editingContestant ? (t('common.save') || 'Enregistrer') : (t('common.create') || 'Créer')}
+                  {editingContestant ? (t('common.save') || 'Enregistrer') : (t('common.create') || 'Create')}
                 </Button>
               </div>
             </form>
@@ -910,7 +910,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
           <CardContent className="p-0">
             {filteredContestants.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                {t('admin.contestants.no_contestants') || 'Aucun candidat trouvé'}
+                {t('admin.contestants.no_contestants') || 'No Contestants'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -930,7 +930,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">Titre</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.status') || 'Statut'}</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.images') || 'Images'}</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.videos') || 'Vidéos'}</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.videos') || 'Videos'}</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.votes') || 'Votes'}</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.comments') || 'Commentaires'}</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 dark:text-white">{t('admin.contestants.registration_date') || 'Date d\'inscription'}</th>
@@ -1082,7 +1082,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <Card className="w-full max-w-3xl dark:bg-gray-800 my-8">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b dark:border-gray-700">
-              <CardTitle>{t('admin.contestants.contestant_details') || 'Détails du candidat'}</CardTitle>
+              <CardTitle>{t('admin.contestants.contestant_details') || 'Contestant Details'}</CardTitle>
               <button
                 onClick={() => setShowDialog(false)}
                 className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -1123,9 +1123,9 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                     disabled={loadingContestantId === selectedContestant.id}
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
-                    <option value="pending">{t('admin.contestants.status_pending') || 'En attente'}</option>
-                    <option value="verified">{t('admin.contestants.status_verified') || 'Vérifié'}</option>
-                    <option value="rejected">{t('admin.contestants.status_rejected') || 'Rejeté'}</option>
+                    <option value="pending">{t('admin.contestants.status_pending') || 'Pending'}</option>
+                    <option value="verified">{t('admin.contestants.status_verified') || 'Status Verified'}</option>
+                    <option value="rejected">{t('admin.contestants.status_rejected') || 'Status Rejected'}</option>
                   </select>
                 </div>
                 <div>
@@ -1144,7 +1144,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                   <Video className="h-5 w-5 text-red-600 mx-auto mb-1" />
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedContestant.videos_count}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{t('admin.contestants.videos') || 'Vidéos'}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{t('admin.contestants.videos') || 'Videos'}</p>
                 </div>
                 <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                   <ThumbsUp className="h-5 w-5 text-green-600 mx-auto mb-1" />
@@ -1195,7 +1195,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               {/* Comments Section */}
               {loadingComments && (
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des commentaires...</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading comments...</p>
                 </div>
               )}
               {!loadingComments && selectedContestant.comments && selectedContestant.comments.length > 0 && (
@@ -1209,7 +1209,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                             <p className="text-sm font-semibold text-gray-900 dark:text-white">{comment.author_name}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {new Date(comment.created_at).toLocaleDateString('en-US')}
-                              {comment.is_hidden && ' • Caché'}
+                              {comment.is_hidden && ' • Hidden'}
                             </p>
                           </div>
                           <div className="flex gap-2">
@@ -1344,7 +1344,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">Vidéos</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white mb-3">Videos</p>
                 <UploadButton
                   endpoint="profileImageUploader"
                   onClientUploadComplete={(res) => {

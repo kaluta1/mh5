@@ -38,7 +38,7 @@ function calculateProfileCompletion(user: any, t: any): { percentage: number; mi
   if (!user) return { percentage: 0, missing: [] }
   
   const fields = [
-    { key: 'first_name', label: t('profile_setup.first_name') || 'Prénom' },
+    { key: 'first_name', label: t('profile_setup.first_name') || 'First Name' },
     { key: 'last_name', label: t('profile_setup.last_name') || 'Nom' },
     { key: 'avatar_url', label: t('settings.profile_photo') || 'Photo de profil' },
     { key: 'bio', label: t('settings.biography') || 'Biographie' },
@@ -95,7 +95,7 @@ function formatGender(gender: string | null, t: any): string {
     'male': t('profile_setup.male') || 'Homme',
     'female': t('profile_setup.female') || 'Femme',
     'other': t('profile_setup.other') || 'Autre',
-    'prefer_not_to_say': t('profile_setup.prefer_not_to_say') || 'Non spécifié'
+    'prefer_not_to_say': t('profile_setup.prefer_not_to_say') || 'Prefer not to say'
   }
   return genderMap[gender] || gender
 }
@@ -147,15 +147,15 @@ export default function SettingsPage() {
     },
     {
       id: 'demographics',
-      label: t('settings.demographics') || 'Identité',
+      label: t('settings.demographics') || 'Demographics',
       icon: <Users className="w-5 h-5" />,
-      description: t('settings.demographics_short') || 'Genre et âge'
+      description: t('settings.demographics_short') || 'Demographics Short'
     },
     {
       id: 'password',
       label: t('settings.password.title') || 'Mot de passe',
       icon: <Lock className="w-5 h-5" />,
-      description: t('settings.password_short') || 'Sécurité du compte'
+      description: t('settings.password_short') || 'Password Short'
     },
     {
       id: 'wallet',
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                   {user?.identity_verified ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      {t('settings.verified') || 'Vérifié'}
+                      {t('settings.verified') || 'Verified'}
                     </span>
                   ) : (
                     <Link 
@@ -232,7 +232,7 @@ export default function SettingsPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
                     >
                       <Fingerprint className="w-3.5 h-3.5" />
-                      {t('settings.verify_identity') || 'Vérifier mon identité'}
+                      {t('settings.verify_identity') || 'Verify Identity'}
                       <ChevronRight className="w-3 h-3" />
                     </Link>
                   )}
@@ -270,7 +270,7 @@ export default function SettingsPage() {
             <div className="flex-shrink-0 md:w-48">
               <div className="bg-gray-100 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600/50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('settings.profile_completion') || 'Profil complété'}</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('settings.profile_completion') || 'Profile Completion'}</span>
                   <span className={`text-lg font-bold ${
                     profileCompletion.percentage === 100 ? 'text-green-400' : 
                     profileCompletion.percentage >= 70 ? 'text-yellow-400' : 'text-red-400'
@@ -357,10 +357,10 @@ export default function SettingsPage() {
                   {tabs.find(t => t.id === currentTab)?.label}
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  {currentTab === 'profile' && (t('settings.profile_description') || 'Modifiez votre photo, nom et biographie')}
-                  {currentTab === 'location' && (t('settings.location_description') || 'Définissez votre localisation géographique')}
+                  {currentTab === 'profile' && (t('settings.profile_description') || 'Update your photo, name, and bio')}
+                  {currentTab === 'location' && (t('settings.location_description') || 'Set your geographic location')}
                   {currentTab === 'demographics' && (t('settings.demographics_description') || 'Renseignez vos informations personnelles')}
-                  {currentTab === 'password' && (t('settings.password.description') || 'Modifiez votre mot de passe pour sécuriser votre compte')}
+                  {currentTab === 'password' && (t('settings.password.description') || 'Change your password to keep your account secure')}
                   {currentTab === 'wallet' && (t('settings.wallet.description') || 'Receive affiliate commissions automatically via USDT BSC')}
                 </p>
               </div>

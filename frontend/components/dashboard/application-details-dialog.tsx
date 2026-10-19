@@ -88,7 +88,7 @@ export function ApplicationDetailsDialog({
       <Card className="w-full max-w-4xl dark:bg-gray-800 my-8 max-h-[90vh] overflow-hidden flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b dark:border-gray-700 flex-shrink-0">
           <CardTitle className="text-xl font-bold">
-            {t('dashboard.contests.my_applications.details') || 'Détails de la candidature'}
+            {t('dashboard.contests.my_applications.details') || 'Description'}
           </CardTitle>
           <button
             onClick={onClose}
@@ -116,7 +116,7 @@ export function ApplicationDetailsDialog({
                   }`}
                 >
                   <Eye className="w-4 h-4 inline mr-2" />
-                  {t('dashboard.contests.my_applications.details') || 'Détails'}
+                  {t('dashboard.contests.my_applications.details') || 'Description'}
                 </button>
                 <button
                   onClick={() => setActiveTab('reactions')}
@@ -127,7 +127,7 @@ export function ApplicationDetailsDialog({
                   }`}
                 >
                   <Users className="w-4 h-4 inline mr-2" />
-                  {t('dashboard.contests.reactions') || 'Réactions'}
+                  {t('dashboard.contests.reactions') || 'Reactions'}
                   {reactionDetails && (
                     <Badge className="ml-2 bg-myhigh5-primary text-white">
                       {Object.values(reactionDetails.reactions_by_type).reduce((acc, arr) => acc + arr.length, 0)}
@@ -182,7 +182,7 @@ export function ApplicationDetailsDialog({
                   {allMedia.length > 0 && (
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                        {t('dashboard.contests.my_applications.media') || 'Médias'}
+                        {t('dashboard.contests.my_applications.media') || 'Media'}
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {allMedia.map((media) => (
@@ -197,7 +197,7 @@ export function ApplicationDetailsDialog({
                             {media.type === 'image' ? (
                               <img
                                 src={media.url}
-                                alt={t('dashboard.contests.my_applications.media_alt') || 'Média'}
+                                alt={t('dashboard.contests.my_applications.media_alt') || 'Media Alt'}
                                 className="w-full h-full object-cover group-hover:opacity-75 transition"
                               />
                             ) : (
@@ -224,7 +224,7 @@ export function ApplicationDetailsDialog({
                     </div>
                     <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                        {t('dashboard.contests.reactions') || 'Réactions'}
+                        {t('dashboard.contests.reactions') || 'Reactions'}
                       </p>
                       <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
                         {contestant.reactions_count || 0}
@@ -286,7 +286,7 @@ export function ApplicationDetailsDialog({
                     ))
                   ) : (
                     <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                      {t('dashboard.contests.no_reactions') || 'Aucune réaction pour le moment'}
+                      {t('dashboard.contests.no_reactions') || 'No Reactions'}
                     </p>
                   )}
                 </div>
@@ -308,7 +308,7 @@ export function ApplicationDetailsDialog({
                         {contestant.reactions_count || 0}
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {t('dashboard.contests.reactions') || 'Réactions'}
+                        {t('dashboard.contests.reactions') || 'Reactions'}
                       </p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
@@ -378,7 +378,7 @@ export function ApplicationDetailsDialog({
                     </>
                   ) : (
                     <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                      {t('dashboard.contests.my_applications.no_shares') || 'Aucun partage pour le moment'}
+                      {t('dashboard.contests.my_applications.no_shares') || 'No Shares'}
                     </p>
                   )}
                 </div>
@@ -386,7 +386,7 @@ export function ApplicationDetailsDialog({
             </>
           ) : (
             <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-              {t('common.error_loading') || 'Erreur lors du chargement'}
+              {t('common.error_loading') || 'Error Loading'}
             </p>
           )}
         </CardContent>

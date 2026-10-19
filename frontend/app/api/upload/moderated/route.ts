@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const accessToken = request.headers.get('x-access-token')
     
     if (!authHeader && !accessToken) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Vérifier le token avec le backend
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const isDocument = file.type === 'application/pdf'
     
     if (!isImage && !isVideo && !isAudio && !isDocument) {
-      return NextResponse.json({ error: 'Type de fichier non supporté' }, { status: 400 })
+      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
     }
 
     // Convertir en base64 pour Sightengine (seulement pour images/vidéos)
@@ -94,9 +94,9 @@ export async function POST(request: NextRequest) {
       const moderationResult = await moderateContent(base64, file.type, isVideo)
       
       if (!moderationResult.isApproved) {
-        console.warn('❌ Contenu rejeté:', moderationResult.flags)
+        console.warn('❌ Content rejected:', moderationResult.flags)
         return NextResponse.json({
-          error: 'Contenu rejeté par la modération',
+          error: 'Content rejected by moderation',
           flags: moderationResult.flags,
           details: moderationResult.flags.map((f: ModerationFlag) => f.description).join(', ')
         }, { status: 422 })
@@ -111,9 +111,9 @@ export async function POST(request: NextRequest) {
         const ownershipResult = await verifyOwnership(base64, verificationImageUrl)
         
         if (ownershipResult.faceDetected && !ownershipResult.isMatch) {
-          console.warn('❌ Ownership non vérifié:', ownershipResult)
+          console.warn('❌ Ownership not verified:', ownershipResult)
           return NextResponse.json({
-            error: 'Le visage ne correspond pas à votre vérification',
+            error: 'The face does not match your verification',
             ownership: ownershipResult
           }, { status: 422 })
         }
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Erreur upload modéré:', error)
+    console.error('Moderated upload error:', error)
     return NextResponse.json({ 
       error: 'Erreur serveur',
       details: String(error)
@@ -234,7 +234,7 @@ function processModerationResponse(data: any): { isApproved: boolean; flags: Mod
         type: 'adult',
         severity: nudityScore > 0.8 ? 'high' : 'medium',
         confidence: nudityScore,
-        description: 'Contenu adulte détecté'
+        description: 'Adult content detected'
       })
     }
   }
@@ -246,7 +246,7 @@ function processModerationResponse(data: any): { isApproved: boolean; flags: Mod
       type: 'violence',
       severity: data.violence.prob > 0.85 ? 'high' : 'medium',
       confidence: data.violence.prob,
-      description: 'Contenu violent détecté'
+      description: 'Violent content detected'
     })
   }
 
@@ -257,7 +257,7 @@ function processModerationResponse(data: any): { isApproved: boolean; flags: Mod
       type: 'gore',
       severity: data.gore.prob > 0.7 ? 'high' : 'medium',
       confidence: data.gore.prob,
-      description: 'Contenu gore/sanglant détecté'
+      description: 'Graphic or gory content detected'
     })
   }
 
@@ -268,7 +268,7 @@ function processModerationResponse(data: any): { isApproved: boolean; flags: Mod
       type: 'weapons',
       severity: 'medium',
       confidence: data.weapon.prob,
-      description: 'Arme détectée'
+      description: 'Weapon detected'
     })
   }
 
@@ -279,7 +279,7 @@ function processModerationResponse(data: any): { isApproved: boolean; flags: Mod
       type: 'offensive',
       severity: 'medium',
       confidence: data.offensive.prob,
-      description: 'Contenu offensant détecté'
+      description: 'Offensive content detected'
     })
   }
 

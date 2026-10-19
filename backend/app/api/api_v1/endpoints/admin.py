@@ -222,7 +222,7 @@ def check_admin(current_user: User) -> User:
     if getattr(current_user, 'is_active', True) is False or getattr(current_user, 'is_deleted', False) is True:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous n'avez pas les permissions pour accéder à cette ressource"
+            detail="You do not have permission to access this resource"
         )
     is_admin_flag = getattr(current_user, 'is_admin', False)
     if is_admin_flag:
@@ -240,7 +240,7 @@ def check_admin(current_user: User) -> User:
     if not has_admin_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Vous n'avez pas les permissions pour accéder à cette ressource"
+            detail="You do not have permission to access this resource"
         )
     return current_user
 
@@ -594,7 +594,7 @@ def get_all_contests(
         print(f"ERROR in get_all_contests: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des concours: {str(e)}"
+            detail=f"Error fetching contests: {str(e)}"
         )
 
 @router.get("/contests/{contest_id}", response_model=ContestResponse)
@@ -614,7 +614,7 @@ def get_contest(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     # Get contest statistics
@@ -900,7 +900,7 @@ def get_contest_contestants(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     # Query contestants for this contest (season_id = contest_id)
@@ -1057,7 +1057,7 @@ def get_contestant_comments(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidature non trouvée"
+            detail="Application not found"
         )
     
     # Récupérer les commentaires avec les informations de l'utilisateur
@@ -1107,7 +1107,7 @@ async def create_contest(
             if not season:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Saison non trouvée"
+                    detail="Season not found"
                 )
             level = season.level.value
         elif contest_data.level:
@@ -1376,7 +1376,7 @@ async def create_contest(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la création du concours: {str(e)}"
+            detail=f"Error creating the contest: {str(e)}"
         )
 
 @router.put("/contests/{contest_id}", response_model=ContestResponse)
@@ -1395,7 +1395,7 @@ async def update_contest(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     try:
@@ -1410,7 +1410,7 @@ async def update_contest(
             if not season:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Saison non trouvée"
+                    detail="Season not found"
                 )
             level = season.level.value
         
@@ -1675,7 +1675,7 @@ async def update_contest(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du concours: {str(e)}"
+            detail=f"Error updating the contest: {str(e)}"
         )
 
 @router.delete("/contests/{contest_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1693,7 +1693,7 @@ async def delete_contest(
     if not contest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concours non trouvé"
+            detail="Contest not found"
         )
     
     try:
@@ -1712,7 +1712,7 @@ async def delete_contest(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la suppression du concours: {str(e)}"
+            detail=f"Error deleting the contest: {str(e)}"
         )
 
 # Seasons endpoints
@@ -1785,7 +1785,7 @@ async def create_season(
     if season_data.level not in valid_levels:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Niveau invalide. Les niveaux valides sont: {', '.join(valid_levels)}"
+            detail=f"Invalid level. Valid levels are: {', '.join(valid_levels)}"
         )
     
     # Check if a season with this level already exists
@@ -1805,7 +1805,7 @@ async def create_season(
         level_name = level_names.get(season_data.level, season_data.level)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Une saison avec le niveau '{level_name}' existe déjà. Il ne peut y avoir qu'une seule saison active par niveau."
+            detail=f"A season with the level '{level_name}' already exists. Only one active season is allowed per level."
         )
     
     try:
@@ -1836,17 +1836,17 @@ async def create_season(
             level_name = level_names.get(season_data.level, season_data.level)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Une saison avec le niveau '{level_name}' existe déjà. Il ne peut y avoir qu'une seule saison active par niveau."
+                detail=f"A season with the level '{level_name}' already exists. Only one active season is allowed per level."
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la création de la saison: {str(e)}"
+            detail=f"Error creating the season: {str(e)}"
         )
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la création de la saison: {str(e)}"
+            detail=f"Error creating the season: {str(e)}"
         )
 
 @router.put("/seasons/{season_id}", response_model=SeasonResponse)
@@ -1865,7 +1865,7 @@ async def update_season(
     if not season:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Saison non trouvée"
+            detail="Season not found"
         )
     
     # Validate level
@@ -1873,7 +1873,7 @@ async def update_season(
     if season_data.level not in valid_levels:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Niveau invalide. Les niveaux valides sont: {', '.join(valid_levels)}"
+            detail=f"Invalid level. Valid levels are: {', '.join(valid_levels)}"
         )
     
     # Check if another season with this level already exists (excluding current season)
@@ -1895,7 +1895,7 @@ async def update_season(
             level_name = level_names.get(season_data.level, season_data.level)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Une saison avec le niveau '{level_name}' existe déjà. Il ne peut y avoir qu'une seule saison active par niveau."
+                detail=f"A season with the level '{level_name}' already exists. Only one active season is allowed per level."
             )
     
     try:
@@ -1924,17 +1924,17 @@ async def update_season(
             level_name = level_names.get(season_data.level, season_data.level)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Une saison avec le niveau '{level_name}' existe déjà. Il ne peut y avoir qu'une seule saison active par niveau."
+                detail=f"A season with the level '{level_name}' already exists. Only one active season is allowed per level."
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour de la saison: {str(e)}"
+            detail=f"Error updating the season: {str(e)}"
         )
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour de la saison: {str(e)}"
+            detail=f"Error updating the season: {str(e)}"
         )
 
 @router.delete("/seasons/{season_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1952,7 +1952,7 @@ async def delete_season(
     if not season:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Saison non trouvée"
+            detail="Season not found"
         )
     
     try:
@@ -1962,7 +1962,7 @@ async def delete_season(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la suppression de la saison: {str(e)}"
+            detail=f"Error deleting the season: {str(e)}"
         )
 
 @router.post("/contestants/{contestant_id}/approve")
@@ -1980,7 +1980,7 @@ async def approve_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat non trouvé"
+            detail="Contestant not found"
         )
     
     try:
@@ -1991,13 +1991,13 @@ async def approve_contestant(
         return {
             'id': contestant.id,
             'verification_status': contestant.verification_status,
-            'message': 'Candidat approuvé avec succès'
+            'message': 'Contestant approved successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de l'approbation du candidat: {str(e)}"
+            detail=f"Error approving the contestant: {str(e)}"
         )
 
 @router.post("/contestants/{contestant_id}/reject")
@@ -2015,7 +2015,7 @@ async def reject_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat non trouvé"
+            detail="Contestant not found"
         )
     
     try:
@@ -2030,13 +2030,13 @@ async def reject_contestant(
         return {
             'id': contestant.id,
             'verification_status': contestant.verification_status,
-            'message': 'Candidat rejeté avec succès'
+            'message': 'Contestant rejected successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors du rejet du candidat: {str(e)}"
+            detail=f"Error rejecting the contestant: {str(e)}"
         )
 
 @router.put("/contestants/{contestant_id}/status")
@@ -2056,14 +2056,14 @@ async def update_contestant_status(
     if status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Statut invalide. Les statuts valides sont: {', '.join(valid_statuses)}"
+            detail=f"Invalid status. Valid statuses are: {', '.join(valid_statuses)}"
         )
     
     contestant = db.query(Contestant).filter(Contestant.id == contestant_id).first()
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat non trouvé"
+            detail="Contestant not found"
         )
     
     try:
@@ -2079,13 +2079,13 @@ async def update_contestant_status(
         return {
             'id': contestant.id,
             'verification_status': contestant.verification_status,
-            'message': f'Statut du candidat mis à jour avec succès'
+            'message': f'Contestant status updated successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du statut: {str(e)}"
+            detail=f"Error updating the status: {str(e)}"
         )
 
 # Contestants endpoints - Create/Update
@@ -2136,7 +2136,7 @@ async def bulk_approve_contestants(
     if not unique_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucun candidat sélectionné"
+            detail="No contestant selected"
         )
 
     try:
@@ -2144,7 +2144,7 @@ async def bulk_approve_contestants(
         if matched_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Aucun candidat correspondant trouvé"
+                detail="No matching contestant found"
             )
 
         approved_count = db.query(Contestant).filter(
@@ -2158,7 +2158,7 @@ async def bulk_approve_contestants(
         db.commit()
 
         return {
-            "message": f"{approved_count} candidat(s) approuvé(s) avec succès",
+            "message": f"{approved_count} contestant(s) approved successfully",
             "requested_count": len(unique_ids),
             "matched_count": matched_count,
             "approved_count": approved_count,
@@ -2169,7 +2169,7 @@ async def bulk_approve_contestants(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de l'approbation en lot: {str(e)}"
+            detail=f"Error approving contestants in bulk: {str(e)}"
         )
 
 @router.get("/seasons/by-level/{level}")
@@ -2187,7 +2187,7 @@ def get_seasons_by_level(
     if level not in valid_levels:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Niveau invalide. Les niveaux valides sont: {', '.join(valid_levels)}"
+            detail=f"Invalid level. Valid levels are: {', '.join(valid_levels)}"
         )
     
     seasons = db.query(ContestSeason).filter(
@@ -2226,7 +2226,7 @@ def get_season_entry_contests(
     season = db.query(ContestSeason).filter(ContestSeason.id == season_id,
                                             ContestSeason.is_deleted == False).first()
     if not season:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saison non trouvée")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Season not found")
     return [{"id": c.id, "name": c.name, "contest_mode": c.contest_mode}
             for c in _season_entry_contests(db, season_id)]
 
@@ -2247,7 +2247,7 @@ async def create_contestant(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail="User not found"
         )
     
     # Vérifier que la saison existe
@@ -2258,7 +2258,7 @@ async def create_contestant(
     if not season:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Saison non trouvée"
+            detail="Season not found"
         )
     
     # Vérifier que l'utilisateur n'a pas déjà un candidat pour cette saison
@@ -2271,7 +2271,7 @@ async def create_contestant(
     if existing_contestant:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cet utilisateur a déjà un candidat pour cette saison"
+            detail="This user already has an entry for this season"
         )
 
     # Phase 8: the contest whose rules govern this NEW entry must be known
@@ -2353,19 +2353,19 @@ async def create_contestant(
             "verification_status": new_contestant.verification_status,
             # Staff view: whether the entry is public yet (reasons live in the moderation/eligibility tools).
             "public": bool(new_contestant.is_active),
-            "message": "Candidat créé avec succès"
+            "message": "Contestant created successfully"
         }
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la création du candidat: {str(e)}"
+            detail=f"Error creating the contestant: {str(e)}"
         )
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la création du candidat: {str(e)}"
+            detail=f"Error creating the contestant: {str(e)}"
         )
 
 @router.put("/contestants/{contestant_id}")
@@ -2389,7 +2389,7 @@ async def update_contestant(
     if not contestant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat non trouvé"
+            detail="Contestant not found"
         )
 
     try:
@@ -2438,7 +2438,7 @@ async def update_contestant(
             if not season:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Saison non trouvée"
+                    detail="Season not found"
                 )
             
             # Integrity guard, evaluated BEFORE anything is mutated: a
@@ -2491,7 +2491,7 @@ async def update_contestant(
             "title": contestant.title,
             "description": contestant.description,
             "verification_status": contestant.verification_status,
-            "message": "Candidat mis à jour avec succès"
+            "message": "Contestant updated successfully"
         }
     except HTTPException:
         raise
@@ -2499,19 +2499,19 @@ async def update_contestant(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Activation refusée: {str(e)}"
+            detail=f"Activation refused: {str(e)}"
         )
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du candidat: {str(e)}"
+            detail=f"Error updating the contestant: {str(e)}"
         )
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du candidat: {str(e)}"
+            detail=f"Error updating the contestant: {str(e)}"
         )
 
 @router.put("/comments/{comment_id}")
@@ -2530,7 +2530,7 @@ async def update_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire non trouvé"
+            detail="Comment not found"
         )
     
     try:
@@ -2543,13 +2543,13 @@ async def update_comment(
         return {
             'id': comment.id,
             'is_hidden': comment.is_hidden,
-            'message': 'Commentaire mis à jour avec succès'
+            'message': 'Comment updated successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du commentaire: {str(e)}"
+            detail=f"Error updating the comment: {str(e)}"
         )
 
 @router.delete("/comments/{comment_id}")
@@ -2567,7 +2567,7 @@ async def delete_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire non trouvé"
+            detail="Comment not found"
         )
     
     try:
@@ -2578,13 +2578,13 @@ async def delete_comment(
         return {
             'id': comment_id,
             'is_deleted': comment.is_deleted,
-            'message': 'Commentaire supprimé avec succès'
+            'message': 'Comment deleted successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la suppression du commentaire: {str(e)}"
+            detail=f"Error deleting the comment: {str(e)}"
         )
 
 @router.put("/comments/{comment_id}/hide")
@@ -2602,7 +2602,7 @@ async def hide_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire non trouvé"
+            detail="Comment not found"
         )
     
     try:
@@ -2613,13 +2613,13 @@ async def hide_comment(
         return {
             'id': comment.id,
             'is_hidden': comment.is_hidden,
-            'message': 'Commentaire caché avec succès'
+            'message': 'Comment hidden successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors du masquage du commentaire: {str(e)}"
+            detail=f"Error hiding the comment: {str(e)}"
         )
 
 @router.put("/comments/{comment_id}/show")
@@ -2637,7 +2637,7 @@ async def show_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire non trouvé"
+            detail="Comment not found"
         )
     
     try:
@@ -2648,13 +2648,13 @@ async def show_comment(
         return {
             'id': comment.id,
             'is_hidden': comment.is_hidden,
-            'message': 'Commentaire affiché avec succès'
+            'message': 'Comment shown successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de l'affichage du commentaire: {str(e)}"
+            detail=f"Error showing the comment: {str(e)}"
         )
 
 @router.put("/comments/{comment_id}/restore")
@@ -2672,7 +2672,7 @@ async def restore_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Commentaire non trouvé"
+            detail="Comment not found"
         )
     
     try:
@@ -2683,13 +2683,13 @@ async def restore_comment(
         return {
             'id': comment.id,
             'is_deleted': comment.is_deleted,
-            'message': 'Commentaire restauré avec succès'
+            'message': 'Comment restored successfully'
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la restauration du commentaire: {str(e)}"
+            detail=f"Error restoring the comment: {str(e)}"
         )
 
 # Users endpoints
@@ -2802,7 +2802,7 @@ def get_all_users(
         print(f"ERROR in get_all_users: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des utilisateurs: {str(e)}"
+            detail=f"Error fetching users: {str(e)}"
         )
 
 @router.get("/users/{user_id}")
@@ -2821,7 +2821,7 @@ def get_user_details(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
 
         # Récupérer le parrain (utilisateur ayant référé ce compte), si présent.
@@ -2904,7 +2904,7 @@ def get_user_details(
         contests_list = [
             {
                 'id': c.contest_id,
-                'title': c.contest.name if c.contest else 'Concours supprimé'
+                'title': c.contest.name if c.contest else 'Contest deleted'
             }
             for c in contests
         ]
@@ -3162,7 +3162,7 @@ def get_user_details(
         print(f"ERROR in get_user_details: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des détails: {str(e)}"
+            detail=f"Error fetching the details: {str(e)}"
         )
 
 @router.put("/users/{user_id}/role")
@@ -3193,7 +3193,7 @@ async def update_user_role(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
         if admin_security.role_is_super_admin_role(user.role):
             # The administrator flag decides whether that role counts: taking it
@@ -3226,7 +3226,7 @@ async def update_user_role(
         return {
             'id': user.id,
             'is_admin': user.is_admin,
-            'message': 'Rôle mis à jour avec succès'
+            'message': 'Role updated successfully'
         }
     except HTTPException:
         raise
@@ -3234,7 +3234,7 @@ async def update_user_role(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du rôle: {str(e)}"
+            detail=f"Error updating the role: {str(e)}"
         )
 
 
@@ -3297,7 +3297,7 @@ def super_admin_demotion_options(
             "code": admin_security.SUPER_ADMIN_REQUIRED, "message": "Only a Super Admin can do this."})
     target = db.query(User).filter(User.id == user_id).first()
     if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return {"id": target.id, **admin_security.demotion_options(db, target)}
 
 
@@ -3326,7 +3326,7 @@ async def update_user_status(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
         if admin_security.role_is_super_admin_role(user.role):
             # A Super Admin account is switched on or off by another Super Admin
@@ -3363,7 +3363,7 @@ async def update_user_status(
         return {
             'id': user.id,
             'is_active': user.is_active,
-            'message': 'Statut mis à jour avec succès'
+            'message': 'Status updated successfully'
         }
     except HTTPException:
         raise
@@ -3371,7 +3371,7 @@ async def update_user_status(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la mise à jour du statut: {str(e)}"
+            detail=f"Error updating the status: {str(e)}"
         )
 
 @router.delete("/users/{user_id}")
@@ -3394,7 +3394,7 @@ async def delete_user(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
         if admin_security.is_administrator(user) or admin_security.role_is_privileged(user.role):
             admin_security.record_denial(db, actor=current_user, target_id=user_id,
@@ -3414,7 +3414,7 @@ async def delete_user(
         return {
             'id': user.id,
             'is_deleted': user.is_deleted,
-            'message': 'Utilisateur supprimé avec succès'
+            'message': 'User deleted successfully'
         }
     except HTTPException:
         raise
@@ -3422,7 +3422,7 @@ async def delete_user(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la suppression: {str(e)}"
+            detail=f"Error while deleting: {str(e)}"
         )
 
 @router.get("/statistics")
@@ -3562,7 +3562,7 @@ def get_admin_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des statistiques: {str(e)}"
+            detail=f"Error fetching statistics: {str(e)}"
         )
 
 @router.get("/reports")
@@ -3673,7 +3673,7 @@ def get_reports(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des reports: {str(e)}"
+            detail=f"Error fetching reports: {str(e)}"
         )
 
 @router.get("/suggested-contests")
@@ -3740,7 +3740,7 @@ def get_suggested_contests(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des suggestions: {str(e)}"
+            detail=f"Error fetching suggestions: {str(e)}"
         )
 
 @router.get("/statistics/user-progress")
@@ -3815,7 +3815,7 @@ def get_user_progress_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des statistiques de progression: {str(e)}"
+            detail=f"Error fetching progression statistics: {str(e)}"
         )
 
 @router.get("/statistics/deposits")
@@ -3887,7 +3887,7 @@ def get_deposits_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des statistiques de dépôts: {str(e)}"
+            detail=f"Error fetching deposit statistics: {str(e)}"
         )
 
 @router.get("/statistics/withdrawals")
@@ -3962,7 +3962,7 @@ def get_withdrawals_statistics(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des statistiques de retraits: {str(e)}"
+            detail=f"Error fetching withdrawal statistics: {str(e)}"
         )
 
 @router.put("/users/{user_id}/kyc/verify")
@@ -3983,7 +3983,7 @@ async def verify_user_kyc(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
         
         old_value = bool(user.identity_verified)
@@ -3997,7 +3997,7 @@ async def verify_user_kyc(
             'id': user.id,
             'identity_verified': user.identity_verified,
             'verification_date': user.verification_date,
-            'message': 'KYC vérifié avec succès'
+            'message': 'KYC verified successfully'
         }
     except HTTPException:
         raise
@@ -4005,7 +4005,7 @@ async def verify_user_kyc(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la vérification du KYC: {str(e)}"
+            detail=f"Error verifying KYC: {str(e)}"
         )
 
 @router.put("/users/{user_id}/kyc/unverify")
@@ -4026,7 +4026,7 @@ async def unverify_user_kyc(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Utilisateur non trouvé"
+                detail="User not found"
             )
         
         old_value = bool(user.identity_verified)
@@ -4040,7 +4040,7 @@ async def unverify_user_kyc(
             'id': user.id,
             'identity_verified': user.identity_verified,
             'verification_date': user.verification_date,
-            'message': 'Vérification KYC révoquée'
+            'message': 'KYC verification revoked'
         }
     except HTTPException:
         raise
@@ -4048,7 +4048,7 @@ async def unverify_user_kyc(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erreur lors de la révocation du KYC: {str(e)}"
+            detail=f"Error revoking KYC: {str(e)}"
         )
 
 
@@ -4330,7 +4330,7 @@ def export_all_invoices_pdf(
         logger.exception("Invoice PDF export failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'export des factures: {exc}",
+            detail=f"Error exporting invoices: {exc}",
         ) from exc
 
 
@@ -4386,7 +4386,7 @@ def export_all_transactions_csv(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'export des transactions: {str(e)}",
+            detail=f"Error exporting transactions: {str(e)}",
         )
 
 
@@ -4422,7 +4422,7 @@ def get_all_transactions(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des transactions: {str(e)}",
+            detail=f"Error fetching transactions: {str(e)}",
         )
 
 
@@ -4622,7 +4622,7 @@ def admin_accounting_journal_entries(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur journal entries: {str(e)}",
+            detail=f"Error loading journal entries: {str(e)}",
         )
 
 

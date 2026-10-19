@@ -495,7 +495,7 @@ function ApplyToContestPageContent() {
     }
 
     if (timeValues.isClosed) {
-      setTimeRemaining(t('dashboard.contests.closed') || 'Fermé')
+      setTimeRemaining(t('dashboard.contests.closed') || 'Closed')
       return
     }
 
@@ -584,7 +584,7 @@ function ApplyToContestPageContent() {
     ) {
       addToast(
         t('verification.incomplete_warning') ||
-          'Complétez toutes les vérifications requises avant de participer.',
+          'Incomplete Warning',
         'error'
       )
       return
@@ -742,7 +742,7 @@ function ApplyToContestPageContent() {
         'success'
       )
     } catch (err: any) {
-      console.error('Erreur lors de la soumission:', err)
+      console.error('Submission error:', err)
 
       // Phase 5: structured, safe backend error (e.g. CONTEST_ENTRY_LOCKED). Eligibility itself never refuses.
       const eligibility = err?.response?.data?.detail
@@ -943,14 +943,14 @@ function ApplyToContestPageContent() {
 
               {contestRequiresVerification && !isEditingParticipation && !verificationStatusLoaded && (
                 <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-600 dark:text-gray-300">
-                  {t('common.loading') || 'Chargement du statut de vérification...'}
+                  {t('common.loading') || 'Loading...'}
                 </div>
               )}
 
               {blockedByVerification && (
                 <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-sm text-amber-900 dark:text-amber-100">
                   {t('verification.incomplete_warning') ||
-                    'Complétez toutes les vérifications dans la fenêtre pour accéder au formulaire.'}
+                    'Incomplete Warning'}
                 </div>
               )}
 
@@ -1031,7 +1031,7 @@ function ApplyToContestPageContent() {
               {needsKYC && !isNomination && (
                 <div className="p-3 sm:p-4 bg-amber-900/20 border border-amber-800/50 rounded-xl mb-3 sm:mb-4">
                   <p className="text-amber-200 text-sm">
-                    {t('participation.kyc_notification') || '⚠️ Votre identité n\'a pas été vérifiée. Nous vous recommandons de compléter votre vérification KYC pour une meilleure expérience.'}
+                    {t('participation.kyc_notification') || 'Kyc Notification'}
                   </p>
                 </div>
               )}
@@ -1192,7 +1192,7 @@ function ApplyToContestPageContent() {
               setHasVisualVerification(true)
               setShowSelfieDialog(false)
               setShowVerificationDialog(true)
-              addToast(t('verification.selfie_success') || 'Selfie enregistré avec succès', 'success')
+              addToast(t('verification.selfie_success') || 'Selfie Success', 'success')
             }}
             verificationType={contest.participant_type === 'pet' ? 'selfie_with_pet' : 'selfie'}
             maxSizeMb={contest.verification_max_size_mb || 50}
@@ -1205,7 +1205,7 @@ function ApplyToContestPageContent() {
               setHasVoiceVerification(true)
               setShowVoiceDialog(false)
               setShowVerificationDialog(true)
-              addToast(t('verification.voice_success') || 'Enregistrement vocal enregistré avec succès', 'success')
+              addToast(t('verification.voice_success') || 'Voice Success', 'success')
             }}
             maxDurationSeconds={contest.verification_video_max_duration || 30}
             maxSizeMb={contest.verification_max_size_mb || 50}
@@ -1218,7 +1218,7 @@ function ApplyToContestPageContent() {
               setHasBrandVerification(true)
               setShowBrandDialog(false)
               setShowVerificationDialog(true)
-              addToast(t('verification.brand_success') || 'Vérification de marque soumise', 'success')
+              addToast(t('verification.brand_success') || 'Brand Success', 'success')
               // TODO: Save brand verification data to backend
             }}
             maxSizeMb={contest.verification_max_size_mb || 50}
@@ -1231,7 +1231,7 @@ function ApplyToContestPageContent() {
               setHasContentVerification(true)
               setShowContentDialog(false)
               setShowVerificationDialog(true)
-              addToast(t('verification.content_success') || 'Vérification de contenu soumise', 'success')
+              addToast(t('verification.content_success') || 'Content Success', 'success')
               // TODO: Save content verification data to backend
             }}
             maxSizeMb={contest.verification_max_size_mb || 50}

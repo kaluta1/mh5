@@ -240,7 +240,7 @@ class ContentModerationService:
                     type=FlagType.OFFENSIVE,
                     severity=Severity.MEDIUM,
                     confidence=1.0,
-                    description=f"Mot interdit détecté"
+                    description=f"Prohibited word detected"
                 ))
                 break
         
@@ -250,7 +250,7 @@ class ContentModerationService:
                 type=FlagType.SPAM,
                 severity=Severity.LOW,
                 confidence=0.8,
-                description="Contenu spam détecté"
+                description="Spam content detected"
             ))
         
         is_approved = len(flags) == 0
@@ -296,7 +296,7 @@ class ContentModerationService:
                     type=FlagType.ADULT,
                     severity=Severity.HIGH if nudity_score > 0.8 else Severity.MEDIUM,
                     confidence=nudity_score,
-                    description="Contenu adulte détecté"
+                    description="Adult content detected"
                 ))
         
         # Violence
@@ -308,7 +308,7 @@ class ContentModerationService:
                     type=FlagType.VIOLENCE,
                     severity=Severity.HIGH if violence_score > 0.85 else Severity.MEDIUM,
                     confidence=violence_score,
-                    description="Contenu violent détecté"
+                    description="Violent content detected"
                 ))
         
         # Gore
@@ -320,7 +320,7 @@ class ContentModerationService:
                     type=FlagType.GORE,
                     severity=Severity.HIGH if gore_score > 0.7 else Severity.MEDIUM,
                     confidence=gore_score,
-                    description="Contenu gore/sanglant détecté"
+                    description="Graphic or gory content detected"
                 ))
         
         # Armes
@@ -332,7 +332,7 @@ class ContentModerationService:
                     type=FlagType.WEAPONS,
                     severity=Severity.MEDIUM,
                     confidence=weapon_score,
-                    description="Arme détectée"
+                    description="Weapon detected"
                 ))
         
         # Contenu offensant
@@ -344,7 +344,7 @@ class ContentModerationService:
                     type=FlagType.OFFENSIVE,
                     severity=Severity.MEDIUM,
                     confidence=offensive_score,
-                    description="Contenu offensant détecté"
+                    description="Offensive content detected"
                 ))
         
         max_confidence = max((f.confidence for f in flags), default=1.0)

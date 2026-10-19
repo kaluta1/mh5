@@ -99,7 +99,7 @@ def get_journal_entry(
     if not entry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Écriture comptable non trouvée"
+            detail="Journal entry not found"
         )
     return entry
 

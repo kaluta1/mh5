@@ -289,7 +289,7 @@ export default function AdminUsers() {
       addToast(message, 'success')
       fetchUsers()
     } catch (error) {
-      console.error('Erreur lors de la modification du statut:', error)
+      console.error('Error changing the status:', error)
       addToast(adminErrorText(error, t('admin.users.toggle_active_error') || 'Error updating user status'), 'error')
     }
   }
@@ -307,13 +307,13 @@ export default function AdminUsers() {
       throwIfApiError(await api.delete(`/api/v1/admin/users/${deleteUserId}`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.delete_success') || 'Utilisateur supprimé avec succès', 'success')
+      addToast(t('admin.users.delete_success') || 'User deleted successfully', 'success')
       fetchUsers()
       setShowDeleteDialog(false)
       setDeleteUserId(null)
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error)
-      addToast(adminErrorText(error, t('admin.users.delete_error') || 'Erreur lors de la suppression'), 'error')
+      console.error('Error while deleting:', error)
+      addToast(adminErrorText(error, t('admin.users.delete_error') || 'Error while deleting'), 'error')
     } finally {
       setIsDeleting(false)
     }
@@ -324,11 +324,11 @@ export default function AdminUsers() {
       throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/verify`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.kyc_verify_success') || 'KYC vérifié avec succès', 'success')
+      addToast(t('admin.users.kyc_verify_success') || 'KYC verified successfully', 'success')
       fetchUsers()
     } catch (error) {
-      console.error('Erreur lors de la vérification KYC:', error)
-      addToast(adminErrorText(error, t('admin.users.kyc_verify_error') || 'Erreur lors de la vérification KYC'), 'error')
+      console.error('Error verifying KYC:', error)
+      addToast(adminErrorText(error, t('admin.users.kyc_verify_error') || 'Error verifying KYC'), 'error')
     }
   }
 
@@ -337,11 +337,11 @@ export default function AdminUsers() {
       throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/unverify`))
       // Invalider le cache des utilisateurs
       cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.kyc_unverify_success') || 'Vérification KYC révoquée', 'success')
+      addToast(t('admin.users.kyc_unverify_success') || 'KYC verification revoked', 'success')
       fetchUsers()
     } catch (error) {
-      console.error('Erreur lors de la révocation KYC:', error)
-      addToast(adminErrorText(error, t('admin.users.kyc_unverify_error') || 'Erreur lors de la révocation KYC'), 'error')
+      console.error('Error revoking KYC:', error)
+      addToast(adminErrorText(error, t('admin.users.kyc_unverify_error') || 'Error revoking KYC'), 'error')
     }
   }
 
@@ -350,13 +350,13 @@ export default function AdminUsers() {
       setLoadingCommentId(commentId)
       setLoadingAction('delete')
       await api.delete(`/api/v1/admin/comments/${commentId}`)
-      addToast(t('admin.users.comment_delete_success') || 'Commentaire supprimé', 'success')
+      addToast(t('admin.users.comment_delete_success') || 'Comment deleted', 'success')
       if (selectedUser) {
         fetchUserDetails(selectedUser.id)
       }
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error)
-      addToast(t('admin.users.comment_delete_error') || 'Erreur lors de la suppression', 'error')
+      console.error('Error while deleting:', error)
+      addToast(t('admin.users.comment_delete_error') || 'Error while deleting', 'error')
     } finally {
       setLoadingCommentId(null)
       setLoadingAction(null)
@@ -371,16 +371,16 @@ export default function AdminUsers() {
         is_hidden: !isHidden
       })
       const message = !isHidden 
-        ? t('admin.users.comment_hide_success') || 'Commentaire masqué'
-        : t('admin.users.comment_show_success') || 'Commentaire affiché'
+        ? t('admin.users.comment_hide_success') || 'Comment hidden'
+        : t('admin.users.comment_show_success') || 'Comment shown'
       addToast(message, 'success')
       if (selectedUser) {
         fetchUserDetails(selectedUser.id)
       }
     } catch (error) {
-      console.error('Erreur lors du masquage:', error)
+      console.error('Error hiding:', error)
       const message = !isHidden
-        ? t('admin.users.comment_hide_error') || 'Erreur lors du masquage'
+        ? t('admin.users.comment_hide_error') || 'Error hiding'
         : t('admin.users.comment_show_error') || 'Erreur lors de l\'affichage'
       addToast(message, 'error')
     } finally {
@@ -677,7 +677,7 @@ export default function AdminUsers() {
                               className="gap-2 cursor-pointer text-orange-600 dark:text-orange-400"
                             >
                               <Square className="h-4 w-4" />
-                              <span>{t('admin.users.unverify_kyc') || 'Révoquer KYC'}</span>
+                              <span>{t('admin.users.unverify_kyc') || 'Revoke KYC'}</span>
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem
@@ -685,7 +685,7 @@ export default function AdminUsers() {
                               className="gap-2 cursor-pointer text-green-600 dark:text-green-400"
                             >
                               <CheckSquare className="h-4 w-4" />
-                              <span>{t('admin.users.verify_kyc') || 'Vérifier KYC'}</span>
+                              <span>{t('admin.users.verify_kyc') || 'Verify KYC'}</span>
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />

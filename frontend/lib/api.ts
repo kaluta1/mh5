@@ -288,7 +288,7 @@ export const authService = {
     // Vérifier que l'inscription a réussi (validateStatus accepte les 4xx)
     if (response.status >= 400) {
       const error: any = new Error(
-        response.data?.detail || response.data?.message || "Erreur lors de l'inscription"
+        response.data?.detail || response.data?.message || "Registration failed"
       )
       error.response = response
       throw error

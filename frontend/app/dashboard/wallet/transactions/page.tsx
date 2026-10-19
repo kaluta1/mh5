@@ -95,10 +95,10 @@ export default function TransactionsPage() {
       t.category === 'commission' ? 'Commission' : 'Achat',
       t.description,
       `${t.amount.toFixed(2)} USD`,
-      t.status === 'completed' ? 'Payé' : 
-        t.status === 'approved' ? 'Approuvé' : 
-        t.status === 'pending' ? 'En attente' : 
-        t.status === 'expired' ? 'Expiré' : 'Échoué'
+      t.status === 'completed' ? 'Paid' : 
+        t.status === 'approved' ? 'Approved' : 
+        t.status === 'pending' ? 'Pending' : 
+        t.status === 'expired' ? 'Expired' : 'Failed'
     ])
     
     const csvContent = [
@@ -200,8 +200,8 @@ export default function TransactionsPage() {
               >
                 {status === 'all' && (t('dashboard.wallet.all') || 'Tout')}
                 {status === 'completed' && (t('dashboard.wallet.completed') || 'Completed')}
-                {status === 'approved' && (t('dashboard.wallet.approved') || 'Approuvé')}
-                {status === 'pending' && (t('dashboard.wallet.pending') || 'En attente')}
+                {status === 'approved' && (t('dashboard.wallet.approved') || 'Approved')}
+                {status === 'pending' && (t('dashboard.wallet.pending') || 'Pending')}
               </button>
             ))}
           </div>

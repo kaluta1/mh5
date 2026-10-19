@@ -42,7 +42,7 @@ export function RoundsList() {
             }
             // Only show toast for non-timeout errors
             if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
-                addToast(t('admin.rounds.load_error') || 'Erreur lors du chargement des rounds', 'error')
+                addToast(t('admin.rounds.load_error') || 'Load Error', 'error')
             }
         } finally {
             setLoading(false)
@@ -80,10 +80,10 @@ export function RoundsList() {
         if (!deleteRoundId) return
         try {
             await api.delete(`/api/v1/rounds/${deleteRoundId}`)
-            addToast(t('admin.rounds.delete_success') || 'Round supprimé avec succès', 'success')
+            addToast(t('admin.rounds.delete_success') || 'Delete Success', 'success')
             fetchRounds()
         } catch (error) {
-            addToast(t('admin.rounds.delete_error') || 'Erreur lors de la suppression', 'error')
+            addToast(t('admin.rounds.delete_error') || 'Error deleting', 'error')
         } finally {
             setShowDeleteDialog(false)
             setDeleteRoundId(null)
@@ -98,10 +98,10 @@ export function RoundsList() {
 
         if (editingRound) {
             await api.put(`/api/v1/rounds/${editingRound.id}`, dataToSend)
-            addToast(t('admin.rounds.update_success') || 'Round mis à jour avec succès', 'success')
+            addToast(t('admin.rounds.update_success') || 'Update Success', 'success')
         } else {
             await api.post('/api/v1/rounds/', dataToSend)
-            addToast(t('admin.rounds.create_success') || 'Round créé avec succès', 'success')
+            addToast(t('admin.rounds.create_success') || 'Create Success', 'success')
         }
         fetchRounds()
     }
@@ -187,7 +187,7 @@ export function RoundsList() {
                 onOpenChange={(open) => setShowDeleteDialog(open)}
                 onConfirm={handleConfirmDelete}
                 title={t('admin.rounds.confirm_delete') || 'Confirmer la suppression'}
-                message={t('admin.rounds.delete_warning') || 'Voulez-vous vraiment supprimer ce round ?'}
+                message={t('admin.rounds.delete_warning') || 'Delete Warning'}
             />
         </div>
     )

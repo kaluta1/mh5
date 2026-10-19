@@ -59,7 +59,7 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
         const maxSizeBytes = options.maxSizeMB * 1024 * 1024
         if (file.size > maxSizeBytes) {
           const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-          const errorMessage = `Le fichier est trop volumineux (${fileSizeMB}MB). Taille maximale autorisée: ${options.maxSizeMB}MB`
+          const errorMessage = `The file is too large (${fileSizeMB} MB). Maximum size: ${options.maxSizeMB} MB`
           
           setState({
             isUploading: false,

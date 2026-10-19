@@ -344,7 +344,7 @@ export default function CommissionsPage() {
         return (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
             <CheckCircle className="w-3 h-3" />
-            {t('dashboard.commissions.paid') || 'Payé'}
+            {t('dashboard.commissions.paid') || 'Paid'}
           </span>
         )
       case 'pending':
@@ -365,7 +365,7 @@ export default function CommissionsPage() {
         return (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
             <XCircle className="w-3 h-3" />
-            {t('dashboard.commissions.cancelled') || 'Annulé'}
+            {t('dashboard.commissions.cancelled') || 'Cancelled'}
           </span>
         )
       default:
@@ -418,7 +418,7 @@ export default function CommissionsPage() {
             {t('dashboard.commissions.title') || 'Mes Commissions'}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {t('dashboard.commissions.subtitle') || 'Suivez vos gains et revenus d\'affiliation'}
+            {t('dashboard.commissions.subtitle') || 'Track your earnings and affiliate revenue'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -468,7 +468,7 @@ export default function CommissionsPage() {
             {formatCurrency(stats.totalEarned)}
           </p>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            {t('dashboard.commissions.total_earned') || 'Total gagné'}
+            {t('dashboard.commissions.total_earned') || 'Total Earned'}
           </p>
         </div>
 
@@ -582,8 +582,8 @@ export default function CommissionsPage() {
                       {status === 'all' && (t('dashboard.commissions.all') || 'Tout')}
                       {status === 'pending' && (t('dashboard.commissions.pending') || 'En attente')}
                       {status === 'approved' && (t('dashboard.commissions.approved') || 'Approved')}
-                      {status === 'paid' && (t('dashboard.commissions.paid') || 'Payé')}
-                      {status === 'cancelled' && (t('dashboard.commissions.cancelled') || 'Annulé')}
+                      {status === 'paid' && (t('dashboard.commissions.paid') || 'Paid')}
+                      {status === 'cancelled' && (t('dashboard.commissions.cancelled') || 'Cancelled')}
                     </button>
                   ))}
                 </div>
@@ -690,14 +690,14 @@ export default function CommissionsPage() {
               {t('dashboard.commissions.no_commissions') || 'Aucune commission'}
             </h3>
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              {t('dashboard.commissions.no_commissions_description') || 'Parrainez des utilisateurs pour commencer à gagner des commissions'}
+              {t('dashboard.commissions.no_commissions_description') || 'Refer members to start earning commissions'}
             </p>
             <Button 
               onClick={() => router.push('/dashboard/affiliates')}
               className="rounded-xl bg-myhigh5-primary hover:bg-myhigh5-primary/90"
             >
               <Users className="w-4 h-4 mr-2" />
-              {t('dashboard.commissions.go_to_affiliates') || 'Voir mes affiliés'}
+              {t('dashboard.commissions.go_to_affiliates') || 'View my affiliates'}
             </Button>
           </div>
         )}

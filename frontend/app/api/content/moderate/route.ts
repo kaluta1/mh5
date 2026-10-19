@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Content moderation error:', error)
     return NextResponse.json(
-      { error: 'Erreur lors de la modération' },
+      { error: 'Moderation failed' },
       { status: 500 }
     )
   }

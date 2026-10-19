@@ -115,7 +115,7 @@ function UserProfilePage() {
       setFollowersCount(response.data.followers_count || 0)
     } catch (err) {
       console.error('Error loading profile:', err)
-      addToast(t('errors.generic') || 'Erreur lors du chargement du profil', 'error')
+      addToast(t('errors.generic') || 'Generic', 'error')
     } finally {
       setLoading(false)
     }
@@ -141,12 +141,12 @@ function UserProfilePage() {
         await followService.unfollowUser(Number(userId))
         setIsFollowing(false)
         setFollowersCount(prev => Math.max(0, prev - 1))
-        addToast(t('dashboard.profile.unfollowed') || 'Vous ne suivez plus cet utilisateur', 'success')
+        addToast(t('dashboard.profile.unfollowed') || 'You no longer follow this user', 'success')
       } else {
         await followService.followUser(Number(userId))
         setIsFollowing(true)
         setFollowersCount(prev => prev + 1)
-        addToast(t('dashboard.profile.followed') || 'Vous suivez cet utilisateur', 'success')
+        addToast(t('dashboard.profile.followed') || 'You are now following this user', 'success')
       }
     } catch (err: any) {
       addToast(err?.response?.data?.detail || 'Erreur', 'error')
@@ -205,7 +205,7 @@ function UserProfilePage() {
   if (!profile) {
     return (
       <div className="text-center py-16">
-        <p className="text-gray-500 dark:text-gray-400">{t('errors.user_not_found') || 'Utilisateur non trouvé'}</p>
+        <p className="text-gray-500 dark:text-gray-400">{t('errors.user_not_found') || 'User not found'}</p>
       </div>
     )
   }
@@ -262,7 +262,7 @@ function UserProfilePage() {
                 </h1>
                 {profile.identity_verified && (
                   <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-xs">
-                    {t('dashboard.profile.verified') || 'Vérifié'}
+                    {t('dashboard.profile.verified') || 'Verified'}
                   </Badge>
                 )}
               </div>
@@ -336,7 +336,7 @@ function UserProfilePage() {
             </div>
             <div className="text-center">
               <p className="text-lg font-bold text-gray-900 dark:text-white">{followersCount}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.profile.followers') || 'Abonnés'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.profile.followers') || 'Followers'}</p>
             </div>
             <div className="text-center">
               <p className="text-lg font-bold text-gray-900 dark:text-white">{profile.following_count || 0}</p>
@@ -392,7 +392,7 @@ function UserProfilePage() {
           <div className="text-center py-12 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
             <Trophy className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
             <p className="text-gray-500 dark:text-gray-400">
-              {t('dashboard.profile.no_entries') || 'Aucune participation pour le moment'}
+              {t('dashboard.profile.no_entries') || 'No entries yet'}
             </p>
           </div>
         ) : (

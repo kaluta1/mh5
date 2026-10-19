@@ -57,14 +57,14 @@ export function ContentVerificationDialog({
 
     // Check file type first
     if (!file.type.startsWith('image/')) {
-      setError(t('verification.invalid_file_type') || 'Type de fichier invalide. Seules les images sont acceptées.')
+      setError(t('verification.invalid_file_type') || 'Invalid file type. Please upload a supported file.')
       return
     }
 
     // Check file size
     if (file.size > maxSizeMb * 1024 * 1024) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      setError(t('verification.file_too_large_with_size') || `L'image est trop volumineuse (${fileSizeMB}MB). Taille maximale autorisée: ${maxSizeMb}MB`)
+      setError(t('verification.file_too_large_with_size') || `The image is too large (${fileSizeMB} MB). Maximum size: ${maxSizeMb} MB`)
       return
     }
 
@@ -78,7 +78,7 @@ export function ContentVerificationDialog({
 
   const handleSubmit = async () => {
     if (!description.trim()) {
-      setError(t('verification.description_required') || 'La description est requise')
+      setError(t('verification.description_required') || 'Description is required')
       return
     }
 
@@ -117,7 +117,7 @@ export function ContentVerificationDialog({
       onComplete(verificationData)
     } catch (err) {
       console.error('Content verification error:', err)
-      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Erreur lors de la soumission'))
+      setError(err instanceof Error ? err.message : (t('verification.submit_error') || 'Submit Error'))
     } finally {
       setIsUploading(false)
     }
@@ -138,11 +138,11 @@ export function ContentVerificationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-myhigh5-primary" />
-            {t('verification.content_ownership') || 'Vérification de propriété du contenu'}
+            {t('verification.content_ownership') || 'Content Ownership'}
           </DialogTitle>
           <DialogDescription>
             {t('verification.content_ownership_description') || 
-              'Prouvez que vous êtes le propriétaire du contenu que vous soumettez.'}
+              'Prove that you own the content you are submitting.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -151,14 +151,14 @@ export function ContentVerificationDialog({
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               {t('verification.content_instructions') || 
-                'Fournissez une preuve que le contenu vous appartient: capture d\'écran de votre compte, lien vers votre profil social, etc.'}
+                'Content Instructions'}
             </p>
           </div>
 
           {/* Content URL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('verification.content_url') || 'Lien vers votre contenu original (optionnel)'}
+              {t('verification.content_url') || 'Link to your original content (optional)'}
             </label>
             <div className="flex gap-2">
               <Link className="w-5 h-5 text-gray-400 mt-2" />
@@ -194,7 +194,7 @@ export function ContentVerificationDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('verification.content_description_placeholder') || 
-                'Expliquez comment ce contenu vous appartient...'}
+                'Explain how this content belongs to you...'}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-myhigh5-primary resize-none"
             />
@@ -203,7 +203,7 @@ export function ContentVerificationDialog({
           {/* Proof Image Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('verification.proof_image') || 'Image de preuve (capture d\'écran)'}
+              {t('verification.proof_image') || 'Proof image (screenshot)'}
             </label>
             
             {proofImage ? (
@@ -228,7 +228,7 @@ export function ContentVerificationDialog({
               >
                 <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('verification.click_upload_proof') || 'Cliquez pour ajouter une preuve'}
+                  {t('verification.click_upload_proof') || 'Click to upload proof'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                   Max {maxSizeMb}MB

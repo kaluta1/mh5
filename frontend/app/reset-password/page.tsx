@@ -47,7 +47,7 @@ function ResetPasswordPageContent() {
     const newErrors: { new_password?: string; confirm_password?: string } = {}
     
     if (!formData.new_password) {
-      newErrors.new_password = t('auth.reset_password.password_required') || 'Le mot de passe est requis'
+      newErrors.new_password = t('auth.reset_password.password_required') || 'Password is required'
     } else if (formData.new_password.length < PASSWORD_MIN_LENGTH) {
       newErrors.new_password = t('auth.reset_password.password_min_length') || `Password must be at least ${PASSWORD_MIN_LENGTH} characters`
     } else if (!isPasswordAcceptable(formData.new_password)) {
@@ -55,9 +55,9 @@ function ResetPasswordPageContent() {
     }
     
     if (!formData.confirm_password) {
-      newErrors.confirm_password = t('auth.reset_password.confirm_password_required') || 'La confirmation du mot de passe est requise'
+      newErrors.confirm_password = t('auth.reset_password.confirm_password_required') || 'Password confirmation is required'
     } else if (formData.new_password !== formData.confirm_password) {
-      newErrors.confirm_password = t('auth.reset_password.passwords_not_match') || 'Les mots de passe ne correspondent pas'
+      newErrors.confirm_password = t('auth.reset_password.passwords_not_match') || 'Passwords do not match'
     }
     
     setErrors(newErrors)
@@ -81,7 +81,7 @@ function ResetPasswordPageContent() {
       
       setIsSuccess(true)
       addToast(
-        t('auth.reset_password.success') || 'Mot de passe réinitialisé avec succès',
+        t('auth.reset_password.success') || 'Your password has been reset.',
         'success'
       )
       
@@ -91,11 +91,11 @@ function ResetPasswordPageContent() {
       }, 3000)
     } catch (error: any) {
       const detail = error.response?.data?.detail
-      let errorMessage = (typeof detail === 'string' ? detail : '') || error.message || t('auth.reset_password.error') || 'Erreur lors de la réinitialisation du mot de passe'
+      let errorMessage = (typeof detail === 'string' ? detail : '') || error.message || t('auth.reset_password.error') || 'The password could not be reset. Please try again.'
       
       // Traduire le message d'erreur si c'est un token invalide
       if (errorMessage.includes('Token invalide ou expiré') || errorMessage.includes('Invalid or expired token')) {
-        errorMessage = t('auth.reset_password.invalid_token') || 'Token invalide ou expiré'
+        errorMessage = t('auth.reset_password.invalid_token') || 'Invalid or expired token'
       }
       
       addToast(errorMessage, 'error')
@@ -148,13 +148,13 @@ function ResetPasswordPageContent() {
                 <CheckCircle className="w-16 h-16 text-green-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                {t('auth.reset_password.success_title') || 'Mot de passe réinitialisé !'}
+                {t('auth.reset_password.success_title') || 'Password reset'}
               </h2>
               <p className="text-center text-gray-700 dark:text-gray-200 mb-6">
-                {t('auth.reset_password.success_message') || 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.'}
+                {t('auth.reset_password.success_message') || 'Your password has been reset. You can now sign in with your new password.'}
               </p>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
-                {t('auth.reset_password.redirecting') || 'Redirection vers la page de connexion...'}
+                {t('auth.reset_password.redirecting') || 'Redirecting to sign in...'}
               </p>
               <Link href="/login">
                 <Button className="bg-blue-500 hover:bg-blue-600 text-white">
@@ -166,10 +166,10 @@ function ResetPasswordPageContent() {
             <>
               <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  {t('auth.reset_password.title') || 'Réinitialiser le mot de passe'}
+                  {t('auth.reset_password.title') || 'Reset password'}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {t('auth.reset_password.description') || 'Entrez votre nouveau mot de passe ci-dessous.'}
+                  {t('auth.reset_password.description') || 'Enter your new password below.'}
                 </p>
               </div>
 
@@ -209,13 +209,13 @@ function ResetPasswordPageContent() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                    {t('auth.reset_password.confirm_password') || 'Confirmer le mot de passe'} *
+                    {t('auth.reset_password.confirm_password') || 'Confirm password'} *
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
                       type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder={t('auth.register.confirm_password_placeholder') || 'Confirmer le mot de passe'}
+                      placeholder={t('auth.register.confirm_password_placeholder') || 'Confirm password'}
                       value={formData.confirm_password}
                       onChange={(e) => {
                         setFormData({ ...formData, confirm_password: e.target.value })
@@ -248,17 +248,17 @@ function ResetPasswordPageContent() {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      {t('common.submitting') || 'Réinitialisation en cours...'}
+                      {t('common.submitting') || 'Submitting...'}
                     </>
                   ) : (
-                    t('auth.reset_password.submit') || 'Réinitialiser le mot de passe'
+                    t('auth.reset_password.submit') || 'Submit'
                   )}
                 </Button>
               </form>
 
               <div className="mt-6 text-center">
                 <Link href="/login" className="text-sm text-blue-500 hover:text-blue-600">
-                  {t('auth.login.title') || 'Retour à la connexion'}
+                  {t('auth.login.title') || 'Welcome Back'}
                 </Link>
               </div>
             </>
@@ -267,7 +267,7 @@ function ResetPasswordPageContent() {
 
         <div className="mt-6 text-center">
           <Link href="/" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-500">
-            {t('common.back') || 'Retour à l\'accueil'}
+            {t('common.back') || 'Back'}
           </Link>
         </div>
       </div>

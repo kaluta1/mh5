@@ -70,7 +70,7 @@ def subscribe_to_newsletter(
         logger.error(f"Erreur lors de la création de l'abonnement newsletter: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Une erreur est survenue lors de l'enregistrement de votre abonnement. Veuillez réessayer."
+            detail="Your subscription could not be saved. Please try again."
         )
 
 
@@ -88,11 +88,11 @@ def unsubscribe_from_newsletter(
         if not subscription:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Email non trouvé dans nos abonnements."
+                detail="Email not found in our subscriptions."
             )
         
         logger.info(f"Abonnement newsletter désactivé: {email}")
-        return {"message": "Vous avez été désinscrit de la newsletter avec succès."}
+        return {"message": "You have been unsubscribed from the newsletter."}
         
     except HTTPException:
         raise
@@ -100,6 +100,6 @@ def unsubscribe_from_newsletter(
         logger.error(f"Erreur lors de la désinscription: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Une erreur est survenue lors de la désinscription. Veuillez réessayer."
+            detail="Unsubscribe failed. Please try again."
         )
 

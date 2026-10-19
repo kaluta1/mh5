@@ -132,7 +132,7 @@ export function OxilorLocationSelector({
           }
         } catch (err) {
           console.error('Erreur villes:', err)
-          setError('Erreur lors du chargement des villes')
+          setError('Error loading cities')
         } finally {
           setLoading(false)
         }
@@ -164,7 +164,7 @@ export function OxilorLocationSelector({
           required
         >
           <option value="">
-            {loading ? 'Chargement...' : 'Sélectionner un continent'}
+            {loading ? 'Chargement...' : 'Select a continent'}
           </option>
           {continents.map((continent) => (
             <option key={continent} value={continent}>
@@ -191,7 +191,7 @@ export function OxilorLocationSelector({
             required
           >
             <option value="">
-              {loading ? 'Chargement...' : countries.length === 0 ? 'Aucun pays trouvé' : 'Sélectionner un pays'}
+              {loading ? 'Chargement...' : countries.length === 0 ? 'No country found' : 'Select a country'}
             </option>
             {countries.map((country) => (
               <option key={country.code} value={country.code}>
@@ -217,7 +217,7 @@ export function OxilorLocationSelector({
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-myhigh5-primary"
             required
           >
-            <option value="">Sélectionner une ville</option>
+            <option value="">Select a city</option>
             {cities.map((city) => (
               <option key={city.id || city.name} value={city.name}>
                 {city.name}

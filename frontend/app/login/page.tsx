@@ -189,7 +189,7 @@ function LoginPageContent() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {t('auth.referral_detected') || 'Code de parrainage détecté !'}
+                    {t('auth.referral_detected') || 'Referral Detected'}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
                     {t('auth.referral_code') || 'Code'}: <span className="font-mono font-bold text-myhigh5-primary">{referralCode}</span>

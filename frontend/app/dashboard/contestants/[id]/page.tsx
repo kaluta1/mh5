@@ -262,7 +262,7 @@ function ContestantDetailPage() {
 
         {error && (
           <p className="text-sm text-red-500 mt-2">
-            {t('errors.generic') || 'Une erreur est survenue.'}
+            {t('errors.generic') || 'Generic'}
           </p>
         )}
       </div>

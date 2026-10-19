@@ -56,7 +56,7 @@ export function InviteDialog({
     e.preventDefault()
     
     if (!email.trim()) {
-      addToast(t('dashboard.affiliates.invite_email_required') || 'Veuillez entrer un email', 'error')
+      addToast(t('dashboard.affiliates.invite_email_required') || 'Email is required', 'error')
       return
     }
 
@@ -82,7 +82,7 @@ export function InviteDialog({
       const data = await response.json()
       
       if (response.ok && data.success) {
-        addToast(t('dashboard.affiliates.invite_sent_success') || 'Invitation envoyée avec succès !', 'success')
+        addToast(t('dashboard.affiliates.invite_sent_success') || 'Invitation sent successfully!', 'success')
         setEmail('')
         setMessage('')
         onClose()
@@ -117,7 +117,7 @@ export function InviteDialog({
             {t('dashboard.affiliates.invite_friend') || 'Inviter un ami'}
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm">
-            {t('dashboard.affiliates.invite_description') || 'Envoyez une invitation par email pour parrainer vos amis'}
+            {t('dashboard.affiliates.invite_description') || 'Send an email invitation to refer your friends'}
           </DialogDescription>
         </DialogHeader>
 
@@ -140,7 +140,7 @@ export function InviteDialog({
           {/* Message optionnel */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              {t('dashboard.affiliates.personal_message') || 'Message personnalisé'} 
+              {t('dashboard.affiliates.personal_message') || 'Personal Message'} 
               <span className="text-gray-400 font-normal ml-1">({t('common.optional') || 'optionnel'})</span>
             </label>
             <textarea
@@ -192,7 +192,7 @@ export function InviteDialog({
           <div className="flex items-center gap-2 mb-2">
             <LinkIcon className="w-4 h-4 text-myhigh5-primary" />
             <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {t('dashboard.affiliates.share_link') || 'Partager votre lien'}
+              {t('dashboard.affiliates.share_link') || 'Share your link'}
             </span>
           </div>
           <div className="flex gap-2">

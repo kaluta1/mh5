@@ -190,7 +190,7 @@ def test_a_taken_username_cannot_be_used_to_probe_an_email(client, db, ip):
     existing = member(db, verified=True)
     for email in ("someone.new@example.com", existing.email):
         r = client.post(f"{A}/register", json=body(email=email, username=existing.username))
-        assert r.status_code == 400 and "utilisateur" in r.json()["detail"]   # same answer for both addresses
+        assert r.status_code == 400 and r.json()["detail"] == "This username is already taken."   # same answer for both addresses
     assert db.query(User).count() == 1
 
 
