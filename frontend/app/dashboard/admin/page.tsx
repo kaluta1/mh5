@@ -365,7 +365,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setCustomStartDate(e.target.value)}
                   className="w-40"
                 />
-                <span className="text-gray-600 dark:text-gray-400">à</span>
+                <span className="text-gray-600 dark:text-gray-400">to</span>
                 <Input
                   type="date"
                   value={customEndDate}

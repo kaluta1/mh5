@@ -260,7 +260,7 @@ export function LocationSelectorWithCreate({
                 className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Créer &quot;{continentInput}&quot;
+                Create &quot;{continentInput}&quot;
               </button>
             )}
           </div>
@@ -312,7 +312,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer &quot;{regionInput}&quot;
+                  Create &quot;{regionInput}&quot;
                 </button>
               )}
             </div>
@@ -365,7 +365,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer &quot;{countryInput}&quot;
+                  Create &quot;{countryInput}&quot;
                 </button>
               )}
             </div>
@@ -418,7 +418,7 @@ export function LocationSelectorWithCreate({
                   className="w-full text-left px-4 py-2 border-t border-gray-300 dark:border-gray-600 text-myhigh5-primary hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer &quot;{cityInput}&quot;
+                  Create &quot;{cityInput}&quot;
                 </button>
               )}
             </div>

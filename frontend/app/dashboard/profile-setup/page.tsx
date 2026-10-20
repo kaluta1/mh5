@@ -194,7 +194,7 @@ export default function ProfileSetupPage() {
                     onClick={() => setAvatarUrl('')}
                     className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
                   >
-                    Supprimer
+                    Remove
                   </button>
                 </div>
               ) : (

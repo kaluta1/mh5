@@ -89,10 +89,10 @@ export default function TransactionsPage() {
     if (transactions.length === 0) return
     
     // Create CSV content
-    const headers = ['Date', 'Type', 'Description', 'Montant', 'Statut']
+    const headers = ['Date', 'Type', 'Description', 'Amount', 'Status']
     const rows = transactions.map(t => [
       t.date ? new Date(t.date).toLocaleDateString('en-US') : '-',
-      t.category === 'commission' ? 'Commission' : 'Achat',
+      t.category === 'commission' ? 'Commission' : 'Purchase',
       t.description,
       `${t.amount.toFixed(2)} USD`,
       t.status === 'completed' ? 'Paid' : 

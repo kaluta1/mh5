@@ -128,7 +128,7 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
       const data = await response.json()
 
       if (!response.ok) {
-        const errorMessage = data.details || data.error || 'Erreur lors de l\'upload'
+        const errorMessage = data.details || data.error || 'Upload failed'
         const flags = data.flags || []
         
         setState({
@@ -168,7 +168,7 @@ export function useModeratedUpload(options: UseModeratedUploadOptions = {}) {
       return result
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue'
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       
       setState({
         isUploading: false,

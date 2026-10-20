@@ -166,7 +166,7 @@ export function ContentVerificationDialog({
                 type="url"
                 value={contentUrl}
                 onChange={(e) => setContentUrl(e.target.value)}
-                placeholder="https://instagram.com/votre-post"
+                placeholder="https://instagram.com/your-post"
                 className="flex-1"
               />
             </div>

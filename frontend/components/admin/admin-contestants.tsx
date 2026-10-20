@@ -1011,7 +1011,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                                 setShowUploadDialog(true)
                               }}
                               className="gap-1"
-                              title="Uploader des fichiers"
+                              title="Upload files"
                             >
                               <Upload className="h-4 w-4" />
                               Upload
@@ -1161,7 +1161,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
               {/* Media Gallery */}
               {selectedContestant.media_items && selectedContestant.media_items.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">📸 Médias ({selectedContestant.media_items.length})</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">📸 Media ({selectedContestant.media_items.length})</h4>
                   <div className="grid grid-cols-4 gap-3">
                     {selectedContestant.media_items.map((media) => (
                       <button
@@ -1217,7 +1217,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                               <button
                                 onClick={() => handleShowComment(comment.id)}
                                 className="p-1 text-gray-500 hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                                title="Afficher le commentaire"
+                                title="Show comment"
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
@@ -1225,7 +1225,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                               <button
                                 onClick={() => handleHideComment(comment.id)}
                                 className="p-1 text-gray-500 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
-                                title="Cacher le commentaire"
+                                title="Hide comment"
                               >
                                 <EyeOff className="h-4 w-4" />
                               </button>
@@ -1233,7 +1233,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                             <button
                               onClick={() => handleDeleteComment(comment.id)}
                               className="p-1 text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                              title="Supprimer le commentaire"
+                              title="Delete comment"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1313,7 +1313,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md dark:bg-gray-800">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b dark:border-gray-700">
-              <CardTitle>Uploader des fichiers</CardTitle>
+              <CardTitle>Upload files</CardTitle>
               <button
                 onClick={() => {
                   setShowUploadDialog(false)
@@ -1369,7 +1369,7 @@ export default function AdminContestants({ contestId }: AdminContestantsProps) {
                 }}
                 className="w-full"
               >
-                Fermer
+                Close
               </Button>
             </CardContent>
           </Card>

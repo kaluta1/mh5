@@ -36,7 +36,7 @@ function ReferralRedirectPageContent() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900/20 dark:to-purple-900/20 flex items-center justify-center">
       <div className="text-center">
         <Loader2 className="w-12 h-12 animate-spin text-myfav-primary mx-auto mb-4" />
-        <p className="text-lg text-gray-700 dark:text-gray-200">Redirection en cours...</p>
+        <p className="text-lg text-gray-700 dark:text-gray-200">Redirecting...</p>
       </div>
     </div>
   )
@@ -48,7 +48,7 @@ export default function ReferralRedirectPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900/20 dark:to-purple-900/20 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-myfav-primary mx-auto mb-4" />
-          <p className="text-lg text-gray-700 dark:text-gray-200">Redirection en cours...</p>
+          <p className="text-lg text-gray-700 dark:text-gray-200">Redirecting...</p>
         </div>
       </div>
     }>

@@ -475,7 +475,7 @@ async def get_payment_status(
 @router.get("/invoice/{deposit_id}", response_class=HTMLResponse)
 async def get_invoice(
     deposit_id: int,
-    lang: Optional[str] = "fr",
+    lang: Optional[str] = "en",
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):

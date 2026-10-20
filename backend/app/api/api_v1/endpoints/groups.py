@@ -120,7 +120,7 @@ def get_invitation_link(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Groupe introuvable"
+            detail="Group not found"
         )
     
     # Check if user is admin or owner
@@ -226,7 +226,7 @@ def get_group_members(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Groupe introuvable"
+            detail="Group not found"
         )
     
     # Get all members with user details
@@ -295,7 +295,7 @@ def update_member_role(
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Membre introuvable"
+            detail="Member not found"
         )
     
     # Update role
@@ -343,7 +343,7 @@ def remove_member(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Membre introuvable"
+            detail="Member not found"
         )
     
     return {

@@ -440,7 +440,7 @@ class CRUDSocialGroup:
         
         group = self.get(db, group_id)
         if not group:
-            raise ValueError("Groupe introuvable")
+            raise ValueError("Group not found")
         
         # Vérifier la limite de membres
         if group.max_members and group.member_count >= group.max_members:

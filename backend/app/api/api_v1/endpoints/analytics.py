@@ -77,7 +77,7 @@ def get_dashboard_analytics(
             ContestSeason.id == contestant.season_id
         ).first()
         
-        contest_name = contestant.title or (season.title if season else f"Concours #{contestant.season_id}")
+        contest_name = contestant.title or (season.title if season else f"Contest #{contestant.season_id}")
         
         votes = int(db.query(func.count(Vote.id)).filter(
             Vote.contestant_id == contestant.id,

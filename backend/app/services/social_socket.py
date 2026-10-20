@@ -100,7 +100,7 @@ class SocialSocketService:
             
             group_id = data.get("group_id")
             if not group_id:
-                return {"error": "group_id requis"}
+                return {"error": "group_id is required"}
             
             # Vérifier que l'utilisateur est membre du groupe
             db = SessionLocal()
@@ -133,13 +133,13 @@ class SocialSocketService:
             
             post_id = data.get("post_id")
             if not post_id:
-                return {"error": "post_id requis"}
+                return {"error": "post_id is required"}
             
             db = SessionLocal()
             try:
                 post = crud_post.get(db, post_id, user_id)
                 if not post:
-                    return {"error": "Post introuvable"}
+                    return {"error": "Post not found"}
                 
                 # Récupérer les followers de l'auteur
                 from app.models.follow import Follow
@@ -151,7 +151,7 @@ class SocialSocketService:
                 notification_data = {
                     "post_id": post.id,
                     "author_id": post.author_id,
-                    "author_name": post.author.username if post.author else "Utilisateur",
+                    "author_name": post.author.username if post.author else "User",
                     "content_preview": (post.content[:100] + "...") if post.content and len(post.content) > 100 else post.content,
                     "post_type": post.post_type.value
                 }
@@ -179,14 +179,14 @@ class SocialSocketService:
             reaction_type = data.get("reaction_type")
             
             if not reaction_type:
-                return {"error": "reaction_type requis"}
+                return {"error": "reaction_type is required"}
             
             db = SessionLocal()
             try:
                 if post_id:
                     post = crud_post.get(db, post_id)
                     if not post:
-                        return {"error": "Post introuvable"}
+                        return {"error": "Post not found"}
                     
                     # Récupérer l'utilisateur qui a réagi
                     user = db.query(User).filter(User.id == user_id).first()
@@ -194,7 +194,7 @@ class SocialSocketService:
                     notification_data = {
                         "post_id": post_id,
                         "user_id": user_id,
-                        "user_name": user.username if user else "Utilisateur",
+                        "user_name": user.username if user else "User",
                         "reaction_type": reaction_type
                     }
                     
@@ -208,7 +208,7 @@ class SocialSocketService:
                 elif comment_id:
                     comment = crud_post_comment.get(db, comment_id)
                     if not comment:
-                        return {"error": "Commentaire introuvable"}
+                        return {"error": "Comment not found"}
                     
                     user = db.query(User).filter(User.id == user_id).first()
                     
@@ -216,7 +216,7 @@ class SocialSocketService:
                         "comment_id": comment_id,
                         "post_id": comment.post_id,
                         "user_id": user_id,
-                        "user_name": user.username if user else "Utilisateur",
+                        "user_name": user.username if user else "User",
                         "reaction_type": reaction_type
                     }
                     
@@ -238,7 +238,7 @@ class SocialSocketService:
             comment_id = data.get("comment_id")
             
             if not post_id or not comment_id:
-                return {"error": "post_id et comment_id requis"}
+                return {"error": "post_id and comment_id are required"}
             
             db = SessionLocal()
             try:
@@ -246,7 +246,7 @@ class SocialSocketService:
                 comment = crud_post_comment.get(db, comment_id)
                 
                 if not post or not comment:
-                    return {"error": "Post ou commentaire introuvable"}
+                    return {"error": "Post or comment not found"}
                 
                 user = db.query(User).filter(User.id == user_id).first()
                 
@@ -254,7 +254,7 @@ class SocialSocketService:
                     "post_id": post_id,
                     "comment_id": comment_id,
                     "author_id": user_id,
-                    "author_name": user.username if user else "Utilisateur",
+                    "author_name": user.username if user else "User",
                     "content_preview": (comment.content[:100] + "...") if comment.content and len(comment.content) > 100 else comment.content
                 }
                 
@@ -281,7 +281,7 @@ class SocialSocketService:
             message_id = data.get("message_id")
             
             if not group_id or not message_id:
-                return {"error": "group_id et message_id requis"}
+                return {"error": "group_id and message_id are required"}
             
             db = SessionLocal()
             try:
@@ -289,7 +289,7 @@ class SocialSocketService:
                 # Phase 9: relay only the caller's own live message of THIS group.
                 if (not message or str(message.group_id) != str(group_id) or message.sender_id != user_id
                         or getattr(message, "is_deleted", False)):
-                    return {"error": "Message introuvable"}
+                    return {"error": "Message not found"}
                 
                 # Vérifier que l'utilisateur est membre du groupe
                 is_member = crud_social_group.is_member(db, group_id, user_id)
@@ -303,7 +303,7 @@ class SocialSocketService:
                     "message_id": message.id,
                     "group_id": group_id,
                     "sender_id": user_id,
-                    "sender_name": sender.username if sender else "Utilisateur",
+                    "sender_name": sender.username if sender else "User",
                     "content": message.content,
                     "message_type": message.message_type.value,
                     "created_at": message.created_at.isoformat()
@@ -325,7 +325,7 @@ class SocialSocketService:
             
             message_id = data.get("message_id")
             if not message_id:
-                return {"error": "message_id requis"}
+                return {"error": "message_id is required"}
             
             db = SessionLocal()
             try:
@@ -354,7 +354,7 @@ class SocialSocketService:
             
             conversation_id = data.get("conversation_id")
             if not conversation_id:
-                return {"error": "conversation_id requis"}
+                return {"error": "conversation_id is required"}
             
             db = SessionLocal()
             try:
@@ -363,7 +363,7 @@ class SocialSocketService:
                 
                 conversation = crud_private_conversation.get(db, conversation_id)
                 if not conversation:
-                    return {"error": "Conversation introuvable"}
+                    return {"error": "Conversation not found"}
                 
                 # Vérifier l'accès
                 has_access = False
@@ -407,7 +407,7 @@ class SocialSocketService:
             message_id = data.get("message_id")
             
             if not conversation_id or not message_id:
-                return {"error": "conversation_id et message_id requis"}
+                return {"error": "conversation_id and message_id are required"}
             
             db = SessionLocal()
             try:
@@ -416,11 +416,11 @@ class SocialSocketService:
                 
                 message = crud_private_message.get(db, message_id)
                 if not message:
-                    return {"error": "Message introuvable"}
+                    return {"error": "Message not found"}
                 
                 conversation = crud_private_conversation.get(db, conversation_id)
                 if not conversation:
-                    return {"error": "Conversation introuvable"}
+                    return {"error": "Conversation not found"}
                 
                 # Vérifier que l'utilisateur est l'expéditeur
                 if message.sender_id != user_id:
@@ -428,7 +428,7 @@ class SocialSocketService:
                 # Phase 9: the message must belong to THIS conversation (no
                 # re-routing an allowed message into someone else's conversation).
                 if str(message.conversation_id) != str(conversation_id):
-                    return {"error": "Message introuvable"}
+                    return {"error": "Message not found"}
                 
                 # Récupérer les destinataires
                 recipient_ids = []
@@ -459,7 +459,7 @@ class SocialSocketService:
                     "message_id": message.id,
                     "conversation_id": conversation_id,
                     "sender_id": user_id,
-                    "sender_name": sender.username if sender else "Utilisateur",
+                    "sender_name": sender.username if sender else "User",
                     "content": message.content,
                     "message_type": message.message_type,
                     "created_at": message.created_at.isoformat()
@@ -485,7 +485,7 @@ class SocialSocketService:
             
             message_id = data.get("message_id")
             if not message_id:
-                return {"error": "message_id requis"}
+                return {"error": "message_id is required"}
             
             db = SessionLocal()
             try:

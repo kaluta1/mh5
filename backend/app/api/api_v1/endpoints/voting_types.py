@@ -59,7 +59,7 @@ def read_voting_types(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Niveau de vote invalide: {voting_level}"
+                detail=f"Invalid voting level: {voting_level}"
             )
     elif commission_source:
         try:
@@ -68,7 +68,7 @@ def read_voting_types(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Source de commission invalide: {commission_source}"
+                detail=f"Invalid commission source: {commission_source}"
             )
     else:
         voting_types = voting_type.get_multi(db=db, skip=skip, limit=limit)

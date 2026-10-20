@@ -149,7 +149,7 @@ function UserProfilePage() {
         addToast(t('dashboard.profile.followed') || 'You are now following this user', 'success')
       }
     } catch (err: any) {
-      addToast(err?.response?.data?.detail || 'Erreur', 'error')
+      addToast(err?.response?.data?.detail || 'Something went wrong', 'error')
     } finally {
       setFollowLoading(false)
     }

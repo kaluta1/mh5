@@ -49,7 +49,7 @@ function ContestContestantsPage() {
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Retour
+          Back
         </Button>
         {!loading && contest && (
           <div>

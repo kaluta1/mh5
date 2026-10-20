@@ -109,14 +109,14 @@ def get_wallet_transactions(
     commission_type_labels = {
         "KYC_PAYMENT": "KYC",
         "FOUNDING_MEMBERSHIP_FEE": "MFM Joining Fee",
-        "ANNUAL_MEMBERSHIP_FEE": "Cotisation FM",
+        "ANNUAL_MEMBERSHIP_FEE": "FM membership fee",
         "EFM_MEMBERSHIP": "EFM",
         "CLUB_MEMBERSHIP": "Club",
-        "CONTEST_PARTICIPATION": "Concours",
-        "SHOP_PURCHASE": "Boutique",
-        "AD_REVENUE": "Pub",
-        "MONTHLY_REVENUE_POOL": "Pool Mensuel",
-        "ANNUAL_PROFIT_POOL": "Pool Annuel"
+        "CONTEST_PARTICIPATION": "Contest",
+        "SHOP_PURCHASE": "Shop",
+        "AD_REVENUE": "Ads",
+        "MONTHLY_REVENUE_POOL": "Monthly pool",
+        "ANNUAL_PROFIT_POOL": "Annual pool"
     }
     
     def build_commission_transactions() -> List[dict]:

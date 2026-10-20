@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     if (!contentUrl) {
       return NextResponse.json(
-        { error: 'contentUrl est requis' },
+        { error: 'contentUrl is required' },
         { status: 400 }
       )
     }

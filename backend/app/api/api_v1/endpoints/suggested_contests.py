@@ -86,7 +86,7 @@ def read_suggested_contests(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Statut invalide: {status}. Valeurs possibles: pending, approved, rejected"
+                detail=f"Invalid status: {status}. Allowed values: pending, approved, rejected"
             )
     
     suggestions = suggested_contest.get_multi(

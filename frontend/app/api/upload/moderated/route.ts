@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     })
     
     if (!authResponse.ok) {
-      return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
     
     const user = await authResponse.json()
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const verificationImageUrl = formData.get('verificationImageUrl') as string | null
     
     if (!file) {
-      return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 })
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
     const metadataError = validateUploadMetadata(file)
@@ -136,9 +136,9 @@ export async function POST(request: NextRequest) {
     const uploadResponse = await utapi.uploadFiles([uploadFile])
     
     if (!uploadResponse[0]?.data) {
-      console.error('Erreur upload:', uploadResponse[0]?.error)
+      console.error('Upload failed:', uploadResponse[0]?.error)
       return NextResponse.json({ 
-        error: 'Erreur lors de l\'upload',
+        error: 'Upload failed',
         details: uploadResponse[0]?.error?.message 
       }, { status: 500 })
     }
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Moderated upload error:', error)
     return NextResponse.json({ 
-      error: 'Erreur serveur',
+      error: 'Server error',
       details: String(error)
     }, { status: 500 })
   }

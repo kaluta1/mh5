@@ -63,9 +63,9 @@ def create_default_roles(db: Session) -> None:
     try:
         # Rôles standard
         roles = [
-            {"name": "admin", "description": "Administrateur avec tous les droits"},
-            {"name": "moderator", "description": "Modérateur de contenu"},
-            {"name": "user", "description": "Utilisateur standard"}
+            {"name": "admin", "description": "Administrator"},
+            {"name": "moderator", "description": "Content moderator"},
+            {"name": "user", "description": "Standard user"}
         ]
         
         for role_data in roles:
@@ -126,7 +126,7 @@ def create_default_contest_templates(db: Session) -> None:
         templates = [
             {
                 "name": "Beauty Contest",
-                "description": "Concours de beauté avec restrictions géographiques",
+                "description": "Beauty contest with geographic restrictions",
                 "contest_type": "beauty",
                 "has_geo_restrictions": True,
                 "has_gender_restrictions": True,
@@ -135,7 +135,7 @@ def create_default_contest_templates(db: Session) -> None:
             },
             {
                 "name": "Handsome Contest",
-                "description": "Concours pour hommes avec restrictions géographiques",
+                "description": "Men's contest with geographic restrictions",
                 "contest_type": "handsome",
                 "has_geo_restrictions": True,
                 "has_gender_restrictions": True,
@@ -144,7 +144,7 @@ def create_default_contest_templates(db: Session) -> None:
             },
             {
                 "name": "Latest Hits",
-                "description": "Concours de musique sans restriction géographique",
+                "description": "Music contest without geographic restrictions",
                 "contest_type": "latest_hits",
                 "has_geo_restrictions": False,
                 "has_gender_restrictions": False,
@@ -176,13 +176,13 @@ def create_base_locations(db: Session) -> None:
         
         # Création des continents
         continents = [
-            {"name": "Afrique", "level": LocationLevel.CONTINENT},
-            {"name": "Asie", "level": LocationLevel.CONTINENT},
+            {"name": "Africa", "level": LocationLevel.CONTINENT},
+            {"name": "Asia", "level": LocationLevel.CONTINENT},
             {"name": "Europe", "level": LocationLevel.CONTINENT},
-            {"name": "Amérique du Nord", "level": LocationLevel.CONTINENT},
-            {"name": "Amérique du Sud", "level": LocationLevel.CONTINENT},
-            {"name": "Océanie", "level": LocationLevel.CONTINENT},
-            {"name": "Antarctique", "level": LocationLevel.CONTINENT}
+            {"name": "North America", "level": LocationLevel.CONTINENT},
+            {"name": "South America", "level": LocationLevel.CONTINENT},
+            {"name": "Oceania", "level": LocationLevel.CONTINENT},
+            {"name": "Antarctica", "level": LocationLevel.CONTINENT}
         ]
         
         for continent_data in continents:
@@ -220,7 +220,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "founding_membership",
                 "name": "Founding Membership",
-                "description": "Adhésion au programme Founding Members (100$). Donne accès au pool mensuel et annuel.",
+                "description": "Founding Members program membership ($100). Gives access to the monthly and annual pools.",
                 "price": 100.00,
                 "currency": "USD",
                 "validity_days": 0,  # One-time fee
@@ -232,7 +232,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "annual_membership",
                 "name": "Annual Membership Fee",
-                "description": "Cotisation annuelle des Founding Members (50$/an) pour maintenir le statut.",
+                "description": "Annual Founding Members fee ($50/year) to keep the status.",
                 "price": 50.00,
                 "currency": "USD",
                 "validity_days": 365,
@@ -247,7 +247,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "kyc",
                 "name": "KYC Verification",
-                "description": "Vérification d'identité KYC",
+                "description": "KYC identity verification",
                 "price": 10.00,
                 "currency": "USD",
                 "validity_days": 0,
@@ -262,7 +262,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "efm_membership",
                 "name": "EFM Membership",
-                "description": "Abonnement aux fonctionnalités avancées",
+                "description": "Access to advanced features",
                 "price": 9.99,
                 "currency": "USD",
                 "validity_days": 30,
@@ -277,7 +277,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "club_membership",
                 "name": "Club Membership",
-                "description": "Abonnement à un club",
+                "description": "Club membership",
                 "price": 4.99,
                 "currency": "USD",
                 "validity_days": 30,
@@ -292,7 +292,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "contest_participation",
                 "name": "Contest Participation",
-                "description": "Participation à un concours payant",
+                "description": "Entry to a paid contest",
                 "price": 5.00,
                 "currency": "USD",
                 "validity_days": 0,
@@ -307,7 +307,7 @@ def create_product_types(db: Session) -> None:
             {
                 "code": "shop_purchase",
                 "name": "Shop Purchase",
-                "description": "Achat en boutique",
+                "description": "Shop purchase",
                 "price": 0.00,  # Variable selon le produit
                 "currency": "USD",
                 "validity_days": 0,

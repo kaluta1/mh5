@@ -211,7 +211,7 @@ class CRUDAffiliateTree:
         ).first()
         
         if not sponsor:
-            return {"success": False, "error": "Code de parrainage invalide"}
+            return {"success": False, "error": "Invalid referral code"}
         
         if sponsor.id == user_id:
             return {"success": False, "error": "You cannot refer yourself"}

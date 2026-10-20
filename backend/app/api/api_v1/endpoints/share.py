@@ -760,7 +760,7 @@ async def share_profile(
         flutter_url += f"?{urlencode({'ref': ref})}"
     
     # Échapper les caractères HTML
-    full_name = html.escape(_author_display_name(db, user, "Utilisateur"))
+    full_name = html.escape(_author_display_name(db, user, "User"))
     username_safe = html.escape(username)
     
     # Image de profil ou image par défaut

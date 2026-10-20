@@ -34,7 +34,7 @@ class CRUDSuggestedContest:
             try:
                 status = SuggestedContestStatus(status)
             except ValueError:
-                raise ValueError(f"Statut invalide: {status}")
+                raise ValueError(f"Invalid status: {status}")
 
         db_obj = SuggestedContest(
             name=obj_in.name,
@@ -68,7 +68,7 @@ class CRUDSuggestedContest:
                     try:
                         value = SuggestedContestStatus(value)
                     except ValueError:
-                        raise ValueError(f"Statut invalide: {value}")
+                        raise ValueError(f"Invalid status: {value}")
             
             setattr(db_obj, field, value)
 

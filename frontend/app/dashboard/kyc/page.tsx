@@ -533,7 +533,7 @@ function KYCPageContent() {
               onClick={() => router.push('/dashboard')}
               className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
             >
-              {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
+              {t('common.back_to_dashboard') || 'Back to dashboard'}
             </Button>
           </div>
         </div>
@@ -741,7 +741,7 @@ function KYCPageContent() {
                 disabled={isLoadingStatus}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingStatus ? 'animate-spin' : ''}`} />
-                {t('common.refresh') || 'Actualiser'}
+                {t('common.refresh') || 'Refresh'}
               </Button>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
@@ -818,7 +818,7 @@ function KYCPageContent() {
               onClick={() => router.push('/dashboard')}
               variant="outline"
             >
-              {t('common.back_to_dashboard') || 'Retour au tableau de bord'}
+              {t('common.back_to_dashboard') || 'Back to dashboard'}
             </Button>
           </div>
         </div>

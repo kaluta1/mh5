@@ -344,7 +344,7 @@ export function ContestDialog({
                                     {/* contest_mode est déterminé par le type: nomination ou participation */}
                                     <div className="mb-2">
                                         <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                                            Mode du concours
+                                            Contest mode
                                         </label>
                                         <Select
                                             value={formData.contest_mode || "participation"}

@@ -33,7 +33,7 @@ def get_current_user(
     except (JWTError, ValidationError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide",
+            detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
@@ -43,14 +43,14 @@ def get_current_user(
         # one answer on which a client drops the token it holds.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide",
+            detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     # Issued before the last password change / reset: no longer a session.
     if not access_token_is_current(payload, user):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide",
+            detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     # A deactivated or deleted account has no session, whatever token it
@@ -60,7 +60,7 @@ def get_current_user(
     if not account_is_usable(user):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide",
+            detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     return user
@@ -74,7 +74,7 @@ def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Utilisateur inactif"
+            detail="This account is inactive"
         )
     # Defence in depth: login already refuses such an account, so it should
     # never hold a token. If one exists anyway, it opens nothing.
@@ -189,7 +189,7 @@ class PermissionChecker:
         if not check_user_permissions(current_user, self.permissions, self.require_all):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission(s) requise(s): {', '.join(self.permissions)}"
+                detail=f"Permission required: {', '.join(self.permissions)}"
             )
         return current_user
 

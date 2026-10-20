@@ -43,14 +43,8 @@ def subscribe_to_newsletter(
         
         logger.info("Abonnement newsletter créé: %s", mask_email(subscription.email))
         
-        # Déterminer la langue depuis les headers Accept-Language
-        subscriber_lang = "en"  # Par défaut
-        accept_language = request.headers.get("Accept-Language", "")
-        if accept_language:
-            # Extraire la première langue (ex: "fr-FR,fr;q=0.9" -> "fr")
-            lang_code = accept_language.split(",")[0].split(";")[0].split("-")[0].lower()
-            if lang_code in ["fr", "en", "es", "de"]:
-                subscriber_lang = lang_code
+        # The site is English-only: confirmation emails are always in English.
+        subscriber_lang = "en"
         
         logger.info(f"Langue détectée pour l'email de confirmation: {subscriber_lang}")
         

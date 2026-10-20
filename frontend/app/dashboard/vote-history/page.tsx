@@ -212,7 +212,7 @@ export default function VoteHistoryPage() {
                   onClick={() => router.push(`/dashboard/contests/1/contestant/${item.contestant_id}`)}
                   className="w-full mt-4 bg-gradient-to-r from-myhigh5-primary to-myhigh5-primary-dark text-white hover:shadow-lg"
                 >
-                  Voir le profil
+                  View profile
                 </Button>
               </div>
             ))}

@@ -1796,9 +1796,9 @@ async def create_season(
     
     if existing_season:
         level_names = {
-            'city': 'ville',
-            'country': 'pays',
-            'regional': 'régional',
+            'city': 'city',
+            'country': 'country',
+            'regional': 'regional',
             'continent': 'continent',
             'global': 'global'
         }
@@ -1827,9 +1827,9 @@ async def create_season(
         # Check if it's a unique constraint violation
         if isinstance(e.orig, UniqueViolation) and 'uq_contest_seasons_level_active' in str(e.orig):
             level_names = {
-                'city': 'ville',
-                'country': 'pays',
-                'regional': 'régional',
+                'city': 'city',
+                'country': 'country',
+                'regional': 'regional',
                 'continent': 'continent',
                 'global': 'global'
             }
@@ -1886,9 +1886,9 @@ async def update_season(
         
         if existing_season:
             level_names = {
-                'city': 'ville',
-                'country': 'pays',
-                'regional': 'régional',
+                'city': 'city',
+                'country': 'country',
+                'regional': 'regional',
                 'continent': 'continent',
                 'global': 'global'
             }
@@ -1915,9 +1915,9 @@ async def update_season(
         # Check if it's a unique constraint violation
         if isinstance(e.orig, UniqueViolation) and 'uq_contest_seasons_level_active' in str(e.orig):
             level_names = {
-                'city': 'ville',
-                'country': 'pays',
-                'regional': 'régional',
+                'city': 'city',
+                'country': 'country',
+                'regional': 'regional',
                 'continent': 'continent',
                 'global': 'global'
             }
@@ -3708,7 +3708,7 @@ def get_suggested_contests(
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Statut invalide: {status}"
+                    detail=f"Invalid status: {status}"
                 )
         
         suggestions = query.order_by(SuggestedContest.created_at.desc()).offset(skip).limit(limit).all()

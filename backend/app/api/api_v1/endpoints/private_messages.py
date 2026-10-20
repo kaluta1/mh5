@@ -137,7 +137,7 @@ def get_conversation(
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation introuvable"
+            detail="Conversation not found"
         )
     
     # Vérifier que l'utilisateur a accès à cette conversation
@@ -261,7 +261,7 @@ def get_conversation_messages(
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation introuvable"
+            detail="Conversation not found"
         )
     
     # Vérifier l'accès
@@ -348,7 +348,7 @@ def send_private_message(
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation introuvable"
+            detail="Conversation not found"
         )
     
     # Vérifier l'accès
@@ -416,7 +416,7 @@ def send_private_message(
                         "conversation_id": conversation_id,
                         "message_id": message.id,
                         "sender_id": current_user.id,
-                        "sender_name": current_user.username or "Utilisateur",
+                        "sender_name": current_user.username or "User",
                         "content_preview": (message.content[:100] + "...") if message.content and len(message.content) > 100 else message.content
                     }
                 ))
@@ -441,7 +441,7 @@ def mark_message_read(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Message introuvable"
+            detail="Message not found"
         )
 
 
@@ -503,7 +503,7 @@ def invite_user_to_group(
                         "group_id": group_id,
                         "invitation_id": invitation.id,
                         "inviter_id": current_user.id,
-                        "inviter_name": current_user.username or "Utilisateur"
+                        "inviter_name": current_user.username or "User"
                     }
                 ))
             except Exception as e:

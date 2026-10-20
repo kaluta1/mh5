@@ -158,7 +158,7 @@ def get_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post introuvable"
+            detail="Post not found"
         )
     
     # Incrémenter le compteur de vues
@@ -181,7 +181,7 @@ def update_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post introuvable"
+            detail="Post not found"
         )
     
     if post.author_id != current_user.id:
@@ -228,7 +228,7 @@ def create_comment(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post introuvable"
+            detail="Post not found"
         )
     from app.services import interaction_safety as isafe
 
@@ -416,7 +416,7 @@ def share_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post introuvable"
+            detail="Post not found"
         )
     
     share = crud_post_share.create(
@@ -555,7 +555,7 @@ def get_group(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Groupe introuvable"
+            detail="Group not found"
         )
     
     user_id = current_user.id if current_user else None
@@ -698,7 +698,7 @@ def create_message(
 
             _s = _SL()
             try:
-                sender_name = safe_display_name(_s, _s.get(User, msg.sender_id), "Utilisateur")
+                sender_name = safe_display_name(_s, _s.get(User, msg.sender_id), "User")
             finally:
                 _s.close()
             asyncio.run(social_socket_service.emit_group_safe(
@@ -819,7 +819,7 @@ def mark_message_read(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Message introuvable"
+            detail="Message not found"
         )
 
 

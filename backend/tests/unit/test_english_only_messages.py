@@ -18,7 +18,14 @@ pytestmark = pytest.mark.unit
 
 ENDPOINTS = Path(__file__).resolve().parents[2] / "app" / "api" / "api_v1" / "endpoints"
 FRENCH = re.compile(r"[éèêëàâçùûüôîïœ]|\b(vous|votre|veuillez|erreur|aucun|aucune|réussi|échec|non trouvé|"
-                    r"avec succès|lors de|impossible de)\b", re.I)
+                    r"avec succès|lors de|impossible de|introuvable|invalide|requis|requise|inactif|"
+                    r"utilisateur|cotisation|concours)\b", re.I)
+APP = ENDPOINTS.parents[2]
+# Messages also come from the dependencies, the CRUD layer (ValueError texts shown as 400s) and the
+# services. The email dictionaries hold the other languages on purpose and are not checked.
+MORE = [APP / "api" / "deps.py", *sorted((APP / "crud").glob("*.py")),
+        *[p for p in sorted((APP / "services").glob("*.py"))
+          if p.name not in ("email_templates.py", "email_event_texts.py")]]
 
 
 def _text(node: ast.AST) -> str:
@@ -30,12 +37,14 @@ def _text(node: ast.AST) -> str:
 
 
 def _messages(tree: ast.AST):
-    """(line, text) of every error detail and response message literal."""
+    """(line, text) of every error detail and response message literal, and of ValueError texts."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             for kw in node.keywords:
                 if kw.arg in ("detail", "message"):
                     yield node.lineno, _text(kw.value)
+            if isinstance(node.func, ast.Name) and node.func.id == "ValueError" and node.args:
+                yield node.lineno, _text(node.args[0])
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values):
                 if isinstance(key, ast.Constant) and key.value in ("message", "detail", "error"):
@@ -45,6 +54,14 @@ def _messages(tree: ast.AST):
 def test_no_endpoint_returns_a_french_message():
     french = []
     for path in sorted(ENDPOINTS.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        french += [f"{path.name}:{line}: {text[:80]}" for line, text in _messages(tree) if text and FRENCH.search(text)]
+    assert french == []
+
+
+def test_dependencies_crud_and_services_return_no_french_message():
+    french = []
+    for path in MORE:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         french += [f"{path.name}:{line}: {text[:80]}" for line, text in _messages(tree) if text and FRENCH.search(text)]
     assert french == []

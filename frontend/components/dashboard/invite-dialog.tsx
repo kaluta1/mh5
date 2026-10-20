@@ -87,11 +87,11 @@ export function InviteDialog({
         setMessage('')
         onClose()
       } else {
-        addToast(data.detail || data.message || 'Erreur lors de l\'envoi', 'error')
+        addToast(data.detail || data.message || 'Could not send the invitation', 'error')
       }
     } catch (error) {
       console.error('Error sending invitation:', error)
-      addToast(t('dashboard.affiliates.invite_error') || 'Erreur lors de l\'envoi de l\'invitation', 'error')
+      addToast(t('dashboard.affiliates.invite_error') || 'Could not send the invitation', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -164,7 +164,7 @@ export function InviteDialog({
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {t('dashboard.affiliates.sending') || 'Envoi en cours...'}
+                {t('dashboard.affiliates.sending') || 'Sending...'}
               </>
             ) : (
               <>

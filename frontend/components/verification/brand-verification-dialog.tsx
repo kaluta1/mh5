@@ -194,7 +194,7 @@ export function BrandVerificationDialog({
                 type="url"
                 value={brandWebsite}
                 onChange={(e) => setBrandWebsite(e.target.value)}
-                placeholder="https://www.votre-marque.com"
+                placeholder="https://www.your-brand.com"
                 className="flex-1"
               />
             </div>

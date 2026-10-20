@@ -36,14 +36,14 @@ class CRUDVotingType:
             try:
                 voting_level = VotingLevel(voting_level)
             except ValueError:
-                raise ValueError(f"Niveau de vote invalide: {voting_level}")
+                raise ValueError(f"Invalid voting level: {voting_level}")
 
         commission_source = obj_in.commission_source
         if isinstance(commission_source, str):
             try:
                 commission_source = CommissionSource(commission_source)
             except ValueError:
-                raise ValueError(f"Source de commission invalide: {commission_source}")
+                raise ValueError(f"Invalid commission source: {commission_source}")
 
         db_obj = VotingType(
             name=obj_in.name,
@@ -77,13 +77,13 @@ class CRUDVotingType:
                     try:
                         value = VotingLevel(value)
                     except ValueError:
-                        raise ValueError(f"Niveau de vote invalide: {value}")
+                        raise ValueError(f"Invalid voting level: {value}")
             elif field == 'commission_source' and value is not None:
                 if isinstance(value, str):
                     try:
                         value = CommissionSource(value)
                     except ValueError:
-                        raise ValueError(f"Source de commission invalide: {value}")
+                        raise ValueError(f"Invalid commission source: {value}")
             
             setattr(db_obj, field, value)
 

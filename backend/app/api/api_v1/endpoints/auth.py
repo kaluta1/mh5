@@ -700,7 +700,7 @@ def change_password(
             return rate_limit_response(reauth.LOCKED_MESSAGE)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mot de passe actuel incorrect"
+            detail="Current password is incorrect"
         )
 
     # Vérifier que le nouveau mot de passe est différent

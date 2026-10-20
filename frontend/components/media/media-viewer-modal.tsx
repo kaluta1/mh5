@@ -114,7 +114,7 @@ export function MediaViewerModal({
                   onClick={handleNext}
                   disabled={currentIndex === allMedia.length - 1}
                   className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 p-2.5 md:p-3 rounded-full bg-black/60 hover:bg-black/80 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100 backdrop-blur-md border border-white/20 hover:border-white/30"
-                  aria-label="Suivant"
+                  aria-label="Next"
                 >
                   <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
                 </button>

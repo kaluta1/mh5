@@ -396,17 +396,17 @@ def initialize_geography_data(db: Session):
     """Initialiser les données géographiques de base"""
     # Vérifier si les données existent déjà
     if db.query(Continent).count() > 0:
-        return {"message": "Données géographiques déjà initialisées"}
+        return {"message": "Geographic data is already initialized"}
     
     # Continents
     continents_data = [
-        {"name": "Afrique", "code": "AF"},
-        {"name": "Antarctique", "code": "AN"},
-        {"name": "Asie", "code": "AS"},
+        {"name": "Africa", "code": "AF"},
+        {"name": "Antarctica", "code": "AN"},
+        {"name": "Asia", "code": "AS"},
         {"name": "Europe", "code": "EU"},
-        {"name": "Amérique du Nord", "code": "NA"},
-        {"name": "Océanie", "code": "OC"},
-        {"name": "Amérique du Sud", "code": "SA"}
+        {"name": "North America", "code": "NA"},
+        {"name": "Oceania", "code": "OC"},
+        {"name": "South America", "code": "SA"}
     ]
     
     continents = {}
@@ -418,15 +418,15 @@ def initialize_geography_data(db: Session):
     
     # Régions principales (exemples)
     regions_data = [
-        {"continent_code": "NA", "name": "Amérique du Nord", "code": "NAM"},
-        {"continent_code": "EU", "name": "Europe de l'Ouest", "code": "WEU"},
-        {"continent_code": "EU", "name": "Europe de l'Est", "code": "EEU"},
-        {"continent_code": "AS", "name": "Asie de l'Est", "code": "EAS"},
-        {"continent_code": "AS", "name": "Asie du Sud-Est", "code": "SEA"},
-        {"continent_code": "AF", "name": "Afrique du Nord", "code": "NAF"},
-        {"continent_code": "AF", "name": "Afrique Subsaharienne", "code": "SSA"},
-        {"continent_code": "SA", "name": "Amérique du Sud", "code": "SAM"},
-        {"continent_code": "OC", "name": "Océanie", "code": "OCE"}
+        {"continent_code": "NA", "name": "North America", "code": "NAM"},
+        {"continent_code": "EU", "name": "Western Europe", "code": "WEU"},
+        {"continent_code": "EU", "name": "Eastern Europe", "code": "EEU"},
+        {"continent_code": "AS", "name": "East Asia", "code": "EAS"},
+        {"continent_code": "AS", "name": "Southeast Asia", "code": "SEA"},
+        {"continent_code": "AF", "name": "North Africa", "code": "NAF"},
+        {"continent_code": "AF", "name": "Sub-Saharan Africa", "code": "SSA"},
+        {"continent_code": "SA", "name": "South America", "code": "SAM"},
+        {"continent_code": "OC", "name": "Oceania", "code": "OCE"}
     ]
     
     regions = {}
@@ -444,14 +444,14 @@ def initialize_geography_data(db: Session):
     # Pays principaux (exemples)
     countries_data = [
         {"region_code": "NAM", "name": "Canada", "code": "CA"},
-        {"region_code": "NAM", "name": "États-Unis", "code": "US"},
-        {"region_code": "NAM", "name": "Mexique", "code": "MX"},
+        {"region_code": "NAM", "name": "United States", "code": "US"},
+        {"region_code": "NAM", "name": "Mexico", "code": "MX"},
         {"region_code": "WEU", "name": "France", "code": "FR"},
-        {"region_code": "WEU", "name": "Allemagne", "code": "DE"},
-        {"region_code": "WEU", "name": "Royaume-Uni", "code": "GB"},
-        {"region_code": "EAS", "name": "Chine", "code": "CN"},
-        {"region_code": "EAS", "name": "Japon", "code": "JP"},
-        {"region_code": "SEA", "name": "Thaïlande", "code": "TH"},
+        {"region_code": "WEU", "name": "Germany", "code": "DE"},
+        {"region_code": "WEU", "name": "United Kingdom", "code": "GB"},
+        {"region_code": "EAS", "name": "China", "code": "CN"},
+        {"region_code": "EAS", "name": "Japan", "code": "JP"},
+        {"region_code": "SEA", "name": "Thailand", "code": "TH"},
     ]
     
     countries = {}
@@ -469,14 +469,14 @@ def initialize_geography_data(db: Session):
     # Villes principales du Canada (exemple)
     canada_cities = [
         {"name": "Toronto", "state_province": "Ontario"},
-        {"name": "Montréal", "state_province": "Québec"},
-        {"name": "Vancouver", "state_province": "Colombie-Britannique"},
+        {"name": "Montreal", "state_province": "Quebec"},
+        {"name": "Vancouver", "state_province": "British Columbia"},
         {"name": "Calgary", "state_province": "Alberta"},
         {"name": "Ottawa", "state_province": "Ontario"},
         {"name": "Edmonton", "state_province": "Alberta"},
         {"name": "Mississauga", "state_province": "Ontario"},
         {"name": "Winnipeg", "state_province": "Manitoba"},
-        {"name": "Québec", "state_province": "Québec"},
+        {"name": "Quebec City", "state_province": "Quebec"},
         {"name": "Hamilton", "state_province": "Ontario"}
     ]
     
@@ -490,7 +490,7 @@ def initialize_geography_data(db: Session):
         db.add(city)
     
     db.commit()
-    return {"message": "Données géographiques initialisées avec succès"}
+    return {"message": "Geographic data initialized"}
 
 
 # Instances CRUD
