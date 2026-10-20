@@ -36,6 +36,7 @@ import { CashoutTransactions, ReconciliationAndAudit } from './admin-finance-cas
 import { CommissionPayouts, PayoutPause, WalletApprovals } from './admin-finance-payouts'
 import { FlaggedPayoutReview } from './admin-finance-review'
 import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
+import AdminSoncoPaySettings from './admin-soncopay-settings'
 
 /**
  * Admin > Finance & Payments.
@@ -178,6 +179,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           {webhook && <WebhookCard webhook={webhook} />}
         </div>
       )}
+      {section === 'soncopay' && <AdminSoncoPaySettings />}
       {section === 'crypto-cashout' && settings && (
         <div className="space-y-4">
           <SwitchSummary label="Automatic crypto payouts" server={settings.server_switches.crypto_auto_payout}

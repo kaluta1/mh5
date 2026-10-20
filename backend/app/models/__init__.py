@@ -56,6 +56,8 @@ from .interaction_safety import UserBlock
 from .payment_config import (  # noqa: F401
     PaymentSettings, PaymentCredential, PaymentConfigAudit, PayoutWalletVerification, PaymentWebhookStat,
 )
+# Customer checkout gateways (SoncoPay collection settings)
+from .checkout_gateway import CheckoutGatewaySettings  # noqa: F401
 
 __all__ = [
     "AgePolicy", "UserAgeProfile", "DobChangeRecord", "AgeSafetyEvent", "ChildSafetyEnforcement",

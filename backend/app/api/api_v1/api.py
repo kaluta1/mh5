@@ -73,6 +73,16 @@ api_router.include_router(
     tags=["Admin - Finance & Payments"],
     dependencies=[Depends(admin.require_admin)],
 )
+# SoncoPay customer payment collection: settings (administrators; changes need a Super Admin
+# and the current password) and its webhook, which refuses every callback until implemented.
+from app.api.api_v1.endpoints import soncopay as soncopay_endpoints  # noqa: E402
+api_router.include_router(
+    soncopay_endpoints.admin_router,
+    prefix="/admin/finance/soncopay",
+    tags=["Admin - Finance & Payments"],
+    dependencies=[Depends(admin.require_admin)],
+)
+api_router.include_router(soncopay_endpoints.webhook_router, prefix="/webhooks", tags=["Webhooks — Payments"])
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])
 api_router.include_router(social.router, prefix="/social", tags=["Service Social"])
 # Groups router routes already start with /groups/..., so no extra prefix is needed.

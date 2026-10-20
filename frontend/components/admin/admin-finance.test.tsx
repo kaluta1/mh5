@@ -436,13 +436,13 @@ describe('AdminFinance: Phase 3.3 Stage B', () => {
 describe('AdminFinance', () => {
   beforeEach(() => { getMock.mockReset(); postMock.mockReset(); putMock.mockReset() })
 
-  it('lists the seven sections and the providers with their real status', async () => {
+  it('lists the eight sections and the providers with their real status', async () => {
     setup()
     render(<AdminFinance section="providers" />)
     expect(await screen.findByText('Crypto pay-in and payout')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Finance & Payments sections' })
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual([
-      'Payment Providers', 'NOWPayments Configuration', 'Crypto Cashout Settings', 'USD Cashout Settings',
+      'Payment Providers', 'NOWPayments Configuration', 'SoncoPay Configuration', 'Crypto Cashout Settings', 'USD Cashout Settings',
       'Payout Security', 'Cashout Transactions', 'Reconciliation & Audit Logs'])
     expect(within(nav).getByRole('link', { name: 'Payment Providers' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('USD settlement (manual)')).toBeInTheDocument()
