@@ -3243,13 +3243,19 @@ def list_super_admins(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """The Super Admins, and whether the caller may grant or revoke the role."""
+    """The Super Admins, whether the caller may grant or revoke the role, and
+    how many of the super_admin.MAX_SUPER_ADMINS seats are taken."""
     check_admin(current_user)
     ids = admin_security.active_super_admin_ids(db)
     rows = db.query(User).filter(User.id.in_(ids)).order_by(User.id).all() if ids else []
+    can_manage = super_admin.is_super_admin(current_user)
+    seats_used = len(admin_security.super_admin_holder_ids(db))
     return {
-        "can_manage": super_admin.is_super_admin(current_user),
+        "can_manage": can_manage,
+        "can_grant": can_manage and seats_used < super_admin.MAX_SUPER_ADMINS,
         "is_super_admin": super_admin.is_super_admin(current_user),
+        "max_super_admins": super_admin.MAX_SUPER_ADMINS,
+        "seats_used": seats_used,
         "role_exists": admin_security.super_admin_role(db) is not None,
         "super_admins": [{"id": u.id, "email": u.email, "full_name": u.full_name, "username": u.username}
                          for u in rows],
@@ -3268,7 +3274,8 @@ def update_user_super_admin(
     Grant or revoke the Super Admin role (every administrative permission).
 
     Only a Super Admin, with their current password, never on their own
-    account, and never removing the last active Super Admin. The account must
+    account, never removing the last active Super Admin, and never more than
+    super_admin.MAX_SUPER_ADMINS Super Admins (409 SUPER_ADMIN_LIMIT_REACHED). The account must
     be an active administrator with a verified email address. Revoking ends
     that account's sessions and gives it back the role it had before, or the
     role chosen in `replacement_role_id` (required when there is no valid

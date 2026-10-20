@@ -13,6 +13,7 @@ breaks that circle once, from the server, for named accounts:
     promote others in the application, but until a second one exists nobody
     can change or remove it (it is the last one, and nobody acts on their own
     account);
+  * at most super_admin.MAX_SUPER_ADMINS accounts;
   * each must be an active administrator with a verified email address;
   * each must have a password that is NOT among the exposed ones
     (app.services.password_exposure). The list of exposed fingerprints must
@@ -44,7 +45,7 @@ from typing import List, Sequence, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.services import admin_security, password_exposure
+from app.services import admin_security, password_exposure, super_admin
 
 MINIMUM_ACCOUNTS = 2
 
@@ -72,6 +73,9 @@ def plan(db: Session, accounts: Sequence[Tuple[int, str]], *, single: bool = Fal
         raise BootstrapError(f"Name at least {MINIMUM_ACCOUNTS} accounts: a Super Admin never acts on their own "
                              "account, so a single one could never be managed. To start with one on purpose, use "
                              "--single.")
+    if len(ids) > super_admin.MAX_SUPER_ADMINS:
+        raise BootstrapError(f"Name at most {super_admin.MAX_SUPER_ADMINS} accounts: that is the most Super Admins "
+                             "there can be.")
     role = admin_security.super_admin_role(db)
     if role is None:
         raise BootstrapError("The Super Admin role does not exist. Run the migrations first.")

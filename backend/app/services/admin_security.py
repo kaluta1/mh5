@@ -52,6 +52,7 @@ AUDIT_SUPER_ADMIN_REVOKED = "SUPER_ADMIN_REVOKED"
 AUDIT_SUPER_ADMIN_BOOTSTRAP = "SUPER_ADMIN_BOOTSTRAP"
 
 SUPER_ADMIN_REQUIRED = "SUPER_ADMIN_REQUIRED"
+SUPER_ADMIN_LIMIT_REACHED = "SUPER_ADMIN_LIMIT_REACHED"
 
 
 class AdminSecurityError(Exception):
@@ -232,6 +233,17 @@ def active_super_admin_ids(db: Session, role_id: Optional[int] = None) -> list:
     return [int(r[0]) for r in rows]
 
 
+def super_admin_holder_ids(db: Session, role_id: Optional[int] = None) -> list:
+    """Every account on the Super Admin role, whatever its state: these are
+    the seats counted against super_admin.MAX_SUPER_ADMINS."""
+    if role_id is None:
+        role = super_admin_role(db)
+        if role is None:
+            return []
+        role_id = role.id
+    return [int(r[0]) for r in db.query(User.id).filter(User.role_id == role_id).order_by(User.id).all()]
+
+
 def _lock_super_admins(db: Session, role_id: int, *also: int) -> dict:
     """Lock every account on the Super Admin role, and the ones named, in id
     order (two Super Admins acting on each other at the same moment wait for
@@ -321,7 +333,8 @@ def set_super_admin(db: Session, actor, *, target_id: int, grant: bool, password
     the role the acting Super Admin chose (`replacement_role_id`); without a
     valid previous role a choice is required. Neither may be, or inherit
     from, the Super Admin role. The revoked account stays an administrator
-    and its sessions end."""
+    and its sessions end. A grant is refused once super_admin.MAX_SUPER_ADMINS
+    accounts hold the role."""
     from app.models.user import Role
 
     attempted = "grant super admin" if grant else "revoke super admin"
@@ -354,6 +367,10 @@ def set_super_admin(db: Session, actor, *, target_id: int, grant: bool, password
     if grant:
         if _on_super_role(target, role.id):
             raise refuse("ALREADY_SUPER_ADMIN", "This account is already a Super Admin.")
+        # Counted under the lock on every holder, so two grants at once cannot both take the last seat.
+        if len(super_admin_holder_ids(db, role.id)) >= super_admin.MAX_SUPER_ADMINS:
+            raise refuse(SUPER_ADMIN_LIMIT_REACHED, f"There can be at most {super_admin.MAX_SUPER_ADMINS} Super "
+                                                    "Admins. Revoke one first.")
         if not eligible_for_super_admin(target):
             raise refuse("TARGET_NOT_ELIGIBLE", "Only an active administrator with a verified email address can "
                                                 "be made a Super Admin.")

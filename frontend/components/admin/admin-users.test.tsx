@@ -24,8 +24,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: any) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
   DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuItem: ({ children, onClick, 'data-testid': testId }: any) => (
-    <button type="button" onClick={onClick} data-testid={testId}>{children}</button>),
+  DropdownMenuItem: ({ children, onClick, disabled, 'data-testid': testId }: any) => (
+    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId}>{children}</button>),
   DropdownMenuSeparator: () => null,
 }))
 
@@ -161,10 +161,11 @@ describe('AdminUsers: the Super Admin role', () => {
 
   const ROLES = [{ id: 3, name: 'finance_manager_m' }, { id: 4, name: 'moderator' }, { id: 5, name: 'user' }]
 
-  function serve(canManage: boolean, previous: { id: number; name: string } | null = { id: 3, name: 'finance_manager_m' }) {
+  function serve(canManage: boolean, previous: { id: number; name: string } | null = { id: 3, name: 'finance_manager_m' },
+    seats: { seats_used: number; max_super_admins: number; can_grant: boolean } | null = null) {
     getMock.mockImplementation(async (url: string) => {
       if (url === '/api/v1/admin/super-admins') {
-        return { status: 200, data: { can_manage: canManage, super_admins: [{ id: 19 }] } }
+        return { status: 200, data: { can_manage: canManage, super_admins: [{ id: 19 }], ...(seats ?? {}) } }
       }
       if (url.endsWith('/super-admin/demotion-options')) {
         return { status: 200, data: { previous_role: previous, previous_role_valid: previous !== null, roles: ROLES } }
@@ -193,12 +194,35 @@ describe('AdminUsers: the Super Admin role', () => {
     expect(screen.getAllByRole('button', { name: /Remove admin/ })).toHaveLength(1)
   })
 
+  it('shows the seats taken and offers no grant once all 5 are taken, while revoking stays possible', async () => {
+    serve(true, undefined, { seats_used: 5, max_super_admins: 5, can_grant: false })
+    render(<AdminUsers />)
+    expect(await screen.findByTestId('super-admin-seats')).toHaveTextContent('Super Admins: 5 of 5')
+    const grant = await screen.findByTestId('super-admin-toggle-8')
+    expect(grant).toBeDisabled()
+    expect(grant).toHaveTextContent('Make Super Admin (limit of 5 reached)')
+    fireEvent.click(grant)
+    expect(screen.queryByTestId('privileged-dialog')).toBeNull()
+    expect(screen.getByTestId('super-admin-toggle-19')).not.toBeDisabled()
+    expect(putMock).not.toHaveBeenCalled()
+  })
+
+  it('offers the grant while a seat is free', async () => {
+    serve(true, undefined, { seats_used: 4, max_super_admins: 5, can_grant: true })
+    render(<AdminUsers />)
+    expect(await screen.findByTestId('super-admin-seats')).toHaveTextContent('Super Admins: 4 of 5')
+    const grant = await screen.findByTestId('super-admin-toggle-8')
+    expect(grant).not.toBeDisabled()
+    expect(grant).toHaveTextContent(/^Make Super Admin$/)
+  })
+
   it('does not offer the role to an administrator who is not a Super Admin', async () => {
     serve(false)
     render(<AdminUsers />)
     expect(await screen.findByTestId('super-admin-badge-19')).toBeInTheDocument()
     expect(screen.queryByTestId('super-admin-toggle-8')).toBeNull()
     expect(screen.queryByTestId('super-admin-toggle-19')).toBeNull()
+    expect(screen.queryByTestId('super-admin-seats')).toBeNull()
   })
 
   it('sends the password with the grant and shows a refusal as a refusal', async () => {

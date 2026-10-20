@@ -19,7 +19,7 @@ environment switches.
 
 Granting and revoking (app.services.admin_security) need a Super Admin, the
 current password, never on one's own account, and never leave the platform
-without an active Super Admin.
+without an active Super Admin. At most MAX_SUPER_ADMINS accounts hold the role.
 
 This module imports nothing from the application, so every permission check
 can use it without an import cycle.
@@ -27,6 +27,9 @@ can use it without an import cycle.
 from __future__ import annotations
 
 SUPER_ADMIN_ROLE_NAME = "super_admin"
+# Seats on the role. Every account on it counts, switched off or not: one
+# switched off can be switched back on without a new grant.
+MAX_SUPER_ADMINS = 5
 
 
 def is_super_admin_role(role) -> bool:

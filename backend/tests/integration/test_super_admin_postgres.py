@@ -216,6 +216,24 @@ def test_two_super_admins_promoting_the_same_account_at_once_keep_its_real_previ
     assert role_of(Session, target) == ("moderator_like", None)
 
 
+def test_two_grants_racing_for_the_last_seat_make_five_super_admins_never_six(pg):
+    engine, Session = pg
+    migrate(engine, MIGRATION, "upgrade")                              # the Super Admin role
+    roles(Session, "user", "moderator_like")
+    actors = [seed(Session, f"actor{i}", role_name="super_admin") for i in range(sa.MAX_SUPER_ADMINS - 1)]
+
+    for _round in range(3):
+        targets = [seed(Session, f"t{_round}_{i}", role_name="moderator_like") for i in range(2)]
+        results = in_threads(2, lambda i: grant(Session, actors[i], targets[i]))
+        assert sorted(results) == sorted(["granted", sec.SUPER_ADMIN_LIMIT_REACHED]), results
+        with Session() as db:
+            assert len(sec.super_admin_holder_ids(db)) == sa.MAX_SUPER_ADMINS
+        winner = targets[results.index("granted")]
+        loser = targets[1 - results.index("granted")]
+        assert role_of(Session, loser) == ("moderator_like", None)          # the refused one is untouched
+        assert revoke(Session, actors[0], winner) == "revoked"            # a seat free again for the next round
+
+
 def test_a_replacement_role_cannot_be_deleted_while_it_is_being_given(pg):
     engine, Session = pg
     migrate(engine, MIGRATION, "upgrade")                              # the Super Admin role

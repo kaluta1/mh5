@@ -107,6 +107,8 @@ export default function AdminUsers() {
   // Granting or revoking Super Admin goes through the same dialog; only a Super Admin is offered it.
   const [privileged, setPrivileged] = useState<{ kind: 'role' | 'status' | 'super'; userId: number; current: boolean } | null>(null)
   const [canManageSuperAdmins, setCanManageSuperAdmins] = useState(false)
+  // Seats on the Super Admin role (server limit). null = the server did not say.
+  const [superAdminSeats, setSuperAdminSeats] = useState<{ used: number; max: number; canGrant: boolean } | null>(null)
   // Revoking Super Admin: the role the account gets instead. '' = its previous role (server rule:
   // required when there is no valid previous role; never a role that leads back to Super Admin).
   const [demotion, setDemotion] = useState<{
@@ -129,11 +131,23 @@ export default function AdminUsers() {
     fetchUsers()
   }, [filter])
 
-  useEffect(() => {
-    // The server decides who may grant or revoke Super Admin; the page only hides what would be refused.
+  // The server decides who may grant or revoke Super Admin; the page only hides what would be refused.
+  const fetchSuperAdmins = () =>
     api.get('/api/v1/admin/super-admins')
-      .then((response) => setCanManageSuperAdmins(response.status === 200 && response.data?.can_manage === true))
-      .catch(() => setCanManageSuperAdmins(false))
+      .then((response) => {
+        const data = response.status === 200 ? response.data : null
+        setCanManageSuperAdmins(data?.can_manage === true)
+        setSuperAdminSeats(data && typeof data.max_super_admins === 'number'
+          ? { used: Number(data.seats_used) || 0, max: data.max_super_admins, canGrant: data.can_grant !== false }
+          : null)
+      })
+      .catch(() => {
+        setCanManageSuperAdmins(false)
+        setSuperAdminSeats(null)
+      })
+
+  useEffect(() => {
+    void fetchSuperAdmins()
   }, [])
 
   const fetchUsers = async () => {
@@ -259,6 +273,7 @@ export default function AdminUsers() {
       cacheService.invalidate('/api/v1/admin/users')
       setPrivileged(null)
       fetchUsers()
+      if (kind === 'super') void fetchSuperAdmins()
     } catch (error) {
       addToast(adminErrorText(error, kind === 'role'
         ? t('admin.users.toggle_admin_error') || 'Error updating admin role'
@@ -440,6 +455,13 @@ export default function AdminUsers() {
           </div>
         </div>
       </div>
+
+      {canManageSuperAdmins && superAdminSeats && (
+        <p data-testid="super-admin-seats" className="text-sm text-gray-600 dark:text-gray-300">
+          {(t('admin.users.super_admin_seats') || 'Super Admins: {used} of {max}')
+            .replace('{used}', String(superAdminSeats.used)).replace('{max}', String(superAdminSeats.max))}
+        </p>
+      )}
 
       {/* Users Table */}
       {loading ? (
@@ -645,13 +667,18 @@ export default function AdminUsers() {
                           {canManageSuperAdmins && (user.is_admin || user.is_super_admin) && (
                             <DropdownMenuItem
                               onClick={() => void handleToggleSuperAdmin(user.id, !!user.is_super_admin)}
+                              // Every seat taken: a grant would be refused (SUPER_ADMIN_LIMIT_REACHED).
+                              disabled={!user.is_super_admin && superAdminSeats?.canGrant === false}
                               className="gap-2 cursor-pointer"
                               data-testid={`super-admin-toggle-${user.id}`}
                             >
                               <Crown className="h-4 w-4" />
                               <span>{user.is_super_admin
                                 ? t('admin.users.revoke_super_admin') || 'Revoke Super Admin'
-                                : t('admin.users.grant_super_admin') || 'Make Super Admin'}</span>
+                                : superAdminSeats?.canGrant === false
+                                  ? (t('admin.users.super_admin_limit_reached') || 'Make Super Admin (limit of {max} reached)')
+                                      .replace('{max}', String(superAdminSeats.max))
+                                  : t('admin.users.grant_super_admin') || 'Make Super Admin'}</span>
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
@@ -964,7 +991,7 @@ export default function AdminUsers() {
             <p className="text-sm text-gray-600 dark:text-gray-300">
               {privileged.kind === 'super'
                 ? t('admin.users.super_admin_hint') ||
-                  'A Super Admin holds every administrative permission, including payment, KYC and administrator settings. Only a Super Admin can grant or revoke it, with their current password, never on their own account, and the last Super Admin cannot be removed. Recorded in the audit trail.'
+                  'A Super Admin holds every administrative permission, including payment, KYC and administrator settings. Only a Super Admin can grant or revoke it, with their current password, never on their own account. There can be at most 5 Super Admins, and the last one cannot be removed. Recorded in the audit trail.'
                 : t('admin.users.privileged_hint') ||
                   'This changes an administrator. It needs the manage_administrators permission and your current password, cannot be done on your own account, and is recorded in the audit trail.'}
             </p>
