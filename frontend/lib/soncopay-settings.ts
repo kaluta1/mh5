@@ -10,10 +10,25 @@
  * only whether one is configured (and an API key's last four characters). A
  * blank field keeps what is saved. The server authorizes every change (a
  * Super Admin, plus the current password) and validates every value again.
+ * SoncoPay becomes the default checkout only while it is on and the
+ * environment in use has its key and secret (the server refuses otherwise).
  * Nothing here touches NOWPayments checkout or the NOWPayments payout engine.
  */
 
 export const SONCOPAY_SETTINGS_URL = '/api/v1/admin/finance/soncopay'
+export const SONCOPAY_CONNECTION_TEST_URL = '/api/v1/admin/finance/soncopay/connection-test'
+
+export type CheckoutProvider = 'nowpayments' | 'soncopay'
+
+/** What the connection test answers (GET /v1/methods on SoncoPay, no side effect). Never a key. */
+export type SoncoPayConnectionTest = {
+  ok: boolean
+  environment: SoncoPayEnvironment
+  methods?: number
+  error?: string
+  code?: string | null
+  status_code?: number | null
+}
 
 export type SoncoPayEnvironment = 'test' | 'live'
 
@@ -37,8 +52,8 @@ export type SoncoPaySettingsView = {
   enabled: boolean
   environment: SoncoPayEnvironment
   environments: SoncoPayEnvironment[]
-  default_provider: 'nowpayments' | 'soncopay'
-  default_provider_in_force: 'nowpayments' | 'soncopay'
+  default_provider: CheckoutProvider
+  default_provider_in_force: CheckoutProvider
   checkout_providers: { provider: string; label: string; available: boolean; note?: string | null }[]
   credentials: SoncoPayCredentialStatus[]
   ready: Record<SoncoPayEnvironment, boolean>
@@ -55,6 +70,7 @@ export type SoncoPaySettingsView = {
 export type SoncoPayDraft = {
   enabled: boolean
   environment: SoncoPayEnvironment
+  defaultProvider: CheckoutProvider
   testApiKey: string
   testWebhookSecret: string
   liveApiKey: string
@@ -65,6 +81,7 @@ export type SoncoPayDraft = {
 export type SoncoPaySettingsBody = {
   enabled?: boolean
   environment?: SoncoPayEnvironment
+  default_provider?: CheckoutProvider
   test_api_key?: string
   test_webhook_secret?: string
   live_api_key?: string
@@ -79,6 +96,9 @@ const SECRET_FIELDS = [
   ['liveWebhookSecret', 'live_webhook_secret', 'webhook signing secret'],
 ] as const
 
+/** A Test key starts with sp_test_, a Live key with sp_live_ (the server checks it again). */
+const KEY_PREFIX = { testApiKey: 'sp_test_', liveApiKey: 'sp_live_' } as const
+
 /** What the Admin Panel says about one key or secret. Never its value. */
 export function describeCredential(c: SoncoPayCredentialStatus): string {
   if (c.saved && c.saved_readable === false) return 'Saved, but cannot be read on this server (check the encryption key)'
@@ -91,6 +111,7 @@ export function draftFrom(view: SoncoPaySettingsView): SoncoPayDraft {
   return {
     enabled: view.enabled,
     environment: view.environment,
+    defaultProvider: view.default_provider,
     testApiKey: '',
     testWebhookSecret: '',
     liveApiKey: '',
@@ -113,6 +134,20 @@ export function draftProblems(view: SoncoPaySettingsView, draft: SoncoPayDraft):
     if (looksLikeUrl(value)) out[field] = `That looks like a URL. Paste the ${what}.`
     else if (/\s/.test(value)) out[field] = `The ${what} has no spaces.`
     else if (value.length < 16) out[field] = `The ${what} is too short.`
+    else if (field in KEY_PREFIX && !value.startsWith(KEY_PREFIX[field as keyof typeof KEY_PREFIX])) {
+      out[field] = `This ${what} starts with ${KEY_PREFIX[field as keyof typeof KEY_PREFIX]}.`
+    }
+  }
+  if (draft.defaultProvider === 'soncopay' && view.default_provider !== 'soncopay') {
+    const soncopay = view.checkout_providers.find((p) => p.provider === 'soncopay')
+    if (!soncopay?.available) out.defaultProvider = 'SoncoPay checkout is not available.'
+    else if (!draft.enabled) out.defaultProvider = 'Switch SoncoPay on first.'
+    else if (!view.ready[draft.environment]) {
+      out.defaultProvider = `Save the ${draft.environment === 'live' ? 'Live' : 'Test'} API key and signing secret first.`
+    }
+  }
+  if (!draft.enabled && view.enabled && draft.defaultProvider === 'soncopay') {
+    out.enabled = 'SoncoPay is the default checkout: choose NOWPayments before switching it off.'
   }
   if (draft.environment === 'live' && view.environment !== 'live' && draft.confirmation.trim() !== view.live_confirmation) {
     out.confirmation = `Type ${view.live_confirmation} to switch to Live.`
@@ -133,6 +168,7 @@ export function settingsChanges(view: SoncoPaySettingsView, draft: SoncoPayDraft
     out.environment = draft.environment
     if (draft.environment === 'live') out.confirmation = draft.confirmation.trim()
   }
+  if (draft.defaultProvider !== view.default_provider) out.default_provider = draft.defaultProvider
   for (const [field, key] of SECRET_FIELDS) {
     const value = draft[field].trim()
     if (value) out[key] = value
@@ -153,4 +189,14 @@ const CHANGE_LABELS: Record<string, string> = {
 /** "Test API key, environment" for a success message. */
 export function describeChanges(changed: string[] | undefined | null): string {
   return (changed || []).map((name) => CHANGE_LABELS[name] || name).join(', ')
+}
+
+/** One line for the connection test result. */
+export function describeConnectionTest(result: SoncoPayConnectionTest): string {
+  const where = result.environment === 'live' ? 'Live' : 'Test'
+  if (result.ok) {
+    const n = result.methods ?? 0
+    return `${where} connection OK: SoncoPay accepted the key (${n} payment method${n === 1 ? '' : 's'} open).`
+  }
+  return `${where} connection failed: ${result.error || 'SoncoPay did not accept the request.'}`
 }

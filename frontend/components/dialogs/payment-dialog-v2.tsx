@@ -49,10 +49,12 @@ import {
   Crown,
   Calendar,
   CheckCircle2,
-  Clock
+  Clock,
+  ExternalLink
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
+import { isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl, type CheckoutGateway } from '@/lib/payment-gateway'
 
 interface PaymentMethod {
   id: string
@@ -167,6 +169,17 @@ export function PaymentDialog({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [payCurrencies, setPayCurrencies] = useState<string[]>(['usdtbsc'])
   const [loadingCurrencies, setLoadingCurrencies] = useState(false)
+  // The gateway of a NEW payment, decided by the server (NOWPayments unless SoncoPay is the ready default).
+  const [gateway, setGateway] = useState<CheckoutGateway>('nowpayments')
+
+  useEffect(() => {
+    if (!open) return
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+    let cancelled = false
+    void paymentService.getCheckoutGateway(token).then((g) => { if (!cancelled) setGateway(g) })
+    return () => { cancelled = true }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -206,6 +219,12 @@ export function PaymentDialog({
           } catch (callbackErr) {
             logger.error('onPaymentInitiated error', callbackErr)
           }
+        } else if (status.provider === 'soncopay') {
+          setStatusMessage(paymentStateText(status.payment_state))
+          if (isFinalState(status.payment_state) && pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current)                // expired/failed: nothing more will happen
+            pollingIntervalRef.current = null
+          }
         } else if (status.payment_status === 'confirming') {
           setStatusMessage(t('payment.confirming') || 'Payment detected, confirming...')
         } else if (status.payment_status === 'partially_paid') {
@@ -226,9 +245,9 @@ export function PaymentDialog({
     }
   }, [open, step, payment?.deposit_id, paymentConfirmed, onPaymentInitiated, t])
 
-  // Load NOWPayments pay currencies on method step
+  // Load NOWPayments pay currencies on method step (SoncoPay offers its methods on its own page)
   useEffect(() => {
-    if (!open || step !== 'method') return
+    if (!open || step !== 'method' || gateway === 'soncopay') return
 
     const token = localStorage.getItem('access_token')
     if (!token) return
@@ -254,7 +273,7 @@ export function PaymentDialog({
     return () => {
       cancelled = true
     }
-  }, [open, step])
+  }, [open, step, gateway])
 
   const checkPaymentNow = async () => {
     if (!payment?.deposit_id) return
@@ -273,6 +292,8 @@ export function PaymentDialog({
         } catch (callbackErr) {
           logger.error('onPaymentInitiated error', callbackErr)
         }
+      } else if (status.provider === 'soncopay') {
+        setStatusMessage(paymentStateText(status.payment_state))
       } else {
         setStatusMessage(
           status.payment_status === 'waiting'
@@ -429,7 +450,8 @@ export function PaymentDialog({
           amount: totalAmount,
           currency: 'usd',
           product_code: apiRecipients[0]?.product_code || 'kyc',
-          pay_currency: payCurrency,
+          // SoncoPay: the member picks crypto, mobile money or card on SoncoPay's own page.
+          pay_currency: gateway === 'soncopay' ? undefined : payCurrency,
           recipients: apiRecipients,
         },
         paymentIdempotencyKeyRef.current
@@ -858,8 +880,30 @@ export function PaymentDialog({
                 </div>
               )}
 
+              {/* SoncoPay: one choice; the methods are offered on SoncoPay's secure page */}
+              {!isLoading && gateway === 'soncopay' && (
+                <button
+                  data-testid="pay-with-soncopay"
+                  onClick={() => handleMethodSelect('soncopay')}
+                  disabled={isLoading}
+                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-myhigh5-primary" />
+                  </div>
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                      {t('payment.pay_with_soncopay') || 'Pay with SoncoPay'}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      {t('payment.soncopay_methods') || 'Crypto, mobile money or card, on the secure SoncoPay page'}
+                    </span>
+                  </span>
+                </button>
+              )}
+
               {/* Methods */}
-              {!isLoading && (
+              {!isLoading && gateway !== 'soncopay' && (
                 <>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">
@@ -925,8 +969,80 @@ export function PaymentDialog({
             </div>
           )}
 
+          {/* Step 3: SoncoPay hosted checkout */}
+          {step === 'payment' && payment && isSoncoPay(payment) && (
+            <div className="space-y-4" data-testid="soncopay-payment-step">
+              <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 text-center border border-myhigh5-primary/20">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  {t('payment.amount_to_pay') || 'Amount to pay'}
+                </p>
+                <p className="text-2xl font-bold text-myhigh5-primary">
+                  ${payment.price_amount.toFixed(2)} {payment.price_currency.toUpperCase()}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t('payment.soncopay_fee_note') || 'SoncoPay shows the exact amount for the method you choose.'}
+                </p>
+              </div>
+
+              {safeCheckoutUrl(payment.checkout_url) ? (
+                <a
+                  href={safeCheckoutUrl(payment.checkout_url) as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="soncopay-checkout-link"
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-myhigh5-primary px-4 py-2 text-sm font-medium text-white hover:bg-myhigh5-primary/90"
+                >
+                  {t('payment.continue_to_soncopay') || 'Continue to the secure payment page'}
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ) : (
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {t('payment.checkout_unavailable') || 'The payment page is not available. Please try again in a few minutes.'}
+                </p>
+              )}
+
+              <div className="break-all px-2 text-center text-xs text-gray-500 dark:text-gray-400">
+                {t('payment.order_id') || 'Reference'}: {payment.order_id}
+              </div>
+
+              <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <p className="text-xs text-blue-700 dark:text-blue-300" data-testid="soncopay-status">
+                  {statusMessage || paymentStateText('pending')}
+                </p>
+              </div>
+
+              {paymentError && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700 dark:text-red-300">{paymentError}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isCheckingPayment}>
+                  {t('common.back') || 'Back'}
+                </Button>
+                <Button
+                  onClick={checkPaymentNow}
+                  disabled={isCheckingPayment}
+                  className="flex-1 bg-myhigh5-primary hover:bg-myhigh5-primary/90"
+                >
+                  {isCheckingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {t('payment.checking') || 'Checking...'}
+                    </>
+                  ) : (
+                    t('payment.check_status') || 'Check status'
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Step 3: NOWPayments checkout */}
-          {step === 'payment' && payment && (
+          {step === 'payment' && payment && !isSoncoPay(payment) && (
             <div className="space-y-4">
               <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-4 text-center border border-myhigh5-primary/20">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">

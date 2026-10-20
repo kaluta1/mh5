@@ -1,5 +1,10 @@
 """
-Payment API Endpoints — NOWPayments crypto checkout.
+Payment API Endpoints — member checkout through NOWPayments or SoncoPay.
+
+The gateway of a NEW payment is soncopay_settings.default_checkout_provider
+(NOWPayments unless a Super Admin made SoncoPay the default and it can take a
+payment now). It is written on the deposit and never changes: every later read
+of that deposit (sync, check, scheduler, webhook) uses the same gateway.
 """
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -16,7 +21,8 @@ import logging
 from app.api import deps
 from app.models.user import User
 from app.models.payment import Deposit, DepositStatus, ProductType
-from app.services import kyc_fee
+from app.services import kyc_fee, soncopay_payments, soncopay_settings
+from app.services.soncopay_client import SoncoPayError
 from app.services.nowpayments_service import (
     NowPaymentsError,
     build_order_id,
@@ -72,6 +78,9 @@ class PaymentResponse(BaseModel):
     price_currency: str
     invoice_url: Optional[str] = None
     status: str
+    # nowpayments: pay_address/pay_amount are shown. soncopay: the member continues on checkout_url.
+    provider: str = "nowpayments"
+    checkout_url: Optional[str] = None
 
 
 def _idempotent_order_id(user_id: int, key: str) -> str:
@@ -83,6 +92,8 @@ def _idempotent_order_id(user_id: int, key: str) -> str:
 
 
 def _stored_payment_response(deposit: Deposit) -> PaymentResponse:
+    if soncopay_payments.is_soncopay(deposit):
+        return _soncopay_response(deposit)
     return PaymentResponse(
         deposit_id=deposit.id,
         order_id=deposit.order_id or "",
@@ -96,6 +107,52 @@ def _stored_payment_response(deposit: Deposit) -> PaymentResponse:
         invoice_url=None,
         status=deposit.status.value,
     )
+
+
+def _soncopay_response(deposit: Deposit) -> PaymentResponse:
+    return PaymentResponse(
+        deposit_id=deposit.id,
+        order_id=deposit.order_id or "",
+        payment_id=deposit.external_payment_id or "",
+        payment_status=deposit.provider_status or deposit.status.value,
+        pay_address="",
+        pay_amount="",
+        pay_currency="",
+        price_amount=float(deposit.amount),
+        price_currency=(deposit.currency or "USD").lower(),
+        invoice_url=deposit.provider_checkout_url,
+        status=deposit.status.value,
+        provider="soncopay",
+        checkout_url=deposit.provider_checkout_url,
+    )
+
+
+async def _attach_soncopay_checkout(db: Session, deposit_id: int, description: str) -> PaymentResponse:
+    """Create the SoncoPay payment of a SoncoPay deposit (or find it again: the
+    same order_id returns the same payment). On any failure the deposit is
+    marked failed and the member gets a fixed sentence."""
+    try:
+        deposit = await soncopay_payments.create_checkout(db, deposit_id, description=description)
+        db.commit()
+    except (SoncoPayError, FinancialIntegrityError) as exc:
+        db.rollback()
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
+        if deposit.status == DepositStatus.PENDING and not deposit.external_payment_id:
+            deposit.status = DepositStatus.FAILED
+        db.commit()
+        logger.error("SoncoPay checkout for deposit %s failed (%s)", deposit_id, type(exc).__name__)
+        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
+    db.refresh(deposit)
+    return _soncopay_response(deposit)
+
+
+@router.get("/checkout-gateway")
+async def checkout_gateway(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Which gateway a new payment uses now, so the payment dialog shows the right step."""
+    return {"provider": soncopay_settings.default_checkout_provider(db)}
 
 
 # Recipient confirmation in the purchase dialog. A signed-in member may check
@@ -234,6 +291,10 @@ async def create_payment(
         ):
             raise HTTPException(status_code=409, detail="Idempotency key is already used for another order")
         if not existing.external_payment_id:
+            if soncopay_payments.is_soncopay(existing) and existing.status == DepositStatus.FAILED:
+                # SoncoPay returns the same payment for the same order_id: a retry is safe.
+                return await _attach_soncopay_checkout(
+                    db, int(existing.id), f"MyHigh5 {product.name} - deposit {int(existing.id)}")
             raise HTTPException(status_code=409, detail="Payment creation is already in progress")
         return _stored_payment_response(existing)
 
@@ -266,6 +327,11 @@ async def create_payment(
             db.rollback()
             raise HTTPException(status_code=409, detail={"code": refusal[0], "message": refusal[1]})
 
+    # The gateway is chosen ONCE, here, and stays with the deposit.
+    gateway = soncopay_settings.default_checkout_provider(db)
+    environment = soncopay_settings.checkout_environment(db) if gateway == "soncopay" else None
+    if gateway == "soncopay" and environment is None:
+        gateway = "nowpayments"                       # fail closed: SoncoPay stopped being ready meanwhile
     deposit = Deposit(
         user_id=current_user.id,
         product_type_id=product.id,
@@ -275,6 +341,8 @@ async def create_payment(
         status=DepositStatus.PENDING,
         # Stamped once at creation: decides old vs new business model deterministically.
         business_model_version=model_version_for_new_event(db),
+        payment_provider=gateway,
+        provider_environment=environment,
     )
     db.add(deposit)
     try:
@@ -293,6 +361,9 @@ async def create_payment(
     # Commit/refresh starts a new read transaction; release it before the
     # bounded provider call so Neon never sees an idle transaction here.
     db.rollback()
+
+    if gateway == "soncopay":
+        return await _attach_soncopay_checkout(db, deposit_id, order_description)
 
     try:
         provider_payload = await now_create_payment(
@@ -364,12 +435,20 @@ async def sync_payment(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Poll NOWPayments and update local deposit status (manual refresh / I've paid button)."""
+    """Ask the deposit's gateway and update the local deposit status (manual refresh / I've paid button)."""
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if soncopay_payments.is_soncopay(deposit):
+        try:
+            return await soncopay_payments.sync_deposit(db, deposit)
+        except SoncoPayError as exc:
+            db.rollback()
+            logger.warning("SoncoPay sync failed for deposit %s (%s)", deposit_id, exc.stage)
+            raise HTTPException(status_code=400, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
 
     try:
         payload = await sync_deposit_with_provider(db, deposit)
@@ -396,7 +475,17 @@ async def check_payment_status(
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if _should_sync_deposit_with_provider(deposit):
+    if soncopay_payments.is_soncopay(deposit):
+        if _should_sync_deposit_with_provider(deposit):
+            try:
+                payload = await soncopay_payments.sync_deposit(db, deposit)
+                return {"deposit_id": deposit_id, "status": payload["status"],
+                        "is_confirmed": payload["is_confirmed"], "order_id": payload["order_id"],
+                        "payment_id": payload["payment_id"]}
+            except SoncoPayError:
+                db.rollback()
+                deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
+    elif _should_sync_deposit_with_provider(deposit):
         try:
             payload = await sync_deposit_with_provider(db, deposit)
             db.commit()
@@ -451,7 +540,7 @@ async def get_payment_status(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Get payment status and NOWPayments pay-in details for a deposit."""
+    """Get payment status and pay-in details for a deposit, from its own gateway."""
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
 
     if not deposit:
@@ -459,6 +548,16 @@ async def get_payment_status(
 
     if deposit.user_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if soncopay_payments.is_soncopay(deposit):
+        if _should_sync_deposit_with_provider(deposit):
+            try:
+                return await soncopay_payments.sync_deposit(db, deposit)
+            except SoncoPayError as exc:
+                db.rollback()
+                logger.warning("SoncoPay sync failed for deposit %s (%s)", deposit_id, exc.stage)
+                deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
+        return soncopay_payments.status_payload(deposit)
 
     if _should_sync_deposit_with_provider(deposit):
         try:

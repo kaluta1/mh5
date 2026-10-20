@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-const { getMock, putMock } = vi.hoisted(() => ({ getMock: vi.fn(), putMock: vi.fn() }))
+const { getMock, putMock, postMock } = vi.hoisted(() => ({ getMock: vi.fn(), putMock: vi.fn(), postMock: vi.fn() }))
 
-vi.mock('@/lib/api', () => ({ default: { get: getMock, put: putMock, post: vi.fn() }, apiService: {} }))
+vi.mock('@/lib/api', () => ({ default: { get: getMock, put: putMock, post: postMock }, apiService: {} }))
 
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 import { FINANCE_SECTIONS } from '@/lib/finance-admin'
 import {
-  describeChanges, describeCredential, draftFrom, draftProblems, settingsChanges, type SoncoPayCredentialStatus,
+  describeChanges, describeConnectionTest, describeCredential, draftFrom, draftProblems, settingsChanges,
+  type SoncoPayCredentialStatus,
 } from '@/lib/soncopay-settings'
 
 // Synthetic values only.
@@ -34,10 +35,10 @@ const view = (over: Record<string, unknown> = {}) => ({
   default_provider: 'nowpayments', default_provider_in_force: 'nowpayments',
   checkout_providers: [
     { provider: 'nowpayments', label: 'NOWPayments', available: true },
-    { provider: 'soncopay', label: 'SoncoPay', available: false, note: 'SoncoPay checkout is not implemented yet.' },
+    { provider: 'soncopay', label: 'SoncoPay', available: true, note: null },
   ],
-  credentials: credentials(), ready: { test: false, live: false }, webhook_url: WEBHOOK, webhook_operational: false,
-  connection_test: { available: false, reason: "SoncoPay's API documentation has not been provided yet." },
+  credentials: credentials(), ready: { test: false, live: false }, webhook_url: WEBHOOK, webhook_operational: true,
+  connection_test: { available: true, reason: null },
   live_confirmation: 'USE SONCOPAY LIVE', encryption_key_configured: true, version: 2, can_change: true,
   last_change: null, ...over,
 })
@@ -49,6 +50,7 @@ const saveButton = () => screen.getByRole('button', { name: 'Save Settings' })
 beforeEach(() => {
   getMock.mockReset()
   putMock.mockReset()
+  postMock.mockReset()
   getMock.mockResolvedValue({ status: 200, data: view() })
 })
 
@@ -59,7 +61,7 @@ describe('Finance & Payments > SoncoPay Configuration', () => {
     expect(slugs.indexOf('soncopay')).toBe(slugs.indexOf('nowpayments') + 1)
   })
 
-  it('shows every control, write-only secret fields, the webhook URL and the not-operational notice', async () => {
+  it('shows every control, write-only secret fields, the webhook URL and the checkout in force', async () => {
     render(<AdminSoncoPaySettings />)
     await screen.findByTestId('soncopay-settings-form')
     expect(screen.getByRole('switch', { name: 'SoncoPay enabled' })).not.toBeChecked()
@@ -72,15 +74,57 @@ describe('Finance & Payments > SoncoPay Configuration', () => {
     const url = screen.getByLabelText(/Webhook URL/) as HTMLInputElement
     expect(url).toHaveValue(WEBHOOK)
     expect(url.readOnly).toBe(true)
-    expect(screen.getByTestId('soncopay-not-operational')).toHaveTextContent('not active yet')
-    // No documented endpoint: the connection test cannot be run.
-    expect(screen.getByTestId('soncopay-connection-test')).toBeDisabled()
-    // NOWPayments stays the default checkout; SoncoPay cannot be picked yet.
+    expect(screen.getByTestId('soncopay-checkout-state')).toHaveTextContent('New member payments use NOWPayments')
+    expect(screen.getByTestId('soncopay-connection-test')).toBeEnabled()
     const select = screen.getByLabelText('Default customer checkout') as HTMLSelectElement
     expect(select).toHaveValue('nowpayments')
-    expect(select).toBeDisabled()
-    expect(screen.getByRole('option', { name: /SoncoPay \(not available yet\)/ })).toBeDisabled()
+    expect(select).toBeEnabled()
     expect(saveButton()).toBeDisabled()
+  })
+
+  it('makes SoncoPay the default only while it is on and the environment is ready', async () => {
+    // Not ready: chosen in the form, refused before anything is sent.
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('soncopay-settings-form')
+    fireEvent.change(screen.getByLabelText('Default customer checkout'), { target: { value: 'soncopay' } })
+    type('Your current password', PASSWORD)
+    expect(screen.getByText('Switch SoncoPay on first.')).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it('sends the default checkout when SoncoPay is on and ready', async () => {
+    const ready = view({ enabled: true, ready: { test: true, live: false },
+      credentials: credentials({ TEST_API_KEY: { ...saved, masked: '••••0001' }, TEST_WEBHOOK_SECRET: saved }) })
+    getMock.mockResolvedValue({ status: 200, data: ready })
+    putMock.mockResolvedValue({ status: 200, data: { ...ready, default_provider: 'soncopay', default_provider_in_force: 'soncopay',
+      last_change: { at: null, by_user_id: 1, changed: ['DEFAULT_CHECKOUT_PROVIDER'] } } })
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('soncopay-settings-form')
+    fireEvent.change(screen.getByLabelText('Default customer checkout'), { target: { value: 'soncopay' } })
+    type('Your current password', PASSWORD)
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1))
+    expect(putMock.mock.calls[0][1]).toEqual({ default_provider: 'soncopay', current_password: PASSWORD, expected_version: 2 })
+    expect(await screen.findByText('Settings saved: default checkout.')).toBeInTheDocument()
+    expect(screen.getByTestId('soncopay-checkout-state')).toHaveTextContent('New member payments use SoncoPay (Test)')
+  })
+
+  it('runs the connection test for the environment in use and never shows the key', async () => {
+    postMock.mockResolvedValue({ status: 200, data: { ok: true, environment: 'test', methods: 3 } })
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('soncopay-settings-form')
+    fireEvent.click(screen.getByTestId('soncopay-connection-test'))
+    expect(await screen.findByTestId('soncopay-connection-result')).toHaveTextContent('Test connection OK')
+    expect(postMock).toHaveBeenCalledWith('/api/v1/admin/finance/soncopay/connection-test', { environment: 'test' })
+    expect(document.body.textContent).not.toContain(TEST_KEY)
+  })
+
+  it('cannot run the connection test without the right to change the settings', async () => {
+    getMock.mockResolvedValue({ status: 200, data: view({ can_change: false }) })
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('soncopay-settings-form')
+    expect(screen.getByTestId('soncopay-connection-test')).toBeDisabled()
+    expect(screen.getByLabelText('Default customer checkout')).toBeDisabled()
   })
 
   it('shows Configured and an API key\'s last four characters, never more', async () => {
@@ -176,5 +220,27 @@ describe('lib/soncopay-settings', () => {
 
   it('labels the changed settings', () => {
     expect(describeChanges(['SONCOPAY_ENABLED', 'LIVE_API_KEY'])).toBe('SoncoPay on/off, Live API key')
+  })
+
+  it('refuses a key of the other environment', () => {
+    const v = view() as any
+    const problems = draftProblems(v, { ...draftFrom(v), testApiKey: LIVE_KEY, liveApiKey: TEST_KEY })
+    expect(problems.testApiKey).toMatch(/sp_test_/)
+    expect(problems.liveApiKey).toMatch(/sp_live_/)
+  })
+
+  it('refuses to switch SoncoPay off while it is the default', () => {
+    const v = view({ enabled: true, default_provider: 'soncopay', default_provider_in_force: 'soncopay',
+      ready: { test: true, live: false } }) as any
+    expect(draftProblems(v, { ...draftFrom(v), enabled: false }).enabled).toMatch(/choose NOWPayments/)
+    expect(settingsChanges(v, { ...draftFrom(v), enabled: false, defaultProvider: 'nowpayments' }))
+      .toEqual({ enabled: false, default_provider: 'nowpayments' })
+  })
+
+  it('describes the connection test result', () => {
+    expect(describeConnectionTest({ ok: true, environment: 'live', methods: 1 })).toBe(
+      'Live connection OK: SoncoPay accepted the key (1 payment method open).')
+    expect(describeConnectionTest({ ok: false, environment: 'test', error: 'SoncoPay refused the key.' })).toBe(
+      'Test connection failed: SoncoPay refused the key.')
   })
 })

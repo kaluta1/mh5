@@ -1,8 +1,10 @@
 /**
- * Payment Service — NOWPayments crypto checkout
+ * Payment Service — member checkout (NOWPayments or SoncoPay; the server decides
+ * the gateway of a new payment and every payment keeps its own).
  */
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { apiErrorText } from '@/lib/financial-eligibility'
+import type { CheckoutGateway, PaymentState } from '@/lib/payment-gateway'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -36,6 +38,9 @@ export interface PaymentResponse {
   price_currency: string
   invoice_url?: string | null
   status: string
+  /** nowpayments: show pay_address/pay_amount. soncopay: the member continues on checkout_url. */
+  provider?: CheckoutGateway
+  checkout_url?: string | null
 }
 
 export interface PaymentStatusResponse {
@@ -52,6 +57,11 @@ export interface PaymentStatusResponse {
   price_currency: string
   tx_hash?: string
   invoice_url?: string | null
+  provider?: CheckoutGateway
+  checkout_url?: string | null
+  /** SoncoPay only. */
+  payment_state?: PaymentState
+  expires_at?: string | null
 }
 
 class PaymentService {
@@ -81,6 +91,18 @@ class PaymentService {
     }
 
     return response.json()
+  }
+
+  /** The gateway a NEW payment uses now (NOWPayments when it cannot be read). */
+  async getCheckoutGateway(token: string): Promise<CheckoutGateway> {
+    try {
+      const response = await fetch(`${this.getBaseUrl()}/checkout-gateway`, { headers: this.getHeaders(token) })
+      if (!response.ok) return 'nowpayments'
+      const data = await response.json()
+      return data?.provider === 'soncopay' ? 'soncopay' : 'nowpayments'
+    } catch {
+      return 'nowpayments'
+    }
   }
 
   async getAvailableCurrencies(token: string): Promise<string[]> {

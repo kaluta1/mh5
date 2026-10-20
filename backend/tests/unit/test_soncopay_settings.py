@@ -8,8 +8,10 @@
      purposes, Live needs its own credentials and a typed confirmation;
   4. the settings can never change NOWPayments checkout, the NOWPayments
      credentials or the payout engine;
-  5. nothing goes live by accident: SoncoPay cannot be the default checkout,
-     the server environment is ignored, and the webhook refuses everything.
+  5. nothing goes live by accident: SoncoPay becomes the default checkout only
+     while it is on and its environment's key and secret are saved, the server
+     environment is ignored, and the webhook refuses anything unsigned.
+     (Checkout and webhook processing: tests/unit/test_soncopay_payments.py.)
 
 Every account, key and secret is SYNTHETIC.
 """
@@ -281,23 +283,61 @@ def test_soncopay_changes_never_touch_nowpayments_checkout_or_payouts(client, db
 # 5. Nothing goes live by accident
 # ===========================================================================
 
-def test_soncopay_cannot_become_the_default_checkout_yet(client, db):
+def test_soncopay_becomes_the_default_checkout_only_while_on_and_ready(client, db):
+    boss = superadmin(db, "boss")
+    view = client.get(URL, headers=bearer(boss)).json()
+    assert {p["provider"]: p["available"] for p in view["checkout_providers"]} == {"nowpayments": True, "soncopay": True}
+
+    # Nothing saved, or saved but off: refused, nothing changes.
+    before = snapshot(db)
+    refused = put(client, boss, default_provider="soncopay")
+    assert (refused.status_code, code_of(refused)) == (409, "NOT_READY")
+    assert snapshot(db) == before
+    save_test_credentials(client, boss)
+    before = snapshot(db)
+    refused = put(client, boss, default_provider="soncopay")
+    assert (refused.status_code, code_of(refused)) == (409, "NOT_READY")
+    assert snapshot(db) == before
+    assert sp.default_checkout_provider(db) == "nowpayments"
+
+    # On, with the Test key and secret: accepted, and in force.
+    assert put(client, boss, enabled=True).status_code == 200
+    done = put(client, boss, default_provider="soncopay")
+    assert done.status_code == 200, done.text
+    assert done.json()["default_provider"] == done.json()["default_provider_in_force"] == "soncopay"
+    assert sp.checkout_environment(db) == "test"
+
+    # It cannot be switched off while it is the default; NOWPayments first.
+    refused = put(client, boss, enabled=False)
+    assert (refused.status_code, code_of(refused)) == (409, "DEFAULT_PROVIDER_OFF")
+    assert put(client, boss, default_provider="nowpayments").status_code == 200
+    assert sp.default_checkout_provider(db) == "nowpayments"
+
+
+def test_a_hand_edited_default_never_routes_to_soncopay_while_it_cannot_take_payments(client, db):
     boss = superadmin(db, "boss")
     save_test_credentials(client, boss)
     assert put(client, boss, enabled=True).status_code == 200
-    before = snapshot(db)
-    refused = put(client, boss, default_provider="soncopay")
-    assert (refused.status_code, code_of(refused)) == (409, "CHECKOUT_NOT_AVAILABLE")
-    assert snapshot(db) == before
-    view = client.get(URL, headers=bearer(boss)).json()
-    assert view["default_provider"] == view["default_provider_in_force"] == "nowpayments"
-    assert {p["provider"]: p["available"] for p in view["checkout_providers"]} == {"nowpayments": True, "soncopay": False}
-
-    # Even a row edited by hand cannot route checkouts to SoncoPay while its checkout does not exist.
-    db.query(CheckoutGatewaySettings).update({"default_provider": "soncopay"})
+    # Default SoncoPay written by hand while it is OFF: NOWPayments stays in force.
+    db.query(CheckoutGatewaySettings).update({"default_provider": "soncopay", "soncopay_enabled": False})
     db.commit()
-    assert sp.default_checkout_provider(db) == "nowpayments"
+    assert sp.default_checkout_provider(db) == "nowpayments" and sp.checkout_environment(db) is None
+    # On but in Live, where nothing is saved: NOWPayments stays in force.
+    db.query(CheckoutGatewaySettings).update({"soncopay_enabled": True, "soncopay_environment": "live"})
+    db.commit()
+    assert sp.default_checkout_provider(db) == "nowpayments" and sp.checkout_environment(db) is None
     assert client.get(URL, headers=bearer(boss)).json()["default_provider_in_force"] == "nowpayments"
+
+
+def test_an_api_key_of_the_other_environment_is_refused(client, db):
+    boss = superadmin(db, "boss")
+    before = snapshot(db)
+    for field, value in (("test_api_key", LIVE_KEY), ("live_api_key", TEST_KEY),
+                         ("test_api_key", "pk_synthetic_not_soncopay_01")):
+        refused = put(client, boss, **{field: value})
+        assert (refused.status_code, code_of(refused)) == (422, "INVALID_VALUE"), field
+        assert LIVE_KEY not in refused.text and TEST_KEY not in refused.text
+    assert snapshot(db) == before
 
 
 def test_with_nothing_saved_soncopay_is_off_and_the_environment_is_ignored(client, db, monkeypatch):
@@ -309,21 +349,26 @@ def test_with_nothing_saved_soncopay_is_off_and_the_environment_is_ignored(clien
     assert (view["enabled"], view["environment"], view["default_provider"], view["version"]) == (
         False, "test", "nowpayments", 0)
     assert not any(c["configured"] for c in view["credentials"])
-    assert view["connection_test"]["available"] is False and view["connection_test"]["reason"]
-    assert view["webhook_operational"] is False
+    assert view["connection_test"]["available"] is True and view["connection_test"]["reason"] is None
+    assert view["webhook_operational"] is True
+    assert sp.checkout_environment(db) is None and sp.default_checkout_provider(db) == "nowpayments"
     assert db.query(CheckoutGatewaySettings).count() == 0                          # reading never creates the row
 
 
-def test_the_webhook_refuses_every_callback_and_processes_nothing(client, db):
+def test_the_webhook_refuses_unsigned_callbacks_and_processes_nothing(client, db):
     boss = superadmin(db, "boss")
+    # No signing secret saved: nothing can be verified, SoncoPay is asked to retry later.
+    waiting = client.post(WEBHOOK, content=b'{"event":"payment.paid","data":{}}',
+                          headers={"Content-Type": "application/json"})
+    assert waiting.status_code == 503
     save_test_credentials(client, boss)
     assert put(client, boss, enabled=True).status_code == 200
     before = snapshot(db)
-    for body, headers in ((b'{"event":"payment.succeeded","amount":100}', {"Content-Type": "application/json"}),
-                          (b"anything", {"X-Signature": "abc", "Content-Type": "text/plain"}),
+    for body, headers in ((b'{"event":"payment.paid","data":{"amount":100}}', {"Content-Type": "application/json"}),
+                          (b"anything", {"X-SoncoPay-Signature": "abc", "Content-Type": "text/plain"}),
                           (b"", {})):
         refused = client.post(WEBHOOK, content=body, headers=headers)
-        assert refused.status_code == 503 and refused.json()["code"] == "SONCOPAY_WEBHOOK_NOT_OPERATIONAL"
+        assert refused.status_code == 400 and refused.json()["detail"] == "invalid signature"
     assert client.get(WEBHOOK).status_code == 405
     assert snapshot(db) == before
 

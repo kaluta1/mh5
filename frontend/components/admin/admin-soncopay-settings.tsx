@@ -8,12 +8,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { financeErrorText } from '@/lib/finance-admin'
 import {
+  SONCOPAY_CONNECTION_TEST_URL,
   SONCOPAY_SETTINGS_URL,
   describeChanges,
+  describeConnectionTest,
   describeCredential,
   draftFrom,
   draftProblems,
   settingsChanges,
+  type CheckoutProvider,
+  type SoncoPayConnectionTest,
   type SoncoPayCredentialStatus,
   type SoncoPayDraft,
   type SoncoPayEnvironment,
@@ -48,13 +52,15 @@ type SecretField = 'testApiKey' | 'testWebhookSecret' | 'liveApiKey' | 'liveWebh
 /**
  * Finance & Payments > SoncoPay Configuration: customer payment collection.
  *
- * One form: on/off, Test/Live, and the API key and webhook signing secret of
- * each environment. Keys and secrets are write-only: the server stores them
+ * One form: on/off, Test/Live, the default customer checkout, and the API key
+ * and webhook signing secret of each environment. Keys and secrets are write-only: the server stores them
  * encrypted and never sends a saved value back, so these fields always start
  * empty and a blank field keeps what is saved. Every change is authorized and
  * validated on the server (a Super Admin, plus the current password) and
  * audited without secret values. An administrator who may only view sees the
  * same form, read-only. NOWPayments checkout and payouts are not affected.
+ * The connection test (a Super Admin) reads SoncoPay with the saved key; it
+ * creates nothing and never shows the key.
  */
 export default function AdminSoncoPaySettings() {
   const [view, setView] = useState<SoncoPaySettingsView | null>(null)
@@ -64,6 +70,8 @@ export default function AdminSoncoPaySettings() {
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<SoncoPayConnectionTest | null>(null)
 
   const show = (data: SoncoPaySettingsView) => {
     setView(data)
@@ -134,6 +142,17 @@ export default function AdminSoncoPaySettings() {
     setBusy(false)
   }
 
+  const testEnvironment: SoncoPayEnvironment = view.environment
+  const runConnectionTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    setError('')
+    const res = await api.post(SONCOPAY_CONNECTION_TEST_URL, { environment: testEnvironment })
+    if (res.status === 200) setTestResult(res.data)
+    else setError(financeErrorText(res, 'The connection test could not be run.'))
+    setTesting(false)
+  }
+
   const secretInput = (field: SecretField, name: string, label: string, help: string) => {
     const status = credential(name)
     return (
@@ -165,10 +184,11 @@ export default function AdminSoncoPaySettings() {
           </p>
         </div>
 
-        <div role="status" data-testid="soncopay-not-operational"
-          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
-          SoncoPay checkout and webhooks are not active yet: members cannot pay with SoncoPay and callbacks are refused
-          until the integration is completed from SoncoPay&apos;s API documentation.
+        <div role="status" data-testid="soncopay-checkout-state"
+          className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100">
+          {view.default_provider_in_force === 'soncopay'
+            ? `New member payments use SoncoPay (${view.environment === 'live' ? 'Live' : 'Test'}). Payments already started keep their own gateway.`
+            : 'New member payments use NOWPayments. Payments already started keep their own gateway.'}
         </div>
 
         {!view.encryption_key_configured && (
@@ -191,9 +211,10 @@ export default function AdminSoncoPaySettings() {
               className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${view.enabled ? BADGE.ok : BADGE.missing}`}>
               {view.enabled ? 'Currently on' : 'Currently off'}
             </span>
-            <p id="soncopay-enabled-help" className="w-full text-xs text-gray-500">
-              Needs the API key and webhook signing secret of the selected environment.
-            </p>
+            {problems.enabled ? <FieldError id="soncopay-enabled-help" text={problems.enabled} />
+              : <p id="soncopay-enabled-help" className="w-full text-xs text-gray-500">
+                  Needs the API key and webhook signing secret of the selected environment.
+                </p>}
           </div>
 
           <div className="space-y-1">
@@ -208,16 +229,21 @@ export default function AdminSoncoPaySettings() {
 
           <div className="space-y-1">
             <label htmlFor="soncopay-default" className="block text-sm font-medium">Default customer checkout</label>
-            <select id="soncopay-default" className={inputClass} value={view.default_provider_in_force} disabled>
+            <select id="soncopay-default" className={inputClass} value={draft.defaultProvider}
+              disabled={busy || !canChange} aria-invalid={!!problems.defaultProvider}
+              aria-describedby="soncopay-default-help"
+              onChange={(e) => set({ defaultProvider: e.target.value as CheckoutProvider })}>
               {view.checkout_providers.map((p) => (
                 <option key={p.provider} value={p.provider} disabled={!p.available}>
-                  {p.label}{p.available ? '' : ' (not available yet)'}
+                  {p.label}{p.available ? '' : ' (not available)'}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-500">
-              NOWPayments stays the checkout until SoncoPay checkout is completed and the cutover is approved.
-            </p>
+            {problems.defaultProvider ? <FieldError id="soncopay-default-help" text={problems.defaultProvider} />
+              : <p id="soncopay-default-help" className="text-xs text-gray-500">
+                  SoncoPay can be chosen while it is on and the selected environment&apos;s key and secret are saved.
+                  In force now: {view.default_provider_in_force === 'soncopay' ? 'SoncoPay' : 'NOWPayments'}.
+                </p>}
           </div>
 
           {switchingToLive && (
@@ -256,13 +282,23 @@ export default function AdminSoncoPaySettings() {
           </div>
 
           <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
-            <Button type="button" variant="outline" disabled={!view.connection_test.available}
-              data-testid="soncopay-connection-test">
-              Connection Test
+            <Button type="button" variant="outline" data-testid="soncopay-connection-test"
+              disabled={!view.connection_test.available || !canChange || testing || busy}
+              onClick={() => void runConnectionTest()}>
+              {testing ? 'Testing…' : `Connection Test (${testEnvironment === 'live' ? 'Live' : 'Test'})`}
             </Button>
             {!view.connection_test.available && view.connection_test.reason && (
               <span className="text-xs text-gray-500">{view.connection_test.reason}</span>
             )}
+            {testResult && (
+              <span data-testid="soncopay-connection-result" role="status"
+                className={`text-xs ${testResult.ok ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400'}`}>
+                {describeConnectionTest(testResult)}
+              </span>
+            )}
+            <span className="w-full text-xs text-gray-500">
+              Reads SoncoPay with the saved key of the environment in use. Nothing is created or charged.
+            </span>
           </div>
 
           {canChange && (

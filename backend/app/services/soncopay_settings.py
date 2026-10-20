@@ -8,9 +8,10 @@ Settings, all saved with ONE form:
   * SoncoPay on/off and its environment (Test or Live), in
     checkout_gateway_settings (one row). No row = off, Test.
   * The default customer checkout gateway (NOWPayments or SoncoPay). No row =
-    NOWPayments. SoncoPay cannot be made the default until its checkout is
-    implemented (CHECKOUT_IMPLEMENTED); NOWPayments checkout is never switched
-    off from here.
+    NOWPayments. SoncoPay is used for a NEW payment only while it is on and
+    the environment in use has a readable API key and signing secret (see
+    checkout_environment); otherwise NOWPayments. A payment keeps the gateway
+    it was created with. NOWPayments checkout is never switched off from here.
   * An API key and a webhook signing secret PER ENVIRONMENT, stored ONLY as
     AES-256-GCM ciphertext in payment_credentials (provider "soncopay") with
     the dedicated PAYMENT_SETTINGS_ENCRYPTION_KEY and a purpose of their own
@@ -29,11 +30,9 @@ credentials or the payout engine. Changing these settings can never change
 NOWPayments checkout or automatic commission payouts. SoncoPay is used for
 customer payment collection only: no payout permission exists for it.
 
-The SoncoPay webhook is NOT operational: its signature scheme is not yet
-confirmed by SoncoPay's documentation, so every callback is refused
-(WEBHOOK_OPERATIONAL) and no payment event is processed. There is no
-connection test either (CONNECTION_TEST_AVAILABLE) until a documented,
-side-effect-free endpoint is known.
+Checkout, webhook and status reading are in app.services.soncopay_payments
+(the API in app.services.soncopay_client). The connection test reads GET
+/v1/methods, which has no side effect.
 """
 from __future__ import annotations
 
@@ -63,13 +62,13 @@ _PURPOSE = "mh5-payments:soncopay-credential:"
 VIEW_PERMISSION = payment_config.PERMISSION_MANAGE
 WEBHOOK_PATH = "/api/v1/webhooks/soncopay"
 
-# What is not built yet, said in one place. Each gate opens only with the
-# implementation that makes it safe.
-CHECKOUT_IMPLEMENTED = False          # SoncoPay checkout (payment creation) exists
-WEBHOOK_OPERATIONAL = False           # verified SoncoPay webhook signatures exist
-CONNECTION_TEST_AVAILABLE = False     # a documented, side-effect-free SoncoPay endpoint is known
-NOT_DOCUMENTED = ("SoncoPay's API documentation has not been provided yet, so there is no documented "
-                  "endpoint to test against.")
+# What is built, said in one place (all three implemented 2026-10-21 against the
+# official API v1 documentation). Turning one back to False closes it again.
+CHECKOUT_IMPLEMENTED = True           # SoncoPay checkout (payment creation, app.services.soncopay_payments)
+WEBHOOK_OPERATIONAL = True            # timestamped signatures verified (app.services.soncopay_payments)
+CONNECTION_TEST_AVAILABLE = True      # GET /v1/methods: documented, no side effect
+NOT_DOCUMENTED = "The connection test is not available."
+KEY_PREFIX = {"test": "sp_test_", "live": "sp_live_"}
 
 # Switching to the Live environment is said on purpose.
 CONFIRM_LIVE = "USE SONCOPAY LIVE"
@@ -162,10 +161,10 @@ def _state(row: Optional[CheckoutGatewaySettings]) -> Dict[str, Any]:
 
 
 def default_checkout_provider(db: Session) -> str:
-    """The gateway new customer checkouts use by default. NOWPayments unless
-    SoncoPay checkout exists, is on and was chosen (fail closed to NOWPayments)."""
+    """The gateway new customer checkouts use. NOWPayments unless SoncoPay was
+    chosen AND can take a payment now (fail closed to NOWPayments)."""
     state = _state(_row(db))
-    if state["default_provider"] == PROVIDER and CHECKOUT_IMPLEMENTED and state["enabled"]:
+    if state["default_provider"] == PROVIDER and checkout_environment(db):
         return PROVIDER
     return NOWPAYMENTS
 
@@ -190,6 +189,10 @@ def _clean(spec: CredentialSpec, value: Any) -> str:
     if len(text) < spec.min_length or len(text) > 512:
         raise SoncoPaySettingsError("INVALID_VALUE", f"{spec.label}: the value is too short or too long.",
                                     field=spec.name)
+    if spec.kind == "api_key" and not text.startswith(KEY_PREFIX[spec.environment]):
+        # A Live key saved as the Test key (or the reverse) would mix real and test money.
+        raise SoncoPaySettingsError("INVALID_VALUE", f"{spec.label}: a SoncoPay {spec.environment.title()} key "
+                                                     f"starts with {KEY_PREFIX[spec.environment]}.", field=spec.name)
     return text
 
 
@@ -204,9 +207,42 @@ def _environment_ready(stored: Dict[str, PaymentCredential], environment: str) -
     """Why this environment's credentials cannot be used (None when they can)."""
     for kind in ("api_key", "webhook_secret"):
         spec = CREDENTIALS[credential_name(environment, kind)]
-        if not _decrypt(stored.get(spec.name)):
+        value = _decrypt(stored.get(spec.name))
+        if not value:
             return f"Save the {spec.label} first."
+        if kind == "api_key" and not value.startswith(KEY_PREFIX[environment]):
+            return f"The saved {spec.label} does not start with {KEY_PREFIX[environment]}: save the right key."
     return None
+
+
+def api_key(db: Session, environment: str) -> Optional[str]:
+    """The API key of one environment, for the server-side SoncoPay client only. Never returned to a browser."""
+    if environment not in ENVIRONMENTS:
+        return None
+    value = _decrypt(_stored(db).get(credential_name(environment, "api_key")))
+    return value if value and value.startswith(KEY_PREFIX[environment]) else None
+
+
+def webhook_secrets(db: Session) -> Dict[str, str]:
+    """The signing secret of each environment that has one: {"test": ..., "live": ...}."""
+    stored = _stored(db)
+    out: Dict[str, str] = {}
+    for environment in ENVIRONMENTS:
+        value = _decrypt(stored.get(credential_name(environment, "webhook_secret")))
+        if value:
+            out[environment] = value
+    return out
+
+
+def checkout_environment(db: Session) -> Optional[str]:
+    """The environment a NEW SoncoPay payment would use, or None when SoncoPay must not
+    take new payments (off, not implemented, or that environment not ready)."""
+    if not CHECKOUT_IMPLEMENTED:
+        return None
+    state = _state(_row(db))
+    if not state["enabled"] or _environment_ready(_stored(db), state["environment"]):
+        return None
+    return state["environment"]
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +387,12 @@ def update(db: Session, actor, *, password: Optional[str], enabled: Optional[boo
         if new_default == PROVIDER and not CHECKOUT_IMPLEMENTED:
             raise refuse("CHECKOUT_NOT_AVAILABLE", "SoncoPay cannot be the default checkout yet: its checkout is "
                                                    "not implemented.", FIELD_DEFAULT)
+        if new_default == PROVIDER:
+            problem = _environment_ready(stored, new_environment)
+            if not new_enabled or problem:
+                reason = problem or "Switch SoncoPay on first."
+                raise refuse("NOT_READY", "SoncoPay can be the default checkout only while it is on and the "
+                                          f"{new_environment.title()} key and secret are saved. {reason}", FIELD_DEFAULT)
         changed.append(FIELD_DEFAULT)
     if new_default == PROVIDER and not new_enabled:
         raise refuse("DEFAULT_PROVIDER_OFF", "SoncoPay is the default checkout: make NOWPayments the default "

@@ -160,13 +160,17 @@ class PaymentScheduler:
             db.close()
 
     async def _check_single_payment(self, db: Session, deposit_id: int) -> str:
-        """Poll NOWPayments for one deposit and apply its answer. Commits."""
+        """Ask the deposit's own gateway about one deposit and apply its answer. Commits."""
         from app.services.nowpayments_service import get_payment_status
+        from app.services import soncopay_payments
 
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
         if deposit is None or not deposit.external_payment_id or deposit.status not in POLLED_STATUSES:
             db.rollback()
             return "SKIPPED"
+        if soncopay_payments.is_soncopay(deposit):
+            # SoncoPay decides expiry itself (and accepts a payment up to 24 h late).
+            return await soncopay_payments.reconcile_one(db, deposit_id)
         payment_id = str(deposit.external_payment_id)
         db.rollback()                                   # no transaction is held while waiting
         try:
@@ -217,6 +221,15 @@ async def check_payment_now(db: Session, deposit_id: int) -> dict:
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         return {"error": "Deposit not found", "status": None}
+
+    from app.services import soncopay_payments
+
+    if soncopay_payments.is_soncopay(deposit):
+        if deposit.external_payment_id and deposit.status in POLLED_STATUSES:
+            await soncopay_payments.reconcile_one(db, deposit_id)
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
+        return {"status": deposit.status.value, "payment_status": deposit.provider_status or deposit.status.value,
+                "is_confirmed": deposit.status == DepositStatus.VALIDATED}
 
     if deposit.external_payment_id and deposit.status in POLLED_STATUSES:
         payment_id = str(deposit.external_payment_id)

@@ -164,6 +164,16 @@ class Deposit(Base):
 
     # Stamped once at creation (NULL = legacy/pre-cutover). Decides which business model applies.
     business_model_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # The gateway that collects this deposit, fixed at creation and never changed:
+    # NULL or "nowpayments" = NOWPayments (every deposit created before SoncoPay),
+    # "soncopay" = SoncoPay. A later change of the default gateway never moves a deposit.
+    payment_provider: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # SoncoPay: "test" or "live", the key that created the payment (and that reads it).
+    provider_environment: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    provider_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)   # provider's own word
+    provider_checkout_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    provider_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Relations
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], backref="deposits")

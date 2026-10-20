@@ -339,6 +339,9 @@ def finalize_deposit_from_nowpayments(
 ) -> bool:
     """Apply provider payload and run business validation when payment is finished."""
     provider_status = str(payload.get("payment_status") or payload.get("status") or "").lower()
+    if str(getattr(deposit, "payment_provider", "") or "") == "soncopay":
+        # A SoncoPay deposit is never confirmed (or refunded) by a NOWPayments answer.
+        raise FinancialIntegrityError("This deposit is collected by SoncoPay, not NOWPayments")
     validate_provider_payment_identity(deposit, payload)
     if provider_status == "refunded":
         from app.services.financial_reversal import reverse_provider_refund

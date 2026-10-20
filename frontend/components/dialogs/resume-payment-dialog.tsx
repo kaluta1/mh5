@@ -17,10 +17,12 @@ import {
   Loader2,
   CreditCard,
   CheckCircle2,
-  Clock
+  Clock,
+  ExternalLink
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { isSoncoPay, paymentStateText, safeCheckoutUrl, type PaymentState } from '@/lib/payment-gateway'
 
 interface ResumePaymentDialogProps {
   open: boolean
@@ -43,6 +45,10 @@ interface PaymentDetails {
   order_id: string
   actually_paid?: string
   is_confirmed: boolean
+  /** soncopay: the member continues on checkout_url (no address to show). */
+  provider?: 'nowpayments' | 'soncopay'
+  checkout_url?: string | null
+  payment_state?: PaymentState
 }
 
 export function ResumePaymentDialog({
@@ -112,6 +118,9 @@ export function ResumePaymentDialog({
           t('payment.creation_failed') ||
             'This payment could not be created. Please start a new checkout from the wallet page.'
         )
+      } else if (isSoncoPay(data)) {
+        setPaymentDetails(data)
+        setStatusMessage(paymentStateText(data.payment_state))
       } else if (!data.pay_address?.trim()) {
         setError(
           t('payment.no_payment_id') ||
@@ -164,6 +173,12 @@ export function ResumePaymentDialog({
       } else if (data.status === 'expired') {
         setError(t('payment.payment_expired') || 'Payment Expired')
         stopPolling()
+      } else if (isSoncoPay(data)) {
+        setStatusMessage(paymentStateText(data.payment_state))
+        if (data.status === 'failed') {
+          setError(paymentStateText('failed'))
+          stopPolling()
+        }
       } else if (data.payment_status === 'partially_paid') {
         setStatusMessage(t('payment.partially_paid') || 'Partially Paid')
       } else if (data.payment_status === 'waiting') {
@@ -273,7 +288,52 @@ export function ResumePaymentDialog({
           </div>
         )}
 
-        {!isLoading && !error && !paymentConfirmed && paymentDetails && (
+        {!isLoading && !error && !paymentConfirmed && paymentDetails && isSoncoPay(paymentDetails) && (
+          <div className="space-y-3 sm:space-y-4" data-testid="resume-soncopay">
+            <div className="bg-myhigh5-primary/5 dark:bg-myhigh5-primary/10 rounded-xl p-3 sm:p-4 text-center border border-myhigh5-primary/20">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">
+                {t('payment.amount_to_pay') || 'Amount to pay'}
+              </p>
+              <p className="text-xl sm:text-2xl font-bold text-myhigh5-primary">
+                ${paymentDetails.price_amount.toFixed(2)} USD
+              </p>
+            </div>
+            {safeCheckoutUrl(paymentDetails.checkout_url) ? (
+              <a href={safeCheckoutUrl(paymentDetails.checkout_url) as string} target="_blank" rel="noopener noreferrer"
+                data-testid="resume-soncopay-link"
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-myhigh5-primary px-4 py-2 text-sm font-medium text-white hover:bg-myhigh5-primary/90">
+                {t('payment.continue_to_soncopay') || 'Continue to the secure payment page'}
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            ) : (
+              <p className="text-sm text-red-700 dark:text-red-300">
+                {t('payment.checkout_unavailable') || 'The payment page is not available. Please try again in a few minutes.'}
+              </p>
+            )}
+            <div className="text-center text-[10px] sm:text-xs text-gray-500 truncate">
+              {t('payment.order_id') || 'Reference'}: {paymentDetails.order_id}
+            </div>
+            <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
+              <p className="text-[10px] sm:text-xs text-blue-700 dark:text-blue-300">
+                {statusMessage || paymentStateText(paymentDetails.payment_state)}
+              </p>
+            </div>
+            <Button onClick={checkPaymentStatus} disabled={isCheckingPayment}
+              className="w-full bg-myhigh5-primary hover:bg-myhigh5-primary/90 text-sm sm:text-base">
+              {isCheckingPayment ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {t('payment.checking') || 'Checking...'}
+                </>
+              ) : (
+                t('payment.check_status') || 'Check status'
+              )}
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !error && !paymentConfirmed && paymentDetails && !isSoncoPay(paymentDetails) && (
           <div className="space-y-3 sm:space-y-4">
             {/* QR Code */}
             <div className="flex justify-center">

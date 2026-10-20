@@ -19,6 +19,7 @@ from app.services.nowpayments_service import (
 )
 from app.services.financial_integrity import FinancialIntegrityError
 from app.services import payment_config
+from app.services.soncopay_payments import soncopay_filter
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -121,14 +122,14 @@ async def nowpayments_ipn(request: Request, db: Session = Depends(get_db)):
     if order_id:
         deposit = (
             db.query(Deposit)
-            .filter(Deposit.order_id == str(order_id))
+            .filter(Deposit.order_id == str(order_id), soncopay_filter())   # never a SoncoPay deposit
             .with_for_update()
             .first()
         )
     if not deposit and payment_id:
         matches = (
             db.query(Deposit)
-            .filter(Deposit.external_payment_id == payment_id)
+            .filter(Deposit.external_payment_id == payment_id, soncopay_filter())
             .with_for_update()
             .limit(2)
             .all()
