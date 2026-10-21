@@ -213,7 +213,7 @@ def test_nowpayments_stays_the_gateway_until_soncopay_is_the_ready_default(clien
                                                                            nowpayments_calls):
     db = ledger
     assert client.get("/api/v1/payments/checkout-gateway").status_code == 401
-    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {"provider": "nowpayments"}
+    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {"provider": "nowpayments", "available": True}
     configure(db, default=False)                                   # on, ready, but not the default
     created = buy(client, buyer, "k-np")
     assert created.status_code == 200, created.text
@@ -226,7 +226,7 @@ def test_nowpayments_stays_the_gateway_until_soncopay_is_the_ready_default(clien
 def test_a_new_payment_goes_to_soncopay_when_it_is_the_ready_default(client, ledger, fake, buyer, nowpayments_calls):
     db = ledger
     configure(db)
-    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {"provider": "soncopay"}
+    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {"provider": "soncopay", "available": True}
     created, dep = soncopay_purchase(client, db, fake, buyer)
     body = created.json()
     assert body["provider"] == "soncopay" and body["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}"

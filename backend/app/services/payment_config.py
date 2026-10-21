@@ -269,9 +269,14 @@ _FIELDS: List[Field] = [
     # ---- provider ------------------------------------------------------------
     Field("provider_display_name", "provider", "text", "Provider display name",
           "Name shown for the crypto payment provider.", _const("NOWPayments"), max_length=80),
-    Field("provider_enabled", "provider", "bool", "Provider enabled",
-          "When off, no new crypto payment is created and no payout is sent. Callbacks for payments "
-          "that already exist are still processed.", _const(True)),
+    Field("provider_enabled", "provider", "bool", "Provider enabled (emergency stop)",
+          "Master switch for NOWPayments in both directions. When off, no new NOWPayments payment is "
+          "created and no payout is sent. Callbacks and status checks for payments that already exist "
+          "are still processed.", _const(True)),
+    Field("checkout_enabled", "provider", "bool", "NOWPayments checkout (new member payments)",
+          "Incoming payments only. When off, members cannot start a new NOWPayments payment; automatic "
+          "commission payouts are not affected. Existing payments, callbacks and status checks continue. "
+          "A new payment also needs the provider switch above to be on.", _const(True)),
     Field("payin_credential_source", "provider", "choice", "Pay-in credential source",
           "Where the pay-in API key and the IPN secret are read from.", _const(SOURCE_ENVIRONMENT),
           choices=(SOURCE_ENVIRONMENT, SOURCE_DATABASE)),
@@ -415,6 +420,7 @@ GROUPS = ("provider", "crypto", "security", "usd")
 class PaymentConfig:
     provider_display_name: str
     provider_enabled: bool
+    checkout_enabled: bool
     payin_credential_source: str
     payout_credential_source: str
     crypto_cashout_enabled: bool
@@ -510,6 +516,12 @@ class PaymentConfig:
         if self.suspended_reason:
             return "PAYOUTS_SUSPENDED"
         return self.fee_rules_gate()
+
+    @property
+    def checkout_allowed(self) -> bool:
+        """A NEW NOWPayments checkout may be created: the provider (master emergency stop) AND checkout on.
+        Payouts never read this."""
+        return bool(self.provider_enabled and self.checkout_enabled)
 
     @property
     def auto_payout_allowed(self) -> bool:
@@ -741,6 +753,8 @@ def activation_required(current: Dict[str, Any], changed: Dict[str, Any]) -> Lis
     out: List[Tuple[str, str]] = []
     if changed.get("crypto_auto_payout_enabled") is True:
         out.append(("crypto_auto_payout_enabled", "switch automatic payouts on"))
+    if changed.get("checkout_enabled") is True:
+        out.append(("checkout_enabled", "switch NOWPayments checkout on"))
     if changed.get("usd_settlement_enabled") is True:
         out.append(("usd_settlement_enabled", "switch USD settlement on"))
     if changed.get("fee_terms_approved") is True:
@@ -1325,9 +1339,16 @@ class PayinRuntime:
     provider_enabled: bool
     source: str
     api_key: Optional[str]
+    # NOWPayments checkout switch (default on: an older caller keeps today's behaviour).
+    checkout_enabled: bool = True
+
+    @property
+    def checkout_allowed(self) -> bool:
+        return bool(self.provider_enabled and self.checkout_enabled)
 
     def __repr__(self) -> str:
-        return f"PayinRuntime(enabled={self.provider_enabled}, source={self.source}, key={'set' if self.api_key else 'none'})"
+        return (f"PayinRuntime(enabled={self.provider_enabled}, checkout={self.checkout_enabled}, "
+                f"source={self.source}, key={'set' if self.api_key else 'none'})")
 
 
 _RUNTIME_TTL_SECONDS = 30.0
@@ -1347,7 +1368,12 @@ def invalidate_runtime() -> None:
 def build_payin_runtime(db: Session) -> PayinRuntime:
     config = load(db)
     return PayinRuntime(config.provider_enabled, config.payin_credential_source,
-                        resolve_credentials(db, config).get("PAYIN_API_KEY"))
+                        resolve_credentials(db, config).get("PAYIN_API_KEY"), config.checkout_enabled)
+
+
+def nowpayments_checkout_available(db: Session) -> bool:
+    """A NEW NOWPayments checkout may be created now (read from the database, never from a cache)."""
+    return load(db).checkout_allowed
 
 
 def payin_runtime() -> PayinRuntime:
@@ -1692,8 +1718,8 @@ def activation_view(config: PaymentConfig) -> dict:
     return {
         "permission": PERMISSION_ACTIVATE,
         # setting -> the value that activates
-        "values": {"crypto_auto_payout_enabled": True, "usd_settlement_enabled": True, "fee_terms_approved": True,
-                   "provider_fee_mode": FEE_MODE_DEDUCTED},
+        "values": {"crypto_auto_payout_enabled": True, "checkout_enabled": True, "usd_settlement_enabled": True,
+                   "fee_terms_approved": True, "provider_fee_mode": FEE_MODE_DEDUCTED},
         "automatic_payouts_on": bool(config.crypto_auto_payout_enabled),
         "while_automatic_payouts_on": {"fields": list(LIVE_PAYOUT_FIELDS), "switches": list(LIVE_PAYOUT_SWITCHES),
                                        "credential_group": "payout"},
@@ -1748,6 +1774,8 @@ def provider_view(db: Session) -> dict:
         "provider": PROVIDER,
         "display_name": config.provider_display_name,
         "enabled": config.provider_enabled,
+        "checkout_enabled": config.checkout_enabled,
+        "checkout_available": config.checkout_allowed,
         "environment": "sandbox" if settings.NOWPAYMENTS_SANDBOX else "production",
         "environment_editable": False,
         "payin_status": "CONFIGURED" if all(in_use[n] for n in PAYIN_CREDENTIALS) else "NOT CONFIGURED",
@@ -1813,6 +1841,13 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
         todo.append("Switch the provider on in Payment Providers.")
     else:
         item("provider", "Provider", "CONFIGURED", "The provider is switched on.")
+    if config.checkout_allowed:
+        item("checkout", "NOWPayments checkout", "CONFIGURED", "Members can start new NOWPayments payments.")
+    else:
+        item("checkout", "NOWPayments checkout", "DISABLED",
+             "No new NOWPayments payment can be started" + ("" if config.checkout_enabled
+                                                           else " (checkout is switched off)") + ". "
+             "Existing payments and automatic payouts are not affected by this switch.")
 
     state = _check_state(in_use["PAYIN_API_KEY"], codes.get("payin_api_key"))
     item("api_authentication", "API authentication (pay-in key)", state,

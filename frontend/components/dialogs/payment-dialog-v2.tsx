@@ -54,7 +54,10 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
-import { isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl, type CheckoutGateway } from '@/lib/payment-gateway'
+import {
+  CHECKOUT_UNAVAILABLE_TEXT, CheckoutUnavailableError, isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl,
+  type CheckoutAvailability,
+} from '@/lib/payment-gateway'
 
 interface PaymentMethod {
   id: string
@@ -169,13 +172,19 @@ export function PaymentDialog({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [payCurrencies, setPayCurrencies] = useState<string[]>(['usdtbsc'])
   const [loadingCurrencies, setLoadingCurrencies] = useState(false)
-  // The gateway of a NEW payment, decided by the server (NOWPayments unless SoncoPay is the ready default).
-  const [gateway, setGateway] = useState<CheckoutGateway>('nowpayments')
+  // The gateway of a NEW payment, decided by the server: SoncoPay when it is the ready default, NOWPayments
+  // while its checkout is on, otherwise none ('unavailable'). 'checking' until the server answers: nothing is
+  // offered before the server confirms a gateway (fail closed).
+  const [gateway, setGateway] = useState<CheckoutAvailability | 'checking'>('checking')
 
   useEffect(() => {
     if (!open) return
+    setGateway('checking')
     const token = localStorage.getItem('access_token')
-    if (!token) return
+    if (!token) {
+      setGateway('unavailable')
+      return
+    }
     let cancelled = false
     void paymentService.getCheckoutGateway(token).then((g) => { if (!cancelled) setGateway(g) })
     return () => { cancelled = true }
@@ -247,7 +256,7 @@ export function PaymentDialog({
 
   // Load NOWPayments pay currencies on method step (SoncoPay offers its methods on its own page)
   useEffect(() => {
-    if (!open || step !== 'method' || gateway === 'soncopay') return
+    if (!open || step !== 'method' || gateway !== 'nowpayments') return
 
     const token = localStorage.getItem('access_token')
     if (!token) return
@@ -400,6 +409,8 @@ export function PaymentDialog({
   // Handle method selection and create payment
   const handleMethodSelect = async (methodId: string, payCurrency = 'usdtbsc') => {
     if (isLoading) return
+    // Only a gateway the server confirmed may take a payment (the server checks again at creation).
+    if (gateway !== 'nowpayments' && gateway !== 'soncopay') return
     setSelectedMethod(methodId)
     setPaymentError(null)
 
@@ -418,6 +429,14 @@ export function PaymentDialog({
       const token = localStorage.getItem('access_token')
       if (!token) {
         setPaymentError(t('common.login_required') || 'Login Required')
+        return
+      }
+
+      // Asked again now: a switch may have moved while the dialog was open, or this handler may run from a
+      // stale render. Nothing is created unless the server confirms the same gateway the member chose.
+      const confirmed = await paymentService.getCheckoutGateway(token)
+      if (confirmed !== gateway) {
+        setGateway(confirmed)
         return
       }
 
@@ -460,6 +479,11 @@ export function PaymentDialog({
       setPayment(paymentOrder)
       setStep('payment')
     } catch (error) {
+      if (error instanceof CheckoutUnavailableError) {
+        // The server refused: no gateway can take a new payment now. Say so and offer nothing.
+        setGateway('unavailable')
+        return
+      }
       logger.error('Payment creation error', error)
       setPaymentError(error instanceof Error ? error.message : 'Error creating the payment')
     } finally {
@@ -880,6 +904,24 @@ export function PaymentDialog({
                 </div>
               )}
 
+              {/* Waiting for the server to say which gateway takes the payment: offer nothing yet */}
+              {!isLoading && gateway === 'checking' && (
+                <div data-testid="checkout-checking" className="flex items-center justify-center py-6">
+                  <Loader2 className="w-6 h-6 animate-spin text-myhigh5-primary" />
+                </div>
+              )}
+
+              {/* No gateway can take a new payment: say so, offer nothing */}
+              {!isLoading && gateway === 'unavailable' && (
+                <div role="status" data-testid="checkout-unavailable"
+                  className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    {t('payment.checkout_unavailable_now') || CHECKOUT_UNAVAILABLE_TEXT}
+                  </p>
+                </div>
+              )}
+
               {/* SoncoPay: one choice; the methods are offered on SoncoPay's secure page */}
               {!isLoading && gateway === 'soncopay' && (
                 <button
@@ -903,7 +945,7 @@ export function PaymentDialog({
               )}
 
               {/* Methods */}
-              {!isLoading && gateway !== 'soncopay' && (
+              {!isLoading && gateway === 'nowpayments' && (
                 <>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide font-medium">

@@ -1,10 +1,12 @@
 """
 Payment API Endpoints — member checkout through NOWPayments or SoncoPay.
 
-The gateway of a NEW payment is soncopay_settings.default_checkout_provider
-(NOWPayments unless a Super Admin made SoncoPay the default and it can take a
-payment now). It is written on the deposit and never changes: every later read
-of that deposit (sync, check, scheduler, webhook) uses the same gateway.
+The gateway of a NEW payment is checkout_routing.new_payment_gateway: SoncoPay
+when it is the ready default, otherwise NOWPayments while its checkout is
+allowed, otherwise none (the member is told payments are unavailable; no
+deposit is created). It is written on the deposit and never changes: every
+later read of that deposit (sync, check, scheduler, webhook) uses the same
+gateway, whatever the switches say.
 """
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -21,7 +23,7 @@ import logging
 from app.api import deps
 from app.models.user import User
 from app.models.payment import Deposit, DepositStatus, ProductType
-from app.services import kyc_fee, soncopay_payments, soncopay_settings
+from app.services import checkout_routing, kyc_fee, soncopay_payments, soncopay_settings
 from app.services.soncopay_client import SoncoPayError
 from app.services.nowpayments_service import (
     NowPaymentsError,
@@ -46,6 +48,7 @@ router = APIRouter()
 
 _SYNCABLE_DEPOSIT_STATUSES = (DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID)
 PAYMENT_PROVIDER_UNAVAILABLE = "The payment provider could not process this request. Please try again in a few minutes."
+CHECKOUT_UNAVAILABLE = {"code": "CHECKOUT_UNAVAILABLE", "message": checkout_routing.UNAVAILABLE_MESSAGE}
 
 
 def _should_sync_deposit_with_provider(deposit: Deposit) -> bool:
@@ -151,8 +154,12 @@ async def checkout_gateway(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Which gateway a new payment uses now, so the payment dialog shows the right step."""
-    return {"provider": soncopay_settings.default_checkout_provider(db)}
+    """Which gateway a new payment uses now, so the payment dialog shows the right step.
+    "none" (available false) when no gateway can take a new payment."""
+    gateway = checkout_routing.new_payment_gateway(db)
+    if gateway is None:
+        return {"provider": "none", "available": False, "message": checkout_routing.UNAVAILABLE_MESSAGE}
+    return {"provider": gateway, "available": True}
 
 
 # Recipient confirmation in the purchase dialog. A signed-in member may check
@@ -298,6 +305,12 @@ async def create_payment(
             raise HTTPException(status_code=409, detail="Payment creation is already in progress")
         return _stored_payment_response(existing)
 
+    # No gateway can take a NEW payment: refused before anything is created or any provider is contacted
+    # (no deposit, no seat, no KYC lock). An idempotent replay above is answered as before.
+    if checkout_routing.new_payment_gateway(db) is None:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
+
     # Child/Teen Safety Phase 10: a NEW payment (deposit row, seat reservation,
     # provider invoice) only for a member the central gate allows. An idempotent
     # replay above creates nothing new and is answered as before.
@@ -327,11 +340,12 @@ async def create_payment(
             db.rollback()
             raise HTTPException(status_code=409, detail={"code": refusal[0], "message": refusal[1]})
 
-    # The gateway is chosen ONCE, here, and stays with the deposit.
-    gateway = soncopay_settings.default_checkout_provider(db)
+    # The gateway is chosen ONCE, here, and stays with the deposit (decided again: a switch may have moved).
+    gateway = checkout_routing.new_payment_gateway(db)
     environment = soncopay_settings.checkout_environment(db) if gateway == "soncopay" else None
-    if gateway == "soncopay" and environment is None:
-        gateway = "nowpayments"                       # fail closed: SoncoPay stopped being ready meanwhile
+    if gateway is None or (gateway == "soncopay" and environment is None):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
     deposit = Deposit(
         user_id=current_user.id,
         product_type_id=product.id,

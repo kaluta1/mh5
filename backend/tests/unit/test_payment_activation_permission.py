@@ -101,7 +101,7 @@ def test_the_panel_is_told_who_may_activate_and_the_activation_permission_alone_
     }
     view = client.get(SETTINGS_URL, headers=auth(admins["none"])).json()["activation"]
     assert view["permission"] == ACTIVATE and view["automatic_payouts_on"] is False
-    assert view["values"] == {"crypto_auto_payout_enabled": True, "usd_settlement_enabled": True,
+    assert view["values"] == {"crypto_auto_payout_enabled": True, "checkout_enabled": True, "usd_settlement_enabled": True,
                               "fee_terms_approved": True, "provider_fee_mode": "DEDUCTED_BY_PROVIDER"}
     assert view["while_automatic_payouts_on"] == {"fields": list(pc.LIVE_PAYOUT_FIELDS),
                                                   "switches": list(pc.LIVE_PAYOUT_SWITCHES),

@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl } from './payment-gateway'
+import { isFinalState, isSoncoPay, parseCheckoutGateway, paymentStateText, safeCheckoutUrl } from './payment-gateway'
 
 describe('lib/payment-gateway', () => {
+  it('reads a gateway only from an explicit available answer', () => {
+    expect(parseCheckoutGateway({ provider: 'nowpayments', available: true })).toBe('nowpayments')
+    expect(parseCheckoutGateway({ provider: 'soncopay', available: true })).toBe('soncopay')
+    for (const bad of [null, undefined, '', 'soncopay', 0, [], {}, { provider: 'nowpayments' },
+      { provider: 'nowpayments', available: false }, { provider: 'none', available: false },
+      { provider: 'none', available: true }, { provider: 'NOWPAYMENTS', available: true },
+      { provider: 'soncopay', available: 'yes' }]) {
+      expect(parseCheckoutGateway(bad)).toBe('unavailable')
+    }
+  })
+
   it('opens only an https page on SoncoPay', () => {
     expect(safeCheckoutUrl('https://soncopay.com/pay/pay_3f9a5c0d21e4b7a6c8d1'))
       .toBe('https://soncopay.com/pay/pay_3f9a5c0d21e4b7a6c8d1')

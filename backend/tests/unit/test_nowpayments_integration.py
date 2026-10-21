@@ -1115,7 +1115,7 @@ def test_credentials_alone_are_never_shown_as_verified(db, monkeypatch):
     payout_env(monkeypatch)
     view = pc.provider_view(db)["readiness"]
     assert set(i["state"] for i in view["items"]) <= set(view["states"]) == set(pc.READINESS_STATES)
-    assert states(db) == {"provider": "CONFIGURED", "api_authentication": "CONFIGURED", "ipn": "CONFIGURED",
+    assert states(db) == {"provider": "CONFIGURED", "checkout": "CONFIGURED", "api_authentication": "CONFIGURED", "ipn": "CONFIGURED",
                           "custody": "CONFIGURED", "ip_whitelist": "UNVERIFIED", "payout_login": "CONFIGURED",
                           "payout_2fa": "CONFIGURED", "automatic_payouts": "DISABLED",
                           "network_fee_terms": "UNVERIFIED"}
@@ -1125,7 +1125,7 @@ def test_credentials_alone_are_never_shown_as_verified(db, monkeypatch):
 def test_nothing_configured_is_unverified_and_says_what_is_missing(db, monkeypatch):
     for name in ("NOWPAYMENTS_API_KEY", "NOWPAYMENTS_IPN_SECRET", *PAYOUT_ENV):
         monkeypatch.setattr(settings, name, "")
-    assert states(db) == {"provider": "CONFIGURED", "api_authentication": "UNVERIFIED", "ipn": "UNVERIFIED",
+    assert states(db) == {"provider": "CONFIGURED", "checkout": "CONFIGURED", "api_authentication": "UNVERIFIED", "ipn": "UNVERIFIED",
                           "custody": "UNVERIFIED", "ip_whitelist": "UNVERIFIED", "payout_login": "UNVERIFIED",
                           "payout_2fa": "UNVERIFIED", "automatic_payouts": "DISABLED",
                           "network_fee_terms": "UNVERIFIED"}
@@ -1139,7 +1139,7 @@ def test_a_successful_connection_test_verifies_what_it_proved_and_nothing_more(d
     logins = []
     result = pc.run_connection_test(db, admin, http=http_for(), now=NOW, login=logins.append)
     assert result["status"] == "OK" and len(logins) == 1
-    assert states(db) == {"provider": "CONFIGURED", "api_authentication": "VERIFIED", "ipn": "CONFIGURED",
+    assert states(db) == {"provider": "CONFIGURED", "checkout": "CONFIGURED", "api_authentication": "VERIFIED", "ipn": "CONFIGURED",
                           "custody": "VERIFIED", "ip_whitelist": "VERIFIED", "payout_login": "VERIFIED",
                           "payout_2fa": "CONFIGURED",                 # provable only by a real payout
                           "automatic_payouts": "DISABLED",            # the switches are off

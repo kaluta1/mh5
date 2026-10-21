@@ -4,7 +4,7 @@
  */
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { apiErrorText } from '@/lib/financial-eligibility'
-import type { CheckoutGateway, PaymentState } from '@/lib/payment-gateway'
+import { CheckoutUnavailableError, parseCheckoutGateway, type CheckoutAvailability, type CheckoutGateway, type PaymentState } from '@/lib/payment-gateway'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -93,15 +93,17 @@ class PaymentService {
     return response.json()
   }
 
-  /** The gateway a NEW payment uses now (NOWPayments when it cannot be read). */
-  async getCheckoutGateway(token: string): Promise<CheckoutGateway> {
+  /**
+   * The gateway a NEW payment uses now. Fails closed: 'unavailable' unless the server explicitly confirms a
+   * gateway (HTTP error, network failure or an unreadable answer never fall back to NOWPayments).
+   */
+  async getCheckoutGateway(token: string): Promise<CheckoutAvailability> {
     try {
       const response = await fetch(`${this.getBaseUrl()}/checkout-gateway`, { headers: this.getHeaders(token) })
-      if (!response.ok) return 'nowpayments'
-      const data = await response.json()
-      return data?.provider === 'soncopay' ? 'soncopay' : 'nowpayments'
+      if (!response.ok) return 'unavailable'
+      return parseCheckoutGateway(await response.json())
     } catch {
-      return 'nowpayments'
+      return 'unavailable'
     }
   }
 
@@ -134,6 +136,9 @@ class PaymentService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
+      if (response.status === 503 && error?.detail?.code === 'CHECKOUT_UNAVAILABLE') {
+        throw new CheckoutUnavailableError()
+      }
       throw new Error(apiErrorText(error.detail, 'Failed to create payment'))
     }
 

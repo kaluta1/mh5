@@ -11,6 +11,30 @@
 
 export type CheckoutGateway = 'nowpayments' | 'soncopay'
 
+/** What a NEW payment can use now: a gateway, or none (no silent fallback to a gateway that is off). */
+export type CheckoutAvailability = CheckoutGateway | 'unavailable'
+
+export const CHECKOUT_UNAVAILABLE_TEXT = 'Payments are temporarily unavailable. Please try again later.'
+
+/** The server refused a NEW payment because no gateway can take one now (503 CHECKOUT_UNAVAILABLE). */
+export class CheckoutUnavailableError extends Error {
+  constructor(message: string = CHECKOUT_UNAVAILABLE_TEXT) {
+    super(message)
+    this.name = 'CheckoutUnavailableError'
+  }
+}
+
+/**
+ * Reads the server's /payments/checkout-gateway answer. Fails closed: a gateway only when the server says
+ * available true AND names a known gateway; anything else (missing, malformed, 'none') is 'unavailable'.
+ */
+export function parseCheckoutGateway(data: unknown): CheckoutAvailability {
+  if (!data || typeof data !== 'object') return 'unavailable'
+  const { provider, available } = data as { provider?: unknown; available?: unknown }
+  if (available !== true) return 'unavailable'
+  return provider === 'soncopay' || provider === 'nowpayments' ? provider : 'unavailable'
+}
+
 /** The member-facing state of a SoncoPay payment, as the server reports it. */
 export type PaymentState = 'pending' | 'awaiting_confirmation' | 'paid' | 'expired' | 'failed' | 'partial' | 'refunded'
 

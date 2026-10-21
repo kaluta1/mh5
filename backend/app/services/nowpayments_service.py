@@ -400,8 +400,11 @@ async def create_payment(
 ) -> Dict[str, Any]:
     from app.services import payment_config
 
-    if not payment_config.payin_runtime().provider_enabled:
+    payin = payment_config.payin_runtime()
+    if not payin.provider_enabled:
         raise NowPaymentsError("Crypto payments are switched off (Finance & Payments > Payment Providers)")
+    if not payin.checkout_allowed:
+        raise NowPaymentsError("NOWPayments checkout is switched off (Finance & Payments > Payment Providers)")
     payload: Dict[str, Any] = {
         "price_amount": float(money(price_amount)),
         "price_currency": price_currency.lower(),

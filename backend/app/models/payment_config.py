@@ -41,6 +41,9 @@ class PaymentSettings(Base):
     # ---- provider -----------------------------------------------------------
     provider_display_name: Mapped[str] = mapped_column(String(80), nullable=False)
     provider_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # NOWPayments checkout (new member payments) only. A NEW payment needs provider_enabled AND this;
+    # payouts never read it. Added on (true) so the migration changes nothing that is in force.
+    checkout_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     # Where each credential group is read from: ENVIRONMENT or DATABASE. Never mixed.
     payin_credential_source: Mapped[str] = mapped_column(String(12), nullable=False)
     payout_credential_source: Mapped[str] = mapped_column(String(12), nullable=False)

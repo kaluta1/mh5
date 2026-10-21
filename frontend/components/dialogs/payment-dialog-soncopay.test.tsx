@@ -20,6 +20,7 @@ vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { username: 'buyer'
 vi.mock('@/services/kyc-service', () => ({ kycService: { getKycFee: vi.fn().mockResolvedValue(null) } }))
 vi.mock('@/services/payment-service', () => ({ paymentService: service }))
 
+import { CheckoutUnavailableError } from '@/lib/payment-gateway'
 import { PaymentDialog } from './payment-dialog-v2'
 import { ResumePaymentDialog } from './resume-payment-dialog'
 
@@ -87,11 +88,80 @@ describe('Payment dialog with SoncoPay as the gateway', () => {
     expect(screen.getByText(/payment page is not available/)).toBeInTheDocument()
   })
 
+  it('offers nothing and says payments are unavailable when no gateway can take a payment', async () => {
+    service.getCheckoutGateway.mockResolvedValue('unavailable')
+    await toMethodStep()
+    expect(await screen.findByTestId('checkout-unavailable')).toHaveTextContent('temporarily unavailable')
+    expect(screen.queryByTestId('pay-with-soncopay')).toBeNull()
+    expect(screen.queryByText('USDT (BSC / BEP20)')).toBeNull()
+    expect(service.getAvailableCurrencies).not.toHaveBeenCalled()      // no silent NOWPayments fallback
+    expect(service.createPayment).not.toHaveBeenCalled()
+  })
+
   it('keeps the NOWPayments currencies when NOWPayments is the gateway', async () => {
     service.getCheckoutGateway.mockResolvedValue('nowpayments')
     await toMethodStep()
     expect(await screen.findByText('USDT (BSC / BEP20)')).toBeInTheDocument()
     expect(screen.queryByTestId('pay-with-soncopay')).toBeNull()
+  })
+
+  it('offers nothing and loads no currencies until the server has confirmed a gateway', async () => {
+    service.getCheckoutGateway.mockReturnValue(new Promise(() => {}))   // the answer never arrives
+    await toMethodStep()
+    expect(await screen.findByTestId('checkout-checking')).toBeInTheDocument()
+    expect(screen.queryByTestId('pay-with-soncopay')).toBeNull()
+    expect(screen.queryByText('USDT (BSC / BEP20)')).toBeNull()
+    expect(screen.queryByTestId('checkout-unavailable')).toBeNull()
+    expect(service.getAvailableCurrencies).not.toHaveBeenCalled()
+    expect(service.createPayment).not.toHaveBeenCalled()
+  })
+
+  it('is unavailable without a session, and asks no gateway', async () => {
+    localStorage.clear()
+    render(<PaymentDialog open onOpenChange={() => {}} initialProductCode="kyc" />)
+    fireEvent.click(await screen.findByRole('button', { name: /Continuer/ }))
+    expect(await screen.findByTestId('checkout-unavailable')).toBeInTheDocument()
+    expect(service.getCheckoutGateway).not.toHaveBeenCalled()
+    expect(service.getAvailableCurrencies).not.toHaveBeenCalled()
+  })
+
+  it('a stale method button cannot start a payment once checkout became unavailable', async () => {
+    // Confirmed when the dialog opened; switched off before the member clicks (the button is still on screen).
+    service.getCheckoutGateway.mockResolvedValueOnce('nowpayments').mockResolvedValue('unavailable')
+    await toMethodStep()
+    fireEvent.click(await screen.findByText('USDT (BSC / BEP20)'))
+    expect(await screen.findByTestId('checkout-unavailable')).toHaveTextContent('temporarily unavailable')
+    expect(service.getCheckoutGateway).toHaveBeenCalledTimes(2)          // asked again at the click
+    expect(service.createPayment).not.toHaveBeenCalled()
+    expect(screen.queryByText('USDT (BSC / BEP20)')).toBeNull()
+  })
+
+  it('a stale NOWPayments button does not pay through NOWPayments once SoncoPay became the gateway', async () => {
+    service.getCheckoutGateway.mockResolvedValueOnce('nowpayments').mockResolvedValue('soncopay')
+    await toMethodStep()
+    fireEvent.click(await screen.findByText('USDT (BSC / BEP20)'))
+    expect(await screen.findByTestId('pay-with-soncopay')).toBeInTheDocument()
+    expect(service.createPayment).not.toHaveBeenCalled()
+  })
+
+  it('shows the unavailable state when the server refuses the new payment (503 CHECKOUT_UNAVAILABLE)', async () => {
+    service.getCheckoutGateway.mockResolvedValue('nowpayments')
+    service.createPayment.mockRejectedValue(new CheckoutUnavailableError())
+    await toMethodStep()
+    fireEvent.click(await screen.findByText('USDT (BSC / BEP20)'))
+    expect(await screen.findByTestId('checkout-unavailable')).toBeInTheDocument()
+    expect(service.createPayment).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('USDT (BSC / BEP20)')).toBeNull()
+  })
+
+  it('creates a NOWPayments USDT BEP20 payment when the server confirmed NOWPayments', async () => {
+    service.getCheckoutGateway.mockResolvedValue('nowpayments')
+    service.createPayment.mockResolvedValue({ ...soncopayPayment, provider: 'nowpayments', checkout_url: undefined,
+      pay_address: '0xsyntheticaddress', pay_amount: '10.0', pay_currency: 'usdtbsc', payment_status: 'waiting' })
+    await toMethodStep()
+    fireEvent.click(await screen.findByText('USDT (BSC / BEP20)'))
+    await waitFor(() => expect(service.createPayment).toHaveBeenCalledTimes(1))
+    expect(service.createPayment.mock.calls[0][1].pay_currency).toBe('usdtbsc')
   })
 })
 
@@ -116,5 +186,9 @@ describe('Resume payment dialog', () => {
     render(<ResumePaymentDialog open onOpenChange={() => {}} depositId={42} amount={10} productCode="kyc" />)
     expect(await screen.findByText('0xsyntheticaddress')).toBeInTheDocument()
     expect(screen.queryByTestId('resume-soncopay')).toBeNull()
+    // Resuming an existing payment never depends on the checkout switches.
+    const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/checkout-gateway'))).toBe(false)
+    expect(service.getCheckoutGateway).not.toHaveBeenCalled()
   })
 })
