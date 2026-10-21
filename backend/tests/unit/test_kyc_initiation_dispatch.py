@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.api.api_v1.endpoints import kyc as kyc_endpoint
+from app.core.config import settings
 from app.models.age_safety import UserAgeProfile
 from app.models.kyc import KYCStatus, KYCVerification
 from app.models.payment import Deposit, DepositStatus, ProductType
@@ -260,6 +261,9 @@ def test_unknown_can_pay_for_kyc_but_cannot_start_it(client, db, providers, disp
                 "pay_amount": "10", "pay_currency": "usdtbsc"}
 
     monkeypatch.setattr(payments_api, "now_create_payment", fake_invoice)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     db.add(ProductType(code="kyc", name="KYC", price=Decimal("10.00"), currency="USD", is_active=True))
     db.commit()
     u = person(db, None)

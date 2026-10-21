@@ -1125,7 +1125,8 @@ def test_credentials_alone_are_never_shown_as_verified(db, monkeypatch):
 def test_nothing_configured_is_unverified_and_says_what_is_missing(db, monkeypatch):
     for name in ("NOWPAYMENTS_API_KEY", "NOWPAYMENTS_IPN_SECRET", *PAYOUT_ENV):
         monkeypatch.setattr(settings, name, "")
-    assert states(db) == {"provider": "CONFIGURED", "checkout": "CONFIGURED", "api_authentication": "UNVERIFIED", "ipn": "UNVERIFIED",
+    # No pay-in key and no IPN secret: NOWPayments cannot take a new payment.
+    assert states(db) == {"provider": "CONFIGURED", "checkout": "DISABLED", "api_authentication": "UNVERIFIED", "ipn": "UNVERIFIED",
                           "custody": "UNVERIFIED", "ip_whitelist": "UNVERIFIED", "payout_login": "UNVERIFIED",
                           "payout_2fa": "UNVERIFIED", "automatic_payouts": "DISABLED",
                           "network_fee_terms": "UNVERIFIED"}
@@ -1277,6 +1278,7 @@ def test_an_oversized_callback_is_refused_before_it_is_parsed(client, db, monkey
 def test_a_member_never_sees_the_providers_own_error_text(client, world, provider, monkeypatch, answer):
     db = world
     monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", IPN_SECRET)     # checkout ready: key + IPN secret
     pc.invalidate_runtime()
     buyer = _user(db, "buyer-create@t.com")
     db.commit()

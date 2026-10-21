@@ -111,6 +111,9 @@ def test_payment_amount_tampering_is_rejected_before_provider_call(
         return {"payment_id": "provider-1", "pay_address": "address", "pay_amount": "10"}
 
     monkeypatch.setattr(payments_endpoint, "now_create_payment", fake_create)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     response = client.post(
         "/api/v1/payments/create",
         headers={**auth_headers, "Idempotency-Key": "tamper-test"},
@@ -140,6 +143,9 @@ def test_payment_creation_uses_server_price_and_idempotency(
         }
 
     monkeypatch.setattr(payments_endpoint, "now_create_payment", fake_create)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     headers = {**auth_headers, "Idempotency-Key": "same-order"}
     payload = {"amount": "10.00", "currency": "USD", "product_code": "server-priced"}
     first = client.post("/api/v1/payments/create", headers=headers, json=payload)

@@ -8,7 +8,8 @@ vi.mock('@/lib/api', () => ({ default: { get: getMock, put: putMock, post: postM
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 import { FINANCE_SECTIONS } from '@/lib/finance-admin'
 import {
-  describeChanges, describeConnectionTest, describeCredential, draftFrom, draftProblems, settingsChanges,
+  describeChanges, describeConnectionTest, describeCredential, describeDefaultInForce, draftFrom, draftProblems,
+  draftWarnings, settingsChanges,
   type SoncoPayCredentialStatus,
 } from '@/lib/soncopay-settings'
 
@@ -32,7 +33,13 @@ const credentials = (over: Record<string, Record<string, unknown>> = {}) => [
 ]
 const view = (over: Record<string, unknown> = {}) => ({
   provider: 'soncopay', source: 'database', enabled: false, environment: 'test', environments: ['test', 'live'],
-  default_provider: 'nowpayments', default_provider_in_force: 'nowpayments',
+  default_provider: 'nowpayments', default_provider_in_force: 'nowpayments', default_unavailable_reason: null,
+  gateways: [
+    { provider: 'nowpayments', label: 'NOWPayments', enabled: true, ready: true, reason: null, environment: 'live',
+      incoming: 'Member payments', outgoing: 'Automatic USDT BEP20 commission payouts (managed in Crypto Cashout)' },
+    { provider: 'soncopay', label: 'SoncoPay', enabled: false, ready: false, reason: 'SoncoPay is switched off.',
+      environment: 'test', incoming: 'Member payments', outgoing: 'Not supported' },
+  ],
   checkout_providers: [
     { provider: 'nowpayments', label: 'NOWPayments', available: true },
     { provider: 'soncopay', label: 'SoncoPay', available: true, note: null },
@@ -229,12 +236,72 @@ describe('lib/soncopay-settings', () => {
     expect(problems.liveApiKey).toMatch(/sp_live_/)
   })
 
-  it('refuses to switch SoncoPay off while it is the default', () => {
+  it('lets SoncoPay be switched off while it is the default, with a warning, and chooses nothing in its place', () => {
     const v = view({ enabled: true, default_provider: 'soncopay', default_provider_in_force: 'soncopay',
       ready: { test: true, live: false } }) as any
-    expect(draftProblems(v, { ...draftFrom(v), enabled: false }).enabled).toMatch(/choose NOWPayments/)
-    expect(settingsChanges(v, { ...draftFrom(v), enabled: false, defaultProvider: 'nowpayments' }))
-      .toEqual({ enabled: false, default_provider: 'nowpayments' })
+    const off = { ...draftFrom(v), enabled: false }
+    expect(draftProblems(v, off)).toEqual({})
+    expect(draftWarnings(v, off)).toEqual([expect.stringMatching(/no new member payment is possible.*Nothing is chosen automatically/)])
+    expect(settingsChanges(v, off)).toEqual({ enabled: false })             // the default is not touched
+    expect(draftWarnings(v, draftFrom(v))).toEqual([])
+  })
+
+  it('refuses to choose NOWPayments while it cannot take new payments', () => {
+    const v = view({ default_provider: 'soncopay', enabled: true, ready: { test: true, live: false },
+      checkout_providers: [
+        { provider: 'nowpayments', label: 'NOWPayments', available: false, note: 'NOWPayments is switched off.' },
+        { provider: 'soncopay', label: 'SoncoPay', available: true, note: null },
+      ] }) as any
+    const draft = { ...draftFrom(v), defaultProvider: 'nowpayments' as const }
+    expect(draftProblems(v, draft).defaultProvider).toBe('NOWPayments cannot take new payments: NOWPayments is switched off.')
+    expect(settingsChanges(v, draft)).toBeNull()
+  })
+
+  it('says when new payments are unavailable, and why', () => {
+    const v = view({ default_provider_in_force: 'none',
+      default_unavailable_reason: 'The default gateway NOWPayments cannot take new payments: NOWPayments is switched off.' }) as any
+    expect(describeDefaultInForce(v)).toBe('New member payments are unavailable. The default gateway NOWPayments '
+      + 'cannot take new payments: NOWPayments is switched off.')
+    expect(describeDefaultInForce(view() as any)).toBe('New member payments use NOWPayments.')
+  })
+
+  it('shows each gateway, the chosen default and that new payments are unavailable', async () => {
+    getMock.mockResolvedValue({ status: 200, data: view({
+      default_provider_in_force: 'none',
+      default_unavailable_reason: 'The default gateway NOWPayments cannot take new payments: NOWPayments is switched off.',
+      gateways: [
+        { provider: 'nowpayments', label: 'NOWPayments', enabled: false, ready: false, reason: 'NOWPayments is switched off.',
+          environment: 'live', incoming: 'Member payments', outgoing: 'Automatic USDT BEP20 commission payouts (managed in Crypto Cashout)' },
+        { provider: 'soncopay', label: 'SoncoPay', enabled: false, ready: false, reason: 'SoncoPay is switched off.',
+          environment: 'test', incoming: 'Member payments', outgoing: 'Not supported' },
+      ],
+      checkout_providers: [
+        { provider: 'nowpayments', label: 'NOWPayments', available: false, note: 'NOWPayments is switched off.' },
+        { provider: 'soncopay', label: 'SoncoPay', available: false, note: 'SoncoPay is switched off.' },
+      ] }) })
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('payment-gateways')
+    expect(screen.getByTestId('soncopay-checkout-state')).toHaveTextContent('New member payments are unavailable')
+    const now = screen.getByTestId('gateway-nowpayments')
+    expect(now).toHaveTextContent('Disabled')
+    expect(now).toHaveTextContent('Not ready')
+    expect(now).toHaveTextContent('(chosen default)')
+    expect(now).toHaveTextContent('NOWPayments is switched off.')
+    expect(screen.getByTestId('gateway-soncopay')).toHaveTextContent('Outgoing: Not supported')
+    for (const option of screen.getByLabelText('Default customer checkout').querySelectorAll('option')) {
+      expect(option).toBeDisabled()                                       // neither can be chosen now
+    }
+    expect(document.getElementById('soncopay-default-help')).toHaveTextContent('In force now: none (new payments unavailable).')
+  })
+
+  it('warns before the default gateway is switched off', async () => {
+    getMock.mockResolvedValue({ status: 200, data: view({ enabled: true, default_provider: 'soncopay',
+      default_provider_in_force: 'soncopay', ready: { test: true, live: false } }) })
+    render(<AdminSoncoPaySettings />)
+    await screen.findByTestId('soncopay-settings-form')
+    expect(screen.queryByTestId('soncopay-warning')).toBeNull()
+    fireEvent.click(screen.getByRole('switch', { name: 'SoncoPay enabled' }))
+    expect(screen.getByTestId('soncopay-warning')).toHaveTextContent('Nothing is chosen automatically')
   })
 
   it('describes the connection test result', () => {

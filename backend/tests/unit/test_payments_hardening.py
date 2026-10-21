@@ -346,6 +346,7 @@ def test_the_limit_forgets_after_its_window_and_is_per_address(monkeypatch):
 def test_a_payment_id_another_deposit_already_holds_is_never_attached_twice(client, world, provider, monkeypatch):
     db = world
     monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret")    # checkout ready
     pc.invalidate_runtime()
     first, _sponsor = pending_deposit(db, tag="first")
     first.external_payment_id = DOC_PAYMENT["payment_id"]

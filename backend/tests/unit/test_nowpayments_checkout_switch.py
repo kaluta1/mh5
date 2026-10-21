@@ -71,6 +71,10 @@ def nowpayments(monkeypatch):
     monkeypatch.setattr(endpoint, "now_create_payment", create)
     monkeypatch.setattr(nowpayments_service, "get_payment_status", status)
     monkeypatch.setattr(pc, "ipn_secret", lambda _db: IPN_SECRET)
+    # The pay-in credentials in force (synthetic): a NOWPayments checkout needs both to be ready.
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", IPN_SECRET)
     pc.invalidate_runtime()
     yield calls
     pc.invalidate_runtime()
@@ -259,19 +263,24 @@ def test_provider_off_is_still_the_emergency_stop_for_payouts(ledger, engine_on)
     assert pc.load(db).checkout_allowed is False
 
 
-def test_provider_off_also_stops_reconciliation_calls_for_an_open_payout(ledger, engine_on):
+def test_provider_off_still_follows_up_an_open_payout_by_its_status_only(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "5.00")
     provider = FakeProvider()
     assert run(db, provider)["members"] == {"SUBMITTED": 1}         # one payout is now open
-    calls = len(provider.status_calls)
+    calls, created = len(provider.status_calls), len(provider.created)
+    other = member(db, "m2", method="CRYPTO")
+    commission(db, other, "5.00")                                   # a member who could be paid
     configure(db, provider_enabled=False)                           # emergency stop
-    assert run(db, provider) == {"enabled": False, "reconciled": {}, "members": {}}
-    assert len(provider.status_calls) == calls                      # NOWPayments is not even asked
-    configure(db, provider_enabled=True, checkout_enabled=False)    # checkout off: reconciliation resumes
+    report = run(db, provider)
+    assert report["enabled"] is False and report["members"] == {}
+    assert report["reconcile_only"] == "PROVIDER_DISABLED" and report["reconciled"] == {"PENDING": 1}
+    assert len(provider.status_calls) == calls + 1                  # the open payout is looked at...
+    assert len(provider.created) == created and cashouts(db, other) == []   # ...and nothing new is sent
+    configure(db, provider_enabled=True, checkout_enabled=False)    # checkout off: payouts as usual
     run(db, provider)
-    assert len(provider.status_calls) > calls
+    assert len(provider.status_calls) > calls + 1
 
 
 @pytest.mark.parametrize("gate", ["crypto_cashout_enabled", "crypto_auto_payout_enabled"])
@@ -289,15 +298,16 @@ def test_checkout_on_never_overrides_a_payout_gate(ledger, engine_on, gate):
 # 5. Gateway decision: no silent fallback
 # ===========================================================================
 
-def test_the_gateway_is_soncopay_when_ready_whatever_the_nowpayments_checkout_switch(ledger, monkeypatch):
+def test_the_gateway_is_the_ready_default_and_never_the_other_one(ledger, nowpayments, monkeypatch):
     db = ledger
     from app.services import soncopay_settings
 
     configure(db, checkout_enabled=False)
-    monkeypatch.setattr(soncopay_settings, "default_checkout_provider", lambda _db: "soncopay")
-    assert checkout_routing.new_payment_gateway(db) == "soncopay"
-    monkeypatch.setattr(soncopay_settings, "default_checkout_provider", lambda _db: "nowpayments")
-    assert checkout_routing.new_payment_gateway(db) is None             # not ready AND NOWPayments off: none
+    monkeypatch.setattr(soncopay_settings, "checkout_problem", lambda _db: None)          # SoncoPay ready
+    monkeypatch.setattr(checkout_routing, "stored_default", lambda _db: "soncopay")
+    assert checkout_routing.new_payment_gateway(db) == "soncopay"      # whatever NOWPayments' switch says
+    monkeypatch.setattr(checkout_routing, "stored_default", lambda _db: "nowpayments")
+    assert checkout_routing.new_payment_gateway(db) is None             # default not ready: none, not SoncoPay
     configure(db, checkout_enabled=True)
     assert checkout_routing.new_payment_gateway(db) == "nowpayments"
 
@@ -336,7 +346,7 @@ def test_the_readiness_view_shows_the_checkout_state(client, ledger):
     db = ledger
     configure(db, provider_enabled=True, checkout_enabled=False)
     items = {i["key"]: i for i in pc.readiness_view(db)["items"]}
-    assert items["checkout"]["state"] == "DISABLED" and "payouts are not affected" in items["checkout"]["detail"]
+    assert items["checkout"]["state"] == "DISABLED" and "does not affect automatic payouts" in items["checkout"]["detail"]
     assert items["provider"]["state"] == "CONFIGURED"
     view = pc.provider_view(db)
     assert (view["enabled"], view["checkout_enabled"], view["checkout_available"]) == (True, False, False)

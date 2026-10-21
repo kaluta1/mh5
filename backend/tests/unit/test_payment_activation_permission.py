@@ -347,7 +347,16 @@ def test_payout_settings_are_an_activation_while_automatic_payouts_are_on(ledger
         assert stored(db) == before
         configure(db, **{switch: True})
         assert update(db, manager, {switch: False}) is not None     # stopping is always allowed
-        assert update(db, both, {switch: True}) is not None
+        if switch == "provider_enabled":
+            # Payouts would resume: a recent successful connection test and the phrase are needed too.
+            assert code(lambda: update(db, both, {switch: True})) == "UNSAFE_ACTIVATION"
+            row = db.query(PaymentSettings).first()
+            row.last_connection_test_status, row.last_connection_ok_at = "OK", NOW - timedelta(hours=1)
+            db.commit()
+            assert code(lambda: update(db, both, {switch: True})) == "CONFIRMATION_REQUIRED"
+            assert update(db, both, {switch: True}, pc.CONFIRM_PROVIDER_RESUME) is not None
+        else:
+            assert update(db, both, {switch: True}) is not None
     before = stored(db)
     # The credentials the engine pays with.
     assert code(lambda: pc.set_credentials(db, manager, {"PAYOUT_API_KEY": "SYNTHETIC-OTHER-PAYOUT-KEY"},

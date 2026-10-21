@@ -985,6 +985,29 @@ describe('AdminFinance', () => {
     expect(screen.getByRole('button', { name: 'Run connection test' })).not.toBeDisabled()
   })
 
+  it('asks for the phrase before switching the provider back on while automatic payouts are on', async () => {
+    const fields = settings().fields.map((f) => f.name === 'crypto_auto_payout_enabled' ? { ...f, value: true }
+      : f.name === 'provider_enabled' ? { ...f, value: false } : f)
+    setup({ s: settings({ fields, activation: ACTIVATION(true), crypto_sections: SECTIONS,
+      confirmations: { ...settings().confirmations, provider_enabled: 'RESUME NOWPAYMENTS PAYOUTS' } }) })
+    putMock.mockResolvedValue({ status: 200, data: {} })
+    render(<AdminFinance section="nowpayments" />)
+    fireEvent.click(await screen.findByRole('switch', { name: 'Provider enabled' }))
+    // The provider settings form (the page has other forms with their own password field).
+    fireEvent.change(document.getElementById('provider-password') as HTMLElement, { target: { value: PASSWORD } })
+    const phrase = document.getElementById('provider-confirmation') as HTMLElement
+    expect(phrase).not.toBeNull()
+    const save = within(phrase.closest('.space-y-4') as HTMLElement).getByRole('button', { name: 'Save changes' })
+    expect(save).toBeDisabled()
+    fireEvent.change(phrase, { target: { value: 'resume' } })
+    expect(save).toBeDisabled()
+    fireEvent.change(phrase, { target: { value: 'RESUME NOWPAYMENTS PAYOUTS' } })
+    fireEvent.click(save)
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/api/v1/admin/finance/settings', {
+      changes: { provider_enabled: true }, current_password: PASSWORD, confirmation: 'RESUME NOWPAYMENTS PAYOUTS',
+      expected_version: 3 }))
+  })
+
   it('offers no reactivation to a manage-only administrator and says why', async () => {
     setup({ o: overview(MANAGE_ONLY), s: settings({ activation: ACTIVATION(),
       payout_suspension: { reason: 'PROVIDER_FEE_MODE_MISMATCH', cashout_id: 12, since: '2026-10-11T09:00:00',

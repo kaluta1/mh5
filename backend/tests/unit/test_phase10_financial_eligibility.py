@@ -14,6 +14,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.core.config import settings
 from app.core.child_safety import (
     AgeTier,
     ContentRating,
@@ -112,6 +113,9 @@ def no_payment_provider(monkeypatch):
         raise AssertionError("a real payment provider was called")
 
     monkeypatch.setattr(payments_api, "now_create_payment", boom)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
 
 
 def ledger_accounts(db):
@@ -531,6 +535,9 @@ def fake_payment_provider(monkeypatch):
                 "pay_amount": str(kwargs.get("price_amount")), "pay_currency": "usdtbsc"}
 
     monkeypatch.setattr(payments_api, "now_create_payment", fake)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     return calls
 
 

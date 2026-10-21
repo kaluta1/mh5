@@ -13,10 +13,13 @@ import {
   describeChanges,
   describeConnectionTest,
   describeCredential,
+  describeDefaultInForce,
   draftFrom,
   draftProblems,
+  draftWarnings,
   settingsChanges,
   type CheckoutProvider,
+  type GatewayStatus,
   type SoncoPayConnectionTest,
   type SoncoPayCredentialStatus,
   type SoncoPayDraft,
@@ -39,6 +42,24 @@ function CredentialBadge({ credential }: { credential?: SoncoPayCredentialStatus
       className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
       {describeCredential(credential)}
     </span>
+  )
+}
+
+/** One gateway: its master switch, whether it can take new payments now (and why not), and what it does. */
+function GatewayRow({ gateway, isDefault }: { gateway: GatewayStatus; isDefault: boolean }) {
+  return (
+    <li data-testid={`gateway-${gateway.provider}`} className="flex flex-wrap items-center gap-2 py-1">
+      <span className="font-medium w-28">{gateway.label}</span>
+      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${gateway.enabled ? BADGE.ok : BADGE.missing}`}>
+        {gateway.enabled ? 'Enabled' : 'Disabled'}
+      </span>
+      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${gateway.ready ? BADGE.ok : BADGE.warn}`}>
+        {gateway.ready ? 'Ready for new payments' : 'Not ready'}
+      </span>
+      {isDefault && <span className="text-xs text-gray-600 dark:text-gray-400">(chosen default)</span>}
+      {!gateway.ready && gateway.reason && <span className="w-full text-xs text-gray-600 dark:text-gray-400">{gateway.reason}</span>}
+      <span className="w-full text-xs text-gray-500">Incoming: {gateway.incoming}. Outgoing: {gateway.outgoing}.</span>
+    </li>
   )
 }
 
@@ -116,6 +137,7 @@ export default function AdminSoncoPaySettings() {
 
   const canChange = view.can_change
   const problems = draftProblems(view, draft)
+  const warnings = draftWarnings(view, draft)
   const changes = settingsChanges(view, draft)
   const credential = (name: string) => view.credentials.find((c) => c.name === name)
   const secretsDisabled = busy || !canChange || !view.encryption_key_configured
@@ -185,10 +207,23 @@ export default function AdminSoncoPaySettings() {
         </div>
 
         <div role="status" data-testid="soncopay-checkout-state"
-          className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100">
-          {view.default_provider_in_force === 'soncopay'
-            ? `New member payments use SoncoPay (${view.environment === 'live' ? 'Live' : 'Test'}). Payments already started keep their own gateway.`
-            : 'New member payments use NOWPayments. Payments already started keep their own gateway.'}
+          className={`rounded-lg border p-3 text-sm ${view.default_provider_in_force === 'none'
+            ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100'
+            : 'border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-100'}`}>
+          {describeDefaultInForce(view)} Payments already started keep their own gateway.
+        </div>
+
+        <div data-testid="payment-gateways" className="space-y-1">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Payment gateways</h3>
+          <ul className="divide-y divide-gray-100 text-sm dark:divide-gray-800">
+            {view.gateways.map((g) => (
+              <GatewayRow key={g.provider} gateway={g} isDefault={g.provider === view.default_provider} />
+            ))}
+          </ul>
+          <p className="text-xs text-gray-500">
+            NOWPayments is switched on and off in NOWPayments Configuration; its automatic payouts are managed in
+            Crypto Cashout. A gateway that is off takes no new payment; payments already started are still confirmed.
+          </p>
         </div>
 
         {!view.encryption_key_configured && (
@@ -215,6 +250,9 @@ export default function AdminSoncoPaySettings() {
               : <p id="soncopay-enabled-help" className="w-full text-xs text-gray-500">
                   Needs the API key and webhook signing secret of the selected environment.
                 </p>}
+            {warnings.map((w) => (
+              <p key={w} role="alert" data-testid="soncopay-warning" className="w-full text-xs text-amber-700 dark:text-amber-300">{w}</p>
+            ))}
           </div>
 
           <div className="space-y-1">
@@ -241,8 +279,9 @@ export default function AdminSoncoPaySettings() {
             </select>
             {problems.defaultProvider ? <FieldError id="soncopay-default-help" text={problems.defaultProvider} />
               : <p id="soncopay-default-help" className="text-xs text-gray-500">
-                  SoncoPay can be chosen while it is on and the selected environment&apos;s key and secret are saved.
-                  In force now: {view.default_provider_in_force === 'soncopay' ? 'SoncoPay' : 'NOWPayments'}.
+                  Only a gateway that can take new payments now can be chosen; nothing is chosen automatically.
+                  In force now: {view.default_provider_in_force === 'none' ? 'none (new payments unavailable)'
+                    : view.default_provider_in_force === 'soncopay' ? 'SoncoPay' : 'NOWPayments'}.
                 </p>}
           </div>
 

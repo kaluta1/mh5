@@ -85,6 +85,13 @@ TOLERANCE_SECONDS = 300
 MAX_WEBHOOK_BYTES = 64 * 1024
 
 
+class CheckoutClosed(SoncoPayError):
+    """SoncoPay may not open a NEW payment now (switched off, other environment, key missing)."""
+
+    def __init__(self):
+        super().__init__("SoncoPay is not taking new payments", stage="create")
+
+
 def is_soncopay(deposit: Any) -> bool:
     return str(getattr(deposit, "payment_provider", "") or "") == PROVIDER
 
@@ -244,6 +251,11 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
     if not is_soncopay(deposit):
         raise FinancialIntegrityError("Not a SoncoPay deposit")
     environment, order_id = deposit.provider_environment, str(deposit.order_id)
+    if soncopay_settings.checkout_environment(db) != environment:
+        # SoncoPay was switched off (or moved to the other environment, or lost its key) since the
+        # deposit was written: no SoncoPay payment is opened. Checked right before the call.
+        db.rollback()
+        raise CheckoutClosed()
     amount, currency = f"{money(deposit.amount):.2f}", normalize_fiat_currency(deposit.currency or "USD")
     client = client_for(db, environment)
     db.rollback()

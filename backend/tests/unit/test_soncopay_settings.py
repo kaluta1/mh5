@@ -44,6 +44,14 @@ def encryption_key(monkeypatch):
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
 
 
+def nowpayments_ready(monkeypatch):
+    """NOWPayments can take new payments: synthetic pay-in key and IPN secret in force (never reached)."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
+
+
 def put(client, actor, password=PASSWORD, **fields):
     return client.put(URL, headers=bearer(actor), json={"current_password": password, **fields})
 
@@ -275,7 +283,7 @@ def test_soncopay_changes_never_touch_nowpayments_checkout_or_payouts(client, db
     put(client, boss, default_provider="soncopay")                                  # refused below; changes nothing
 
     assert _nowpayments_state(db) == before
-    assert sp.default_checkout_provider(db) == "nowpayments"
+    assert sp.current_state(db)["default_provider"] == "nowpayments"               # the stored default, unchanged
     assert db.query(AuditTrail).filter(AuditTrail.table_name == "checkout_gateway_settings").count() == 5   # five accepted saves, the refused default none
 
 
@@ -283,10 +291,13 @@ def test_soncopay_changes_never_touch_nowpayments_checkout_or_payouts(client, db
 # 5. Nothing goes live by accident
 # ===========================================================================
 
-def test_soncopay_becomes_the_default_checkout_only_while_on_and_ready(client, db):
+def test_soncopay_becomes_the_default_checkout_only_while_on_and_ready(client, db, monkeypatch):
+    nowpayments_ready(monkeypatch)
     boss = superadmin(db, "boss")
     view = client.get(URL, headers=bearer(boss)).json()
-    assert {p["provider"]: p["available"] for p in view["checkout_providers"]} == {"nowpayments": True, "soncopay": True}
+    assert {p["provider"]: p["available"] for p in view["checkout_providers"]} == {"nowpayments": True, "soncopay": False}
+    assert {g["provider"]: (g["enabled"], g["ready"]) for g in view["gateways"]} == {
+        "nowpayments": (True, True), "soncopay": (False, False)}
 
     # Nothing saved, or saved but off: refused, nothing changes.
     before = snapshot(db)
@@ -307,26 +318,36 @@ def test_soncopay_becomes_the_default_checkout_only_while_on_and_ready(client, d
     assert done.json()["default_provider"] == done.json()["default_provider_in_force"] == "soncopay"
     assert sp.checkout_environment(db) == "test"
 
-    # It cannot be switched off while it is the default; NOWPayments first.
-    refused = put(client, boss, enabled=False)
-    assert (refused.status_code, code_of(refused)) == (409, "DEFAULT_PROVIDER_OFF")
-    assert put(client, boss, default_provider="nowpayments").status_code == 200
+    # It CAN be switched off while it is the default: the choice is kept, nothing is in force, and
+    # NOWPayments (ready) is NOT chosen in its place.
+    off = put(client, boss, enabled=False)
+    assert off.status_code == 200, off.text
+    assert (off.json()["default_provider"], off.json()["default_provider_in_force"]) == ("soncopay", "none")
+    assert "SoncoPay is switched off" in off.json()["default_unavailable_reason"]
+    assert sp.default_checkout_provider(db) is None
+    # On again: the Super Admin's own choice is in force again; nothing else changed it.
+    assert put(client, boss, enabled=True).json()["default_provider_in_force"] == "soncopay"
+    # An explicit choice of the other, ready gateway.
+    assert put(client, boss, default_provider="nowpayments").json()["default_provider_in_force"] == "nowpayments"
     assert sp.default_checkout_provider(db) == "nowpayments"
 
 
-def test_a_hand_edited_default_never_routes_to_soncopay_while_it_cannot_take_payments(client, db):
+def test_a_hand_edited_default_never_routes_anywhere_while_it_cannot_take_payments(client, db, monkeypatch):
+    nowpayments_ready(monkeypatch)                                 # the OTHER gateway is ready: still not used
     boss = superadmin(db, "boss")
     save_test_credentials(client, boss)
     assert put(client, boss, enabled=True).status_code == 200
-    # Default SoncoPay written by hand while it is OFF: NOWPayments stays in force.
+    # Default SoncoPay written by hand while it is OFF: nothing is in force (no fall back to NOWPayments).
     db.query(CheckoutGatewaySettings).update({"default_provider": "soncopay", "soncopay_enabled": False})
     db.commit()
-    assert sp.default_checkout_provider(db) == "nowpayments" and sp.checkout_environment(db) is None
-    # On but in Live, where nothing is saved: NOWPayments stays in force.
+    assert sp.default_checkout_provider(db) is None and sp.checkout_environment(db) is None
+    # On but in Live, where nothing is saved: still nothing in force.
     db.query(CheckoutGatewaySettings).update({"soncopay_enabled": True, "soncopay_environment": "live"})
     db.commit()
-    assert sp.default_checkout_provider(db) == "nowpayments" and sp.checkout_environment(db) is None
-    assert client.get(URL, headers=bearer(boss)).json()["default_provider_in_force"] == "nowpayments"
+    assert sp.default_checkout_provider(db) is None and sp.checkout_environment(db) is None
+    view = client.get(URL, headers=bearer(boss)).json()
+    assert (view["default_provider"], view["default_provider_in_force"]) == ("soncopay", "none")
+    assert "Live environment" in view["default_unavailable_reason"]
 
 
 def test_an_api_key_of_the_other_environment_is_refused(client, db):
@@ -351,7 +372,9 @@ def test_with_nothing_saved_soncopay_is_off_and_the_environment_is_ignored(clien
     assert not any(c["configured"] for c in view["credentials"])
     assert view["connection_test"]["available"] is True and view["connection_test"]["reason"] is None
     assert view["webhook_operational"] is True
-    assert sp.checkout_environment(db) is None and sp.default_checkout_provider(db) == "nowpayments"
+    assert sp.checkout_environment(db) is None
+    # The stored default is NOWPayments, which has no pay-in credentials here: nothing is in force.
+    assert sp.default_checkout_provider(db) is None and view["default_provider_in_force"] == "none"
     assert db.query(CheckoutGatewaySettings).count() == 0                          # reading never creates the row
 
 

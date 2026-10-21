@@ -126,6 +126,9 @@ def environment(monkeypatch):
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
     monkeypatch.setattr(settings, "BACKEND_PUBLIC_URL", "https://api.example.test")
     monkeypatch.setattr(settings, "FRONTEND_URL", "https://app.example.test")
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
 
 
 @pytest.fixture

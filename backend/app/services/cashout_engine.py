@@ -9,7 +9,10 @@ With the server switch off, run_cycle() returns immediately: it reads no
 member, writes no row, reserves nothing and never calls the provider. With the
 server switch on but automatic payouts paused by an administrator, a cycle
 only reconciles payouts that were already handed to the provider (so nothing
-stays reserved for ever) and starts no new one.
+stays reserved for ever) and starts no new one. The same holds while the
+provider (the NOWPayments master gateway switch) is off: payouts already handed
+over are followed up through StatusOnlyProvider, which can only read a status;
+nothing is created, retried or sent.
 
 Every limit below is read from app.services.payment_config at the start of a
 cycle. Changing a setting never sends anything by itself. A cycle never pays
@@ -406,6 +409,34 @@ def _mark_interrupted(db: Session, now: datetime) -> int:
     return len(rows)
 
 
+class PayoutNotAllowed(RuntimeError):
+    """A payout operation other than reading a status was attempted in status-only mode."""
+
+
+class StatusOnlyProvider:
+    """The payout provider seen through a window that only READS: a payout's status and
+    details, and the lookup of a payout by its unique reference. Creating, sending,
+    retrying, validating or anything else raises PayoutNotAllowed (never silently None)."""
+
+    READS = ("payout_details", "payout_status", "find_payout")
+
+    def __init__(self, provider):
+        self._provider = provider
+
+    def __getattr__(self, name: str):
+        if name in StatusOnlyProvider.READS:
+            return getattr(self._provider, name)       # AttributeError when the provider lacks it
+        raise PayoutNotAllowed(f"'{name}' is not allowed while payouts are reconcile-only")
+
+
+def has_open_payouts(db: Session) -> bool:
+    """Is any crypto payout still waiting for a result from the provider (handed over, or unknown)?"""
+    return (db.query(AffiliateCashoutRequest.id)
+            .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
+                    AffiliateCashoutRequest.status.in_([CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value]))
+            .first()) is not None
+
+
 def reconcile_open(db: Session, provider, *, now: Optional[datetime] = None) -> Counter:
     _mark_interrupted(db, now or datetime.utcnow())
     ids = [row.id for row in db.query(AffiliateCashoutRequest.id)
@@ -735,7 +766,18 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
     now = now or datetime.utcnow()
     config = payment_config.load(db)
     credentials = payment_config.resolve_credentials(db, config)
-    if not (config.provider_enabled and credentials.payout_ready):
+    if not config.provider_enabled:
+        # The provider (master gateway switch) is off: no payout is created, retried or sent. Payouts
+        # handed to the provider BEFORE it was switched off are still followed up, by reading their
+        # status only (StatusOnlyProvider refuses everything else), so none is left without a result.
+        report = {"enabled": False, "reconciled": {}, "members": {}}
+        if credentials.payout_ready and has_open_payouts(db):
+            report["reconcile_only"] = "PROVIDER_DISABLED"
+            report["reconciled"] = dict(reconcile_open(
+                db, StatusOnlyProvider(provider or NowPaymentsPayoutProvider(credentials)), now=now))
+        db.rollback()
+        return report
+    if not credentials.payout_ready:
         return {"enabled": False, "reconciled": {}, "members": {}}
     provider = provider or NowPaymentsPayoutProvider(credentials)
     report = {"enabled": bool(config.auto_payout_allowed),

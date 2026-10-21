@@ -8,10 +8,12 @@ Settings, all saved with ONE form:
   * SoncoPay on/off and its environment (Test or Live), in
     checkout_gateway_settings (one row). No row = off, Test.
   * The default customer checkout gateway (NOWPayments or SoncoPay). No row =
-    NOWPayments. SoncoPay is used for a NEW payment only while it is on and
-    the environment in use has a readable API key and signing secret (see
-    checkout_environment); otherwise NOWPayments. A payment keeps the gateway
-    it was created with. NOWPayments checkout is never switched off from here.
+    NOWPayments. Only a gateway that can take a new payment may be chosen.
+    The choice is kept as it is when that gateway is later switched off or
+    stops being ready: new payments are then unavailable (never sent to the
+    other gateway) until it is ready again or another ready gateway is chosen
+    (app.services.checkout_routing). A payment keeps the gateway it was
+    created with. NOWPayments checkout is never switched off from here.
   * An API key and a webhook signing secret PER ENVIRONMENT, stored ONLY as
     AES-256-GCM ciphertext in payment_credentials (provider "soncopay") with
     the dedicated PAYMENT_SETTINGS_ENCRYPTION_KEY and a purpose of their own
@@ -160,13 +162,17 @@ def _state(row: Optional[CheckoutGatewaySettings]) -> Dict[str, Any]:
     return {"enabled": bool(row.soncopay_enabled), "environment": environment, "default_provider": default}
 
 
-def default_checkout_provider(db: Session) -> str:
-    """The gateway new customer checkouts use. NOWPayments unless SoncoPay was
-    chosen AND can take a payment now (fail closed to NOWPayments)."""
-    state = _state(_row(db))
-    if state["default_provider"] == PROVIDER and checkout_environment(db):
-        return PROVIDER
-    return NOWPAYMENTS
+def current_state(db: Session) -> Dict[str, Any]:
+    """SoncoPay on/off, its environment and the STORED default gateway (no row = off, Test, NOWPayments)."""
+    return _state(_row(db))
+
+
+def default_checkout_provider(db: Session) -> Optional[str]:
+    """The gateway new customer checkouts use: the stored default while it can take a
+    payment, otherwise None. Never the other gateway (app.services.checkout_routing)."""
+    from app.services import checkout_routing
+
+    return checkout_routing.new_payment_gateway(db)
 
 
 def webhook_url() -> Optional[str]:
@@ -234,15 +240,23 @@ def webhook_secrets(db: Session) -> Dict[str, str]:
     return out
 
 
+def checkout_problem(db: Session) -> Optional[str]:
+    """Why SoncoPay cannot take a NEW payment now (None = it can)."""
+    if not CHECKOUT_IMPLEMENTED:
+        return "SoncoPay checkout is not implemented."
+    state = _state(_row(db))
+    if not state["enabled"]:
+        return "SoncoPay is switched off."
+    problem = _environment_ready(_stored(db), state["environment"])
+    return f"{state['environment'].title()} environment: {problem}" if problem else None
+
+
 def checkout_environment(db: Session) -> Optional[str]:
     """The environment a NEW SoncoPay payment would use, or None when SoncoPay must not
     take new payments (off, not implemented, or that environment not ready)."""
-    if not CHECKOUT_IMPLEMENTED:
+    if checkout_problem(db) is not None:
         return None
-    state = _state(_row(db))
-    if not state["enabled"] or _environment_ready(_stored(db), state["environment"]):
-        return None
-    return state["environment"]
+    return _state(_row(db))["environment"]
 
 
 # ---------------------------------------------------------------------------
@@ -260,9 +274,13 @@ def _last_change(db: Session) -> Optional[dict]:
 
 def view(db: Session, actor) -> dict:
     """Everything the Admin Panel shows. Never the value of a key or secret."""
+    from app.services import checkout_routing
+
     row = _row(db)
     state = _state(row)
     stored = _stored(db)
+    gateways = checkout_routing.states(db)
+    effective = checkout_routing.effective_default(db)
     credentials: List[dict] = []
     for name, spec in CREDENTIALS.items():
         saved = stored.get(name)
@@ -280,13 +298,24 @@ def view(db: Session, actor) -> dict:
         "enabled": state["enabled"],
         "environment": state["environment"],
         "environments": list(ENVIRONMENTS),
+        # The default a Super Admin chose (kept as it is) and the one in force for new payments:
+        # the chosen one while it is ready, otherwise "none" (never the other gateway).
         "default_provider": state["default_provider"],
-        "default_provider_in_force": default_checkout_provider(db),
+        "default_provider_in_force": effective.gateway or "none",
+        "default_unavailable_reason": effective.reason,
+        # Each gateway: its master switch, whether it can take a new payment now (and why not),
+        # and what it does. "available" = may be chosen as the default now.
+        "gateways": [
+            {"provider": g.gateway, "label": checkout_routing.LABELS[g.gateway], "enabled": g.enabled,
+             "ready": g.ready, "reason": g.reason, "environment": g.environment,
+             "incoming": "Member payments",
+             "outgoing": ("Automatic USDT BEP20 commission payouts (managed in Crypto Cashout)"
+                          if g.gateway == NOWPAYMENTS else "Not supported")}
+            for g in gateways.values()],
         "checkout_providers": [
-            {"provider": NOWPAYMENTS, "label": "NOWPayments", "available": True},
-            {"provider": PROVIDER, "label": "SoncoPay", "available": CHECKOUT_IMPLEMENTED,
-             "note": None if CHECKOUT_IMPLEMENTED else "SoncoPay checkout is not implemented yet."},
-        ],
+            {"provider": g.gateway, "label": checkout_routing.LABELS[g.gateway], "available": g.ready,
+             "note": g.reason}
+            for g in gateways.values()],
         "credentials": credentials,
         "ready": {env: _environment_ready(stored, env) is None for env in ENVIRONMENTS},
         "webhook_url": webhook_url(),
@@ -384,6 +413,8 @@ def update(db: Session, actor, *, password: Optional[str], enabled: Optional[boo
             raise refuse("NOT_READY", f"SoncoPay cannot be on in {new_environment.title()} yet. {problem}",
                          FIELD_ENABLED)
     if new_default != old["default_provider"]:
+        # Only a gateway that can take a new payment NOW, as it will be after this save, may become
+        # the default (checked here, on the server, whatever the form sent).
         if new_default == PROVIDER and not CHECKOUT_IMPLEMENTED:
             raise refuse("CHECKOUT_NOT_AVAILABLE", "SoncoPay cannot be the default checkout yet: its checkout is "
                                                    "not implemented.", FIELD_DEFAULT)
@@ -393,10 +424,18 @@ def update(db: Session, actor, *, password: Optional[str], enabled: Optional[boo
                 reason = problem or "Switch SoncoPay on first."
                 raise refuse("NOT_READY", "SoncoPay can be the default checkout only while it is on and the "
                                           f"{new_environment.title()} key and secret are saved. {reason}", FIELD_DEFAULT)
+        else:
+            # Lock order: this row first (above), then the NOWPayments settings row, SHARED: switching
+            # NOWPayments off waits until this save is done (and is then reflected at once in the
+            # effective default). payment_config never locks this row, so the two cannot deadlock.
+            problem = payment_config.nowpayments_checkout_problem(db, payment_config.load_shared(db))
+            if problem:
+                raise refuse("NOT_READY", f"NOWPayments can be the default checkout only while it can take new "
+                                          f"payments. {problem}", FIELD_DEFAULT)
         changed.append(FIELD_DEFAULT)
-    if new_default == PROVIDER and not new_enabled:
-        raise refuse("DEFAULT_PROVIDER_OFF", "SoncoPay is the default checkout: make NOWPayments the default "
-                                             "before switching SoncoPay off.", FIELD_ENABLED)
+    # Switching off the gateway that is the default is allowed: the default stays as chosen, and no
+    # new payment is possible until it is on again or a Super Admin chooses a ready gateway. Nothing
+    # is chosen automatically.
 
     if not changed:
         db.rollback()

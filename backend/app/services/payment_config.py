@@ -127,6 +127,8 @@ CONFIRM_USD_SETTLEMENT = "ENABLE USD SETTLEMENT"
 CONFIRM_FEE_MODE = "PROVIDER FEE BEHAVIOUR VERIFIED"
 CONFIRM_FEE_LIMITS = "APPROVE NETWORK FEE LIMITS"
 CONFIRM_REACTIVATION = "REACTIVATE CRYPTO PAYOUTS"
+# Switching the provider back on while automatic payouts are configured on lets payouts resume.
+CONFIRM_PROVIDER_RESUME = "RESUME NOWPAYMENTS PAYOUTS"
 # A change to any of these withdraws the approval of the network fee limits.
 _FEE_TERMS_FIELDS = ("provider_fee_mode", "member_fee_cap_percent", "member_fee_cap_usd", "min_net_payout_usd",
                      "fee_terms_version", "fee_consent_valid_days", "network_fee_policy",
@@ -683,6 +685,19 @@ def lock_settings(db: Session) -> PaymentConfig:
                         persisted=True, state=_suspension_state(row))
 
 
+def load_shared(db: Session) -> PaymentConfig:
+    """The configuration in force, read under a SHARE lock on the settings row: a change to it
+    (switching the provider off, for instance) waits until the caller commits or rolls back.
+    Used by the checkout-gateway settings (soncopay_settings.update), which lock their own row
+    FIRST and this one second; nothing here ever locks the gateway row, so there is no cycle."""
+    row = (db.query(PaymentSettings).filter(PaymentSettings.id == SETTINGS_ROW_ID)
+           .with_for_update(read=True).populate_existing().first())
+    if row is None:
+        return default_config()
+    return _from_values({name: getattr(row, name) for name in _CONFIG_FIELDS}, version=int(row.version),
+                        persisted=True, state=_suspension_state(row))
+
+
 def _row_for_update(db: Session) -> PaymentSettings:
     row = db.query(PaymentSettings).filter(PaymentSettings.id == SETTINGS_ROW_ID).with_for_update().first()
     if row is None:
@@ -1140,14 +1155,36 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
         if (confirmation or "").strip() != CONFIRM_AUTO_PAYOUT:
             raise refuse("CONFIRMATION_REQUIRED", f'Type "{CONFIRM_AUTO_PAYOUT}" to confirm.', field)
 
+    if _resumes_payouts(changed, merged):
+        # Automatic payouts are configured on: the provider switch is the last thing holding them.
+        # Same proof as switching automatic payouts on (the activation permission is required by
+        # activation_required): a recent successful connection test and the typed phrase.
+        field = "provider_enabled"
+        tested = row.last_connection_ok_at
+        if row.last_connection_test_status != "OK" or tested is None or now - tested > CONNECTION_TEST_MAX_AGE:
+            raise refuse("UNSAFE_ACTIVATION", "Automatic payouts would resume: run a successful connection test "
+                         "(provider reachable, payout key accepted, custody balance readable) in the last 24 hours "
+                         "first.", field)
+        if (confirmation or "").strip() != CONFIRM_PROVIDER_RESUME:
+            raise refuse("CONFIRMATION_REQUIRED", "Automatic payouts would resume at the next cycle. "
+                         f'Type "{CONFIRM_PROVIDER_RESUME}" to confirm.', field)
 
-def _activates(changed: Dict[str, Any]) -> bool:
+
+def _resumes_payouts(changed: Dict[str, Any], merged: Dict[str, Any]) -> bool:
+    """Does this change switch the provider back on while automatic payouts stay configured on?
+    (Switching automatic payouts on in the same change has its own, stricter check.)"""
+    return (changed.get("provider_enabled") is True and bool(merged.get("crypto_auto_payout_enabled"))
+            and "crypto_auto_payout_enabled" not in changed)
+
+
+def _activates(changed: Dict[str, Any], merged: Optional[Dict[str, Any]] = None) -> bool:
     """Does this change approve or switch on something on the strength of the
     OTHER values in force? Such a change must name the configuration version
     the administrator was looking at."""
     return (changed.get("fee_terms_approved") is True or changed.get("crypto_auto_payout_enabled") is True
             or changed.get("usd_settlement_enabled") is True
-            or changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED)
+            or changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED
+            or (merged is not None and _resumes_payouts(changed, merged)))
 
 
 def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Optional[str],
@@ -1192,7 +1229,7 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     merged = {**current, **changed}
     try:
         _validate_combination(db, row, merged, changed, confirmation, now)
-        if expected_version is None and _activates(changed):
+        if expected_version is None and _activates(changed, merged):
             raise PaymentConfigError("VERSION_REQUIRED",
                                      "An approval or an activation must name the configuration version it was "
                                      "decided on. Reload the page and try again.")
@@ -1200,13 +1237,18 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
         db.rollback()
         raise
     old = {name: current[name] for name in changed}
+    audited = dict(changed)
+    if _resumes_payouts(changed, merged):
+        # Said in the audit record: this change let automatic payouts resume, on the strength of that test.
+        audited["payouts_may_resume"] = True
+        audited["connection_test_ok_at"] = row.last_connection_ok_at
     for name, value in changed.items():
         setattr(row, name, value)
     if "payin_credential_source" in changed or "payout_credential_source" in changed:
         _reset_connection_test(row)
     row.version = int(row.version) + 1
     row.updated_by = actor.id
-    _audit(db, row, actor_id=actor.id, action="SETTINGS_UPDATED", old=old, new=changed, ip=ip)
+    _audit(db, row, actor_id=actor.id, action="SETTINGS_UPDATED", old=old, new=audited, ip=ip)
     db.commit()
     invalidate_runtime()
     return load(db)
@@ -1371,9 +1413,25 @@ def build_payin_runtime(db: Session) -> PayinRuntime:
                         resolve_credentials(db, config).get("PAYIN_API_KEY"), config.checkout_enabled)
 
 
+def nowpayments_checkout_problem(db: Session, config: Optional[PaymentConfig] = None) -> Optional[str]:
+    """Why a NEW NOWPayments checkout cannot be created now (None = it can). Read from the
+    database, never from a cache: the provider and checkout switches, then the pay-in API key
+    and the IPN secret in force (without the secret no payment could ever be confirmed)."""
+    config = config or load(db)
+    if not config.provider_enabled:
+        return "NOWPayments is switched off."
+    if not config.checkout_enabled:
+        return "NOWPayments checkout is switched off."
+    credentials = resolve_credentials(db, config)
+    missing = [CREDENTIALS[name].label for name in PAYIN_CREDENTIALS if not credentials.get(name)]
+    if missing:
+        return "Missing or unreadable: " + ", ".join(missing) + "."
+    return None
+
+
 def nowpayments_checkout_available(db: Session) -> bool:
-    """A NEW NOWPayments checkout may be created now (read from the database, never from a cache)."""
-    return load(db).checkout_allowed
+    """A NEW NOWPayments checkout may be created now."""
+    return nowpayments_checkout_problem(db) is None
 
 
 def payin_runtime() -> PayinRuntime:
@@ -1752,7 +1810,10 @@ def settings_view(db: Session) -> dict:
                           "usd_settlement_enabled": CONFIRM_USD_SETTLEMENT,
                           "provider_fee_mode": CONFIRM_FEE_MODE,
                           "fee_terms_approved": CONFIRM_FEE_LIMITS,
-                          "payout_reactivation": CONFIRM_REACTIVATION},
+                          "payout_reactivation": CONFIRM_REACTIVATION,
+                          # Asked only while switching the provider on would let automatic payouts resume.
+                          **({"provider_enabled": CONFIRM_PROVIDER_RESUME}
+                             if config.crypto_auto_payout_enabled and not config.provider_enabled else {})},
         "activation": activation_view(config),
         "payout_suspension": suspension_view(db),
         "network_fee_gate": ({"code": config.fee_gate(), "message": FEE_GATE_MESSAGES[config.fee_gate()]}
@@ -1775,7 +1836,8 @@ def provider_view(db: Session) -> dict:
         "display_name": config.provider_display_name,
         "enabled": config.provider_enabled,
         "checkout_enabled": config.checkout_enabled,
-        "checkout_available": config.checkout_allowed,
+        "checkout_available": nowpayments_checkout_problem(db, config) is None,
+        "checkout_problem": nowpayments_checkout_problem(db, config),
         "environment": "sandbox" if settings.NOWPAYMENTS_SANDBOX else "production",
         "environment_editable": False,
         "payin_status": "CONFIGURED" if all(in_use[n] for n in PAYIN_CREDENTIALS) else "NOT CONFIGURED",
@@ -1841,13 +1903,13 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
         todo.append("Switch the provider on in Payment Providers.")
     else:
         item("provider", "Provider", "CONFIGURED", "The provider is switched on.")
-    if config.checkout_allowed:
+    checkout_problem = nowpayments_checkout_problem(db, config)
+    if checkout_problem is None:
         item("checkout", "NOWPayments checkout", "CONFIGURED", "Members can start new NOWPayments payments.")
     else:
         item("checkout", "NOWPayments checkout", "DISABLED",
-             "No new NOWPayments payment can be started" + ("" if config.checkout_enabled
-                                                           else " (checkout is switched off)") + ". "
-             "Existing payments and automatic payouts are not affected by this switch.")
+             f"No new NOWPayments payment can be started: {checkout_problem} "
+             "Existing payments are not affected, and the checkout switch does not affect automatic payouts.")
 
     state = _check_state(in_use["PAYIN_API_KEY"], codes.get("payin_api_key"))
     item("api_authentication", "API authentication (pay-in key)", state,

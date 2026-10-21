@@ -54,6 +54,9 @@ def invoices(monkeypatch):
                 "price_currency": "usd", "order_id": kwargs["order_id"]}
 
     monkeypatch.setattr(payments, "now_create_payment", create)
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     return asked
 
 

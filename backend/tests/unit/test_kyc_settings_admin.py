@@ -56,6 +56,9 @@ def environment(monkeypatch):
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(settings, "KALUTA_KYC_ENABLED", True)
     monkeypatch.setattr(settings, "KYC_PROVIDER", "kaluta")
+    # NOWPayments can take new payments (synthetic pay-in credentials; it is never reached).
+    monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-api-key")
+    monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", "synthetic-ipn-secret-0001")
     monkeypatch.setattr(settings, "KALUTA_API_KEY", ENV_KEY)
     monkeypatch.setattr(settings, "KALUTA_WEBHOOK_SECRET", ENV_SECRET)
     monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",

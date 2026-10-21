@@ -10,15 +10,31 @@
  * only whether one is configured (and an API key's last four characters). A
  * blank field keeps what is saved. The server authorizes every change (a
  * Super Admin, plus the current password) and validates every value again.
- * SoncoPay becomes the default checkout only while it is on and the
- * environment in use has its key and secret (the server refuses otherwise).
- * Nothing here touches NOWPayments checkout or the NOWPayments payout engine.
+ * Only a gateway that can take new payments may become the default (the
+ * server refuses otherwise, whatever this form sends). The chosen default is
+ * kept when that gateway is switched off: new payments are then unavailable
+ * until it is on again or another ready gateway is chosen. Nothing is ever
+ * chosen automatically. Nothing here touches NOWPayments checkout or the
+ * NOWPayments payout engine.
  */
 
 export const SONCOPAY_SETTINGS_URL = '/api/v1/admin/finance/soncopay'
 export const SONCOPAY_CONNECTION_TEST_URL = '/api/v1/admin/finance/soncopay/connection-test'
 
 export type CheckoutProvider = 'nowpayments' | 'soncopay'
+
+/** One gateway as the server sees it now. "ready" = may take a NEW member payment (and be chosen as the default). */
+export type GatewayStatus = {
+  provider: CheckoutProvider
+  label: string
+  enabled: boolean
+  ready: boolean
+  /** Why it cannot take new payments (null when ready). */
+  reason: string | null
+  environment: string
+  incoming: string
+  outgoing: string
+}
 
 /** What the connection test answers (GET /v1/methods on SoncoPay, no side effect). Never a key. */
 export type SoncoPayConnectionTest = {
@@ -52,8 +68,12 @@ export type SoncoPaySettingsView = {
   enabled: boolean
   environment: SoncoPayEnvironment
   environments: SoncoPayEnvironment[]
+  /** The default a Super Admin chose (kept as it is). */
   default_provider: CheckoutProvider
-  default_provider_in_force: CheckoutProvider
+  /** The gateway new payments use now: the chosen default while it is ready, otherwise 'none'. */
+  default_provider_in_force: CheckoutProvider | 'none'
+  default_unavailable_reason: string | null
+  gateways: GatewayStatus[]
   checkout_providers: { provider: string; label: string; available: boolean; note?: string | null }[]
   credentials: SoncoPayCredentialStatus[]
   ready: Record<SoncoPayEnvironment, boolean>
@@ -138,6 +158,12 @@ export function draftProblems(view: SoncoPaySettingsView, draft: SoncoPayDraft):
       out[field] = `This ${what} starts with ${KEY_PREFIX[field as keyof typeof KEY_PREFIX]}.`
     }
   }
+  if (draft.defaultProvider === 'nowpayments' && view.default_provider !== 'nowpayments') {
+    const nowpayments = view.checkout_providers.find((p) => p.provider === 'nowpayments')
+    if (!nowpayments?.available) {
+      out.defaultProvider = `NOWPayments cannot take new payments${nowpayments?.note ? `: ${nowpayments.note}` : '.'}`
+    }
+  }
   if (draft.defaultProvider === 'soncopay' && view.default_provider !== 'soncopay') {
     const soncopay = view.checkout_providers.find((p) => p.provider === 'soncopay')
     if (!soncopay?.available) out.defaultProvider = 'SoncoPay checkout is not available.'
@@ -146,13 +172,33 @@ export function draftProblems(view: SoncoPaySettingsView, draft: SoncoPayDraft):
       out.defaultProvider = `Save the ${draft.environment === 'live' ? 'Live' : 'Test'} API key and signing secret first.`
     }
   }
-  if (!draft.enabled && view.enabled && draft.defaultProvider === 'soncopay') {
-    out.enabled = 'SoncoPay is the default checkout: choose NOWPayments before switching it off.'
-  }
   if (draft.environment === 'live' && view.environment !== 'live' && draft.confirmation.trim() !== view.live_confirmation) {
     out.confirmation = `Type ${view.live_confirmation} to switch to Live.`
   }
   return out
+}
+
+/**
+ * What the administrator should know before saving (never blocks the save): switching off
+ * the gateway that is the default makes new payments unavailable, and nothing replaces it.
+ */
+export function draftWarnings(view: SoncoPaySettingsView, draft: SoncoPayDraft): string[] {
+  const out: string[] = []
+  if (!draft.enabled && view.enabled && draft.defaultProvider === 'soncopay') {
+    out.push('SoncoPay is the default gateway. After this change no new member payment is possible until SoncoPay '
+      + 'is on again or another ready gateway is chosen. Nothing is chosen automatically.')
+  }
+  return out
+}
+
+/** One line for the default in force. */
+export function describeDefaultInForce(view: SoncoPaySettingsView): string {
+  if (view.default_provider_in_force === 'none') {
+    return `New member payments are unavailable. ${view.default_unavailable_reason ?? ''}`.trim()
+  }
+  const label = view.default_provider_in_force === 'soncopay'
+    ? `SoncoPay (${view.environment === 'live' ? 'Live' : 'Test'})` : 'NOWPayments'
+  return `New member payments use ${label}.`
 }
 
 /**

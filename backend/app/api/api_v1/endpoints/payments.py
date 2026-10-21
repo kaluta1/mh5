@@ -1,10 +1,10 @@
 """
 Payment API Endpoints — member checkout through NOWPayments or SoncoPay.
 
-The gateway of a NEW payment is checkout_routing.new_payment_gateway: SoncoPay
-when it is the ready default, otherwise NOWPayments while its checkout is
-allowed, otherwise none (the member is told payments are unavailable; no
-deposit is created). It is written on the deposit and never changes: every
+The gateway of a NEW payment is checkout_routing.new_payment_gateway: the
+default gateway a Super Admin chose, while it can take a payment; otherwise
+none (the member is told payments are unavailable; no deposit is created).
+Never the other gateway. It is written on the deposit and never changes: every
 later read of that deposit (sync, check, scheduler, webhook) uses the same
 gateway, whatever the switches say.
 """
@@ -23,7 +23,7 @@ import logging
 from app.api import deps
 from app.models.user import User
 from app.models.payment import Deposit, DepositStatus, ProductType
-from app.services import checkout_routing, kyc_fee, soncopay_payments, soncopay_settings
+from app.services import checkout_routing, kyc_fee, payment_config, soncopay_payments, soncopay_settings
 from app.services.soncopay_client import SoncoPayError
 from app.services.nowpayments_service import (
     NowPaymentsError,
@@ -137,6 +137,14 @@ async def _attach_soncopay_checkout(db: Session, deposit_id: int, description: s
     try:
         deposit = await soncopay_payments.create_checkout(db, deposit_id, description=description)
         db.commit()
+    except soncopay_payments.CheckoutClosed:
+        # SoncoPay stopped taking new payments meanwhile: nothing was sent to it.
+        db.rollback()
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
+        if deposit.status == DepositStatus.PENDING and not deposit.external_payment_id:
+            deposit.status = DepositStatus.FAILED
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
     except (SoncoPayError, FinancialIntegrityError) as exc:
         db.rollback()
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
@@ -299,7 +307,11 @@ async def create_payment(
             raise HTTPException(status_code=409, detail="Idempotency key is already used for another order")
         if not existing.external_payment_id:
             if soncopay_payments.is_soncopay(existing) and existing.status == DepositStatus.FAILED:
-                # SoncoPay returns the same payment for the same order_id: a retry is safe.
+                # SoncoPay returns the same payment for the same order_id: a retry is safe, but only
+                # while SoncoPay takes new payments in the deposit's own environment.
+                if soncopay_settings.checkout_environment(db) != existing.provider_environment:
+                    db.rollback()
+                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
                 return await _attach_soncopay_checkout(
                     db, int(existing.id), f"MyHigh5 {product.name} - deposit {int(existing.id)}")
             raise HTTPException(status_code=409, detail="Payment creation is already in progress")
@@ -378,6 +390,15 @@ async def create_payment(
 
     if gateway == "soncopay":
         return await _attach_soncopay_checkout(db, deposit_id, order_description)
+
+    if not payment_config.nowpayments_checkout_available(db):
+        # NOWPayments stopped taking new payments since the deposit was written (switch moved, key
+        # removed): nothing is sent to it. Decided from the database, not from a cache.
+        deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
+        deposit.status = DepositStatus.FAILED
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
+    db.rollback()
 
     try:
         provider_payload = await now_create_payment(
