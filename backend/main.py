@@ -447,6 +447,27 @@ def debug_cors():
         "backend_cors_origins_from_settings": settings.BACKEND_CORS_ORIGINS
     }
 
+# 502/503 answers whose detail was written for the member on purpose (a code the
+# frontend acts on plus a fixed message). Every other 5xx detail stays masked in
+# production, whatever it says.
+MEMBER_SAFE_UNAVAILABLE_CODES = frozenset({
+    "CHECKOUT_UNAVAILABLE",
+    "PAYMENT_PROVIDER_UNAVAILABLE",
+    "KYC_PROVIDER_UNAVAILABLE",
+})
+
+
+def _member_safe_unavailable(exc: StarletteHTTPException) -> bool:
+    detail = exc.detail
+    return (
+        exc.status_code in (502, 503)
+        and isinstance(detail, dict)
+        and set(detail) == {"code", "message"}
+        and detail.get("code") in MEMBER_SAFE_UNAVAILABLE_CODES
+        and isinstance(detail.get("message"), str)
+    )
+
+
 # Custom exception handler for HTTP exceptions
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -461,13 +482,16 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "method": request.method
             }
         )
-    safe_detail = "Internal server error" if IS_PRODUCTION and exc.status_code >= 500 else exc.detail
+    if IS_PRODUCTION and exc.status_code >= 500 and not _member_safe_unavailable(exc):
+        safe_detail = "Internal server error"
+    else:
+        safe_detail = exc.detail
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "detail": safe_detail,
             "code": f"HTTP_{exc.status_code}",
-            "message": str(safe_detail)
+            "message": safe_detail["message"] if _member_safe_unavailable(exc) else str(safe_detail)
         }
     )
 

@@ -28,3 +28,15 @@ describe('kycService.getKYCStatus: attempts and provider sessions', () => {
     expect(status).toMatchObject({ session_expired: false, sessions_remaining: null, session_limit_reached: false })
   })
 })
+
+describe('kycService.initiateVerification: provider unavailable', () => {
+  it('shows the fixed sentence of a structured 503 (KYC_PROVIDER_UNAVAILABLE)', async () => {
+    const message = 'Identity verification is temporarily unavailable. Please try again later.'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false, status: 503,
+      json: async () => ({ detail: { code: 'KYC_PROVIDER_UNAVAILABLE', message }, code: 'HTTP_503', message }),
+    }))
+    await expect(kycService.initiateVerification('synthetic-token', 'en', 'Synthetic street 1'))
+      .rejects.toThrow(new Error(message))
+  })
+})

@@ -48,6 +48,7 @@ router = APIRouter()
 
 _SYNCABLE_DEPOSIT_STATUSES = (DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID)
 PAYMENT_PROVIDER_UNAVAILABLE = "The payment provider could not process this request. Please try again in a few minutes."
+PROVIDER_UNAVAILABLE_DETAIL = {"code": "PAYMENT_PROVIDER_UNAVAILABLE", "message": PAYMENT_PROVIDER_UNAVAILABLE}
 CHECKOUT_UNAVAILABLE = {"code": "CHECKOUT_UNAVAILABLE", "message": checkout_routing.UNAVAILABLE_MESSAGE}
 
 
@@ -152,7 +153,7 @@ async def _attach_soncopay_checkout(db: Session, deposit_id: int, description: s
             deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("SoncoPay checkout for deposit %s failed (%s)", deposit_id, type(exc).__name__)
-        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
+        raise HTTPException(status_code=502, detail=PROVIDER_UNAVAILABLE_DETAIL) from exc
     db.refresh(deposit)
     return _soncopay_response(deposit)
 
@@ -416,7 +417,7 @@ async def create_payment(
         db.commit()
         logger.error("NOWPayments create error: %s", exc)
         # The provider's own answer stays in the server log; the member gets a fixed sentence.
-        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE) from exc
+        raise HTTPException(status_code=502, detail=PROVIDER_UNAVAILABLE_DETAIL) from exc
     except Exception as exc:
         deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
         deposit.status = DepositStatus.FAILED
@@ -432,7 +433,7 @@ async def create_payment(
         deposit.status = DepositStatus.FAILED
         db.commit()
         logger.error("NOWPayments returned a payment id that another deposit already holds (deposit %s)", deposit_id)
-        raise HTTPException(status_code=502, detail=PAYMENT_PROVIDER_UNAVAILABLE)
+        raise HTTPException(status_code=502, detail=PROVIDER_UNAVAILABLE_DETAIL)
     deposit.external_payment_id = provider_payment_id
     deposit.payment_address = provider_payload.get("pay_address")
     deposit.crypto_amount = (

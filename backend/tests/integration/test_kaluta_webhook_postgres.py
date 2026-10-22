@@ -106,6 +106,33 @@ def test_an_approval_and_a_rejection_racing_leave_one_decision(pg):
         assert results.count(dispatch.APPLIED) in (1, 2)
 
 
+def test_a_late_creation_event_delivered_at_once_adopts_the_session_once(pg):
+    """Our request timed out, the provider opened the
+    session anyway. Its creation event, delivered several times at once, saves
+    that one session once; nothing else of the attempt changes."""
+    _engine, Session = pg
+    verification_id, reference = open_verification(Session, "late")
+    with Session() as db:
+        row = db.get(KYCVerification, verification_id)
+        row.status, row.external_verification_id, row.verification_url, row.expires_at = (
+            KYCStatus.PENDING, None, None, None)
+        row.attempt_sessions_count = 1
+        db.commit()
+        user_id = row.user_id
+    body = {"event": "session.created", "timestamp": "2026-10-13T12:00:00Z",
+            "session": {"id": "sess-late", "external_id": reference, "status": "created",
+                        "metadata": {"user_id": user_id}}}
+    assert outcomes(Session, body) == [dispatch.APPLIED] * WORKERS
+    with Session() as db:
+        row = db.get(KYCVerification, verification_id)
+        assert (row.status, row.external_verification_id, row.verification_url) == (
+            KYCStatus.IN_PROGRESS, "sess-late", "https://kalutakyc.com/verify/sess-late")
+        assert row.attempt_sessions_count == 1 and row.attempts_count == 1 and row.reference_id == reference
+        trail = db.query(KYCAuditLog).filter(KYCAuditLog.verification_id == verification_id).all()
+        assert sum("session adopted" in a.details for a in trail) == 1
+        assert sum("progress noted" in a.details for a in trail) == WORKERS - 1
+
+
 # ---------------------------------------------------------------------------
 # The member KYC fee: requests arriving together
 # ---------------------------------------------------------------------------

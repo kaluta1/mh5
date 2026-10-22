@@ -526,6 +526,205 @@ def test_a_network_failure_is_not_retried_automatically(client, db, monkeypatch)
     assert len(fake.requests) == 1                                       # a second call could open a second session
 
 
+def created(reference, user_id, *, session="sess-late", **fields) -> dict:
+    return {"event": "session.created", "timestamp": "2026-10-13T12:00:00Z",
+            "session": {"id": session, "external_id": reference, "status": "created",
+                        "metadata": {"user_id": user_id}, **fields}}
+
+
+def timed_out_start(client, db, monkeypatch, user):
+    """The provider opened the session but answered after our read timeout."""
+    import main
+
+    monkeypatch.setattr(main, "IS_PRODUCTION", True)
+    fake = FakeProvider(monkeypatch, error=httpx.ReadTimeout("synthetic timeout"))
+    deposits = db.query(Deposit).count()
+    answer = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert answer.status_code == 503
+    assert answer.json()["detail"] == {"code": "KYC_PROVIDER_UNAVAILABLE", "message": kaluta_kyc.UNAVAILABLE_MESSAGE}
+    assert "Internal server error" not in answer.text
+    row = kyc_rows(db, user)[0]
+    assert row.status == KYCStatus.PENDING and row.verification_url is None and row.attempt_sessions_count == 1
+    assert db.query(Deposit).count() == deposits                       # nothing charged again
+    return fake, row
+
+
+def test_a_session_opened_after_a_timeout_is_adopted_from_its_creation_event(client, db, monkeypatch):
+    user = adult(db)
+    kyc_paid(db, user)
+    fake, row = timed_out_start(client, db, monkeypatch, user)
+    expires = (datetime.utcnow() + timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert deliver(client, created(row.reference_id, user.id, expires_at=expires)).json()["result"] == "applied"
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert (row.status, row.external_verification_id, row.verification_url) == (
+        KYCStatus.IN_PROGRESS, "sess-late", "https://kalutakyc.com/verify/sess-late")
+    assert row.expires_at is not None and row.residential_address_locked_at is not None
+    assert any("session adopted" in d for d in audit_details(db, row))
+    # A second delivery of the same event changes nothing.
+    assert deliver(client, created(row.reference_id, user.id)).json()["result"] == "applied"
+    db.expire_all()
+    assert kyc_rows(db, user)[0].expires_at == row.expires_at
+
+    # Starting again hands out that session: no second provider call, session or payment.
+    again = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert again.status_code == 200 and again.json()["reused"] is True
+    assert again.json()["verification_url"] == "https://kalutakyc.com/verify/sess-late"
+    assert [r["url"] for r in fake.requests].count("https://kalutakyc.com/v1/sessions") == 1
+    row = kyc_rows(db, user)[0]
+    assert row.attempt_sessions_count == 1 and row.attempts_count == 1 and len(kyc_rows(db, user)) == 1
+    assert deliver(client, approved(row, session="sess-late")).json()["result"] == "applied"
+
+
+def test_a_provider_link_in_the_creation_event_is_kept_only_when_it_is_the_providers_own(client, db, monkeypatch):
+    user = adult(db)
+    kyc_paid(db, user)
+    _, row = timed_out_start(client, db, monkeypatch, user)
+    event_ = created(row.reference_id, user.id, verification_url="https://evil.example/verify/sess-late")
+    assert deliver(client, event_).json()["result"] == "applied"
+    db.expire_all()
+    assert kyc_rows(db, user)[0].verification_url == "https://kalutakyc.com/verify/sess-late"
+
+
+@pytest.mark.parametrize("change", ["no_member", "other_member", "old_reference", "no_session_id", "unsafe_session_id",
+                                    "ended_status"])
+def test_a_creation_event_that_cannot_be_proved_ours_adopts_nothing(client, db, monkeypatch, change):
+    user = adult(db)
+    kyc_paid(db, user)
+    _, row = timed_out_start(client, db, monkeypatch, user)
+    event_ = created(row.reference_id, user.id)
+    if change == "no_member":
+        event_["session"].pop("metadata")
+    elif change == "other_member":
+        event_["session"]["metadata"] = {"user_id": user.id + 1}
+    elif change == "old_reference":
+        event_["session"]["external_id"] = "mh5_old_reference"
+    elif change == "no_session_id":
+        event_["session"].pop("id")
+    elif change == "unsafe_session_id":
+        event_["session"]["id"] = "../../evil?x=1"
+    else:
+        event_["session"]["status"] = "expired"
+    deliver(client, event_)
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert row.status == KYCStatus.PENDING and row.verification_url is None
+    assert row.external_verification_id in (None, "")
+
+
+def test_a_creation_event_never_replaces_a_saved_session_or_reopens_a_decision(client, db):
+    user = person(db, 30)
+    v = open_verification(db, user, session="sess-1")
+    other = created(v.reference_id, user.id, session="sess-other")
+    assert deliver(client, other).json()["result"] == "applied"           # noted as progress only
+    db.expire_all()
+    row = db.get(KYCVerification, v.id)
+    assert (row.external_verification_id, row.verification_url) == ("sess-1", "https://kalutakyc.com/verify/sess-1")
+
+    row.verification_url = None
+    row.status = KYCStatus.REJECTED
+    db.commit()
+    assert deliver(client, other).json()["result"] == "ignored"
+    db.expire_all()
+    row = db.get(KYCVerification, v.id)
+    assert row.status == KYCStatus.REJECTED and row.verification_url is None
+
+
+def test_a_creation_event_without_a_valid_recent_signature_adopts_nothing(client, db, monkeypatch):
+    user = adult(db)
+    kyc_paid(db, user)
+    _, row = timed_out_start(client, db, monkeypatch, user)
+    body = json.dumps(created(row.reference_id, user.id)).encode()
+    assert client.post(WEBHOOK, content=body, headers=signed(body, secret="whsec_wrong")).status_code == 401
+    assert client.post(WEBHOOK, content=body, headers=signed(body, at=time.time() - 600)).status_code == 401  # replay
+    assert client.post(WEBHOOK, content=body, headers={"Content-Type": "application/json"}).status_code == 401
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert row.status == KYCStatus.PENDING and row.verification_url is None and not row.external_verification_id
+
+
+def provider_that_sends_the_creation_event_first(monkeypatch, db, user, *, then):
+    """The provider's creation event reaches us while our request is still waiting for its answer."""
+    calls = []
+
+    async def post(_client, url, **kwargs):
+        calls.append(url)
+        reference = kwargs["json"]["external_id"]
+        assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc, payload=created(reference, user.id)) == "applied"
+        if then == "timeout":
+            raise httpx.ReadTimeout("synthetic timeout")
+        return httpx.Response(200, json={"session_id": "sess-late", "verification_url": "https://kalutakyc.com/verify/sess-late",
+                                         "expires_at": (datetime.utcnow() + timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+                              request=httpx.Request("POST", url))
+
+    async def get(_client, url, **kwargs):
+        return httpx.Response(401, json={"detail": "Invalid API key"}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    return calls
+
+
+@pytest.mark.parametrize("then", ["answer", "timeout"])
+def test_a_creation_event_arriving_during_the_start_leaves_one_session(client, db, monkeypatch, then):
+    user = adult(db)
+    kyc_paid(db, user)
+    calls = provider_that_sends_the_creation_event_first(monkeypatch, db, user, then=then)
+    answer = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert answer.status_code == (200 if then == "answer" else 503), answer.text
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert (row.status, row.external_verification_id, row.verification_url) == (
+        KYCStatus.IN_PROGRESS, "sess-late", "https://kalutakyc.com/verify/sess-late")
+    assert row.attempt_sessions_count == 1 and row.attempts_count == 1
+    again = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert again.status_code == 200 and again.json()["reused"] is True and len(calls) == 1
+    used = db.query(Deposit).filter(Deposit.user_id == user.id, Deposit.is_used.is_(True)).count()
+    assert used == 1 and db.query(Deposit).filter(Deposit.user_id == user.id).count() == 1
+
+
+def test_a_session_saved_while_a_start_waits_for_the_lock_is_handed_out_not_replaced(client, db, monkeypatch):
+    """Between the unlocked look at the session and the member's lock, the
+    creation event (or a request at the same time) saved a session."""
+    from app.api.api_v1.endpoints import kyc as kyc_endpoint
+
+    user = adult(db)
+    kyc_paid(db, user)
+    fake, row = timed_out_start(client, db, monkeypatch, user)
+    reference = row.reference_id
+
+    async def meanwhile(_verification):
+        assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc, payload=created(reference, user.id)) == "applied"
+        return {"is_valid": False, "is_completed": False}
+
+    monkeypatch.setattr(kyc_endpoint, "check_kyc_session_validity", meanwhile)
+    answer = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert answer.status_code == 200 and answer.json()["reused"] is True
+    assert answer.json()["verification_url"] == "https://kalutakyc.com/verify/sess-late"
+    assert len(fake.requests) == 1
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert row.reference_id == reference and row.attempt_sessions_count == 1
+
+
+def test_a_session_the_provider_no_longer_accepts_is_replaced_within_the_session_limit(client, db, monkeypatch):
+    from app.api.api_v1.endpoints import kyc as kyc_endpoint
+
+    fake = FakeProvider(monkeypatch)
+    user = adult(db)
+    kyc_paid(db, user)
+    first = client.post(INITIATE, json=ADDRESS, headers=auth(user)).json()
+
+    async def no_longer_valid(_verification):
+        return {"is_valid": False, "is_completed": False}
+
+    monkeypatch.setattr(kyc_endpoint, "check_kyc_session_validity", no_longer_valid)
+    fresh = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert fresh.status_code == 200 and fresh.json()["status"] == "new"
+    assert fresh.json()["verification_url"] != first["verification_url"] and len(fake.requests) == 2
+    assert kyc_rows(db, user)[0].attempt_sessions_count == 2
+
+
 def test_a_session_that_ran_out_is_replaced_within_the_same_paid_attempt(client, db, monkeypatch):
     fake = FakeProvider(monkeypatch)
     user = adult(db)

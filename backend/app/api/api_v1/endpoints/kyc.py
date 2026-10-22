@@ -286,6 +286,9 @@ async def initiate_shufti_verification(
             detail="If provided, residential address must be at least 2 characters.",
         )
 
+    # The link already judged here (handed out or found unusable). Only a link
+    # saved after this point is handed out by the locked check below.
+    checked_url = verification.verification_url if verification else None
     # The open session is handed out again while it is valid (no lock: the
     # provider may be asked over the network; a decision found there is applied
     # under the verification's own lock).
@@ -349,8 +352,30 @@ async def initiate_shufti_verification(
     # attempt and the session limit cannot be passed by asking twice.
     db.query(User.id).filter(User.id == current_user.id).with_for_update().first()
     verification = (db.query(KYCVerificationModel).filter(KYCVerificationModel.user_id == current_user.id)
-                    .populate_existing().first())
+                    .with_for_update().populate_existing().first())
     _refuse_closed(verification)
+    if (
+        not force_new
+        and verification
+        and verification.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS)
+        and verification.verification_url
+        and verification.verification_url != checked_url
+        and not _session_expired_locally(verification)
+    ):
+        # A session was saved while this request waited for the lock (a request
+        # at the same time, or a session adopted from the provider's creation
+        # event): it is handed out, not replaced by a second one.
+        reused = {
+            "verification_url": verification.verification_url,
+            "reference": verification.reference_id,
+            "verification_id": verification.id,
+            "reused": True,
+            "provider": provider_for_verification(verification),
+            "status": "in_progress",
+            **_attempt_view(verification, per_attempt),
+        }
+        db.rollback()
+        return reused
 
     new_attempt = verification is None or verification.status in _NEW_ATTEMPT_STATUSES
     if new_attempt and verification is not None and verification.attempts_count >= verification.max_attempts:
@@ -503,7 +528,7 @@ async def initiate_shufti_verification(
             # shown; the same paid attempt can be started again later.
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=UNAVAILABLE_MESSAGE,
+                detail={"code": "KYC_PROVIDER_UNAVAILABLE", "message": UNAVAILABLE_MESSAGE},
             )
         # Shufti misconfiguration / bad credentials — clearer than generic 500
         if (

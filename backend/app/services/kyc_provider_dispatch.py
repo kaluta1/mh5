@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -15,7 +16,10 @@ from app.models.kyc import KYCAuditLog, KYCStatus, KYCVerification, Verification
 from app.models.user import User
 from app.schemas.kyc import KYCVerificationUpdate
 from app.services.kaluta_kyc import (
+    KALUTA_APP_HOST,
     PROVIDER_REJECTION_MARK,
+    IN_FLIGHT,
+    is_provider_verification_url,
     active_kyc_provider,
     is_kaluta_active,
     kaluta_kyc_service,
@@ -26,6 +30,9 @@ from app.services.kaluta_kyc import (
 from app.services.shufti_pro import kyc_flags_from_shufti_payload, shufti_pro_service
 
 logger = logging.getLogger(__name__)
+
+# A provider session id as it may appear in a link we build: a plain token.
+_SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,255}")
 
 
 def provider_for_verification(verification) -> str:
@@ -283,6 +290,40 @@ def _audit_kaluta(db: Session, verification, action: str, details: str, *, old_s
         logger.error("Kaluta audit row could not be written (%s)", type(exc).__name__)
 
 
+def _adopt_created_session(db: Session, verification, *, session: Dict[str, Any], session_id: str,
+                           external_id, bound_user_id, reported: str, wh_raw: str) -> bool:
+    """A session the provider opened although our request for it failed (a read
+    timeout): its creation event is the only place its id arrives. Each start
+    issues a new reference and clears the link, so an event naming the CURRENT
+    reference while no link is saved is the session of the start that failed.
+    Adopted only then, for the member it is bound to; a saved session is never
+    replaced. A later start hands out this session instead of opening another."""
+    if not (_SESSION_ID.fullmatch(session_id)
+            and external_id and str(external_id) == str(verification.reference_id or "")):
+        return False
+    if bound_user_id is None or str(bound_user_id) != str(verification.user_id):
+        return False
+    if reported and reported not in IN_FLIGHT:
+        return False
+    if verification.verification_url:
+        return False
+    url = session.get("verification_url")
+    if not is_provider_verification_url(url):
+        url = f"{KALUTA_APP_HOST}/verify/{session_id}"
+    if not is_provider_verification_url(url):
+        return False
+    now = datetime.utcnow()
+    verification.external_verification_id = session_id
+    verification.verification_url = url
+    verification.status = KYCStatus.IN_PROGRESS
+    verification.expires_at = parse_provider_time(session.get("expires_at"))
+    if verification.residential_address_locked_at is None:
+        verification.residential_address_locked_at = now
+    verification.webhook_data = wh_raw
+    db.commit()
+    return True
+
+
 def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip: Optional[str] = None) -> str:
     """Apply one VERIFIED Kaluta webhook delivery. Idempotent: the state of the
     verification decides, not the number of deliveries."""
@@ -428,6 +469,10 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
     # while the verification is open; never written over a decision.
     if old_status not in _OPEN:
         return done(IGNORED, "progress event after a decision")
+    if event == "session.created" and _adopt_created_session(
+            db, verification, session=session, session_id=session_id, external_id=external_id,
+            bound_user_id=bound_user_id, reported=reported, wh_raw=wh_raw):
+        return done(APPLIED, "session adopted: its creation was not confirmed to this server")
     crud_kyc.kyc_verification.update(
         db,
         db_obj=verification,
