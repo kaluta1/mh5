@@ -248,7 +248,15 @@ _IDENTITY_DONE = (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED)
 def _locked_verification(db: Session, verification_id: int):
     """The verification row, locked until the next commit and re-read from the
     database: two deliveries of the same event, or a delivery and a status
-    poll, decide one after the other and the second sees what the first did."""
+    poll, decide one after the other and the second sees what the first did.
+
+    The member's row is locked first, as a KYC start does (member, then
+    verification): a decision writes the member's flags, and taking the two
+    locks in the opposite order of a start deadlocked with it."""
+    user_id = db.query(KYCVerification.user_id).filter(KYCVerification.id == verification_id).scalar()
+    if user_id is None:
+        return None
+    db.query(User.id).filter(User.id == user_id).with_for_update(key_share=True).first()
     return (db.query(KYCVerification).filter(KYCVerification.id == verification_id)
             .with_for_update().populate_existing().first())
 

@@ -349,8 +349,12 @@ async def initiate_shufti_verification(
 
     # From here on the member's row is locked until the next commit: two requests
     # at once are decided one after the other, so one paid payment opens one
-    # attempt and the session limit cannot be passed by asking twice.
-    db.query(User.id).filter(User.id == current_user.id).with_for_update().first()
+    # attempt and the session limit cannot be passed by asking twice. Member
+    # first, then the verification: the order of every KYC path. NO KEY UPDATE
+    # still serialises the starts but lets a row that only points at the member
+    # (an audit row's foreign key check) through; FOR UPDATE blocked that row
+    # while it held the verification, a deadlock.
+    db.query(User.id).filter(User.id == current_user.id).with_for_update(key_share=True).first()
     verification = (db.query(KYCVerificationModel).filter(KYCVerificationModel.user_id == current_user.id)
                     .with_for_update().populate_existing().first())
     _refuse_closed(verification)
