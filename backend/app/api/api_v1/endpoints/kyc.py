@@ -1515,13 +1515,26 @@ async def shufti_pro_webhook(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Verification not found"
         )
-    
+
+    # Decided under the locks of every KYC decision (member, then the verification),
+    # on the row as it is now: a delivery at the same time, a poll, an administrator
+    # or a new start (a new reference) that came first is seen here.
+    verification = _locked_verification(db, verification.id)
+    if verification is None or verification.reference_id != webhook_data.reference:
+        db.rollback()
+        return KYCWebhookResponse(success=True, message="Stale webhook ignored",
+                                  verification_id=verification.id if verification else None)
+
     # Traiter les résultats selon l'événement
     if webhook_data.event == "verification.accepted":
         if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            db.rollback()
             return KYCWebhookResponse(success=True, message="Webhook already processed", verification_id=verification.id)
         wh_raw = webhook_data.model_dump()
         flags = kyc_flags_from_shufti_payload(wh_raw, overall_accepted=True)
+        # An earlier rejection's reason does not stay on an accepted identity (part of the same commit).
+        verification.rejection_reason = None
+        verification.rejection_details = None
         crud_kyc.kyc_verification.apply_shufti_identity_accepted(
             db,
             verification=verification,
@@ -1534,30 +1547,34 @@ async def shufti_pro_webhook(
 
     elif webhook_data.event == "verification.declined":
         if verification.status == KYCStatus.REJECTED:
+            db.rollback()
             return KYCWebhookResponse(success=True, message="Webhook already processed", verification_id=verification.id)
         if verification.status in (KYCStatus.PENDING_PROOF_OF_ADDRESS, KYCStatus.APPROVED):
+            db.rollback()
             return KYCWebhookResponse(success=True, message="Stale webhook ignored", verification_id=verification.id)
         # Rejeter automatiquement
         reason = webhook_data.declined_reason or "Verification failed"
-        crud_kyc.kyc_verification.reject_verification(
-            db, verification_id=verification.id, reason=reason
-        )
-
         wh_raw = webhook_data.model_dump()
         flags = kyc_flags_from_shufti_payload(wh_raw, overall_accepted=False)
-        # Mettre à jour avec les données du webhook
+        # The rejection and what Shufti reported, in ONE commit under the row lock (a
+        # second commit would let a decision taken in between be overwritten). A
+        # rejected identity is never verified; Shufti's own result stays in the record.
         update_data = KYCVerificationUpdate(
             external_verification_id=webhook_data.reference,
             provider_response=str(webhook_data.verification_result),
-            webhook_data=str(webhook_data.model_dump()),
+            webhook_data=str(wh_raw),
             rejection_reason=reason,
-            identity_verified=flags["identity_verified"],
+            identity_verified=False,
             document_verified=flags["document_verified"],
             face_verified=flags["face_verified"],
         )
-        crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+        crud_kyc.kyc_verification.reject_verification(
+            db, verification_id=verification.id, reason=reason, provider_update=update_data
+        )
         # Committed: REJECTED. The provider's reason is never emailed.
         kyc_notifications.notify_status(db, verification.id)
+    else:
+        db.rollback()
 
     return KYCWebhookResponse(
         success=True,

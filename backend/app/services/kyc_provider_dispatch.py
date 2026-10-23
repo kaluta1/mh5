@@ -136,13 +136,16 @@ def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, fla
 def apply_provider_rejected(db: Session, *, crud_kyc, verification, flags: Dict[str, bool], reason: str, external_id: str, provider_response=None, webhook_data=None, details: Optional[str] = None):
     """The rejection and what the provider reported, in ONE commit under the
     caller's row lock: an approval decided in between would otherwise be
-    overwritten by the second half (identity accepted, identity_verified False)."""
+    overwritten by the second half (identity accepted, identity_verified False).
+
+    A rejected identity is never verified, whatever the document and face scores
+    were: the provider's own figures stay in provider_response / webhook_data."""
     provider_update = KYCVerificationUpdate(
         external_verification_id=external_id,
         provider_response=str(provider_response) if provider_response is not None else None,
         webhook_data=str(webhook_data) if webhook_data is not None else None,
         rejection_reason=reason,
-        identity_verified=flags.get("identity_verified", False),
+        identity_verified=False,
         document_verified=flags.get("document_verified", False),
         face_verified=flags.get("face_verified", False),
     )
