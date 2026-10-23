@@ -33,6 +33,7 @@ from app.services.kaluta_kyc import (
     parse_provider_time,
 )
 from app.services.kyc_provider_dispatch import (
+    _locked_verification,
     check_kyc_session_validity,
     generate_kyc_reference,
     handle_kaluta_webhook,
@@ -1223,8 +1224,12 @@ def approve_kyc_verification(
     """
     Approuver une vérification KYC (admin seulement)
     """
-    verification = crud_kyc.kyc_verification.get(db, id=verification_id)
+    # Decided under the same locks as a provider decision (member, then the
+    # verification), on the row as it is now: a webhook or a poll that decided
+    # meanwhile is seen here, and is never overwritten by a stale view of it.
+    verification = _locked_verification(db, verification_id)
     if not verification:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KYC verification not found"
@@ -1236,6 +1241,7 @@ def approve_kyc_verification(
         KYCStatus.PENDING_PROOF_OF_ADDRESS,
         KYCStatus.REQUIRES_REVIEW,
     ]:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This verification cannot be approved"
@@ -1274,8 +1280,12 @@ def reject_kyc_verification(
     """
     Rejeter une vérification KYC (admin seulement)
     """
-    verification = crud_kyc.kyc_verification.get(db, id=verification_id)
+    # Decided under the same locks as a provider decision (member, then the
+    # verification), on the row as it is now: a webhook or a poll that decided
+    # meanwhile is seen here, and is never overwritten by a stale view of it.
+    verification = _locked_verification(db, verification_id)
     if not verification:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="KYC verification not found"
@@ -1287,6 +1297,7 @@ def reject_kyc_verification(
         KYCStatus.PENDING_PROOF_OF_ADDRESS,
         KYCStatus.REQUIRES_REVIEW,
     ]:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This verification cannot be rejected"
@@ -1433,41 +1444,31 @@ async def submit_proof_of_address(
         ensure_ascii=False,
     )
 
+    # The files are stored (network, no lock held). From here on the decision is
+    # taken under the locks of every KYC decision (member, then the verification),
+    # on the row as it is now: an administrator's or the provider's decision taken
+    # meanwhile stands, and two submissions at once approve once. The document and
+    # the approval are written in ONE commit.
+    verification = _locked_verification(db, verification.id)
+    if (verification is None or verification.user_id != current_user.id
+            or verification.status != KYCStatus.PENDING_PROOF_OF_ADDRESS):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Proof of address can only be submitted after identity verification is accepted.",
+        )
+
     existing = crud_kyc.kyc_document.get_by_type(
         db, verification_id=verification.id, document_type=document_type
     )
     now = datetime.utcnow()
-    if existing:
-        crud_kyc.kyc_document.update(
-            db,
-            db_obj=existing,
-            obj_in=KYCDocumentUpdate(
-                front_image_url=front_url,
-                back_image_url=back_url,
-                is_verified=True,
-                verification_notes=poa_notes,
-                verified_at=now,
-            ),
-        )
-    else:
-        created_doc = crud_kyc.kyc_document.create(
-            db,
-            obj_in=KYCDocumentCreate(
-                verification_id=verification.id,
-                document_type=document_type,
-                front_image_url=front_url,
-                back_image_url=back_url,
-            ),
-        )
-        crud_kyc.kyc_document.update(
-            db,
-            db_obj=created_doc,
-            obj_in=KYCDocumentUpdate(
-                is_verified=True,
-                verification_notes=poa_notes,
-                verified_at=now,
-            ),
-        )
+    document = existing or KYCDocumentModel(verification_id=verification.id, document_type=document_type)
+    document.front_image_url = front_url
+    document.back_image_url = back_url
+    document.is_verified = True
+    document.verification_notes = poa_notes
+    document.verified_at = now
+    db.add(document)
 
     crud_kyc.kyc_verification.finalize_proof_of_address_auto(db, verification_id=verification.id)
     payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)

@@ -114,8 +114,13 @@ class CRUDKYCVerification:
         external_verification_id: Optional[str] = None,
         provider_response: Optional[str] = None,
         webhook_data: Optional[str] = None,
+        address_accepted: bool = False,
     ) -> KYCVerification:
-        """Shufti ID+face passed — move to proof-of-address step; no revenue recognition yet."""
+        """Shufti ID+face passed — move to proof-of-address step; no revenue recognition yet.
+
+        address_accepted: the provider verified the address too. The proof-of-address
+        approval is then written in the SAME commit: two commits would release the
+        caller's row lock in between, and a decision taken there would be overwritten."""
         verification.status = KYCStatus.PENDING_PROOF_OF_ADDRESS
         verification.identity_verified = bool(flags.get("identity_verified"))
         verification.document_verified = bool(flags.get("document_verified"))
@@ -135,6 +140,8 @@ class CRUDKYCVerification:
             u.address_verified = False
 
         db.add(verification)
+        if address_accepted:
+            self._stage_proof_of_address_approved(db, verification)
         db.commit()
         db.refresh(verification)
         self._create_audit_log(
@@ -145,15 +152,34 @@ class CRUDKYCVerification:
             None,
             False,
         )
+        if address_accepted:
+            self._create_audit_log(db, verification.id, "proof_of_address_approved",
+                                   "Proof of address validated (automatic)", None, False)
         return verification
 
     def finalize_proof_of_address_auto(
         self, db: Session, *, verification_id: int, admin_user_id: Optional[int] = None
     ) -> KYCVerification:
-        """Heuristic PoA passed — full KYC approved."""
+        """Heuristic PoA passed — full KYC approved. Whatever the caller staged in
+        this transaction (the proof-of-address document) is committed with it."""
         verification = self.get(db, verification_id)
         if not verification:
             return verification
+        self._stage_proof_of_address_approved(db, verification)
+        db.commit()
+        db.refresh(verification)
+        self._create_audit_log(
+            db,
+            verification_id,
+            "proof_of_address_approved",
+            "Proof of address validated (automatic)",
+            admin_user_id,
+            bool(admin_user_id),
+        )
+        return verification
+
+    def _stage_proof_of_address_approved(self, db: Session, verification: KYCVerification) -> None:
+        """The proof-of-address approval, in the caller's transaction (not committed)."""
         verification.status = KYCStatus.APPROVED
         verification.address_verified = True
         verification.processed_at = datetime.utcnow()
@@ -180,17 +206,6 @@ class CRUDKYCVerification:
         from app.services.affiliate_rate_policy import record_for_sponsor_of
 
         record_for_sponsor_of(db, int(verification.user_id))  # permanent 40% qualification, if just met
-        db.commit()
-        db.refresh(verification)
-        self._create_audit_log(
-            db,
-            verification_id,
-            "proof_of_address_approved",
-            "Proof of address validated (automatic)",
-            admin_user_id,
-            bool(admin_user_id),
-        )
-        return verification
 
     def approve_verification(self, db: Session, *, verification_id: int, admin_user_id: Optional[int] = None) -> KYCVerification:
         """Approuver une vérification KYC"""

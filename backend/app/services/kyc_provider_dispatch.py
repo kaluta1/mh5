@@ -106,6 +106,7 @@ async def initiate_kyc_session(
 def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, flags: Dict[str, bool], external_id: str, provider_response=None, webhook_data=None):
     """Shufti/Kaluta ID+face passed — PoA step unless Kaluta already verified address."""
     if flags.get("kaluta_poa_complete"):
+        # Identity and address in ONE commit, under the caller's row lock.
         crud_kyc.kyc_verification.apply_shufti_identity_accepted(
             db,
             verification=verification,
@@ -113,8 +114,8 @@ def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, fla
             external_verification_id=external_id,
             provider_response=provider_response,
             webhook_data=webhook_data,
+            address_accepted=True,
         )
-        crud_kyc.kyc_verification.finalize_proof_of_address_auto(db, verification_id=verification.id)
         from app.services.payment_accounting import payment_accounting
 
         payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
@@ -157,6 +158,11 @@ async def sync_verification_from_provider(db: Session, *, crud_kyc, verification
         return None
 
     provider = provider_for_verification(verification)
+    # The session the provider is asked about. A start may replace it while the
+    # provider answers (a new reference, then a new session): that answer is
+    # about the old session and must never decide the new one.
+    asked_reference = verification.reference_id
+    asked_session = str(verification.external_verification_id or "")
     validity_check = await check_kyc_session_validity(verification)
     if not validity_check.get("is_completed"):
         return None
@@ -172,19 +178,23 @@ async def sync_verification_from_provider(db: Session, *, crud_kyc, verification
     if verification is None or verification.status not in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS):
         db.rollback()
         return None
+    current = str(verification.external_verification_id or "")
+    if verification.reference_id != asked_reference or (provider == "kaluta" and current != asked_session):
+        db.rollback()
+        return None
 
     # Kaluta: the provider's session id (the reference is ours). Shufti: the reference is the id.
     provider_id = verification.reference_id
     if provider == "kaluta":
         provider_id = str((raw.get("id") if isinstance(raw, dict) else None)
                           or verification.external_verification_id or verification.reference_id)
+        if current and provider_id != current:
+            # The answer names another session than the current one (expired, approved or rejected alike).
+            db.rollback()
+            return None
 
     if validity_check.get("expired"):
         # The session ran out: not a rejection, and the attempt is not used up.
-        current = str(verification.external_verification_id or "")
-        if provider == "kaluta" and current and provider_id != current:
-            db.rollback()
-            return None
         if not _session_marked_expired(verification):
             _mark_session_ended(db, verification)
             try:

@@ -213,11 +213,11 @@ def test_a_polled_decision_during_a_start_waits_for_it_instead_of_deadlocking(pg
                                                                         verification=verification))
 
     started, polled = interleave(engine, held_member_lock, lambda: initiate(Session, user_id, force_new=True), poll)
-    # The start goes first (the poll waits for the member). The poll then still applies
-    # what it read about the replaced session: a separate, pre-existing question (see
-    # the report); here only that both finish and the decision is whole.
-    assert started == "new" and polled == {"status": "rejected"}, (started, polled)
+    # The start goes first (the poll waits for the member). What the poll read is
+    # about the session the start replaced: it decides nothing, the new one stays open.
+    assert started == "new" and polled is None, (started, polled)
     row, user = state(Session, verification_id)
+    assert row.status == KYCStatus.IN_PROGRESS and row.rejection_reason is None
     assert_consistent(row, user)
 
 
