@@ -235,8 +235,12 @@ class CRUDKYCVerification:
         
         return verification
 
-    def reject_verification(self, db: Session, *, verification_id: int, reason: str, details: Optional[str] = None, admin_user_id: Optional[int] = None) -> KYCVerification:
-        """Rejeter une vérification KYC"""
+    def reject_verification(self, db: Session, *, verification_id: int, reason: str, details: Optional[str] = None, admin_user_id: Optional[int] = None,
+                            provider_update: Optional[KYCVerificationUpdate] = None) -> KYCVerification:
+        """Rejeter une vérification KYC.
+
+        provider_update: what the provider reported, written in the SAME commit as the
+        rejection (a second commit would release the row lock in between)."""
         verification = self.get(db, verification_id)
         if verification:
             verification.status = KYCStatus.REJECTED
@@ -247,6 +251,10 @@ class CRUDKYCVerification:
             verification.document_verified = False
             verification.face_verified = False
             verification.address_verified = False
+
+            if provider_update is not None:
+                for field, value in provider_update.dict(exclude_unset=True).items():
+                    setattr(verification, field, value)
 
             u = db.query(User).filter(User.id == verification.user_id).first()
             if u:

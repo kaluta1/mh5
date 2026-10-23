@@ -133,8 +133,10 @@ def apply_provider_identity_accepted(db: Session, *, crud_kyc, verification, fla
 
 
 def apply_provider_rejected(db: Session, *, crud_kyc, verification, flags: Dict[str, bool], reason: str, external_id: str, provider_response=None, webhook_data=None, details: Optional[str] = None):
-    crud_kyc.kyc_verification.reject_verification(db, verification_id=verification.id, reason=reason, details=details)
-    update_data = KYCVerificationUpdate(
+    """The rejection and what the provider reported, in ONE commit under the
+    caller's row lock: an approval decided in between would otherwise be
+    overwritten by the second half (identity accepted, identity_verified False)."""
+    provider_update = KYCVerificationUpdate(
         external_verification_id=external_id,
         provider_response=str(provider_response) if provider_response is not None else None,
         webhook_data=str(webhook_data) if webhook_data is not None else None,
@@ -143,7 +145,8 @@ def apply_provider_rejected(db: Session, *, crud_kyc, verification, flags: Dict[
         document_verified=flags.get("document_verified", False),
         face_verified=flags.get("face_verified", False),
     )
-    crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=update_data)
+    crud_kyc.kyc_verification.reject_verification(db, verification_id=verification.id, reason=reason, details=details,
+                                                  provider_update=provider_update)
     # Committed: REJECTED. The provider's reason stays in the record; the email carries none.
     kyc_notifications.notify_status(db, verification.id)
 
@@ -227,12 +230,8 @@ async def sync_verification_from_provider(db: Session, *, crud_kyc, verification
         details=(f"{PROVIDER_REJECTION_MARK}{raw.get('id') or verification.external_verification_id or ''}"
                  if provider == "kaluta" and isinstance(raw, dict) else None),
     )
-    u = db.query(User).filter(User.id == verification.user_id).first()
-    if u:
-        u.identity_verified = False
-        u.address_verified = False
-    db.commit()
-    db.refresh(verification)
+    # The member's flags were cleared in the rejection's own commit. Nothing is written
+    # here afterwards: the row lock is gone and a decision taken since must stand.
     return {"status": "rejected"}
 
 
@@ -386,15 +385,6 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
         if old_status not in _OPEN and not after_provider_rejection:
             # Rejected by an administrator, expired, or under review: the provider does not reopen it.
             return done(IGNORED, "the verification is closed and was not rejected by the provider")
-        apply_provider_identity_accepted(
-            db,
-            crud_kyc=crud_kyc,
-            verification=verification,
-            flags=flags,
-            external_id=session_id or str(external_id or ""),
-            provider_response=json.dumps(stored_session),
-            webhook_data=wh_raw,
-        )
         identity = session.get("identity") if isinstance(session.get("identity"), dict) else {}
         scores = session.get("scores") if isinstance(session.get("scores"), dict) else {}
         updates: Dict[str, Any] = {}
@@ -415,12 +405,19 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
         if after_provider_rejection:
             updates["rejection_reason"] = None
             updates["rejection_details"] = None
-        if updates:
-            crud_kyc.kyc_verification.update(
-                db,
-                db_obj=verification,
-                obj_in=KYCVerificationUpdate(**updates),
-            )
+        # Set on the locked row BEFORE the transition, so they are part of its commit:
+        # written afterwards they would land after the lock is released.
+        for field, value in KYCVerificationUpdate(**updates).dict(exclude_unset=True).items():
+            setattr(verification, field, value)
+        apply_provider_identity_accepted(
+            db,
+            crud_kyc=crud_kyc,
+            verification=verification,
+            flags=flags,
+            external_id=session_id or str(external_id or ""),
+            provider_response=json.dumps(stored_session),
+            webhook_data=wh_raw,
+        )
         return done(APPLIED, "identity accepted after a provider retry" if after_provider_rejection
                     else "identity accepted")
 
