@@ -32,7 +32,7 @@ from app.schemas.user import UserCreate
 from app.services import age_gate, dob_service
 from app.services.age_policy_engine import AgeAndContestPolicyEngine, utc_today
 from tests.unit.test_age_policy_engine import add_policy
-from tests.unit.test_new_business_model import _pool_member, _retired_legacy, _user, world  # noqa: F401
+from tests.unit.test_new_business_model import _kyc_approve, _pool_member, _retired_legacy, _user, world  # noqa: F401
 
 PASSWORD = "Str0ng*Passw0rd!"
 TODAY = utc_today()
@@ -325,7 +325,7 @@ def test_25_26_rejection_has_no_pool_or_financial_side_effect(world, register):
 
 def test_27_personal_sponsor_behavior_unchanged(world, register):
     db = world
-    sponsor = _user(db, "sponsor@example.com")
+    sponsor = _kyc_approve(db, _user(db, "sponsor@example.com"))
     db.commit()
     user = created(db, register(query=f"?sponsor_code={sponsor.personal_referral_code}")[0])
     assert (user.sponsor_id, user.sponsor_source) == (sponsor.id, "PERSONAL_REFERRAL")

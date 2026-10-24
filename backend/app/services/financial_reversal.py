@@ -66,7 +66,21 @@ def reverse_provider_refund(
     if _REFUND_MARKER in notes:
         return True
 
-    _refund_amount(payload, locked)
+    # A FULL refund (this path's only meaning: a partial amount is refused here, as before).
+    full_amount = _refund_amount(payload, locked)
+    # A Multi-Unit Referral Pool deposit with units: refunded unit by unit (cash, revenue and
+    # commission of each), which also completes a deposit that was partly refunded before.
+    from app.services import referral_pool_units
+
+    pool_units = referral_pool_units.on_provider_refund(db, locked, full_amount, source="provider")
+    if pool_units is not None:
+        if referral_pool_units.purchase_fully_refunded(db, locked):
+            locked.status = DepositStatus.FAILED
+            locked.admin_notes = f"{notes}\n{_REFUND_MARKER} at {datetime.utcnow().isoformat()}Z".strip()
+        db.flush()
+        if not defer_commit:
+            db.commit()
+        return True
 
     from app.services.new_model_ledger import is_new_model
 

@@ -99,6 +99,9 @@ INDIVIDUAL_PAYOUTS = "c8e0f2a4b6d8_individual_usdt_payouts.py"
 CHECKOUT_GATEWAY_SETTINGS = "d0f2a4c6e8b1_checkout_gateway_settings.py"
 SONCOPAY_PAYMENTS = "e1a3b5c7d9f2_soncopay_payments.py"
 CHECKOUT_SWITCH = "f2b4d6e8a0c1_nowpayments_checkout_switch.py"
+MULTIUNIT_POOL = "a7c9e1f3b5d2_referral_pool_multiunit_foundation.py"
+POOL_EVENTS = "c1e3a5b7d9f2_referral_pool_events_and_risk_reviews.py"
+POOL_REFUNDS = "d2f4b6c8e0a1_referral_pool_manual_refund_records.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -358,12 +361,15 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
     for filename, revision, down, child in (
             (CHECKOUT_GATEWAY_SETTINGS, "d0f2a4c6e8b1", "c8e0f2a4b6d8", SONCOPAY_PAYMENTS),
             (SONCOPAY_PAYMENTS, "e1a3b5c7d9f2", "d0f2a4c6e8b1", CHECKOUT_SWITCH),
-            (CHECKOUT_SWITCH, "f2b4d6e8a0c1", "e1a3b5c7d9f2", None)):
+            (CHECKOUT_SWITCH, "f2b4d6e8a0c1", "e1a3b5c7d9f2", MULTIUNIT_POOL),
+            (MULTIUNIT_POOL, "a7c9e1f3b5d2", "f2b4d6e8a0c1", POOL_EVENTS),
+            (POOL_EVENTS, "c1e3a5b7d9f2", "a7c9e1f3b5d2", POOL_REFUNDS),
+            (POOL_REFUNDS, "d2f4b6c8e0a1", "c1e3a5b7d9f2", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # f2b4d6e8a0c1 is the single head
+    # d2f4b6c8e0a1 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

@@ -4,9 +4,11 @@ import * as React from "react"
 import { useState } from "react"
 import { HelpCircle, ChevronDown } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
+import { referralPoolFaqAnswer, useReferralPoolStatus } from "@/lib/referral-pool-status"
 
 export function FAQ() {
   const { t } = useLanguage()
+  const poolStatus = useReferralPoolStatus()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   const faqs = [
@@ -21,6 +23,10 @@ export function FAQ() {
     {
       question: t('landing.faq.question_leaders'),
       answer: t('landing.faq.answer_leaders')
+    },
+    {
+      question: t('landing.faq.question_referral_pool'),
+      answer: referralPoolFaqAnswer(t, poolStatus)
     },
     {
       question: t('landing.faq.question_4'),

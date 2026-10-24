@@ -110,6 +110,11 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
     product = _product(db, deposit)
     if product.code == REFERRAL_POOL_PRODUCT_CODE:
         _hold_retired_pool_payment(db, deposit)
+        # Multi-Unit pool (P3): the units of a recorded purchase, while sales are switched on.
+        # Cash stays held in 2100; revenue and commission are posted by a later phase.
+        from app.services import referral_pool_units
+
+        referral_pool_units.on_pool_deposit_validated(db, deposit)
         return
     try:
         policy = get_policy(db, product.code)
@@ -161,6 +166,9 @@ def recognize_deferred_deposit(db: Session, deposit: Deposit, recognized_at: Opt
 
 def reverse_new_model_deposit(db: Session, deposit: Deposit, *, reason: str) -> None:
     """Full refund of a NEW_V2 deposit: exact structured reversal of its own postings only."""
+    from app.services import referral_pool_units
+
+    referral_pool_units.refuse_full_reversal_after_unit_refunds(db, deposit)  # before anything is written
     reverse_direct_commissions(db, source_type=SourceType.DEPOSIT, source_id=deposit.id, reason=reason)
     reversal_entry_id = None
     for entry in entries_for_source(db, SourceType.DEPOSIT, deposit.id):
@@ -183,4 +191,5 @@ def reverse_new_model_deposit(db: Session, deposit: Deposit, *, reason: str) -> 
     from app.services import referral_pool_service as pool
 
     pool.mark_refunded(db, deposit.id)
+    referral_pool_units.on_deposit_refunded(db, deposit)
     db.flush()

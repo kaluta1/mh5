@@ -288,7 +288,9 @@ def test_payment_confirmation_transport_only(world, email_outbox, monkeypatch):
 
     db = world
     monkeypatch.setattr(settings, "LEGACY_BUSINESS_MODEL_ENABLED", False)
-    sponsor = _register(db, "sponsorh@example.com")
+    from tests.unit.test_new_business_model import _kyc_approve
+
+    sponsor = _kyc_approve(db, _register(db, "sponsorh@example.com"))   # a valid inviter (P6)
     buyer = _register(db, "buyerh@example.com", sponsor.personal_referral_code)
     deposit = _deposit(db, buyer, "annual_membership")
     db.commit()

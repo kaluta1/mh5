@@ -106,6 +106,16 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 
+from app.api.api_v1.endpoints import referral_pool as referral_pool_endpoints  # noqa: E402
+
+api_router.include_router(referral_pool_endpoints.router, tags=["Referral Pool (Multi-Unit)"])
+api_router.include_router(
+    referral_pool_endpoints.admin_router,
+    prefix="/admin/referral-pool",
+    tags=["Administration - Referral Pool"],
+    dependencies=[Depends(admin.require_admin)],
+)
+
 from app.api.api_v1.endpoints import age_policies as age_policy_endpoints  # noqa: E402
 
 api_router.include_router(

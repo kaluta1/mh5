@@ -373,6 +373,18 @@ def _register(db, email, code=None) -> User:
                                          sponsor_code=code)
 
 
+def _kyc_approve(db, user: User) -> User:
+    """A KYC-approved member: since P6 only such a member can be a personal inviter."""
+    from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
+
+    db.add(KYCVerification(user_id=user.id, status=KYCStatus.APPROVED, provider=VerificationProvider.KALUTA,
+                           reference_id=f"kyc-test-{user.id}", attempts_count=1, submitted_at=datetime.utcnow(),
+                           processed_at=datetime.utcnow(), identity_verified=True, address_verified=True))
+    user.identity_verified = user.address_verified = True
+    db.commit()
+    return user
+
+
 def _pool_member(db, email) -> User:
     u = _user(db, email)
     db.add(ReferralPoolMembership(user_id=u.id, status=pool.ACTIVE, seat_number=db.query(ReferralPoolMembership).count() + 1,
@@ -384,11 +396,16 @@ def _pool_member(db, email) -> User:
 def test_personal_referral_sets_direct_sponsor(world):
     db = world
     _pool_member(db, "pm@t.com")
-    personal = _user(db, "personal@t.com")
+    personal = _kyc_approve(db, _user(db, "personal@t.com"))
     db.commit()
     new = _register(db, "newbie@t.com", personal.personal_referral_code)
     assert (new.sponsor_id, new.sponsor_source) == (personal.id, "PERSONAL_REFERRAL")
     assert db.query(ReferralPoolAssignment).count() == 0
+    # An inviter without an approved KYC creates no sponsor relationship (P6 rule).
+    unverified = _user(db, "unverified@t.com")
+    db.commit()
+    other = _register(db, "newbie2@t.com", unverified.personal_referral_code)
+    assert (other.sponsor_id, other.sponsor_source) == (None, "NONE")
 
 
 def test_organic_and_invalid_code_signups_get_no_sponsor_even_with_active_pool_members(world):

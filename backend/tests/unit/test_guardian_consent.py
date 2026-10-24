@@ -44,7 +44,7 @@ from tests.unit.test_age_gate_registration import (  # noqa: F401
     years_ago,
 )
 from tests.unit.test_age_policy_engine import add_policy
-from tests.unit.test_new_business_model import _pool_member, _retired_legacy, _user, world  # noqa: F401
+from tests.unit.test_new_business_model import _kyc_approve, _pool_member, _retired_legacy, _user, world  # noqa: F401
 
 TODAY = utc_today()
 PASSWORD = "Str0ng*Passw0rd!"
@@ -395,7 +395,7 @@ def test_36b_personal_sponsor_code_is_carried_to_completion(world, client, regis
     db = world
     add_policy(db)
     enforce(db, "TZ")
-    sponsor = _user(db, "sponsor_p4@example.com")
+    sponsor = _kyc_approve(db, _user(db, "sponsor_p4@example.com"))
     db.commit()
     minor, _ = full_flow(client, register, outbox, db, query=f"?sponsor_code={sponsor.personal_referral_code}")
     assert (minor.sponsor_id, minor.sponsor_source) == (sponsor.id, "PERSONAL_REFERRAL")

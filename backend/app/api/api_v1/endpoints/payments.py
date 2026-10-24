@@ -68,6 +68,13 @@ class CreatePaymentRequest(BaseModel):
     product_code: str
     pay_currency: Optional[str] = None
     recipients: Optional[list[PaymentRecipient]] = None
+    # Referral Pool units only (any other product: exactly 1). The amount must still equal the
+    # server's quantity x unit price. The upper bound is a technical guard per payment, not a
+    # business limit (members may buy again; administrators can set real limits).
+    quantity: int = Field(default=1, ge=1, le=10000)
+
+
+POOL_CHECKOUT_LIMIT, POOL_CHECKOUT_WINDOW = 10, 600     # new Referral Pool checkouts per member per 10 minutes
 
 
 class PaymentResponse(BaseModel):
@@ -244,12 +251,16 @@ async def create_payment(
     if is_legacy_founding_product(product_code) and not legacy_business_model_enabled():
         raise HTTPException(status_code=410, detail=f"Founding membership enrollment: {RETIRED_MESSAGE}")
 
+    from app.services import referral_pool_units as pool_units
     from app.services.new_model_reference_data import REFERRAL_POOL_PRODUCT_CODE
     from app.services.referral_pool_service import RETIRED_MESSAGE as POOL_RETIRED_MESSAGE
 
-    if product_code == REFERRAL_POOL_PRODUCT_CODE:
-        # Retired 2026-09-28: no deposit, seat or provider invoice is created.
+    is_pool = product_code == REFERRAL_POOL_PRODUCT_CODE
+    if is_pool and not pool_units.sales_open(db):
+        # Multi-Unit sales are switched off (the default): no deposit, purchase or provider invoice.
         raise HTTPException(status_code=410, detail=POOL_RETIRED_MESSAGE)
+    if not is_pool and request.quantity != 1:
+        raise HTTPException(status_code=400, detail="Only Referral Pool units are bought in quantities.")
 
     if product_code in kyc_fee.RETIRED_KYC_PRODUCT_CODES:
         # One KYC product is sold (kyc_fee.PRODUCT_CODE, priced by the member KYC fee).
@@ -265,6 +276,13 @@ async def create_payment(
 
     try:
         expected_amount, expected_currency = authoritative_product_terms(product)
+        if is_pool:
+            # Priced by the server only: quantity x the fixed $100 unit price (the product row must agree).
+            if expected_amount != pool_units.UNIT_PRICE or expected_currency != "USD":
+                raise FinancialIntegrityError("The Referral Pool unit price is not configured as 100.00 USD")
+            if request.recipients:
+                raise FinancialIntegrityError("Referral Pool units are bought for the member's own account")
+            expected_amount = pool_units.UNIT_PRICE * request.quantity
         validate_client_purchase_terms(
             submitted_amount=request.amount,
             submitted_currency=request.currency,
@@ -333,6 +351,9 @@ async def create_payment(
         require(db, current_user, FinancialOperation.PAYMENT, subject={"product_code": product_code})
     except FinancialEligibilityHold as exc:
         raise http_error(exc) from None
+    if is_pool and _is_rate_limited(f"pool-checkout:{current_user.id}", POOL_CHECKOUT_LIMIT, POOL_CHECKOUT_WINDOW):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Too many purchase attempts. Please try again in a few minutes.")
 
     pay_currency = normalize_pay_currency(
         request.pay_currency
@@ -372,6 +393,20 @@ async def create_payment(
         provider_environment=environment,
     )
     db.add(deposit)
+    if is_pool:
+        # The purchase is recorded with its deposit, in ONE commit, before any provider is asked.
+        # Eligibility (adult, KYC-approved, no risk review) and the optional limits are decided
+        # again here, under the pool mutex.
+        try:
+            db.flush()
+            pool_units.create_purchase(db, user=current_user, deposit=deposit, quantity=request.quantity)
+        except pool_units.UnitsError as exc:
+            db.rollback()
+            code = 403 if exc.code == "NOT_ELIGIBLE" else 409
+            raise HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)}) from None
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Payment creation is already in progress") from None
     try:
         db.commit()
     except IntegrityError as exc:

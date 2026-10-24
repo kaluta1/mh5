@@ -15,6 +15,7 @@ from app.services.monthly_round_scheduler import MonthlyRoundScheduler
 from app.services.creative_link_check import CreativeLinkScheduler
 from app.services.email_outbox import EmailOutboxScheduler
 from app.services.cashout_engine import CashoutScheduler
+from app.services.referral_pool_integration import ReferralPoolScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,9 @@ _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     "email-outbox": (EmailOutboxScheduler(), "_drain_outbox"),
     # Crypto cashout engine: every tick is a no-op unless CRYPTO_AUTO_PAYOUT_ENABLED=true.
     "cashouts": (CashoutScheduler(), "_run_cycle"),
+    # Referral Pool worker (events, eligibility sweep, queue): a no-op unless REFERRAL_POOL_WORKER_ENABLED=true;
+    # assigning a sponsor additionally needs allocation_enabled in referral_pool_config.
+    "referral-pool": (ReferralPoolScheduler(), "_run_pass"),
 }
 
 _TASK_ALIASES = {"monthly-round": "monthly-ops"}

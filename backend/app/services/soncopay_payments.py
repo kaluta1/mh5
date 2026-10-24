@@ -164,8 +164,15 @@ def apply_payment(db: Session, deposit: Deposit, payment: Mapping[str, Any]) -> 
         deposit.provider_checkout_url = str(payment["checkout_url"])
 
     if status == "partially_refunded":
-        # Never treated as a full refund (even without refunded_amount): reconcile manually,
-        # exactly like a NOWPayments partial refund.
+        # A Referral Pool deposit with units: this SIGNED event's cumulative refunded amount
+        # refunds exactly the units it covers (P7). Anything else: reconcile manually, exactly like
+        # a NOWPayments partial refund. Never treated as a full refund.
+        from app.services import referral_pool_units
+
+        refunded = payment.get("refunded_amount")
+        if refunded is not None and referral_pool_units.on_provider_refund(
+                db, deposit, refunded, source="soncopay") is not None:
+            return True
         raise FinancialIntegrityError("Partial refunds are not supported; reconcile this provider event manually")
     if status == "refunded":
         from app.services.financial_reversal import reverse_provider_refund

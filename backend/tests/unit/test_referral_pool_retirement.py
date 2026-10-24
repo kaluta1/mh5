@@ -39,6 +39,16 @@ def test_public_summary_reports_the_pool_retired_without_price_or_seat_promotion
     assert cp["applies_to_annual_ads"] is False and body["ad_revenue"]["payouts_live"] is False
 
 
+# The only pool writes: the Multi-Unit admin controls (admin + permission + re-auth, audited).
+# The retired seat model stays without any write route.
+MULTIUNIT_ADMIN_WRITES = [
+    ("/api/v1/admin/referral-pool/limits", ["PUT"]),
+    ("/api/v1/admin/referral-pool/refunds", ["POST"]),
+    ("/api/v1/admin/referral-pool/refunds/{record_id}/decision", ["POST"]),
+    ("/api/v1/admin/referral-pool/risk-reviews/{review_id}/decision", ["POST"]),
+]
+
+
 def test_no_route_can_write_to_the_referral_pool(app):
     assert any("referral-pool" in getattr(r, "path", "") for r in app.routes)  # read-only history routes exist
     writes = [
@@ -47,7 +57,7 @@ def test_no_route_can_write_to_the_referral_pool(app):
         if "referral-pool" in getattr(route, "path", "")
         and set(getattr(route, "methods", set()) or set()) & {"POST", "PUT", "PATCH", "DELETE"}
     ]
-    assert writes == []
+    assert sorted(writes) == sorted(MULTIUNIT_ADMIN_WRITES)
 
 
 def test_member_affiliate_rate_endpoint_is_read_only(world):

@@ -99,8 +99,11 @@ describe('translations', () => {
   it('keeps the retired programs available as read-only history', () => {
     const en = JSON.parse(readFileSync(join(dir, 'en.json'), 'utf8'))
     expect(existsSync(join(root, 'app', 'dashboard', 'referral-pool', 'page.tsx'))).toBe(true)
-    expect(read('app', 'dashboard', 'referral-pool', 'page.tsx')).toMatch(/retired/i)
-    expect(en.business_model.pool_page_title).toBe('Referral Pool history')
+    // The Multi-Unit Referral Pool page keeps the member's record from the earlier single-seat program.
+    expect(read('app', 'dashboard', 'referral-pool', 'page.tsx')).toMatch(/referral_pool\.previous_title/)
+    expect(en.referral_pool.previous_title).toBe('Previous Referral Pool program')
+    expect(en.business_model.pool_body).toMatch(/single-seat Referral Pool has ended/)
+    expect(en.business_model.pool_page_title).toBe('Referral Pool')
     expect(en.business_model.history_note).toMatch(/previous program remain in your commission history and wallet/i)
     expect(read('components', 'dashboard', 'business-model-overview.tsx')).toMatch(/business_model\.history_note/)
     expect(JSON.stringify(en)).toMatch(/Only direct referrals count\.[^"]*There are no multi-level commissions\./)

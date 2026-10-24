@@ -206,6 +206,9 @@ class CRUDKYCVerification:
         from app.services.affiliate_rate_policy import record_for_sponsor_of
 
         record_for_sponsor_of(db, int(verification.user_id))  # permanent 40% qualification, if just met
+        from app.services.referral_pool_integration import record_kyc_decision
+
+        record_kyc_decision(db, verification, approved=True)  # pool outbox: commits with this approval
 
     def approve_verification(self, db: Session, *, verification_id: int, admin_user_id: Optional[int] = None) -> KYCVerification:
         """Approuver une vérification KYC"""
@@ -238,6 +241,9 @@ class CRUDKYCVerification:
             from app.services.affiliate_rate_policy import record_for_sponsor_of
 
             record_for_sponsor_of(db, int(verification.user_id))  # permanent 40% qualification, if just met
+            from app.services.referral_pool_integration import record_kyc_decision
+
+            record_kyc_decision(db, verification, approved=True)  # pool outbox: commits with this approval
             db.commit()
             db.refresh(verification)
             
@@ -276,6 +282,9 @@ class CRUDKYCVerification:
                 u.identity_verified = False
                 u.address_verified = False
 
+            from app.services.referral_pool_integration import record_kyc_decision
+
+            record_kyc_decision(db, verification, approved=False)  # pool outbox: commits with this rejection
             db.commit()
             db.refresh(verification)
             

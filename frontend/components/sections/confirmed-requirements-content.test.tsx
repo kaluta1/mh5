@@ -65,9 +65,15 @@ describe('landing page content (confirmed wording)', () => {
     expect(`${slots.description} ${page.description}`).not.toMatch(/21%|11%|60%/)
   })
 
-  it('has no Referral Pool question in the FAQ', () => {
+  it('answers the Referral Pool question with launch status and no guarantee', () => {
     const { container } = render(<FAQ />)
-    expect(container.textContent ?? '').not.toMatch(/Referral Pool/i)
+    const text = container.textContent ?? ''
+    expect(text).toContain(en.landing.faq.question_referral_pool)
+    const answer = en.landing.faq.answer_referral_pool
+    expect(answer).toMatch(/\$100 each/)
+    expect(answer).toMatch(/Referrals and earnings are not guaranteed\./)
+    expect(answer).not.toMatch(/launched|currently (un)?available/)       // launch status comes from the live switches
+    expect(answer).not.toMatch(/10,000 members|one-time \$100/i)   // the retired single-seat pool
   })
 })
 

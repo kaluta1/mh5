@@ -110,7 +110,7 @@ export default function AdminBusinessModel() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Business model (NEW_V2)</h1>
-        <p className="text-sm text-gray-500">Direct affiliate, MyHigh5 Leaders and marketplace custody. The Referral Pool is retired (read-only history). All financial actions are audited.</p>
+        <p className="text-sm text-gray-500">Direct affiliate, MyHigh5 Leaders and marketplace custody. The previous single-seat Referral Pool is kept here as read-only history; the Multi-Unit Referral Pool has its own admin page. All financial actions are audited.</p>
       </div>
       <div className="flex flex-wrap gap-2" role="tablist">
         {TABS.map((t) => (
@@ -127,7 +127,7 @@ export default function AdminBusinessModel() {
           <Card title="Version">
             <p className="text-sm">{overview.version} effective {overview.effective_at} · legacy model enabled: {String(overview.legacy_business_model_enabled)}</p>
           </Card>
-          <Card title="Referral Pool (retired, history only)">
+          <Card title="Previous single-seat Referral Pool (history only)">
             <p className="text-sm">Seats {overview.referral_pool.seats_in_use} / {overview.referral_pool.capacity} · assignments {overview.referral_pool.assignments} · method {overview.referral_pool.assignment_method}</p>
             <p className="text-sm">By status: {JSON.stringify(overview.referral_pool.by_status)} · active by source: {JSON.stringify(overview.referral_pool.active_by_source)}</p>
           </Card>
@@ -140,7 +140,7 @@ export default function AdminBusinessModel() {
       {tab === 'Referral Pool' && (
         <>
           <p role="note" className="text-sm text-gray-600 dark:text-gray-300">
-            The Referral Pool is retired: no new enrollment, seats or referral assignments can be created. Historical records below are read-only.
+            The previous single-seat Referral Pool has ended: no new seats or seat-based assignments can be created. Historical records below are read-only. The Multi-Unit Referral Pool is managed under Admin, Referral Pool.
           </p>
           {manifest && (
             <Card title="Legacy $100 Founding migration (read-only dry run)">

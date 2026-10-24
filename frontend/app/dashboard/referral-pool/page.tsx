@@ -1,13 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Users } from 'lucide-react'
 import api from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
 import { apiErrorText } from '@/lib/financial-eligibility'
+import { ReferralPoolUnitsCard } from '@/components/dashboard/referral-pool-units-card'
+import { ReferralPoolDashboard } from '@/components/dashboard/referral-pool-dashboard'
+import { ReferralPoolFaq, ReferralPoolRules } from '@/components/sections/referral-pool-explainer'
 
 type PoolMe = {
-  retired?: boolean
   membership: null | {
     status: string
     entitlement_source: string
@@ -26,11 +29,14 @@ function errorDetail(e: unknown): string {
   return e instanceof Error ? e.message : 'Request failed'
 }
 
-/** The Referral Pool is retired: this page only shows a member's own historical record. */
+/** The member's Multi-Unit Referral Pool page: launch status, own totals, current round, purchase
+ * card (unavailable while sales are off), how it works, and the record kept from the earlier
+ * single-seat program. */
 export default function ReferralPoolPage() {
   const { t } = useLanguage()
   const [me, setMe] = useState<PoolMe | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const load = useCallback(async () => {
     try {
@@ -48,18 +54,30 @@ export default function ReferralPoolPage() {
   const membership = me?.membership
 
   return (
-    <div className="space-y-6 pb-10 max-w-3xl">
+    <div className="space-y-6 pb-10 max-w-4xl">
       <div>
         <h1 className="flex items-center gap-3 text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
           <Users className="w-7 h-7 text-myhigh5-primary" aria-hidden="true" />
-          {t('business_model.pool_page_title')}
+          {t('referral_pool.page_title')}
         </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-300">{t('business_model.pool_body')}</p>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('business_model.pool_legacy_note')}</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-300">{t('referral_pool.intro')}</p>
       </div>
 
-      <div className="rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 space-y-3">
-        <h2 className="font-semibold text-gray-900 dark:text-white">{t('business_model.pool_status')}</h2>
+      <ReferralPoolDashboard refreshKey={refreshKey} />
+      <ReferralPoolUnitsCard onChange={() => setRefreshKey((k) => k + 1)} />
+      <ReferralPoolRules />
+      <ReferralPoolFaq />
+      <p className="text-sm">
+        <Link href="/referral-pool" className="text-myhigh5-primary underline">
+          {t('referral_pool.explainer_title')}
+        </Link>
+      </p>
+
+      <section className="rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 space-y-3">
+        <h2 className="font-semibold text-gray-900 dark:text-white">{t('referral_pool.previous_title')}</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300">{t('business_model.pool_body')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t('business_model.pool_legacy_note')}</p>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t('business_model.pool_status')}</h3>
         {membership ? (
           <>
             <p className="font-medium text-myhigh5-primary">{t(`business_model.status_${membership.status}`)}</p>
@@ -76,7 +94,7 @@ export default function ReferralPoolPage() {
             {error}
           </p>
         )}
-      </div>
+      </section>
     </div>
   )
 }

@@ -16,9 +16,11 @@ import {
   Sparkles
 } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
+import { referralPoolFaqAnswer, useReferralPoolStatus } from "@/lib/referral-pool-status"
 
 export default function FAQMobilePage() {
   const { t } = useLanguage()
+  const poolStatus = useReferralPoolStatus()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   const faqs = [
@@ -33,6 +35,10 @@ export default function FAQMobilePage() {
     {
       question: t('landing.faq.question_leaders'),
       answer: t('landing.faq.answer_leaders')
+    },
+    {
+      question: t('landing.faq.question_referral_pool'),
+      answer: referralPoolFaqAnswer(t, poolStatus)
     },
     {
       question: t('landing.faq.question_4') || 'Comment puis-je participer aux concours ?',

@@ -86,6 +86,11 @@ def validate_sponsor_assignment(db: Session, *, user_id: int, sponsor_id: int) -
         raise AffiliateHierarchyError("Sponsor reassignment is not allowed")
     if not sponsor.is_active or sponsor.is_deleted:
         raise AffiliateHierarchyError("Sponsor is inactive")
+    from app.services.sponsor_assignment import inviter_eligible
+
+    if not inviter_eligible(db, sponsor):
+        # The same rule as a code at registration: only a KYC-approved member invites.
+        raise AffiliateHierarchyError("Sponsor is not an identity-verified member")
 
     cursor: User | None = sponsor
     visited: set[int] = set()

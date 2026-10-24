@@ -211,9 +211,10 @@ def test_pending_tab_shows_only_the_members_own_invitations(client, chain):
 
 def test_referral_link_assigns_the_inviter_as_direct_sponsor_only(world):
     db = world
-    a = _user(db, "linka@t.com")
-    db.commit()
-    b = _register(db, "linkb@t.com", a.personal_referral_code)
+    from tests.unit.test_new_business_model import _kyc_approve
+
+    a = _kyc_approve(db, _user(db, "linka@t.com"))
+    b = _kyc_approve(db, _register(db, "linkb@t.com", a.personal_referral_code))
     c = _register(db, "linkc@t.com", b.personal_referral_code)
     assert (b.sponsor_id, c.sponsor_id) == (a.id, b.id)
     assert ids(crud_user.get_direct_referrals_detailed(db, a.id)) == [b.id]

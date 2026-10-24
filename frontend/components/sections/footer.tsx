@@ -104,6 +104,7 @@ export function Footer() {
   const quickLinks = [
     { name: t('footer.quick_links.about'), href: "/about", icon: Users },
     { name: t('footer.quick_links.contests'), href: "/contests", icon: Trophy },
+    { name: t('footer.quick_links.referral_pool'), href: "/referral-pool", icon: Users },
     { name: t('navigation.contact'), href: "/contact", icon: Mail },
   ]
 

@@ -1,0 +1,514 @@
+"""Multi-Unit Referral Pool, P6: KYC, sponsor and anti-abuse integration on a real PostgreSQL server.
+
+Opt-in: RUN_POSTGRES_TESTS=1 (see test_payments_postgres.py). Each test runs in ONE
+DISPOSABLE database that is dropped afterwards. Everything is SYNTHETIC.
+
+KYC decisions go through the real crud_kyc approve/reject paths: they write a pool event in
+their own transaction (outbox) and take no pool lock; the worker handles events afterwards.
+"""
+from __future__ import annotations
+
+import os
+import threading
+import uuid
+from datetime import datetime, timedelta
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
+from app.crud import crud_kyc
+from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission
+from app.models.business_model import (
+    ReferralPoolAssignment, ReferralPoolEvent, ReferralPoolMembership, ReferralPoolPending, ReferralPoolRiskReview,
+    ReferralPoolRoundSlot, ReferralPoolUnit, RevenueRecognition,
+)
+from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
+from app.models.login_log import LoginLog
+from app.models.user import User
+from app.services import payment_config
+from app.services import referral_pool_allocation as alloc
+from app.services import referral_pool_integration as integration
+from app.services import referral_pool_risk as risk
+from app.services import referral_pool_units as units
+from app.services.affiliate_hierarchy import AffiliateHierarchyError, validate_sponsor_assignment
+from app.services.sponsor_assignment import assign_at_registration, inviter_eligible
+from tests.integration.test_payments_postgres import in_threads, pg  # noqa: F401
+from tests.integration.test_referral_pool_allocation_postgres import (  # noqa: F401
+    add_units, assert_counters, holder, pool, received, referral, set_allocation,
+)
+from tests.integration.test_referral_pool_units_postgres import NOW, member, world  # noqa: F401
+
+pytestmark = [
+    pytest.mark.postgres,
+    pytest.mark.skipif(os.getenv("RUN_POSTGRES_TESTS", "").lower() not in ("1", "true", "yes"),
+                       reason="Set RUN_POSTGRES_TESTS=1 to run against a local PostgreSQL server"),
+]
+
+ROUNDS = int(os.getenv("KYC_RACE_ROUNDS", "10"))
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+def unverified(Session, *, identity=None, sponsor: int | None = None, source: str = "PERSONAL_REFERRAL") -> tuple:
+    """(member, verification): a member whose KYC is in progress (not yet approved)."""
+    user_id = member(Session, kyc=False)
+    with Session() as db:
+        u = db.get(User, user_id)
+        if sponsor is not None:
+            u.sponsor_id, u.sponsor_source = sponsor, source
+        first, last, born = identity or (f"F{uuid.uuid4().hex[:6]}", f"L{uuid.uuid4().hex[:6]}", datetime(1990, 1, 1))
+        v = KYCVerification(user_id=user_id, status=KYCStatus.IN_PROGRESS, provider=VerificationProvider.KALUTA,
+                            reference_id=f"ref-{uuid.uuid4().hex[:10]}", attempts_count=1, submitted_at=NOW,
+                            verified_first_name=first, verified_last_name=last, verified_date_of_birth=born)
+        db.add(v)
+        db.commit()
+        return user_id, v.id
+
+
+def approve(Session, verification_id: int) -> None:
+    with Session() as db:
+        crud_kyc.kyc_verification.approve_verification(db, verification_id=verification_id)
+
+
+def reject(Session, verification_id: int) -> None:
+    with Session() as db:
+        crud_kyc.kyc_verification.reject_verification(db, verification_id=verification_id, reason="Synthetic rejection")
+
+
+def new_attempt(Session, verification_id: int) -> None:
+    with Session() as db:
+        v = db.get(KYCVerification, verification_id)
+        v.status, v.attempts_count = KYCStatus.IN_PROGRESS, v.attempts_count + 1
+        db.commit()
+
+
+def lapsed_holder(Session, n: int, **kw) -> tuple:
+    """(member, verification): bought n units while KYC-approved, then rejected (units suspended),
+    now on a new attempt awaiting approval."""
+    user_id, v = unverified(Session, **kw)
+    approve(Session, v)
+    work(Session)
+    add_units(Session, user_id, n)
+    reject(Session, v)
+    work(Session)
+    new_attempt(Session, v)
+    return user_id, v
+
+
+def events(Session, user_id: int) -> list:
+    with Session() as db:
+        return [(e.event_type, e.status) for e in db.query(ReferralPoolEvent).filter_by(user_id=user_id)
+                .order_by(ReferralPoolEvent.id)]
+
+
+def work(Session):
+    return integration.process_events(Session, now=NOW)
+
+
+def pending_of(Session, user_id: int):
+    with Session() as db:
+        p = db.query(ReferralPoolPending).filter_by(referred_user_id=user_id).first()
+        return (p.status, p.resolution_reason) if p else None
+
+
+def unit_status(Session, user_id: int) -> set:
+    with Session() as db:
+        return {u.status for u in db.query(ReferralPoolUnit).filter_by(user_id=user_id)}
+
+
+@pytest.fixture
+def reviewer(world, monkeypatch):
+    _engine, Session = world
+    monkeypatch.setattr(payment_config, "has_permission", lambda user, permission: True)
+    monkeypatch.setattr(payment_config, "require_reauth", lambda actor, password: None)
+    return member(Session)
+
+
+# ---------------------------------------------------------------------------
+# 1. KYC decisions reach the pool after they commit
+# ---------------------------------------------------------------------------
+
+def test_an_approval_writes_one_event_that_queues_the_member_and_syncs_units(pool):
+    Session = pool
+    fresh, fv = unverified(Session)
+    approve(Session, fv)
+    assert events(Session, fresh) == [("KYC_APPROVED", "PENDING")]          # nothing done inside the KYC commit
+    assert pending_of(Session, fresh) is None
+    work(Session)
+    assert events(Session, fresh) == [("KYC_APPROVED", "DONE")]
+    assert pending_of(Session, fresh) == ("WAITING", None)
+
+    user_id, v = lapsed_holder(Session, 2)                                  # units suspended by a rejection
+    assert unit_status(Session, user_id) == {"SUSPENDED"}
+    approve(Session, v)
+    assert unit_status(Session, user_id) == {"SUSPENDED"}                   # not inside the approval
+    work(Session)
+    assert [e[0] for e in events(Session, user_id)] == ["KYC_APPROVED", "KYC_REJECTED", "KYC_APPROVED"]
+    assert unit_status(Session, user_id) == {"ACTIVE"}
+
+
+def test_an_approval_that_rolls_back_leaves_no_event(pool):
+    Session = pool
+    user_id, v = unverified(Session)
+    with Session() as db:
+        verification = db.get(KYCVerification, v)
+        verification.status = KYCStatus.APPROVED
+        integration.record_kyc_decision(db, verification, approved=True)
+        db.rollback()                                                       # the decision did not happen
+    assert events(Session, user_id) == []
+    work(Session)
+    assert pending_of(Session, user_id) is None
+
+
+def test_rejection_suspends_units_and_voids_open_slots_reapproval_restores(pool):
+    Session = pool
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    work(Session)
+    add_units(Session, user_id, 2)
+    other = holder(Session, 1)
+    with Session() as db:                                                  # opens the round (3 slots), one filled
+        alloc.assign(db, referral(Session), now=NOW)
+        db.commit()
+    reject(Session, v)
+    work(Session)
+    assert unit_status(Session, user_id) == {"SUSPENDED"}
+    with Session() as db:
+        open_slots = db.query(ReferralPoolRoundSlot).filter_by(member_user_id=user_id, status="OPEN").count()
+        assert open_slots == 0
+    new_attempt(Session, v)
+    approve(Session, v)
+    work(Session)
+    assert unit_status(Session, user_id) == {"ACTIVE"}
+    assert other and events(Session, user_id)[-1] == ("KYC_APPROVED", "DONE")
+    assert_counters(Session)
+
+
+def test_duplicate_approval_callbacks_write_one_event_and_queue_once(pool):
+    Session = pool
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    approve(Session, v)                                                     # the same decision delivered again
+    assert events(Session, user_id) == [("KYC_APPROVED", "PENDING")]
+    work(Session)
+    work(Session)
+    with Session() as db:
+        assert db.query(ReferralPoolPending).filter_by(referred_user_id=user_id).count() == 1
+
+
+@pytest.mark.parametrize("round_", range(ROUNDS))
+def test_concurrent_kyc_decisions_workers_and_allocation_never_deadlock(pool, round_):
+    Session = pool
+    holder(Session, 3)
+    people = [lapsed_holder(Session, 1) for _ in range(2)] + [unverified(Session) for _ in range(2)]
+
+    def act(i):
+        try:
+            kind = (i + round_) % 4
+            if kind == 0:
+                approve(Session, people[i % 4][1])
+            elif kind == 1:
+                work(Session)
+            elif kind == 2:
+                alloc.process_pending(Session, now=NOW)
+            else:
+                integration.sweep_eligibility(Session, now=NOW)
+            return "ok"
+        except Exception as exc:  # noqa: BLE001 - a deadlock would surface here
+            return f"error:{type(exc).__name__}:{getattr(getattr(exc, 'orig', None), 'pgcode', '')}"
+
+    results = in_threads(8, act)
+    assert not [r for r in results if isinstance(r, Exception) or str(r).startswith("error")], results
+    for _ in range(2):
+        integration.run_once(Session, now=NOW)
+    with Session() as db:
+        assert db.query(ReferralPoolEvent).filter(ReferralPoolEvent.status != "DONE").count() == 0
+    assert_counters(Session)
+
+
+def test_a_kyc_approval_takes_no_pool_lock(pool):
+    """The pool mutex is held by another transaction for the whole approval: the approval
+    finishes anyway (it would wait, then time out, if it touched any pool row lock)."""
+    Session = pool
+    user_id, v = lapsed_holder(Session, 1)
+    holding, done = threading.Event(), threading.Event()
+
+    def hold_mutex():
+        with Session() as db:
+            units.lock_pool(db)
+            holding.set()
+            done.wait(20)
+            db.rollback()
+
+    t = threading.Thread(target=hold_mutex)
+    t.start()
+    assert holding.wait(10)
+    with Session() as db:
+        db.execute(text("SET LOCAL lock_timeout = '3s'"))
+        crud_kyc.kyc_verification.approve_verification(db, verification_id=v)
+    done.set()
+    t.join(20)
+    assert events(Session, user_id)[-1] == ("KYC_APPROVED", "PENDING")
+
+
+# ---------------------------------------------------------------------------
+# 2. Personal invitations and existing sponsors
+# ---------------------------------------------------------------------------
+
+def test_a_valid_personal_inviter_takes_precedence(pool):
+    Session = pool
+    inviter = member(Session)                                               # KYC-approved
+    user_id, v = unverified(Session, sponsor=inviter)
+    approve(Session, v)
+    work(Session)
+    assert pending_of(Session, user_id) is None
+    with Session() as db:
+        assert db.get(User, user_id).sponsor_id == inviter
+
+
+def test_an_unverified_inviter_creates_no_sponsor_at_registration_or_by_code(pool):
+    Session = pool
+    unverified_inviter = member(Session, kyc=False)
+    newcomer = member(Session)
+    with Session() as db:
+        u = db.get(User, newcomer)
+        u.sponsor_id, u.sponsor_source = None, None
+        db.commit()
+        assert assign_at_registration(db, db.get(User, newcomer), db.get(User, unverified_inviter)) == "NONE"
+        db.commit()
+        assert db.get(User, newcomer).sponsor_id is None
+    late = member(Session)
+    with Session() as db:
+        with pytest.raises(AffiliateHierarchyError, match="identity-verified"):
+            validate_sponsor_assignment(db, user_id=late, sponsor_id=unverified_inviter)
+        db.rollback()
+        assert inviter_eligible(db, db.get(User, member(Session))) is True
+
+
+def test_a_historical_invalid_sponsor_is_kept_and_reported_not_replaced(pool):
+    Session = pool
+    holder(Session, 2)
+    stale_inviter = member(Session, kyc=False)
+    user_id, v = unverified(Session, sponsor=stale_inviter)
+    approve(Session, v)
+    work(Session)
+    assert pending_of(Session, user_id) is None                             # SPONSOR_PRESENT: never pooled
+    with Session() as db:
+        assert db.get(User, user_id).sponsor_id == stale_inviter
+        report = integration.invalid_personal_sponsors(db)
+        assert {"user_id": user_id, "sponsor_id": stale_inviter, "source": "PERSONAL_REFERRAL"} in report
+
+
+def test_a_pool_sponsor_cannot_be_replaced_by_a_later_invitation(pool):
+    Session = pool
+    sponsor = holder(Session, 1)
+    inviter = member(Session)
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    integration.run_once(Session, now=NOW)
+    with Session() as db:
+        assert db.get(User, user_id).sponsor_id == sponsor
+        with pytest.raises(AffiliateHierarchyError, match="reassignment"):
+            validate_sponsor_assignment(db, user_id=user_id, sponsor_id=inviter)
+        db.rollback()
+
+
+def test_the_worker_queue_is_fifo_and_a_failing_referral_does_not_stop_it(pool, monkeypatch):
+    Session = pool
+    holder(Session, 3)
+    first = referral(Session, at=NOW + timedelta(minutes=1))
+    broken = referral(Session, at=NOW + timedelta(minutes=2))
+    last = referral(Session, at=NOW + timedelta(minutes=3))
+    real = alloc.assign
+
+    def flaky(db, referred_user_id, **kw):
+        if referred_user_id == broken:
+            raise RuntimeError("synthetic failure")
+        return real(db, referred_user_id, **kw)
+
+    monkeypatch.setattr(alloc, "assign", flaky)
+    results = alloc.process_pending(Session, now=NOW)
+    assert [r.outcome for r in results] == [alloc.ASSIGNED, alloc.ERROR, alloc.ASSIGNED]
+    with Session() as db:
+        p = db.query(ReferralPoolPending).filter_by(referred_user_id=broken).one()
+        assert (p.status, p.attempts, p.last_error.startswith("RuntimeError")) == ("WAITING", 1, True)
+    monkeypatch.setattr(alloc, "assign", real)
+    assert alloc.process_pending(Session, now=NOW)[0].outcome == alloc.ASSIGNED          # retried next pass
+    assert first and last
+
+
+def test_a_failing_event_is_retried_then_failed_and_recoverable(pool, monkeypatch):
+    Session = pool
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    monkeypatch.setattr(integration, "handle_event", lambda db, e, now=None: (_ for _ in ()).throw(RuntimeError("x")))
+    for _ in range(integration.MAX_ATTEMPTS):
+        work(Session)                                                       # one attempt per pass, no tight loop
+    with Session() as db:
+        e = db.query(ReferralPoolEvent).filter_by(user_id=user_id).one()
+        assert (e.status, e.attempts) == ("FAILED", integration.MAX_ATTEMPTS) and "RuntimeError" in e.last_error
+        integration.retry_failed_event(db, e.id)
+        db.commit()
+    monkeypatch.undo()
+    work(Session)
+    assert events(Session, user_id) == [("KYC_APPROVED", "DONE")]
+
+
+def test_with_allocation_off_events_are_handled_but_nobody_is_assigned(pool):
+    Session = pool
+    holder(Session, 2)
+    set_allocation(Session, False)
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    integration.run_once(Session, now=NOW)
+    assert pending_of(Session, user_id) == ("WAITING", None)
+    with Session() as db:
+        assert db.get(User, user_id).sponsor_id is None
+        assert db.query(ReferralPoolAssignment).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# 3. Second accounts
+# ---------------------------------------------------------------------------
+
+def test_a_duplicate_verified_identity_blocks_both_accounts_until_cleared(pool, reviewer):
+    Session = pool
+    holder(Session, 2)
+    same = ("Jane", "Doe", datetime(1985, 3, 4))
+    a, va = unverified(Session, identity=same)
+    b, vb = unverified(Session, identity=(" jane ", "DOE", datetime(1985, 3, 4)))
+    approve(Session, va)
+    work(Session)
+    add_units(Session, a, 1)
+    assert unit_status(Session, a) == {"ACTIVE"}                            # alone so far
+    approve(Session, vb)
+    work(Session)
+    with Session() as db:
+        rows = db.query(ReferralPoolRiskReview).filter_by(signal=risk.DUPLICATE_IDENTITY).all()
+        assert {r.user_id for r in rows} == {a, b} and all(r.blocking and r.status == "OPEN" for r in rows)
+        assert len({r.evidence_hash for r in rows}) == 1 and "jane" not in (rows[0].related_user_ids or "").lower()
+        assert units.member_eligibility(db, db.get(User, a)).reason == "RISK_REVIEW"
+    integration.sweep_eligibility(Session, now=NOW)
+    assert unit_status(Session, a) == {"SUSPENDED"}
+    assert alloc.process_pending(Session, now=NOW) == [alloc.Result(alloc.CANCELLED, "RISK_REVIEW")]
+    with Session() as db:
+        assert db.get(User, b).sponsor_id is None
+        for row in db.query(ReferralPoolRiskReview).filter_by(signal=risk.DUPLICATE_IDENTITY).all():
+            risk.decide(db, db.get(User, reviewer), row.id, risk.CLEARED, note="Twins, verified by phone",
+                        password="x", now=NOW)
+    integration.run_once(Session, now=NOW)
+    assert unit_status(Session, a) == {"ACTIVE"}
+    with Session() as db:
+        assert db.get(User, b).sponsor_id is not None                       # re-queued and assigned
+
+
+def test_a_shared_wallet_or_login_ip_is_recorded_and_never_blocks(pool):
+    Session = pool
+    a, va = unverified(Session)
+    b = member(Session)
+    with Session() as db:
+        db.get(User, a).usdt_wallet_address = "0xSharedSyntheticWallet"
+        db.get(User, b).usdt_wallet_address = " 0xsharedsyntheticwallet "
+        db.add(LoginLog(user_id=a, ip_address="203.0.113.77"))
+        db.add(LoginLog(user_id=b, ip_address="203.0.113.77"))
+        db.commit()
+    approve(Session, va)
+    work(Session)
+    with Session() as db:
+        signals = {(r.user_id, r.signal, r.blocking) for r in db.query(ReferralPoolRiskReview)}
+        assert {(a, risk.SHARED_WALLET, False), (b, risk.SHARED_WALLET, False),
+                (a, risk.SHARED_IP, False), (b, risk.SHARED_IP, False)} <= signals
+        assert not risk.is_blocked(db, a) and units.member_eligibility(db, db.get(User, a)).eligible
+    assert pending_of(Session, a) == ("WAITING", None)
+    with Session() as db:                                                  # the database refuses an IP ban
+        with pytest.raises(IntegrityError):
+            db.add(ReferralPoolRiskReview(user_id=a, signal=risk.SHARED_IP, evidence_hash="f" * 64, blocking=True))
+            db.flush()
+        db.rollback()
+
+
+# ---------------------------------------------------------------------------
+# 4. Money stays put
+# ---------------------------------------------------------------------------
+
+def test_kyc_and_sponsor_changes_never_duplicate_revenue_or_commission(pool):
+    Session = pool
+    inviter = member(Session)
+    buyer, v = unverified(Session, sponsor=inviter)
+    approve(Session, v)
+    work(Session)
+    add_units(Session, buyer, 3)                                            # earned at once (3 x $100, 3 x $20)
+    reject(Session, v)
+    work(Session)
+    new_attempt(Session, v)
+    approve(Session, v)
+    work(Session)
+    integration.sweep_eligibility(Session, now=NOW)
+    with Session() as db:
+        ids = [u.id for u in db.query(ReferralPoolUnit).filter_by(user_id=buyer)]
+        assert db.query(RevenueRecognition).filter(RevenueRecognition.source_type == "REFERRAL_POOL_UNIT",
+                                                   RevenueRecognition.source_id.in_(ids)).count() == 3
+        rows = db.query(AffiliateCommission).filter(AffiliateCommission.source_type == "REFERRAL_POOL_UNIT",
+                                                    AffiliateCommission.source_id.in_(ids)).all()
+        assert len(rows) == 3 and {c.user_id for c in rows} == {inviter}
+        assert db.query(AffiliateCashoutRequest).count() == 0               # nothing paid out
+
+
+def test_worker_passes_leave_historical_assignments_unchanged(pool):
+    Session = pool
+    legacy_member, legacy_referral = member(Session), member(Session)
+    with Session() as db:
+        seat = ReferralPoolMembership(user_id=legacy_member, status="ACTIVE", seat_number=1, entitlement_source="PAID",
+                                      joined_at=NOW, assignment_eligible=True, assignments_count=1)
+        db.add(seat)
+        db.flush()
+        db.add(ReferralPoolAssignment(referred_user_id=legacy_referral, pool_member_user_id=legacy_member,
+                                      membership_id=seat.id, method="FAIR_RANDOM_V1", candidate_count=2,
+                                      min_assignment_count=0, assigned_at=NOW))
+        db.commit()
+    holder(Session, 2)
+    user_id, v = unverified(Session)
+    approve(Session, v)
+    for _ in range(2):
+        integration.run_once(Session, now=NOW)
+    with Session() as db:
+        legacy = db.query(ReferralPoolAssignment).filter_by(referred_user_id=legacy_referral).one()
+        assert (legacy.pool_member_user_id, legacy.slot_id, legacy.round_id) == (legacy_member, None, None)
+    assert_counters(Session)
+
+
+def test_the_worker_is_off_unless_switched_on(monkeypatch):
+    monkeypatch.delenv("REFERRAL_POOL_WORKER_ENABLED", raising=False)
+    assert integration.worker_enabled() is False
+    monkeypatch.setenv("REFERRAL_POOL_WORKER_ENABLED", "true")
+    assert integration.worker_enabled() is True
+    from app.services.scheduler_manager import scheduler_manager
+
+    assert "referral-pool" in scheduler_manager.list_tasks()
+
+
+def test_the_events_and_reviews_migration_goes_down_and_up_to_the_model_schema(pg):
+    from tests.integration.test_payments_postgres import load_migration, migrate
+    from tests.integration.test_referral_pool_multiunit_schema_postgres import tables
+
+    engine, _Session = pg
+    name = "c1e3a5b7d9f2_referral_pool_events_and_risk_reviews.py"
+    module = load_migration(name)
+    assert (module.revision, module.down_revision) == ("c1e3a5b7d9f2", "a7c9e1f3b5d2")
+
+    def shape():
+        with engine.connect() as c:
+            return sorted(tuple(r) for r in c.execute(text(
+                "select cl.relname, con.conname, pg_get_constraintdef(con.oid) from pg_constraint con "
+                "join pg_class cl on cl.oid = con.conrelid "
+                "where cl.relname in ('referral_pool_events', 'referral_pool_risk_reviews')")))
+
+    model = shape()
+    migrate(engine, name, "downgrade")
+    assert not {"referral_pool_events", "referral_pool_risk_reviews"} & tables(engine)
+    migrate(engine, name, "upgrade")
+    migrate(engine, name, "upgrade")                                      # re-run: a no-op
+    assert shape() == model
