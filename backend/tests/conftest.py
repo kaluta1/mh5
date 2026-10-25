@@ -105,6 +105,16 @@ def _no_kyc_admin_values_between_tests():
     kaluta_kyc_service.use_settings({})
 
 
+@pytest.fixture(autouse=True)
+def _small_referral_pool_minimum(monkeypatch):
+    """Allocation tests build pools of one or two holders: the production minimum (5 holders,
+    10 units) is lowered to 1/1 here. The minimum's own tests set the real values back."""
+    from app.services import referral_pool_allocation as alloc
+
+    monkeypatch.setattr(alloc, "MIN_ALLOCATION_HOLDERS", 1)
+    monkeypatch.setattr(alloc, "MIN_ALLOCATION_UNITS", 1)
+
+
 TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY = "synthetic-test-payment-settings-encryption-key"
 
 

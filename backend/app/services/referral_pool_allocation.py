@@ -5,7 +5,9 @@ units bought or restored later join the next round). A KYC-approved referral wit
 personal inviter waits in referral_pool_pending; each assignment takes one OPEN slot chosen
 uniformly at random (``secrets``) among the slots it may take, fills it, and makes the slot's
 holder the referral's sponsor, once. A round completes when every slot is FILLED or VOID; the
-next one opens only when a waiting referral needs a slot, and never empty.
+next one opens only when a waiting referral needs a slot, and never empty. Nobody is allocated
+while fewer than MIN_ALLOCATION_HOLDERS eligible holders hold MIN_ALLOCATION_UNITS eligible ACTIVE
+units: referrals keep waiting (POOL_BELOW_MINIMUM), an OPEN round included.
 
 Fairness: every OPEN slot is equally likely; a unit holds one slot per round, so a holder of N
 continuously eligible units receives exactly N referrals per completed round. Slots a referral
@@ -47,6 +49,12 @@ METHOD = "QUOTA_ROUND_V1"
 POOL_SOURCE = "REFERRAL_POOL"
 _PERSONAL_SOURCES = ("PERSONAL_REFERRAL", "JOIN_CODE")
 _MAX_REDRAWS = 1000
+# Minimum pool before anyone is allocated (owner decision P15 D4-C): no round opens and no slot is
+# drawn unless at least this many distinct eligible holders hold at least this many eligible ACTIVE
+# units, so a small pool never becomes one member's sponsor feed. Fixed in code on purpose.
+MIN_ALLOCATION_HOLDERS = 5
+MIN_ALLOCATION_UNITS = 10
+BELOW_MINIMUM = "POOL_BELOW_MINIMUM"
 
 # outcomes
 ASSIGNED, ALREADY_ASSIGNED, WAITING, CANCELLED, DISABLED, NOT_QUEUED, ERROR = (
@@ -122,17 +130,8 @@ def _open_round(db: Session) -> Optional[ReferralPoolRound]:
             .with_for_update().populate_existing().first())
 
 
-def open_round_if_needed(db: Session, *, now: Optional[datetime] = None) -> Optional[ReferralPoolRound]:
-    """The OPEN round, or a new one from a snapshot of eligible ACTIVE units. None when allocation
-    is off or no unit is eligible (no empty round is ever created). Caller holds the pool mutex
-    or this takes it."""
-    now = now or datetime.utcnow()
-    cfg = units.lock_pool(db)
-    if not cfg.allocation_enabled:
-        return None
-    current = _open_round(db)
-    if current is not None:
-        return current
+def eligible_active_units(db: Session) -> List[tuple]:
+    """(unit id, holder id) of every ACTIVE unit whose holder is eligible now, in unit-id order."""
     rows = (db.query(ReferralPoolUnit.id, ReferralPoolUnit.user_id).filter(ReferralPoolUnit.status == units.ACTIVE)
             .order_by(ReferralPoolUnit.id).all())
     holders: Dict[int, bool] = {}
@@ -140,8 +139,27 @@ def open_round_if_needed(db: Session, *, now: Optional[datetime] = None) -> Opti
         if holder_id not in holders:
             holder = db.query(User).filter(User.id == holder_id).first()
             holders[holder_id] = units.member_eligibility(db, holder).eligible
-    snapshot = [(uid, holder_id) for uid, holder_id in rows if holders[holder_id]]
-    if not snapshot:
+    return [(uid, holder_id) for uid, holder_id in rows if holders[holder_id]]
+
+
+def meets_minimum(snapshot: List[tuple]) -> bool:
+    return (len({holder_id for _uid, holder_id in snapshot}) >= MIN_ALLOCATION_HOLDERS
+            and len(snapshot) >= MIN_ALLOCATION_UNITS)
+
+
+def open_round_if_needed(db: Session, *, now: Optional[datetime] = None) -> Optional[ReferralPoolRound]:
+    """The OPEN round, or a new one from a snapshot of eligible ACTIVE units. None when allocation
+    is off or the pool is below the minimum (no empty or undersized round is ever created).
+    Caller holds the pool mutex or this takes it."""
+    now = now or datetime.utcnow()
+    cfg = units.lock_pool(db)
+    if not cfg.allocation_enabled:
+        return None
+    current = _open_round(db)
+    if current is not None:
+        return current
+    snapshot = eligible_active_units(db)
+    if not meets_minimum(snapshot):
         return None
     number = int(db.query(func.coalesce(func.max(ReferralPoolRound.round_number), 0)).scalar()) + 1
     digest = hashlib.sha256(",".join(f"{u}:{h}" for u, h in snapshot).encode()).hexdigest()
@@ -199,6 +217,11 @@ def assign(db: Session, referred_user_id: int, *, now: Optional[datetime] = None
         db.flush()
         return Result(CANCELLED, refusal)
 
+    snapshot = eligible_active_units(db)
+    if not snapshot:
+        return _wait(pending, "NO_ELIGIBLE_UNIT", now)
+    if not meets_minimum(snapshot):
+        return _wait(pending, BELOW_MINIMUM, now)           # also holds an OPEN round if the pool shrank
     excluded = _downline(db, referred_user_id) | {referred_user_id}
     eligible_cache: Dict[int, bool] = {}
     for _ in range(_MAX_REDRAWS):
