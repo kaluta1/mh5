@@ -316,12 +316,17 @@ def _adopt_created_session(db: Session, verification, *, session: Dict[str, Any]
     timeout): its creation event is the only place its id arrives. Each start
     issues a new reference and clears the link, so an event naming the CURRENT
     reference while no link is saved is the session of the start that failed.
-    Adopted only then, for the member it is bound to; a saved session is never
-    replaced. A later start hands out this session instead of opening another."""
+    Adopted only then; a saved session is never replaced. A later start hands
+    out this session instead of opening another.
+
+    The provider's events carry no metadata, so the member binding is the
+    reference itself: unguessable, issued to this member only and known only
+    to this server and the provider, in an event whose signature was checked.
+    A user id the event does name must be the member's."""
     if not (_SESSION_ID.fullmatch(session_id)
             and external_id and str(external_id) == str(verification.reference_id or "")):
         return False
-    if bound_user_id is None or str(bound_user_id) != str(verification.user_id):
+    if bound_user_id is not None and str(bound_user_id) != str(verification.user_id):
         return False
     if reported and reported not in IN_FLIGHT:
         return False

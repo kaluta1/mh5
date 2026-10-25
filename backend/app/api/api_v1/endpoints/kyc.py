@@ -521,6 +521,23 @@ async def initiate_shufti_verification(
             if row is not None and int(row.attempt_sessions_count or 0) > 0:
                 row.attempt_sessions_count = int(row.attempt_sessions_count) - 1
             db.commit()
+        else:
+            # The provider may have opened the session although its answer did not
+            # arrive; its creation event, delivered meanwhile, saved it. That link
+            # is handed out: the member continues instead of being told to wait.
+            db.rollback()
+            row = db.query(KYCVerificationModel).filter(KYCVerificationModel.id == verification.id).populate_existing().first()
+            if (row is not None and row.reference_id == reference and row.verification_url
+                    and row.status in (KYCStatus.PENDING, KYCStatus.IN_PROGRESS)):
+                return {
+                    "verification_url": row.verification_url,
+                    "reference": reference,
+                    "verification_id": row.id,
+                    "reused": True,
+                    "provider": provider_for_verification(row),
+                    "status": "in_progress",
+                    **_attempt_view(row, per_attempt),
+                }
         err = result.get("error", "Verification could not be started")
         err_l = (err or "").lower()
         if is_kaluta_active():

@@ -248,7 +248,9 @@ class KalutaKYCService:
         headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
 
         try:
-            timeout = httpx.Timeout(30.0, connect=5.0, read=20.0, write=10.0, pool=5.0)
+            # The provider has taken more than 30 s to answer a creation it then carried
+            # out; a shorter wait failed the start of a session that was opened anyway.
+            timeout = httpx.Timeout(60.0, connect=5.0, read=60.0, write=10.0, pool=5.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{KALUTA_API_BASE}/sessions", headers=headers, json=body)
             if resp.status_code >= 400:
@@ -296,7 +298,9 @@ class KalutaKYCService:
 
         headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
         try:
-            timeout = httpx.Timeout(20.0, connect=5.0, read=15.0, write=10.0, pool=5.0)
+            # A status read is never needed to decide (the signed webhook decides) and runs
+            # while the member waits for a page: kept short.
+            timeout = httpx.Timeout(8.0, connect=3.0, read=5.0, write=5.0, pool=3.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(f"{KALUTA_API_BASE}/sessions/{session_id}", headers=headers)
             if resp.status_code >= 400:

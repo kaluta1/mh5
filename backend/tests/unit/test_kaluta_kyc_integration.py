@@ -586,16 +586,31 @@ def test_a_provider_link_in_the_creation_event_is_kept_only_when_it_is_the_provi
     assert kyc_rows(db, user)[0].verification_url == "https://kalutakyc.com/verify/sess-late"
 
 
-@pytest.mark.parametrize("change", ["no_member", "other_member", "old_reference", "no_session_id", "unsafe_session_id",
+def test_the_providers_creation_event_without_metadata_adopts_the_session(client, db, monkeypatch):
+    # The provider's events carry no metadata: the reference alone binds the session to the member.
+    user = adult(db)
+    kyc_paid(db, user)
+    _, row = timed_out_start(client, db, monkeypatch, user)
+    event_ = created(row.reference_id, user.id)
+    event_["session"].pop("metadata")
+    assert deliver(client, event_).json()["result"] == "applied"
+    db.expire_all()
+    row = kyc_rows(db, user)[0]
+    assert (row.status, row.external_verification_id, row.verification_url) == (
+        KYCStatus.IN_PROGRESS, "sess-late", "https://kalutakyc.com/verify/sess-late")
+    again = client.post(INITIATE, json=ADDRESS, headers=auth(user))
+    assert again.status_code == 200 and again.json()["verification_url"] == "https://kalutakyc.com/verify/sess-late"
+    assert kyc_rows(db, user)[0].attempt_sessions_count == 1
+
+
+@pytest.mark.parametrize("change", ["other_member", "old_reference", "no_session_id", "unsafe_session_id",
                                     "ended_status"])
 def test_a_creation_event_that_cannot_be_proved_ours_adopts_nothing(client, db, monkeypatch, change):
     user = adult(db)
     kyc_paid(db, user)
     _, row = timed_out_start(client, db, monkeypatch, user)
     event_ = created(row.reference_id, user.id)
-    if change == "no_member":
-        event_["session"].pop("metadata")
-    elif change == "other_member":
+    if change == "other_member":
         event_["session"]["metadata"] = {"user_id": user.id + 1}
     elif change == "old_reference":
         event_["session"]["external_id"] = "mh5_old_reference"
@@ -671,7 +686,9 @@ def test_a_creation_event_arriving_during_the_start_leaves_one_session(client, d
     kyc_paid(db, user)
     calls = provider_that_sends_the_creation_event_first(monkeypatch, db, user, then=then)
     answer = client.post(INITIATE, json=ADDRESS, headers=auth(user))
-    assert answer.status_code == (200 if then == "answer" else 503), answer.text
+    # Even when the provider's answer never arrives, the session its creation event saved is handed out.
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["verification_url"] == "https://kalutakyc.com/verify/sess-late"
     db.expire_all()
     row = kyc_rows(db, user)[0]
     assert (row.status, row.external_verification_id, row.verification_url) == (
