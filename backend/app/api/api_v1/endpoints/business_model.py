@@ -31,7 +31,7 @@ from app.models.business_model import (
     RevenuePolicy,
 )
 from app.models.user import User
-from app.services import leaders_service, legacy_pool_migration, marketplace_service
+from app.services import kyc_fee, leaders_service, legacy_pool_migration, marketplace_service
 from app.services import referral_pool_service as pool
 from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 from app.services.new_model_revenue import COMMISSION_BASE_DEFINITION, RevenuePolicyMissing, compute_breakdown, get_policy
@@ -80,7 +80,7 @@ def _commission_policy(db: Session) -> dict:
         "commission_base_definition": COMMISSION_BASE_DEFINITION,
         "provider_cost_reduces_commission_base": False,
         "affiliate_levels": 1,
-        "kyc": _policy_example(db, "kyc", "10.00"),
+        "kyc": _policy_example(db, "kyc", str(kyc_fee.member_fee(db)[0])),     # at the configured member fee
         "other_products": [_policy_example(db, "annual_membership", g) for g in ("10.00", "50.00", "100.00")],
         "marketplace": _policy_example(db, MARKETPLACE_PRODUCT_CODE, str(total), str(base)),
         "leaders_revenue_definition": leaders_service.REVENUE_DEFINITION,

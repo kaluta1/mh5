@@ -6,6 +6,7 @@ describe('the member KYC fee shown to a member', () => {
   it('shows the amount the server sent', () => {
     expect(formatKycFee({ kyc_price: 7.5, kyc_currency: 'USD' })).toBe('7.50 USD')
     expect(formatKycFee({ kyc_price: 10, kyc_currency: 'usd' })).toBe('10 USD')
+    expect(formatKycFee({ kyc_price: 5, kyc_currency: 'USD' })).toBe('5 USD')
     expect(formatKycFee({ kyc_price: '25.00' })).toBe('25 USD')
   })
 
@@ -17,11 +18,12 @@ describe('the member KYC fee shown to a member', () => {
     expect(isKycFree({ kyc_price: 10 })).toBe(false)
   })
 
-  it('does not call an unknown fee free', () => {
+  it('never shows an assumed price while the fee is unknown', () => {
     for (const unknown of [null, undefined, {}, { kyc_price: null }, { kyc_price: 'abc' }, { kyc_price: -1 }]) {
       expect(isKycFree(unknown as any)).toBe(false)
       expect(kycFeeAmount(unknown as any)).toBeNull()
-      expect(formatKycFee(unknown as any)).toBe('10 USD')
+      expect(formatKycFee(unknown as any)).toBe('…')
+      expect(formatKycFee(unknown as any)).not.toMatch(/10/)
     }
   })
 })

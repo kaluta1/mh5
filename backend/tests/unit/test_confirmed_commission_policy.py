@@ -389,6 +389,14 @@ def test_policy_rows_state_the_confirmed_rules(world):
     summary = bm_api._commission_policy(db)
     assert "referral_pool" not in summary  # retired: no longer advertised as a commission example
     assert (summary["kyc"]["commission_base"], summary["kyc"]["direct_commission"]) == (10.0, 2.0)
+    # The KYC example follows the member KYC fee an administrator configured, never a fixed figure.
+    kyc_row = db.query(ProductType).filter(ProductType.code == "kyc").one()
+    kyc_row.price = Decimal("5.00")
+    db.flush()
+    five = bm_api._commission_policy(db)["kyc"]
+    assert (five["gross"], five["commission_base"], five["direct_commission"]) == (5.0, 5.0, 1.0)
+    kyc_row.price = Decimal("10.00")
+    db.flush()
     assert [p["direct_commission"] for p in summary["other_products"]] == [2.0, 10.0, 20.0]
     mk = summary["marketplace"]
     assert (mk["gross"], mk["seller_base"], mk["commission_base"], mk["direct_commission"]) == (120.0, 100.0, 20.0, 4.0)

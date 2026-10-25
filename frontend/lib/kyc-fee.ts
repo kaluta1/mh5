@@ -8,8 +8,8 @@
 
 export const KYC_FEE_URL = '/api/v1/kyc/fee'
 export const KYC_ADMIN_FEE_URL = '/api/v1/kyc/admin/fee'
-/** Shown only until the server's figure has arrived. */
-export const KYC_FEE_FALLBACK_USD = 10
+/** Shown while the server's figure is unknown: no price is ever assumed. */
+export const KYC_FEE_UNKNOWN_TEXT = '…'
 
 export type KycFeeView = { amount: string; currency: string; is_free: boolean; retry_policy: string }
 
@@ -35,10 +35,11 @@ export function isKycFree(source: FeeSource): boolean {
   return source?.kyc_is_free === true || kycFeeAmount(source) === 0
 }
 
-/** "Free", "7.50 USD", or the fallback while the fee is unknown. Never turns a fee of 0 into a price. */
+/** "Free", "7.50 USD", or "…" while the fee is unknown. Never turns a fee of 0 into a price. */
 export function formatKycFee(source: FeeSource, freeLabel = 'Free'): string {
   if (isKycFree(source)) return freeLabel
-  const amount = kycFeeAmount(source) ?? KYC_FEE_FALLBACK_USD
+  const amount = kycFeeAmount(source)
+  if (amount === null) return KYC_FEE_UNKNOWN_TEXT
   const text = Number.isInteger(amount) ? String(amount) : amount.toFixed(2)
   return `${text} ${(source?.kyc_currency || 'USD').toUpperCase()}`
 }

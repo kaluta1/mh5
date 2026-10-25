@@ -77,8 +77,9 @@ interface Recipient {
   error: string | null
 }
 
-// Until the server's member KYC fee has arrived (the server refuses any other amount).
-const DEFAULT_KYC_PRICE_USD = 10
+// No KYC price is assumed: the member KYC fee is shown, and can be paid, only once the
+// server's figure has arrived (the server refuses any other amount).
+const KYC_PRICE_UNKNOWN = 0
 
 const PREFERRED_PAY_CURRENCIES = ['usdtbsc', 'usdterc20', 'usdttrc20', 'usdt', 'btc', 'eth']
 
@@ -162,7 +163,9 @@ export function PaymentDialog({
   const [includeMyself, setIncludeMyself] = useState(true)
   const [myselfProduct, setMyselfProduct] = useState<'kyc' | 'mfm_membership' | 'annual_membership'>(initialProductCode as 'kyc' | 'mfm_membership' | 'annual_membership')
   // The member KYC fee is set by an administrator; the server's figure replaces the default.
-  const [kycPriceUsd, setKycPriceUsd] = useState(DEFAULT_KYC_PRICE_USD)
+  const [kycPriceUsd, setKycPriceUsd] = useState(KYC_PRICE_UNKNOWN)
+  const kycPriceKnown = kycPriceUsd > 0
+  const kycPriceText = kycPriceKnown ? `${kycPriceUsd}` : '…'
   const [myselfAmount, setMyselfAmount] = useState(
     initialProductCode === 'kyc' ? kycPriceUsd : 
     initialProductCode === 'annual_membership' ? 50 : 100
@@ -391,7 +394,8 @@ export function PaymentDialog({
   // Check if payment is valid
   const othersValid = recipients.every(r => r.verifiedUser !== null && r.amount > 0)
   const hasAtLeastOne = includeMyself || recipients.length > 0
-  const allRecipientsValid = hasAtLeastOne && othersValid && 
+  const usesKyc = (includeMyself && myselfProduct === 'kyc') || recipients.some(r => r.productCode === 'kyc')
+  const allRecipientsValid = hasAtLeastOne && othersValid && (!usesKyc || kycPriceKnown) &&
     (!includeMyself || myselfAmount >= (myselfProduct === 'mfm_membership' ? 100 : myselfProduct === 'annual_membership' ? 50 : kycPriceUsd))
 
   // Copy to clipboard
@@ -684,7 +688,7 @@ export function PaymentDialog({
                         {t('payment.kyc_description') || 'Identity verification'}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-myhigh5-primary">${kycPriceUsd}</span>
+                    <span className="text-sm font-bold text-myhigh5-primary">${kycPriceText}</span>
                   </div>
                 </button>
 
@@ -798,7 +802,7 @@ export function PaymentDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="kyc">KYC Service - {kycPriceUsd} USD</SelectItem>
+                        <SelectItem value="kyc">KYC Service - {kycPriceText} USD</SelectItem>
                         <SelectItem value="annual_membership">Annual Membership - 50 USD</SelectItem>
                       </SelectContent>
                     </Select>

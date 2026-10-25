@@ -141,7 +141,7 @@ class KYCService {
             type: 'payment_required',
             message: (detail as { message?: string }).message || 'Payment is required for KYC verification',
             available_attempts: (detail as { available_attempts?: number }).available_attempts || 0,
-            price: (detail as { price?: number }).price || 10,
+            price: (detail as { price?: number }).price ?? 0,     // the server always says; 0 = not said
             currency: (detail as { currency?: string }).currency || 'USD',
           })
         }

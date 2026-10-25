@@ -17,7 +17,8 @@ const { service } = vi.hoisted(() => ({
 const { language } = vi.hoisted(() => ({ language: { t: () => '', language: 'en' } }))
 vi.mock('@/contexts/language-context', () => ({ useLanguage: () => language }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { username: 'buyer', email: 'buyer@example.test' } }) }))
-vi.mock('@/services/kyc-service', () => ({ kycService: { getKycFee: vi.fn().mockResolvedValue(null) } }))
+const { kyc } = vi.hoisted(() => ({ kyc: { getKycFee: vi.fn() } }))
+vi.mock('@/services/kyc-service', () => ({ kycService: kyc }))
 vi.mock('@/services/payment-service', () => ({ paymentService: service }))
 
 import { CheckoutUnavailableError } from '@/lib/payment-gateway'
@@ -33,6 +34,7 @@ const soncopayPayment = {
 }
 
 beforeEach(() => {
+  kyc.getKycFee.mockReset().mockResolvedValue({ amount: 5, currency: 'USD', is_free: false })     // the configured member fee
   localStorage.setItem('access_token', 'synthetic-token')
   for (const fn of Object.values(service)) fn.mockReset()
   service.getAvailableCurrencies.mockResolvedValue(['usdtbsc'])
@@ -48,7 +50,9 @@ afterEach(() => {
 async function toMethodStep() {
   render(<PaymentDialog open onOpenChange={() => {}} initialProductCode="kyc" />)
   await waitFor(() => expect(service.getCheckoutGateway).toHaveBeenCalled())
-  fireEvent.click(await screen.findByRole('button', { name: /Continuer/ }))
+  const next = await screen.findByRole('button', { name: /Continuer/ })
+  await waitFor(() => expect(next).toBeEnabled())                       // once the server's fee has arrived
+  fireEvent.click(next)
 }
 
 describe('Payment dialog with SoncoPay as the gateway', () => {
@@ -116,11 +120,31 @@ describe('Payment dialog with SoncoPay as the gateway', () => {
     expect(service.createPayment).not.toHaveBeenCalled()
   })
 
+  it('shows the configured KYC fee, never an assumed one, and pays exactly that amount', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    service.createPayment.mockResolvedValue({ ...soncopayPayment, price_amount: 5 })
+    await toMethodStep()
+    fireEvent.click(await screen.findByTestId('pay-with-soncopay'))
+    await waitFor(() => expect(service.createPayment).toHaveBeenCalledTimes(1))
+    expect(service.createPayment.mock.calls[0][1].amount).toBe(5)
+  })
+
+  it('offers no KYC payment while the fee is unknown', async () => {
+    kyc.getKycFee.mockResolvedValue(null)
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    render(<PaymentDialog open onOpenChange={() => {}} initialProductCode="kyc" />)
+    await waitFor(() => expect(kyc.getKycFee).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: /Continuer/ })).toBeDisabled()
+    expect(screen.queryByText('$10')).toBeNull()
+    expect(screen.getByText('$…')).toBeInTheDocument()
+    expect(service.createPayment).not.toHaveBeenCalled()
+  })
+
   it('is unavailable without a session, and asks no gateway', async () => {
     localStorage.clear()
     render(<PaymentDialog open onOpenChange={() => {}} initialProductCode="kyc" />)
-    fireEvent.click(await screen.findByRole('button', { name: /Continuer/ }))
-    expect(await screen.findByTestId('checkout-unavailable')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Continuer/ })).toBeDisabled()   // no fee without a session
+    expect(kyc.getKycFee).not.toHaveBeenCalled()
     expect(service.getCheckoutGateway).not.toHaveBeenCalled()
     expect(service.getAvailableCurrencies).not.toHaveBeenCalled()
   })
