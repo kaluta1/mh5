@@ -1715,7 +1715,7 @@
     },
     "kyc": {
       "title": "Manage KYC",
-      "description": "Approve or reject identity verifications",
+      "description": "Identity verifications decided automatically by Kaluta (read-only)",
       "pending": "Pending",
       "approved": "Approved",
       "rejected": "Rejected",
