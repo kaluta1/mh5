@@ -130,6 +130,10 @@ def record(db: Session, actor, member_id: int, *, product_code: str, reason: str
     product_code = (product_code or "kyc").strip().lower()
     if is_legacy_founding_product(product_code):
         raise ManualPaymentError("RETIRED", "Founding memberships are retired and cannot be granted.", 410)
+    if verify_identity:
+        # KYC is decided by the provider only: a payment never marks an identity verified.
+        raise ManualPaymentError("KYC_DECIDED_BY_PROVIDER", "KYC is verified automatically by the provider. "
+                                 "A manual payment cannot mark an identity verified.", 410)
     _authorize(db, actor, member_id, password, "record manual payment", ip)
     reason = _clean(reason)
     if len(reason) < REASON_MIN_LENGTH:
@@ -274,16 +278,9 @@ def confirm(db: Session, actor, request_id: int, *, password: Optional[str], evi
     if conflicted:
         raise _refuse(db, actor, member_id, "confirm manual payment", "COMMISSION_CONFLICT",
                       "This payment would pay a commission to an administrator who recorded or confirmed it.", ip)
+    # KYC is decided by the provider only: an older request that asked for the identity
+    # to be marked verified confirms the payment and leaves the identity as it is.
     identity_verified = False
-    if request.verify_identity_requested:
-        old = bool(member.identity_verified)
-        member.identity_verified = True
-        member.verification_date = now
-        identity_verified = True
-        admin_security.audit(db, actor_id=actor.id, record_id=member_id, action="ADMIN_KYC_VERIFY_WITH_GRANT", ip=ip,
-                             old={"identity_verified": old},
-                             new={"identity_verified": True, "request_id": request.id,
-                                  "requested_by": request.requested_by})
     request.status, request.decided_by, request.decided_at = CONFIRMED, actor.id, now
     request.evidence_reference = evidence[:255]
     request.decision_note = note[:2000] or None

@@ -2,6 +2,7 @@ import logging
 import os
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from app.api.api_v1.endpoints.kyc import PROVIDER_ONLY_DETAIL as KYC_PROVIDER_ONLY_DETAIL
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, inspect, text
@@ -3973,91 +3974,17 @@ def get_withdrawals_statistics(
         )
 
 @router.put("/users/{user_id}/kyc/verify")
-async def verify_user_kyc(
-    user_id: int,
-    http_request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Vérifie le KYC d'un utilisateur (admin uniquement). Never on the administrator's own account.
-    """
+async def verify_user_kyc(user_id: int, current_user: User = Depends(get_current_user)):
+    """Retired: KYC is decided by the provider only; an administrator cannot mark identity verified."""
     check_admin(current_user)
-    _refuse_own_account(db, http_request, current_user, user_id, "verify identity")
-    
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        old_value = bool(user.identity_verified)
-        user.identity_verified = True
-        user.verification_date = datetime.utcnow()
-        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_VERIFY", old={"identity_verified": old_value}, new={"identity_verified": True})
-        db.commit()
-        db.refresh(user)
-        
-        return {
-            'id': user.id,
-            'identity_verified': user.identity_verified,
-            'verification_date': user.verification_date,
-            'message': 'KYC verified successfully'
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error verifying KYC: {str(e)}"
-        )
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=KYC_PROVIDER_ONLY_DETAIL)
+
 
 @router.put("/users/{user_id}/kyc/unverify")
-async def unverify_user_kyc(
-    user_id: int,
-    http_request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Révoque la vérification KYC d'un utilisateur (admin uniquement). Never on the administrator's own account.
-    """
+async def unverify_user_kyc(user_id: int, current_user: User = Depends(get_current_user)):
+    """Retired: KYC is decided by the provider only; an administrator cannot change it."""
     check_admin(current_user)
-    _refuse_own_account(db, http_request, current_user, user_id, "revoke identity verification")
-    
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        old_value = bool(user.identity_verified)
-        user.identity_verified = False
-        user.verification_date = None
-        _record_admin_audit(db, actor_id=current_user.id, record_id=user.id, action="ADMIN_KYC_UNVERIFY", old={"identity_verified": old_value}, new={"identity_verified": False})
-        db.commit()
-        db.refresh(user)
-        
-        return {
-            'id': user.id,
-            'identity_verified': user.identity_verified,
-            'verification_date': user.verification_date,
-            'message': 'KYC verification revoked'
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error revoking KYC: {str(e)}"
-        )
-
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=KYC_PROVIDER_ONLY_DETAIL)
 
 # ============================================
 # ADMIN: MARK USER AS PAID (grant a service credit)

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Shield, Crown, Ban, CheckCircle, XCircle, Edit2, Eye, Users, Trophy, Award, MapPin, Calendar, FileCheck, MessageCircle, X, MoreVertical, Trash2, CheckSquare, Square } from 'lucide-react'
+import { Shield, Crown, Ban, CheckCircle, XCircle, Edit2, Eye, Users, Trophy, Award, MapPin, Calendar, FileCheck, MessageCircle, X, MoreVertical, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -334,31 +334,7 @@ export default function AdminUsers() {
     }
   }
 
-  const handleVerifyKYC = async (userId: number) => {
-    try {
-      throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/verify`))
-      // Invalider le cache des utilisateurs
-      cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.kyc_verify_success') || 'KYC verified successfully', 'success')
-      fetchUsers()
-    } catch (error) {
-      console.error('Error verifying KYC:', error)
-      addToast(adminErrorText(error, t('admin.users.kyc_verify_error') || 'Error verifying KYC'), 'error')
-    }
-  }
-
-  const handleUnverifyKYC = async (userId: number) => {
-    try {
-      throwIfApiError(await api.put(`/api/v1/admin/users/${userId}/kyc/unverify`))
-      // Invalider le cache des utilisateurs
-      cacheService.invalidate('/api/v1/admin/users')
-      addToast(t('admin.users.kyc_unverify_success') || 'KYC verification revoked', 'success')
-      fetchUsers()
-    } catch (error) {
-      console.error('Error revoking KYC:', error)
-      addToast(adminErrorText(error, t('admin.users.kyc_unverify_error') || 'Error revoking KYC'), 'error')
-    }
-  }
+  // KYC is decided by the provider (Kaluta) only: no administrator verifies or revokes it here.
 
   const handleDeleteComment = async (commentId: number) => {
     try {
@@ -697,24 +673,6 @@ export default function AdminUsers() {
                               </>
                             )}
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {user.kyc_status === 'verified' ? (
-                            <DropdownMenuItem
-                              onClick={() => handleUnverifyKYC(user.id)}
-                              className="gap-2 cursor-pointer text-orange-600 dark:text-orange-400"
-                            >
-                              <Square className="h-4 w-4" />
-                              <span>{t('admin.users.unverify_kyc') || 'Revoke KYC'}</span>
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleVerifyKYC(user.id)}
-                              className="gap-2 cursor-pointer text-green-600 dark:text-green-400"
-                            >
-                              <CheckSquare className="h-4 w-4" />
-                              <span>{t('admin.users.verify_kyc') || 'Verify KYC'}</span>
-                            </DropdownMenuItem>
-                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => handleDeleteClick(user.id)}

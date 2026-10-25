@@ -251,7 +251,7 @@ class CRUDKYCVerification:
             self._create_audit_log(
                 db, verification_id, "approved", 
                 "Verification approved", 
-                admin_user_id, True
+                admin_user_id, admin_user_id is not None
             )
         
         return verification
@@ -292,7 +292,7 @@ class CRUDKYCVerification:
             self._create_audit_log(
                 db, verification_id, "rejected", 
                 f"Verification rejected: {reason}", 
-                admin_user_id, True
+                admin_user_id, admin_user_id is not None
             )
         
         return verification

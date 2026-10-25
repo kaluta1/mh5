@@ -895,15 +895,20 @@ def test_kyc_decisions_notify_the_member(client, db, email_outbox):
         db.add(v)
         rows.append(v)
     db.commit()
-    r = client.post(f"/api/v1/kyc/admin/verification/{rows[0].id}/approve", headers=auth(admin))
-    assert r.status_code == 200, r.text
-    r = client.post(f"/api/v1/kyc/admin/verification/{rows[1].id}/reject", headers=auth(admin),
-                    data={"reason": "Document <b>unreadable</b>"})
-    assert r.status_code == 200, r.text
+    # Decisions are the provider's (the administrator routes are retired); each is announced after its commit.
+    from app.crud import crud_kyc
+    from app.services import kyc_notifications
+
+    for path in ("approve", "reject"):
+        assert client.post(f"/api/v1/kyc/admin/verification/{rows[0].id}/{path}", headers=auth(admin)).status_code == 410
+    crud_kyc.kyc_verification.approve_verification(db, verification_id=rows[0].id)
+    kyc_notifications.notify_status(db, rows[0].id)
+    crud_kyc.kyc_verification.reject_verification(db, verification_id=rows[1].id, reason="Document <b>unreadable</b>")
+    kyc_notifications.notify_status(db, rows[1].id)
     assert _events(db) == ["KYC.APPROVED", "KYC.REJECTED"]
     first, second = email_outbox[0], email_outbox[1]
     assert first["to"] == approved.email and "KYC" in first["subject"] and "Ihre" in first["html"]   # member's language
-    assert second["to"] == rejected.email and "Document &lt;b&gt;unreadable&lt;/b&gt;" in second["html"]
+    assert second["to"] == rejected.email and "<b>unreadable</b>" not in second["html"]      # nothing unescaped
     db.refresh(rows[0])
     assert rows[0].status == KYCStatus.APPROVED                                # the decision itself is unchanged
 

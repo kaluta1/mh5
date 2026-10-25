@@ -195,9 +195,10 @@ def test_automatic_approval_is_announced_once_whatever_path_reports_it(db, email
 
 def test_the_endpoints_notify_only_after_the_committed_transition():
     source = (APP / "api/api_v1/endpoints/kyc.py").read_text(encoding="utf-8")
-    finalize = source.index("crud_kyc.kyc_verification.finalize_proof_of_address_auto(db, verification_id=verification.id)")
-    assert 0 < source.index("kyc_notifications.notify_status(db, verification.id)", finalize) - finalize < 400
-    assert source.count("kyc_notifications.notify_status(") == 3     # proof of address + Shufti accepted + Shufti declined
+    # No endpoint decides KYC by itself any more (the self-declared proof of address is retired):
+    # the Kaluta decisions notify in kyc_provider_dispatch, after their commit.
+    assert "finalize_proof_of_address_auto" not in source
+    assert source.count("kyc_notifications.notify_status(") == 2     # Shufti accepted + Shufti declined (legacy webhook)
     assert "kyc_notifications" not in (APP / "crud/crud_kyc.py").read_text(encoding="utf-8")
 
 
@@ -219,20 +220,18 @@ def test_provider_rejection_is_announced_without_the_providers_reason(db, email_
     assert "reason:" not in whole
 
 
-def test_admin_decisions_keep_their_email_and_never_double_up(client, db, email_outbox, monkeypatch):
-    monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",
-                        lambda *a, **k: True)
+def test_an_administrator_cannot_decide_a_kyc_and_nothing_is_sent(client, db, email_outbox):
     admin = person(db, 40, admin=True)
-    approved_user, rejected_user = person(db, 30), person(db, 30)
-    v1, v2 = verification(db, approved_user), verification(db, rejected_user)
-    assert client.post(f"/api/v1/kyc/admin/verification/{v1.id}/approve", headers=auth(admin)).status_code == 200
-    kyc_notifications.notify_status(db, v1.id)
-    assert client.post(f"/api/v1/kyc/admin/verification/{v2.id}/reject", headers=auth(admin),
-                       data={"reason": "The photo is too dark to read"}).status_code == 200
-    kyc_notifications.notify_status(db, v2.id)
-    assert sorted(events(db)) == ["KYC.APPROVED", "KYC.REJECTED"]
-    rejected_mail = next(m for m in email_outbox if m["to"] == rejected_user.email)
-    assert "The photo is too dark to read" in rejected_mail["html"]        # the administrator's own, member-facing reason
+    member = person(db, 30)
+    v = verification(db, member)
+    before = v.status
+    approve = client.post(f"/api/v1/kyc/admin/verification/{v.id}/approve", headers=auth(admin))
+    reject = client.post(f"/api/v1/kyc/admin/verification/{v.id}/reject", headers=auth(admin),
+                         data={"reason": "The photo is too dark to read"})
+    assert (approve.status_code, reject.status_code) == (410, 410)
+    assert approve.json()["detail"]["code"] == "KYC_DECIDED_BY_PROVIDER"
+    db.expire_all()
+    assert db.get(type(v), v.id).status == before and events(db) == [] and len(email_outbox) == 0
 
 
 # An expired SESSION leaves the attempt open (the status does not change). A

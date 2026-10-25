@@ -352,10 +352,12 @@ def test_O_P_kyc_initiation_respects_age_and_never_reaches_a_provider(client, db
 
         submit_body = {"firstName": "S", "lastName": "T", "dateOfBirth": "2000-01-01T00:00:00", "nationality": "TZ",
                        "address": "synthetic", "documentType": list(DocumentType)[0].value, "issuingCountry": "TZ"}
-        for path, body in (("/api/v1/kyc/initiate", {"residential_address": "x"}), ("/api/v1/kyc/submit", submit_body)):
+        for path, body in (("/api/v1/kyc/initiate", {"residential_address": "x"}), ("/api/v1/kyc/address/initiate", {})):
             r = client.post(path, json=body, headers=auth(u))
             assert r.status_code == status_code, (path, r.text)
             assert r.json()["detail"]["next_step"] == step and payload_is_generic(r.text)
+        # The retired review submission is refused to everybody: KYC starts with the provider only.
+        assert client.post("/api/v1/kyc/submit", json=submit_body, headers=auth(u)).status_code == 410
     assert fe.evaluate(db, adult(db), Op.KYC_INITIATION).allowed
 
 

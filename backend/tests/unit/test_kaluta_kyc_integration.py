@@ -374,16 +374,14 @@ def test_the_providers_own_retry_after_its_rejection_is_honoured(client, db, ema
 
 
 def test_a_provider_approval_never_overturns_an_administrators_rejection(client, db):
+    # Administrators no longer decide (the route is retired); a rejection one recorded
+    # before that stays final whatever the provider sends later.
     admin = person(db, 40, admin=True)
-    for status in (KYCStatus.IN_PROGRESS,):
-        v = open_verification(db, person(db, 30), status=status)
-        deliver(client, rejected(v))                                      # the provider rejected first ...
-        assert client.post(f"/api/v1/kyc/admin/verification/{v.id}/reject", headers=auth(admin),
-                           data={"reason": "Document belongs to somebody else"}).status_code in (200, 400)
-    # ... and an administrator rejected an open one directly.
     direct = open_verification(db, person(db, 30), session="sess-9")
     assert client.post(f"/api/v1/kyc/admin/verification/{direct.id}/reject", headers=auth(admin),
-                       data={"reason": "Document belongs to somebody else"}).status_code == 200
+                       data={"reason": "Document belongs to somebody else"}).status_code == 410
+    crud_kyc.kyc_verification.reject_verification(db, verification_id=direct.id,
+                                                  reason="Document belongs to somebody else", admin_user_id=admin.id)
     db.expire_all()
     assert db.get(KYCVerification, direct.id).status == KYCStatus.REJECTED
     assert not str(db.get(KYCVerification, direct.id).rejection_details or "").startswith(kaluta_kyc.PROVIDER_REJECTION_MARK)

@@ -111,7 +111,7 @@ export default function MarkPaidPage() {
     }
   }
 
-  const grantPayment = async (verifyIdentity: boolean = false) => {
+  const grantPayment = async () => {
     if (!selectedUser) return
     const sentPassword = password
     setPassword('')
@@ -120,7 +120,6 @@ export default function MarkPaidPage() {
       const response = await api.post(`/api/v1/admin/users/${selectedUser.id}/grant-payment`, {
         product_code: product,
         notes: notes.trim(),
-        verify_identity: verifyIdentity,
         current_password: sentPassword,
       })
       // A refusal (permission, password, the member's referral line, a missing reference) stops here:
@@ -359,7 +358,7 @@ export default function MarkPaidPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Button onClick={() => grantPayment(false)} disabled={granting || !password || !validGrantReason(notes)} className="w-full">
+                  <Button onClick={() => grantPayment()} disabled={granting || !password || !validGrantReason(notes)} className="w-full">
                     {granting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -373,23 +372,11 @@ export default function MarkPaidPage() {
                     )}
                   </Button>
 
-                  {product === 'kyc' && (
-                    <Button
-                      onClick={() => grantPayment(true)}
-                      disabled={granting || !password || !validGrantReason(notes)}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      <ShieldCheck className="h-4 w-4 mr-2" />
-                      {t('admin.mark_paid.record_and_verify_button') || 'Record payment + verify identity (on confirmation)'}
-                    </Button>
-                  )}
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {product === 'kyc'
-                      ? (t('admin.mark_paid.verify_hint') ||
-                        'On confirmation, verify identity also marks KYC as approved (skips the verification step entirely).')
-                      : (t('admin.mark_paid.recorded_hint') ||
-                        'Nothing is credited until a second administrator confirms the payment.')}
+                    {t('admin.mark_paid.recorded_hint') ||
+                      'Nothing is credited until a second administrator confirms the payment.'}
+                    {product === 'kyc' &&
+                      ` ${t('admin.mark_paid.kyc_by_provider_hint') || 'The member then verifies their identity with Kaluta: a payment never marks KYC as approved.'}`}
                   </p>
                 </div>
               </>

@@ -176,16 +176,17 @@ def test_the_same_shufti_acceptance_delivered_twice_at_once_is_applied_once(pg, 
     assert_consistent(row, user)
 
 
-def test_a_shufti_rejection_waiting_on_an_admin_approval_sees_it(pg, shufti):
+def test_the_retired_admin_approval_during_a_shufti_rejection_changes_nothing(pg, shufti):
     engine, Session = pg
     admin_id = seed_admin(Session)
     verification_id, reference = open_shufti(Session, "spadmin")
-    started, box = while_first_commit_waits(engine, Session, lambda: shufti_deliver(Session, declined(reference)))
-    assert admin_decides(Session, verification_id, admin_id, "approve") == "200"
+    started, box = while_first_commit_waits(engine, Session,
+                                            lambda: admin_decides(Session, verification_id, admin_id, "approve"))
+    shufti_deliver(Session, declined(reference))
     started[0].join(20)
-    assert box == ["Stale webhook ignored"]                         # an approved verification is not rejected
+    assert box == ["410"]                                           # KYC is decided by the provider only
     row, user, trail = state(Session, verification_id)
-    assert row.status == KYCStatus.APPROVED and "rejected" not in trail
+    assert row.status == KYCStatus.REJECTED and "approved" not in trail
     assert_consistent(row, user)
 
 

@@ -139,13 +139,13 @@ describe('AdminUsers: a refused action looks refused', () => {
     expect(successes()).toEqual([])                                  // ... and a refusal of it is shown as one
   })
 
-  it('does not report an identity verification or a deletion the server refused', async () => {
+  it('offers no way to verify or revoke an identity by hand (KYC is decided by the provider only)', async () => {
     setup()
-    putMock.mockResolvedValue(refused(403, 'SELF_ACTION_FORBIDDEN', 'An administrator cannot perform this action on their own account.'))
-    deleteMock.mockResolvedValue(refused(409, 'ADMIN_ACCOUNT_PROTECTED', 'An administrator account cannot be deleted.'))
     render(<AdminUsers />)
-    fireEvent.click((await screen.findAllByRole('button', { name: /KYC/ }))[0])
-    await waitFor(() => expect(errors()).toEqual(['An administrator cannot perform this action on their own account.']))
+    await screen.findAllByRole('button')
+    expect(screen.queryByText('Verify KYC')).toBeNull()
+    expect(screen.queryByText('Revoke KYC')).toBeNull()
+    expect(putMock).not.toHaveBeenCalledWith(expect.stringMatching(/\/kyc\/(verify|unverify)$/))
     expect(successes()).toEqual([])
   })
 })

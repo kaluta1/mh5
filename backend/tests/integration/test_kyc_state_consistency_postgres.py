@@ -1,5 +1,6 @@
-"""KYC state consistency between provider decisions, administrator decisions, the
-status poll and proof of address, on a real PostgreSQL server.
+"""KYC state consistency between provider decisions, the retired administrator
+routes, the status poll and the provider's proof-of-address step, on a real
+PostgreSQL server. KYC is decided by the provider only.
 
 Opt-in: RUN_POSTGRES_TESTS=1 (see test_payments_postgres.py). Each test runs in ONE
 DISPOSABLE database that is dropped afterwards. Everything is SYNTHETIC; the KYC
@@ -67,20 +68,13 @@ def seed_admin(Session, name: str = "kycadmin") -> int:
 
 
 def admin_decides(Session, verification_id: int, admin_id: int, verb: str) -> str:
+    """The retired administrator route: refused (410) for everybody, and it touches nothing."""
     def work():
         with Session() as db:
             admin = db.get(User, admin_id)
-            try:
-                if verb == "approve":
-                    kyc_endpoint.approve_kyc_verification(db=db, verification_id=verification_id,
-                                                          background_tasks=BackgroundTasks(), current_user=admin)
-                else:
-                    kyc_endpoint.reject_kyc_verification(db=db, verification_id=verification_id,
-                                                         background_tasks=BackgroundTasks(), current_user=admin,
-                                                         reason="The photo is too dark to read", details=None)
-            except HTTPException:
-                db.rollback()
-                raise
+            route = (kyc_endpoint.approve_kyc_verification if verb == "approve"
+                     else kyc_endpoint.reject_kyc_verification)
+            route(current_user=admin)
             return "200"
     return outcome(work)
 
@@ -204,10 +198,10 @@ def test_a_poll_answer_about_the_current_session_still_applies(pg, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 2. Administrator decisions against provider decisions
+# 2. The retired administrator routes against provider decisions
 # ---------------------------------------------------------------------------
 
-def test_an_admin_approval_waiting_on_a_provider_rejection_sees_it(pg):
+def test_a_retired_admin_route_waiting_on_a_provider_decision_changes_nothing(pg):
     engine, Session = pg
     admin_id = seed_admin(Session)
     verification_id, reference = open_verification(Session, "adrej")
@@ -216,72 +210,45 @@ def test_an_admin_approval_waiting_on_a_provider_rejection_sees_it(pg):
                                                                                   "approve"))
         assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc, payload=rejected(reference)) == dispatch.APPLIED
     started[0].join(20)
-    assert box == ["400"]                                       # the rejection stands; nothing is overwritten
+    assert box == ["410"]
     row, user, trail = state(Session, verification_id)
     assert row.status == KYCStatus.REJECTED and "approved" not in trail
     assert_consistent(row, user)
 
 
-def test_an_admin_rejection_waiting_on_a_provider_approval_sees_it(pg):
-    engine, Session = pg
-    admin_id = seed_admin(Session)
-    verification_id, reference = open_verification(Session, "adok")
-    with Session() as db:
-        started, box = while_first_commit_waits(engine, db, lambda: admin_decides(Session, verification_id, admin_id,
-                                                                                  "reject"))
-        assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc,
-                                              payload=approved_with_address(reference)) == dispatch.APPLIED
-    started[0].join(20)
-    assert box == ["400"]                                       # an approved verification cannot be rejected
-    row, user, trail = state(Session, verification_id)
-    assert row.status == KYCStatus.APPROVED and "rejected" not in trail
-    assert_consistent(row, user)
-
-
-def test_two_admin_approvals_at_once_approve_once(pg):
-    engine, Session = pg
-    admin_id = seed_admin(Session)
-    verification_id, _reference = open_verification(Session, "adtwice")
-    # The second approval arrives while the first is about to commit.
-    started, box = while_first_commit_waits(engine, Session, lambda: admin_decides(Session, verification_id, admin_id,
-                                                                                   "approve"))
-    first = admin_decides(Session, verification_id, admin_id, "approve")
-    started[0].join(20)
-    assert (first, box) == ("200", ["400"])
-    results = in_threads(4, lambda _i: admin_decides(Session, verification_id, admin_id, "approve"))
-    assert results == ["400"] * 4, results
-    row, user, trail = state(Session, verification_id)
-    assert row.status == KYCStatus.APPROVED and trail.count("approved") == 1
-    assert_consistent(row, user)
-
-
 @pytest.mark.parametrize("round_", range(ROUNDS))
-def test_admin_and_provider_decisions_at_once_always_leave_a_consistent_state(pg, round_):
+def test_provider_decisions_at_once_always_leave_a_consistent_state(pg, round_):
     _engine, Session = pg
     admin_id = seed_admin(Session, f"kycadmin{round_}")
     verification_id, reference = open_verification(Session, f"admix{round_}")
     actors = [lambda: deliver(Session, rejected(reference)),
               lambda: deliver(Session, approved(reference)),
-              lambda: admin_decides(Session, verification_id, admin_id, "approve"),
+              lambda: deliver(Session, approved_with_address(reference)),
               lambda: admin_decides(Session, verification_id, admin_id, "reject")]
     results = in_threads(WORKERS, lambda i: (i % len(actors), outcome(actors[(i + round_) % len(actors)])))
     assert not [r for r in results if isinstance(r, Exception)], results
     assert not [r for _i, r in results if str(r).startswith("sqlstate:")], results
+    assert not [r for _i, r in results if r == "200"], results          # no administrator decided anything
     row, user, trail = state(Session, verification_id)
     assert_consistent(row, user)
-    assert trail.count("approved") <= 1
-    # An administrator's decision is final against the provider's later events.
-    if "approved" in trail:
-        assert row.status == KYCStatus.APPROVED
-    elif row.status == KYCStatus.REJECTED and not (row.rejection_details or "").startswith("kaluta:session:"):
-        assert row.rejection_reason == "The photo is too dark to read"
+    with Session() as db:                                                  # nothing was decided by an administrator
+        assert db.query(KYCAuditLog).filter(KYCAuditLog.verification_id == verification_id,
+                                            KYCAuditLog.performed_by_admin.is_(True)).count() == 0
+    assert trail.count("proof_of_address_approved") <= 1
+    assert pool_events(Session, verification_id) in ([], ["KYC_APPROVED"], ["KYC_REJECTED"])
 
 
 # ---------------------------------------------------------------------------
-# 3. Proof of address: one commit, decided on the row as it is now
+# 3. The provider's proof-of-address step: one commit, decided on the row as it is now
 # ---------------------------------------------------------------------------
 
-def test_a_provider_approval_with_the_address_leaves_no_gap_for_an_admin_rejection(pg):
+def pool_events(Session, verification_id: int) -> list:
+    with Session() as db:
+        return sorted(r[0] for r in db.execute(text(
+            "SELECT event_type FROM referral_pool_events WHERE kyc_verification_id = :v"), {"v": verification_id}))
+
+
+def test_a_provider_approval_with_the_address_leaves_no_gap(pg):
     _engine, Session = pg
     admin_id = seed_admin(Session)
     verification_id, reference = open_verification(Session, "poagap")
@@ -289,114 +256,76 @@ def test_a_provider_approval_with_the_address_leaves_no_gap_for_an_admin_rejecti
         fired = after_first_commit(db, lambda: admin_decides(Session, verification_id, admin_id, "reject"))
         assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc,
                                               payload=approved_with_address(reference)) == dispatch.APPLIED
-    assert fired[1] == "400"                                    # the first commit already holds the approval
+    assert fired[1] == "410"
     row, user, trail = state(Session, verification_id)
     assert row.status == KYCStatus.APPROVED and "rejected" not in trail
     assert trail.count("shufti_identity_accepted") == 1 and trail.count("proof_of_address_approved") == 1
     assert_consistent(row, user)
+    assert pool_events(Session, verification_id) == ["KYC_APPROVED"]
 
 
-@pytest.fixture
-def proof_of_address(monkeypatch, pg):
-    """The proof-of-address endpoint with its file store and matcher faked.
-    `during_upload` runs while the files are being stored (no lock is held there)."""
-    _engine, Session = pg
-    during_upload: list = []
-
-    async def store(_upload, user_id):
-        await asyncio.sleep(0.02)
-        for action in during_upload:
-            action()
-        return {"url": f"local://kyc/{user_id}/proof.pdf"}
-
-    monkeypatch.setattr(kyc_endpoint, "store_kyc_proof_file", store)
-    monkeypatch.setattr(kyc_endpoint, "evaluate_proof_of_address", lambda **_k: (True, None))
-    monkeypatch.setattr(kyc_endpoint, "_guard_kyc_initiation", lambda *_a, **_k: None)
-
-    def submit(user_id: int) -> str:
-        def work():
-            with Session() as db:
-                user = db.get(User, user_id)
-                try:
-                    answer = asyncio.run(kyc_endpoint.submit_proof_of_address(
-                        db=db, current_user=user, document_type=DocumentType.UTILITY_BILL,
-                        name_on_document="Jane Doe", address_as_shown_on_document=ADDRESS,
-                        document_front=object(), document_back=None))
-                except HTTPException:
-                    db.rollback()
-                    raise
-                return answer["status"]
-        return outcome(work)
-
-    return submit, during_upload
-
-
-def identity_accepted(Session, name: str) -> tuple:
-    verification_id, _reference = open_verification(Session, name)
+def in_address_step(Session, name: str) -> tuple:
+    """Identity accepted by the provider without the address, then a provider address session
+    asked for under a new reference (what POST /kyc/address/initiate records)."""
+    verification_id, reference = open_verification(Session, name)
+    assert deliver(Session, approved(reference)) == dispatch.APPLIED
     with Session() as db:
         row = db.get(KYCVerification, verification_id)
-        row.status = KYCStatus.PENDING_PROOF_OF_ADDRESS
-        row.identity_verified = row.document_verified = row.face_verified = True
-        row.verified_address = ADDRESS
-        user = db.get(User, row.user_id)
-        user.identity_verified = True
+        assert row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
+        db.add(KYCAuditLog(verification_id=row.id, action=dispatch.ADDRESS_SESSION_STARTED, details="synthetic",
+                           old_status=row.status.value, new_status=row.status.value, performed_by_admin=False,
+                           timestamp=datetime.utcnow() + timedelta(seconds=1)))
+        row.reference_id = f"{reference}_address"
+        row.external_verification_id = "sess-addr"
+        row.verification_url = "https://kalutakyc.com/verify/sess-addr"
         db.commit()
-        return verification_id, row.user_id
+        return verification_id, row.reference_id
 
 
-def test_an_admin_rejection_during_the_upload_is_not_overwritten_by_the_proof_of_address(pg, proof_of_address):
+def address_approved(reference: str) -> dict:
+    body = approved_with_address(reference)
+    body["session"]["id"] = "sess-addr"
+    return body
+
+
+def test_the_address_session_approval_delivered_at_once_approves_once_with_one_pool_event(pg, monkeypatch):
+    monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",
+                        lambda *a, **k: True)
     _engine, Session = pg
-    submit, during_upload = proof_of_address
-    admin_id = seed_admin(Session)
-    verification_id, user_id = identity_accepted(Session, "poarej")
-    during_upload.append(lambda: admin_decides(Session, verification_id, admin_id, "reject"))
-    assert submit(user_id) == "400"
-    row, user, trail = state(Session, verification_id)
-    assert row.status == KYCStatus.REJECTED and "proof_of_address_approved" not in trail
-    assert_consistent(row, user)
-    with Session() as db:
-        assert db.query(KYCDocument).filter(KYCDocument.verification_id == verification_id).count() == 0
-
-
-def test_proof_of_address_submitted_twice_at_once_approves_once(pg, proof_of_address):
-    engine, Session = pg
-    submit, _during_upload = proof_of_address
-    verification_id, user_id = identity_accepted(Session, "poatwice")
-    # The second submission arrives while the first is about to commit.
-    started, box = while_first_commit_waits(engine, Session, lambda: submit(user_id))
-    first = submit(user_id)
-    started[0].join(20)
-    assert (first, box) == ("approved", ["400"])
-    results = in_threads(4, lambda _i: submit(user_id))
-    assert results == ["400"] * 4, results
+    verification_id, reference = in_address_step(Session, "addronce")
+    results = in_threads(WORKERS, lambda _i: outcome(lambda: deliver(Session, address_approved(reference))))
+    assert sorted(results) == [dispatch.APPLIED] + [dispatch.DUPLICATE] * (WORKERS - 1), results
     row, user, trail = state(Session, verification_id)
     assert row.status == KYCStatus.APPROVED and trail.count("proof_of_address_approved") == 1
     assert_consistent(row, user)
-    with Session() as db:
-        documents = db.query(KYCDocument).filter(KYCDocument.verification_id == verification_id).all()
-        assert len(documents) == 1 and documents[0].is_verified is True
+    assert pool_events(Session, verification_id) == ["KYC_APPROVED"]
 
 
-def test_a_proof_of_address_that_fails_to_commit_leaves_no_document_and_no_approval(pg, proof_of_address):
-    engine, Session = pg
-    submit, _during_upload = proof_of_address
-    verification_id, user_id = identity_accepted(Session, "poafail")
+@pytest.mark.parametrize("round_", range(ROUNDS))
+def test_an_address_approval_and_rejection_at_once_leave_one_decision(pg, monkeypatch, round_):
+    monkeypatch.setattr("app.services.payment_accounting.payment_accounting.post_kyc_verification_recognition_for_user",
+                        lambda *a, **k: True)
+    _engine, Session = pg
+    verification_id, reference = in_address_step(Session, f"addrmix{round_}")
+    rejection = rejected(reference)
+    rejection["session"]["id"] = "sess-addr"
+    actors = [lambda: deliver(Session, address_approved(reference)), lambda: deliver(Session, rejection)]
+    results = in_threads(WORKERS, lambda i: outcome(actors[(i + round_) % len(actors)]))
+    assert not [r for r in results if isinstance(r, Exception) or str(r).startswith("sqlstate:")], results
+    row, user, _trail = state(Session, verification_id)
+    assert row.status in (KYCStatus.APPROVED, KYCStatus.REJECTED)
+    assert_consistent(row, user)
+    assert pool_events(Session, verification_id) == ["KYC_" + row.status.value.upper()]
 
-    class Boom(Exception):
-        pass
 
-    def refuse(session, _ctx, _instances):
-        if any(isinstance(o, KYCVerification) and o.status == KYCStatus.APPROVED for o in session.dirty):
-            raise Boom()
-
-    event.listen(Session, "before_flush", refuse)
-    try:
-        with pytest.raises(Boom):
-            submit(user_id)
-    finally:
-        event.remove(Session, "before_flush", refuse)
+def test_the_retired_proof_of_address_upload_changes_nothing(pg):
+    _engine, Session = pg
+    verification_id, _reference = in_address_step(Session, "poaretired")
+    with pytest.raises(HTTPException) as refused:
+        kyc_endpoint.submit_proof_of_address()
+    assert refused.value.status_code == 410
     row, user, trail = state(Session, verification_id)
-    assert row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS and trail == []
+    assert row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS and "proof_of_address_approved" not in trail
     assert_consistent(row, user)
     with Session() as db:
         assert db.query(KYCDocument).filter(KYCDocument.verification_id == verification_id).count() == 0
@@ -436,7 +365,7 @@ def test_kyc_payments_and_decisions_on_one_member_never_deadlock(pg, round_):
     actors = [lambda n: create_kyc_payment(Session, user_id, n),
               lambda n: deliver(Session, approved(reference)),
               lambda n: create_kyc_payment(Session, user_id, n),
-              lambda n: admin_decides(Session, verification_id, admin_id, "approve")]
+              lambda n: deliver(Session, approved_with_address(reference))]
     results = in_threads(WORKERS, lambda i: outcome(lambda: actors[(i + round_) % len(actors)](i)))
     assert not [r for r in results if isinstance(r, Exception) or str(r).startswith("sqlstate:")], results
     with Session() as db:

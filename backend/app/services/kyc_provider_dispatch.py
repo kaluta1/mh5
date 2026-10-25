@@ -34,6 +34,45 @@ logger = logging.getLogger(__name__)
 # A provider session id as it may appear in a link we build: a plain token.
 _SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,255}")
 
+# ---------------------------------------------------------------- the proof-of-address step
+# KYC is decided by the provider only. After the identity is accepted without the
+# address (the provider's proof-of-address step was not part of that session), the
+# member continues with a NEW provider session for the same attempt (no payment).
+# That session's own result decides: approved only when the provider required and
+# passed the proof of address. Nothing a member types or uploads to MyHigh5, and no
+# administrator, decides it. The step is read from the verification's audit trail.
+IDENTITY_ACCEPTED_AUDIT = "shufti_identity_accepted"          # written when the identity is accepted
+ADDRESS_SESSION_STARTED = "kaluta_address_session_started"    # one provider session asked for
+ADDRESS_SESSION_RELEASED = "kaluta_address_session_released"  # the provider certainly opened nothing
+ADDRESS_NOT_CHECKED = "kaluta_address_not_checked"            # approved, but the provider did not check the address
+SESSION_GRANTED = "kyc_session_granted"                       # an administrator allowed one more session
+ADDRESS_SESSIONS_INCLUDED = 1
+_ADDRESS_ACTIONS = (IDENTITY_ACCEPTED_AUDIT, ADDRESS_SESSION_STARTED, ADDRESS_SESSION_RELEASED,
+                    ADDRESS_NOT_CHECKED, SESSION_GRANTED)
+
+
+def address_step(db: Session, verification) -> Dict[str, Any]:
+    """Where the provider proof-of-address step of this verification stands."""
+    rows = (db.query(KYCAuditLog.action, KYCAuditLog.timestamp)
+            .filter(KYCAuditLog.verification_id == verification.id, KYCAuditLog.action.in_(_ADDRESS_ACTIONS))
+            .order_by(KYCAuditLog.timestamp, KYCAuditLog.id).all())
+    started_at = None
+    for action, at in rows:
+        if action == IDENTITY_ACCEPTED_AUDIT:
+            started_at = at
+    step = [(a, t) for a, t in rows if started_at is not None and t >= started_at and a != IDENTITY_ACCEPTED_AUDIT]
+    used = (sum(1 for a, _ in step if a == ADDRESS_SESSION_STARTED)
+            - sum(1 for a, _ in step if a == ADDRESS_SESSION_RELEASED))
+    granted = sum(1 for a, _ in step if a == SESSION_GRANTED)
+    last_start = max((t for a, t in step if a == ADDRESS_SESSION_STARTED), default=None)
+    not_checked = last_start is not None and any(a == ADDRESS_NOT_CHECKED and t >= last_start for a, t in step)
+    in_step = verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
+    session_open = bool(in_step and used > 0 and verification.verification_url and not not_checked
+                        and not _session_marked_expired(verification))
+    return {"in_step": in_step, "sessions_used": max(0, used),
+            "sessions_left": max(0, ADDRESS_SESSIONS_INCLUDED + granted - max(0, used)),
+            "session_open": session_open, "address_not_checked": not_checked}
+
 
 def provider_for_verification(verification) -> str:
     if verification and verification.provider:
@@ -311,7 +350,7 @@ def _audit_kaluta(db: Session, verification, action: str, details: str, *, old_s
 
 
 def _adopt_created_session(db: Session, verification, *, session: Dict[str, Any], session_id: str,
-                           external_id, bound_user_id, reported: str, wh_raw: str) -> bool:
+                           external_id, bound_user_id, reported: str, wh_raw: str, address: bool = False) -> bool:
     """A session the provider opened although our request for it failed (a read
     timeout): its creation event is the only place its id arrives. Each start
     issues a new reference and clears the link, so an event naming the CURRENT
@@ -340,7 +379,8 @@ def _adopt_created_session(db: Session, verification, *, session: Dict[str, Any]
     now = datetime.utcnow()
     verification.external_verification_id = session_id
     verification.verification_url = url
-    verification.status = KYCStatus.IN_PROGRESS
+    if not address:                       # a proof-of-address session keeps the identity it follows
+        verification.status = KYCStatus.IN_PROGRESS
     verification.expires_at = parse_provider_time(session.get("expires_at"))
     if verification.residential_address_locked_at is None:
         verification.residential_address_locked_at = now
@@ -400,14 +440,54 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
     wh_raw = json.dumps({"event": event, "timestamp": payload.get("timestamp"), "session": stored_session})
     flags = kyc_flags_from_kaluta_session(session)
     reported = str(session.get("status") or "").strip().lower()
+    # A session of the proof-of-address step: asked for under the current reference
+    # after the identity was accepted (every start issues a new reference).
+    address = bool(old_status == KYCStatus.PENDING_PROOF_OF_ADDRESS and external_id
+                   and address_step(db, verification)["sessions_used"] > 0)
+
+    if event in _APPROVAL_EVENTS and address:
+        if reported and reported != "approved":
+            return done(IGNORED, "the event and the session status disagree")
+        checks = session.get("checks_required") if isinstance(session.get("checks_required"), dict) else {}
+        if not flags.get("kaluta_poa_complete"):
+            if checks.get("proof_of_address"):
+                apply_provider_rejected(
+                    db, crud_kyc=crud_kyc, verification=verification, flags=flags,
+                    reason="Proof of address was not verified by the provider",
+                    external_id=session_id or str(external_id or ""), provider_response=json.dumps(stored_session),
+                    webhook_data=wh_raw, details=f"{PROVIDER_REJECTION_MARK}{session_id}")
+                return done(APPLIED, "rejected: the provider required the proof of address and it did not pass")
+            # The provider approved the session without checking the address (its
+            # proof-of-address step is off): nothing is decided; the link is not handed out again.
+            verification.expires_at = datetime.utcnow()
+            verification.webhook_data = wh_raw
+            db.add(KYCAuditLog(verification_id=verification.id, action=ADDRESS_NOT_CHECKED,
+                               details=f"Session {session_id or '-'} approved without a proof-of-address check; "
+                                       "address not verified",
+                               old_status=getattr(old_status, "value", old_status),
+                               new_status=getattr(verification.status, "value", verification.status),
+                               performed_by_user_id=None, performed_by_admin=False, timestamp=datetime.utcnow()))
+            db.commit()
+            return done(IGNORED, "the provider did not check the address; nothing decided")
+        apply_provider_identity_accepted(
+            db, crud_kyc=crud_kyc, verification=verification, flags=flags,
+            external_id=session_id or str(external_id or ""), provider_response=json.dumps(stored_session),
+            webhook_data=wh_raw)
+        return done(APPLIED, "identity and proof of address accepted by the provider")
 
     if event in _APPROVAL_EVENTS:
         if reported and reported != "approved":
             return done(IGNORED, "the event and the session status disagree")
         if old_status in _IDENTITY_DONE:
             return done(DUPLICATE, "identity was already accepted")
+        # Only a NEW session (the member retried in the provider's widget) follows a provider
+        # rejection: a session's own result is final, so the session that was rejected never
+        # turns into an approval (a late or reordered delivery of it is ignored).
+        rejected_details = str(verification.rejection_details or "")
         after_provider_rejection = (old_status == KYCStatus.REJECTED
-                                    and str(verification.rejection_details or "").startswith(PROVIDER_REJECTION_MARK))
+                                    and rejected_details.startswith(PROVIDER_REJECTION_MARK)
+                                    and bool(session_id)
+                                    and session_id != rejected_details[len(PROVIDER_REJECTION_MARK):])
         if old_status not in _OPEN and not after_provider_rejection:
             # Rejected by an administrator, expired, or under review: the provider does not reopen it.
             return done(IGNORED, "the verification is closed and was not rejected by the provider")
@@ -452,6 +532,13 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
             return done(IGNORED, "the event and the session status disagree")
         if old_status == KYCStatus.REJECTED:
             return done(DUPLICATE, "already rejected")
+        if address:
+            apply_provider_rejected(
+                db, crud_kyc=crud_kyc, verification=verification, flags=flags,
+                reason=str(session.get("rejection_reason") or "Verification rejected")[:2000],
+                external_id=session_id or str(external_id or ""), provider_response=json.dumps(stored_session),
+                webhook_data=wh_raw, details=f"{PROVIDER_REJECTION_MARK}{session_id}")
+            return done(APPLIED, "rejected by the provider (proof-of-address session)")
         if old_status in _IDENTITY_DONE:
             logger.warning("Ignoring stale Kaluta rejection for verification_id=%s", verification.id)
             return done(IGNORED, "identity was already accepted")
@@ -477,7 +564,7 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
         # without a payment (within the session limit of kyc_settings).
         if old_status == KYCStatus.EXPIRED:
             return done(DUPLICATE, "already expired")
-        if old_status not in _OPEN:
+        if old_status not in _OPEN and not address:
             return done(IGNORED, "the verification is not open")
         current = str(verification.external_verification_id or "")
         if session_id and current and session_id != current:
@@ -490,11 +577,11 @@ def handle_kaluta_webhook(db: Session, *, crud_kyc, payload: Dict[str, Any], ip:
 
     # Progress events (created, document_submitted, face_submitted, ...): noted
     # while the verification is open; never written over a decision.
-    if old_status not in _OPEN:
+    if old_status not in _OPEN and not address:
         return done(IGNORED, "progress event after a decision")
     if event == "session.created" and _adopt_created_session(
             db, verification, session=session, session_id=session_id, external_id=external_id,
-            bound_user_id=bound_user_id, reported=reported, wh_raw=wh_raw):
+            bound_user_id=bound_user_id, reported=reported, wh_raw=wh_raw, address=address):
         return done(APPLIED, "session adopted: its creation was not confirmed to this server")
     crud_kyc.kyc_verification.update(
         db,

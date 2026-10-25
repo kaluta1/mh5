@@ -194,8 +194,12 @@ def test_maker_checker_rules_at_service_level(world):
     member = _user(db, "mm@example.com", sponsor=sponsor)
     db.commit()
     maker, checker = cashier(db, "maker"), cashier(db, "checker")
+    with pytest.raises(mps.ManualPaymentError) as e:                                 # KYC is the provider's only
+        mps.record(db, maker, member.id, product_code="annual_membership", reason="Bank ref 2026-10-16/76",
+                   password=PASSWORD, verify_identity=True)
+    assert e.value.code == "KYC_DECIDED_BY_PROVIDER"
     out = mps.record(db, maker, member.id, product_code="annual_membership", reason="Bank ref 2026-10-16/77",
-                     password=PASSWORD, verify_identity=True)
+                     password=PASSWORD)
     req = out.request
     assert (out.status, out.deposit.status, db.query(JournalEntry).count(), db.query(AffiliateCommission).count()) == \
         ("pending_confirmation", DepositStatus.PENDING, 0, 0)
@@ -214,7 +218,7 @@ def test_maker_checker_rules_at_service_level(world):
     done = mps.confirm(db, checker, req.id, password=PASSWORD, evidence_reference="TX-0xfeed01")
     db.refresh(member)
     assert (done.status, done.deposit.status, done.deposit.validated_by, member.identity_verified) == \
-        ("granted", DepositStatus.VALIDATED, checker.id, True)
+        ("granted", DepositStatus.VALIDATED, checker.id, False)                      # a payment never verifies an identity
     commission = db.query(AffiliateCommission).one()
     assert (commission.user_id, commission.commission_amount) == (sponsor.id, Decimal("10.00"))
     for call in (lambda: mps.confirm(db, checker, req.id, password=PASSWORD, evidence_reference="TX-0xfeed01"),

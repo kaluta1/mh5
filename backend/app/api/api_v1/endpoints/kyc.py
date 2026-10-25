@@ -33,7 +33,10 @@ from app.services.kaluta_kyc import (
     parse_provider_time,
 )
 from app.services.kyc_provider_dispatch import (
+    ADDRESS_SESSION_RELEASED,
+    ADDRESS_SESSION_STARTED,
     _locked_verification,
+    address_step,
     check_kyc_session_validity,
     generate_kyc_reference,
     handle_kaluta_webhook,
@@ -59,16 +62,14 @@ from app.services.email_events import EmailEvent
 from app.services.payment_accounting import payment_accounting
 from app.services.proof_of_address_match import (
     normalized_address_key,
-    evaluate_proof_of_address,
 )
 from app.core.storage import (
     iter_s3_object,
     parse_kyc_document_reference,
     resolve_kyc_document_for_serving,
-    store_kyc_proof_file,
 )
 from app.core.security import create_kyc_document_view_token, verify_kyc_document_view_token
-from app.models.kyc import KYCDocument as KYCDocumentModel, KYCVerification as KYCVerificationModel
+from app.models.kyc import KYCAuditLog as KYCAuditLogModel, KYCDocument as KYCDocumentModel, KYCVerification as KYCVerificationModel
 
 logger = logging.getLogger(__name__)
 
@@ -231,11 +232,25 @@ def _attempt_view(verification, per_attempt: int) -> dict:
     }
 
 
+# KYC is decided by the provider (Kaluta) only: no administrator approval, rejection
+# or status override, and no self-declared proof of address. Every route that used
+# to decide outside the provider answers this, and changes nothing.
+PROVIDER_ONLY_DETAIL = {
+    "code": "KYC_DECIDED_BY_PROVIDER",
+    "message": "KYC is verified automatically by the provider. It cannot be approved, rejected or "
+               "changed by hand.",
+}
+
+
+def refuse_manual_kyc_decision() -> None:
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=PROVIDER_ONLY_DETAIL)
+
+
 def _refuse_closed(verification) -> None:
     if verification and verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Complete the proof-of-address step before restarting identity verification.",
+            detail="Your identity is verified. Continue with the proof-of-address step.",
         )
     if verification and verification.status == KYCStatus.APPROVED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your identity is already verified")
@@ -824,6 +839,7 @@ async def get_kyc_status_detailed(
     sessions_remaining = (kyc_settings.sessions_left(verification, per_attempt=kyc_settings.sessions_per_attempt(db))
                           if can_continue else None)
     needs_proof_of_address = verification.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
+    step = address_step(db, verification) if needs_proof_of_address else None
     if verification.status == KYCStatus.APPROVED:
         kyc_step = 0
     elif needs_proof_of_address:
@@ -854,6 +870,14 @@ async def get_kyc_status_detailed(
         "declared_residential_address": verification.verified_address,
         "residential_address_locked": bool(verification.residential_address_locked_at),
         "needs_proof_of_address": needs_proof_of_address,
+        # The proof of address is verified by the provider, in its own session (no payment).
+        "address_step": None if step is None else {
+            "provider": "kaluta",
+            "session_open": step["session_open"],
+            "verification_url": verification.verification_url if step["session_open"] else None,
+            "sessions_left": step["sessions_left"],
+            "address_not_checked": step["address_not_checked"],
+        },
         "kyc_step": kyc_step,
         "can_restart": can_restart and (has_valid_payment or kyc_is_free),  # paid, or KYC is free
         "can_continue": can_continue,
@@ -881,53 +905,109 @@ async def get_kyc_status_detailed(
     }
 
 
-@router.post("/submit", response_model=KYCVerification)
-def submit_kyc_verification(
+@router.post("/address/initiate")
+async def initiate_address_verification(
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    kyc_data: KYCSubmissionRequest
-) -> KYCVerification:
-    """
-    Soumettre une nouvelle demande de vérification KYC
-    """
+):
+    """The proof-of-address step, verified by the provider: a NEW provider session for
+    a member whose identity was accepted without the address. Same attempt, no
+    payment. Only that session's own result (its signed webhook) decides: approved
+    when the provider required and passed the proof of address."""
     _guard_kyc_initiation(db, current_user)
-    # Vérifier si l'utilisateur a déjà une vérification en cours
-    existing_verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
-    if existing_verification and existing_verification.status in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A KYC verification is already in progress for this user"
-        )
-    
-    # Créer la nouvelle vérification
-    verification_create = KYCVerificationCreate(
-        user_id=current_user.id,
-        status=KYCStatus.PENDING,
-        verified_first_name=kyc_data.first_name,
-        verified_last_name=kyc_data.last_name,
-        verified_date_of_birth=kyc_data.date_of_birth,
-        verified_nationality=kyc_data.nationality,
-        verified_address=kyc_data.address,
-        reference_id=f"KYC_{current_user.id}_{int(datetime.utcnow().timestamp())}"
+    kyc_settings.apply(db)
+    if not is_kaluta_active() or not kaluta_kyc_service.configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail={"code": "KYC_PROVIDER_UNAVAILABLE", "message": UNAVAILABLE_MESSAGE})
+    db.query(User.id).filter(User.id == current_user.id).with_for_update(key_share=True).first()
+    verification = (db.query(KYCVerificationModel).filter(KYCVerificationModel.user_id == current_user.id)
+                    .with_for_update().populate_existing().first())
+    if (verification is None or verification.status != KYCStatus.PENDING_PROOF_OF_ADDRESS
+            or provider_for_verification(verification) != "kaluta"):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "code": "KYC_ADDRESS_STEP_NOT_OPEN",
+            "message": "The proof-of-address step opens once your identity is verified."})
+    step = address_step(db, verification)
+    if step["session_open"]:
+        url = verification.verification_url
+        db.rollback()
+        return {"verification_url": url, "verification_id": verification.id, "reused": True,
+                "status": "address_in_progress", "provider": "kaluta"}
+    if step["sessions_left"] <= 0:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "code": "KYC_ADDRESS_CHECK_NOT_AVAILABLE" if step["address_not_checked"] else "KYC_SESSION_LIMIT_REACHED",
+            "message": ("The provider has not checked your address yet. Please contact support: they will tell "
+                        "you when the address check is available. You will not be charged again.")
+            if step["address_not_checked"] else
+            ("Your address verification link was used. Please contact support: they can allow one more. "
+             "You will not be charged again.")})
+
+    # The session is counted before the provider is asked (a second request cannot pass the limit),
+    # under a NEW reference: every event for it is then this step's.
+    reference = generate_kyc_reference(current_user.id)
+    verification.reference_id = reference
+    verification.verification_url = None
+    verification.expires_at = None
+    db.add(KYCAuditLogModel(verification_id=verification.id, action=ADDRESS_SESSION_STARTED,
+                            details="Provider proof-of-address session asked for (same attempt, no payment)",
+                            old_status=verification.status.value, new_status=verification.status.value,
+                            performed_by_user_id=current_user.id, performed_by_admin=False,
+                            timestamp=datetime.utcnow()))
+    db.commit()
+    verification_id = verification.id
+    address = (verification.verified_address or "").strip()
+
+    result = await initiate_kyc_session(
+        db=db, user=current_user, reference=reference, language="en",
+        country_iso=_shufti_country_iso2_for_user(db, current_user),
+        residential_address=address if len(address) >= 2 else None,
     )
-    
-    verification = crud_kyc.kyc_verification.create(db=db, obj_in=verification_create)
-    
-    # Créer le document associé avec les URLs uploadées
-    document_create = KYCDocumentCreate(
-        verification_id=verification.id,
-        document_type=kyc_data.document_type,
-        document_number=kyc_data.document_number,
-        issuing_country=kyc_data.issuing_country,
-        front_image_url=kyc_data.document_front if kyc_data.document_front else None,
-        back_image_url=kyc_data.document_back if kyc_data.document_back else None,
-        selfie_image_url=kyc_data.selfie if kyc_data.selfie else None
-    )
-    
-    crud_kyc.kyc_document.create(db=db, obj_in=document_create)
-    
-    return verification
+    row = (db.query(KYCVerificationModel).filter(KYCVerificationModel.id == verification_id)
+           .with_for_update().populate_existing().first())
+    if not result.get("success"):
+        if result.get("no_session_created"):
+            db.add(KYCAuditLogModel(verification_id=verification_id, action=ADDRESS_SESSION_RELEASED,
+                                    details="The provider opened no session; the session is given back",
+                                    old_status=row.status.value, new_status=row.status.value,
+                                    performed_by_user_id=current_user.id, performed_by_admin=False,
+                                    timestamp=datetime.utcnow()))
+            db.commit()
+        elif row is not None and row.reference_id == reference and row.verification_url:
+            # Its creation event saved the session while the answer did not arrive.
+            url = row.verification_url
+            db.rollback()
+            return {"verification_url": url, "verification_id": verification_id, "reused": True,
+                    "status": "address_in_progress", "provider": "kaluta"}
+        else:
+            db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail={"code": "KYC_PROVIDER_UNAVAILABLE", "message": UNAVAILABLE_MESSAGE})
+    session_id = str(result.get("session_id") or "")
+    url = result.get("verification_url")
+    if row is None or row.reference_id != reference or row.status != KYCStatus.PENDING_PROOF_OF_ADDRESS:
+        db.rollback()       # decided or replaced meanwhile: this session is not handed out
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "code": "KYC_ATTEMPT_ENDED", "message": "This verification has changed. Reload the page."})
+    row.external_verification_id = session_id
+    row.verification_url = url
+    row.expires_at = parse_provider_time(result.get("expires_at"))
+    db.add(KYCAuditLogModel(verification_id=verification_id, action="kaluta_session_created",
+                            details=f"Provider proof-of-address session {session_id} opened",
+                            old_status=row.status.value, new_status=row.status.value,
+                            performed_by_user_id=current_user.id, performed_by_admin=False,
+                            timestamp=datetime.utcnow()))
+    db.commit()
+    return {"verification_url": url, "verification_id": verification_id, "reused": False,
+            "status": "address_in_progress", "provider": "kaluta"}
+
+
+@router.post("/submit")
+def submit_kyc_verification():
+    """Retired: a KYC application is started with the provider (POST /initiate), never submitted for review."""
+    refuse_manual_kyc_decision()
 
 
 @router.get("/status", response_model=KYCStatusResponse)
@@ -1031,76 +1111,11 @@ def get_kyc_verification(
 
 
 @router.post("/verification/{verification_id}/upload-document")
-def upload_kyc_document(
-    *,
-    db: Session = Depends(deps.get_db),
-    verification_id: int,
-    current_user: User = Depends(deps.get_current_active_user),
-    document_type: DocumentType = Form(...),
-    front_image: UploadFile = File(...),
-    back_image: Optional[UploadFile] = File(None),
-    selfie_image: Optional[UploadFile] = File(None)
-):
-    """
-    Télécharger des documents pour une vérification KYC
-    """
-    _guard_kyc_initiation(db, current_user)
-    verification = crud_kyc.kyc_verification.get(db, id=verification_id)
-    if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KYC verification not found"
-        )
-    
-    if verification.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not allowed to access this verification"
-        )
-    
-    if verification.status not in [KYCStatus.PENDING, KYCStatus.IN_PROGRESS]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Documents cannot be uploaded for this verification"
-        )
-    
-    # TODO: Implémenter le stockage des fichiers (S3, local, etc.)
-    # Pour l'instant, on simule les URLs
-    front_url = f"/uploads/kyc/{verification_id}/{document_type.value}_front_{front_image.filename}"
-    back_url = f"/uploads/kyc/{verification_id}/{document_type.value}_back_{back_image.filename}" if back_image else None
-    selfie_url = f"/uploads/kyc/{verification_id}/selfie_{selfie_image.filename}" if selfie_image else None
-    
-    # Mettre à jour ou créer le document
-    existing_document = crud_kyc.kyc_document.get_by_type(
-        db, verification_id=verification_id, document_type=document_type
-    )
-    
-    if existing_document:
-        document_update = KYCDocumentUpdate(
-            front_image_url=front_url,
-            back_image_url=back_url,
-            selfie_image_url=selfie_url
-        )
-        crud_kyc.kyc_document.update(db=db, db_obj=existing_document, obj_in=document_update)
-    else:
-        document_create = KYCDocumentCreate(
-            verification_id=verification_id,
-            document_type=document_type,
-            front_image_url=front_url,
-            back_image_url=back_url,
-            selfie_image_url=selfie_url
-        )
-        crud_kyc.kyc_document.create(db=db, obj_in=document_create)
-    
-    # Mettre à jour le statut de la vérification
-    if verification.status == KYCStatus.PENDING:
-        verification_update = KYCVerificationUpdate(status=KYCStatus.IN_PROGRESS)
-        crud_kyc.kyc_verification.update(db=db, db_obj=verification, obj_in=verification_update)
-    
-    return {"message": "Documents uploaded successfully"}
+def upload_kyc_document():
+    """Retired: identity documents are given to the provider only, in its own session."""
+    refuse_manual_kyc_decision()
 
 
-# Endpoints administrateur
 @router.get("/admin/verifications", response_model=List[KYCVerification])
 def list_kyc_verifications(
     *,
@@ -1230,115 +1245,16 @@ def admin_view_kyc_document(
     return StreamingResponse(iter_s3_object(bucket, ref), media_type=content_type, headers=headers)
 
 
-@router.post("/admin/verification/{verification_id}/approve", response_model=KYCVerification)
-def approve_kyc_verification(
-    *,
-    db: Session = Depends(deps.get_db),
-    verification_id: int,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(deps.get_current_admin_user)
-) -> KYCVerification:
-    """
-    Approuver une vérification KYC (admin seulement)
-    """
-    # Decided under the same locks as a provider decision (member, then the
-    # verification), on the row as it is now: a webhook or a poll that decided
-    # meanwhile is seen here, and is never overwritten by a stale view of it.
-    verification = _locked_verification(db, verification_id)
-    if not verification:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KYC verification not found"
-        )
-    
-    if verification.status not in [
-        KYCStatus.PENDING,
-        KYCStatus.IN_PROGRESS,
-        KYCStatus.PENDING_PROOF_OF_ADDRESS,
-        KYCStatus.REQUIRES_REVIEW,
-    ]:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This verification cannot be approved"
-        )
-    
-    result = crud_kyc.kyc_verification.approve_verification(
-        db, verification_id=verification_id, admin_user_id=current_user.id
-    )
-    payment_accounting.post_kyc_verification_recognition_for_user(db, result.user_id)
-    
-    # Envoyer l'email de confirmation KYC approuvé
-    verified_user = db.query(User).filter(User.id == verification.user_id).first()
-    if verified_user:
-        email_service.enqueue(
-            db,
-            event=EmailEvent.KYC_APPROVED,
-            recipient=verified_user.email,
-            user_id=verified_user.id,
-            lang=getattr(verified_user, 'preferred_language', None),
-            idempotency_key=f"kyc.approved:{verification.id}:{int(verification.attempts_count or 0)}",
-        )
-    
-    return result
+@router.post("/admin/verification/{verification_id}/approve")
+def approve_kyc_verification(current_user: User = Depends(deps.get_current_admin_user)):
+    """Retired: KYC is approved by the provider only."""
+    refuse_manual_kyc_decision()
 
 
-@router.post("/admin/verification/{verification_id}/reject", response_model=KYCVerification)
-def reject_kyc_verification(
-    *,
-    db: Session = Depends(deps.get_db),
-    verification_id: int,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(deps.get_current_admin_user),
-    reason: str = Form(...),
-    details: Optional[str] = Form(None)
-) -> KYCVerification:
-    """
-    Rejeter une vérification KYC (admin seulement)
-    """
-    # Decided under the same locks as a provider decision (member, then the
-    # verification), on the row as it is now: a webhook or a poll that decided
-    # meanwhile is seen here, and is never overwritten by a stale view of it.
-    verification = _locked_verification(db, verification_id)
-    if not verification:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="KYC verification not found"
-        )
-    
-    if verification.status not in [
-        KYCStatus.PENDING,
-        KYCStatus.IN_PROGRESS,
-        KYCStatus.PENDING_PROOF_OF_ADDRESS,
-        KYCStatus.REQUIRES_REVIEW,
-    ]:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This verification cannot be rejected"
-        )
-    
-    result = crud_kyc.kyc_verification.reject_verification(
-        db, verification_id=verification_id, reason=reason, 
-        details=details, admin_user_id=current_user.id
-    )
-    
-    # Envoyer l'email de notification KYC rejeté
-    rejected_user = db.query(User).filter(User.id == verification.user_id).first()
-    if rejected_user:
-        email_service.enqueue(
-            db,
-            event=EmailEvent.KYC_REJECTED,
-            recipient=rejected_user.email,
-            user_id=rejected_user.id,
-            lang=getattr(rejected_user, 'preferred_language', None),
-            context={"reason": reason},
-            idempotency_key=f"kyc.rejected:{verification.id}:{int(verification.attempts_count or 0)}",
-        )
-    
-    return result
+@router.post("/admin/verification/{verification_id}/reject")
+def reject_kyc_verification(current_user: User = Depends(deps.get_current_admin_user)):
+    """Retired: KYC is rejected by the provider only."""
+    refuse_manual_kyc_decision()
 
 
 @router.get("/admin/statistics", response_model=KYCStatistics)
@@ -1375,132 +1291,12 @@ def get_verification_audit_logs(
 
 
 @router.post("/proof-of-address")
-async def submit_proof_of_address(
-    *,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-    document_type: DocumentType = Form(...),
-    name_on_document: str = Form(...),
-    address_as_shown_on_document: str = Form(...),
-    document_front: UploadFile = File(...),
-    document_back: Optional[UploadFile] = File(None),
-):
-    """
-    Étape 2 : fichiers justificatif (image ou PDF) + texte saisi ; correspondance heuristique avec l’adresse verrouillée.
-    """
-    _guard_kyc_initiation(db, current_user)
-    name_on_document = (name_on_document or "").strip()
-    address_as_shown_on_document = (address_as_shown_on_document or "").strip()
-    if len(name_on_document) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="name_on_document must be at least 2 characters.",
-        )
-    if len(address_as_shown_on_document) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="address_as_shown_on_document must be at least 8 characters.",
-        )
-    if document_type not in (
-        DocumentType.UTILITY_BILL,
-        DocumentType.ADDRESS_PROOF,
-        DocumentType.BANK_STATEMENT,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="document_type must be utility_bill, address_proof, or bank_statement.",
-        )
-
-    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=current_user.id)
-    if not verification or verification.status != KYCStatus.PENDING_PROOF_OF_ADDRESS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Proof of address can only be submitted after identity verification is accepted.",
-        )
-    locked = (verification.verified_address or "").strip()
-    if not locked:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No residential address on file; restart KYC from step 1.",
-        )
-
-    ok, reason = evaluate_proof_of_address(
-        locked_residential_address=locked,
-        profile_full_name=_profile_full_name(current_user),
-        name_on_document=name_on_document,
-        address_as_shown_on_document=address_as_shown_on_document,
-    )
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": reason, "message": "Proof of address does not match your profile or declared address."},
-        )
-
-    try:
-        front_info = await store_kyc_proof_file(document_front, current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-
-    back_url: Optional[str] = None
-    if document_back is not None and (document_back.filename or "").strip():
-        try:
-            back_info = await store_kyc_proof_file(document_back, current_user.id)
-            back_url = back_info["url"]
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-
-    front_url = front_info["url"]
-
-    # Persist submitted text + marker in DB (URLs go to front_image_url / back_image_url).
-    poa_notes = json.dumps(
-        {
-            "source": "proof_of_address_auto",
-            "name_on_document": name_on_document,
-            "address_as_shown_on_document": address_as_shown_on_document,
-        },
-        ensure_ascii=False,
-    )
-
-    # The files are stored (network, no lock held). From here on the decision is
-    # taken under the locks of every KYC decision (member, then the verification),
-    # on the row as it is now: an administrator's or the provider's decision taken
-    # meanwhile stands, and two submissions at once approve once. The document and
-    # the approval are written in ONE commit.
-    verification = _locked_verification(db, verification.id)
-    if (verification is None or verification.user_id != current_user.id
-            or verification.status != KYCStatus.PENDING_PROOF_OF_ADDRESS):
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Proof of address can only be submitted after identity verification is accepted.",
-        )
-
-    existing = crud_kyc.kyc_document.get_by_type(
-        db, verification_id=verification.id, document_type=document_type
-    )
-    now = datetime.utcnow()
-    document = existing or KYCDocumentModel(verification_id=verification.id, document_type=document_type)
-    document.front_image_url = front_url
-    document.back_image_url = back_url
-    document.is_verified = True
-    document.verification_notes = poa_notes
-    document.verified_at = now
-    db.add(document)
-
-    crud_kyc.kyc_verification.finalize_proof_of_address_auto(db, verification_id=verification.id)
-    payment_accounting.post_kyc_verification_recognition_for_user(db, verification.user_id)
-    # The approval is committed: tell the member (the main approval path; it used to send nothing).
-    kyc_notifications.notify_status(db, verification.id)
-
-    return {
-        "success": True,
-        "status": "approved",
-        "verification_id": verification.id,
-        "message": "KYC complete.",
-    }
+def submit_proof_of_address():
+    """Retired: the proof of address is verified by the provider (POST /address/initiate). Text a member
+    types, or a file uploaded here, never verified an address."""
+    refuse_manual_kyc_decision()
 
 
-# Webhook pour Shufti Pro
 @router.post("/webhook/shufti-pro", response_model=KYCWebhookResponse)
 async def shufti_pro_webhook(
     *,

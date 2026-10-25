@@ -313,16 +313,19 @@ def test_switching_an_administrator_account_on_or_off_is_a_privileged_action(cli
     assert client.delete(f"/api/v1/admin/users/{member.id}", headers=bearer(plain)).status_code == 200
 
 
-def test_nobody_verifies_their_own_identity(client, db):
+def test_nobody_verifies_an_identity_by_hand(client, db):
+    # KYC is decided by the provider only: no administrator marks an identity verified
+    # or unverified, their own or a member's.
     admin, member = person(db, "boss", admin=True), person(db, "member")
-    for action in ("verify", "unverify"):
-        own = client.put(f"/api/v1/admin/users/{admin.id}/kyc/{action}", headers=bearer(admin))
-        assert (own.status_code, code_of(own)) == (403, "SELF_ACTION_FORBIDDEN")
+    member.identity_verified = True
+    db.commit()
+    for target in (admin, member):
+        for action in ("verify", "unverify"):
+            answer = client.put(f"/api/v1/admin/users/{target.id}/kyc/{action}", headers=bearer(admin))
+            assert (answer.status_code, code_of(answer)) == (410, "KYC_DECIDED_BY_PROVIDER")
+    assert client.put(f"/api/v1/admin/users/{member.id}/kyc/verify", headers=bearer(member)).status_code == 403
     db.expire_all()
-    assert not db.get(User, admin.id).identity_verified
-    assert client.put(f"/api/v1/admin/users/{member.id}/kyc/verify", headers=bearer(admin)).status_code == 200
-    db.expire_all()
-    assert db.get(User, member.id).identity_verified is True
+    assert not db.get(User, admin.id).identity_verified and db.get(User, member.id).identity_verified is True
 
 
 # ===========================================================================
@@ -367,7 +370,7 @@ def test_a_manual_payment_needs_its_own_permission_the_password_and_another_acco
     # An administrator paying themselves, and a request without a password.
     assert code_of(grant(client, plain, plain)) == "PERMISSION_REQUIRED"
     assert code_of(grant(client, cashier, cashier)) == "SELF_ACTION_FORBIDDEN"
-    assert code_of(grant(client, cashier, cashier, verify_identity=True)) == "SELF_ACTION_FORBIDDEN"
+    assert code_of(grant(client, cashier, member, verify_identity=True)) == "KYC_DECIDED_BY_PROVIDER"   # never by hand
     for password in (None, "", "not-the-password"):
         assert code_of(grant(client, cashier, member, current_password=password)) == "REAUTH_REQUIRED"
     # A payment has to say which payment it is.

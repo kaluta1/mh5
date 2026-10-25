@@ -84,7 +84,7 @@ describe('Mark as paid: a refused payment is not a payment', () => {
 
     await waitFor(() => expect(errors()).toEqual([message]))
     expect(postMock).toHaveBeenCalledWith('/api/v1/admin/users/42/grant-payment', {
-      product_code: 'kyc', notes: REFERENCE, verify_identity: false, current_password: PASSWORD })
+      product_code: 'kyc', notes: REFERENCE, current_password: PASSWORD })
     expect(successes()).toEqual([])                                  // "marked as paid successfully" was shown here
     // The reference is still there to correct and resend; the password is not kept.
     expect((screen.getByLabelText(/Payment reference/) as HTMLInputElement).value).toBe(REFERENCE)

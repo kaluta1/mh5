@@ -143,32 +143,8 @@ export default function AdminKYC() {
     }
   }, [])
 
-  const handleApprove = async (id: number) => {
-    try {
-      await api.post(`/api/v1/kyc/admin/verification/${id}/approve`)
-      fetchVerifications()
-      if (detail?.id === id) openDetail(id)
-    } catch (error) {
-      console.error('Error approving:', error)
-    }
-  }
-
-  const handleReject = async (id: number, reason: string) => {
-    try {
-      const payload = new URLSearchParams()
-      payload.set('reason', reason)
-
-      await api.post(`/api/v1/kyc/admin/verification/${id}/reject`, payload, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      })
-      fetchVerifications()
-      if (detail?.id === id) openDetail(id)
-    } catch (error) {
-      console.error('Error rejecting:', error)
-    }
-  }
+  // KYC is decided by the provider (Kaluta) only: this page shows records, results and
+  // history, and offers no approval, rejection or status change.
 
   const filteredVerifications = (Array.isArray(verifications) ? verifications : []).filter((v) => {
     const email = v.user?.email?.toLowerCase() || ''
@@ -372,32 +348,6 @@ export default function AdminKYC() {
                         <Eye className="h-4 w-4" />
                         {t('admin.kyc.view') || 'Details'}
                       </Button>
-                      {canModerate(verification.status) && (
-                        <>
-                          <Button
-                            size="sm"
-                            className="gap-1 bg-green-600 hover:bg-green-700"
-                            onClick={() => handleApprove(verification.id)}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            {t('admin.kyc.approve') || 'Approve'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="gap-1"
-                            onClick={() =>
-                              handleReject(
-                                verification.id,
-                                t('admin.kyc.reject_default_reason')
-                              )
-                            }
-                          >
-                            <XCircle className="h-4 w-4" />
-                            {t('admin.kyc.reject') || 'Reject'}
-                          </Button>
-                        </>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -554,27 +504,10 @@ export default function AdminKYC() {
                 </div>
               )}
 
-              {canModerate(detail.status) && (
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApprove(detail.id)}>
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    {t('admin.kyc.approve') || 'Approve'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() =>
-                      handleReject(
-                        detail.id,
-                        t('admin.kyc.reject_default_reason')
-                      )
-                    }
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {t('admin.kyc.reject') || 'Reject'}
-                  </Button>
-                </div>
-              )}
+              <p data-testid="kyc-decided-by-provider" className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-600">
+                {t('admin.kyc.decided_by_provider') ||
+                  'KYC is verified automatically by Kaluta. Decisions cannot be made or changed here.'}
+              </p>
 
               <AdminKycSessionGrant verification={detail} onGranted={() => void openDetail(detail.id)} />
             </div>

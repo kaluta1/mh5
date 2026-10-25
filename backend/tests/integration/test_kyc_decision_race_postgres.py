@@ -49,6 +49,14 @@ def rejected(reference: str) -> dict:
     return payload("session.rejected", reference, "rejected", rejection_reason="Face does not match the document")
 
 
+def retry_approved(reference: str) -> dict:
+    """The member retried in the provider's widget: a NEW session with the same external_id."""
+    body = approved(reference)
+    body["session"]["id"] = "sess-2"
+    body["session"]["metadata"] = {"_retry_index": 1}
+    return body
+
+
 def state(Session, verification_id: int) -> tuple:
     with Session() as db:
         row = db.get(KYCVerification, verification_id)
@@ -96,7 +104,7 @@ def test_an_approval_right_after_a_webhook_rejection_commits_leaves_a_consistent
     _engine, Session = pg
     verification_id, reference = open_verification(Session, "gapwh")
     with Session() as db:
-        fired = after_first_commit(db, lambda: deliver(Session, approved(reference)))
+        fired = after_first_commit(db, lambda: deliver(Session, retry_approved(reference)))
         assert dispatch.handle_kaluta_webhook(db, crud_kyc=crud_kyc, payload=rejected(reference)) == dispatch.APPLIED
     # The provider's own retry approval after its rejection stands (existing rule).
     assert fired[1] == dispatch.APPLIED
@@ -116,7 +124,7 @@ def test_an_approval_right_after_a_polled_rejection_commits_leaves_a_consistent_
     monkeypatch.setattr(dispatch, "check_kyc_session_validity", provider_says_rejected)
     with Session() as db:
         verification = db.get(KYCVerification, verification_id)
-        fired = after_first_commit(db, lambda: deliver(Session, approved(reference)))
+        fired = after_first_commit(db, lambda: deliver(Session, retry_approved(reference)))
         result = asyncio.run(dispatch.sync_verification_from_provider(db, crud_kyc=crud_kyc, verification=verification))
     assert result == {"status": "rejected"} and fired[1] == dispatch.APPLIED
     row, user = state(Session, verification_id)
@@ -146,7 +154,8 @@ def test_rejection_then_approval_is_the_providers_retry(pg):
     verification_id, reference = open_verification(Session, "ra")
     assert deliver(Session, rejected(reference)) == dispatch.APPLIED
     assert_consistent(*state(Session, verification_id))
-    assert deliver(Session, approved(reference)) == dispatch.APPLIED
+    assert deliver(Session, approved(reference)) == dispatch.IGNORED       # the rejected session itself stays rejected
+    assert deliver(Session, retry_approved(reference)) == dispatch.APPLIED
     row, user = state(Session, verification_id)
     assert row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
     assert_consistent(row, user)
@@ -167,12 +176,12 @@ def test_duplicates_and_replays_are_idempotent(pg):
     verification_id, reference = open_verification(Session, "dup")
     assert deliver(Session, rejected(reference)) == dispatch.APPLIED
     assert deliver(Session, rejected(reference)) == dispatch.DUPLICATE
-    assert deliver(Session, approved(reference)) == dispatch.APPLIED
-    for body in (approved(reference), approved(reference)):
+    assert deliver(Session, retry_approved(reference)) == dispatch.APPLIED
+    for body in (retry_approved(reference), approved(reference)):
         assert deliver(Session, body) == dispatch.DUPLICATE
     assert deliver(Session, rejected(reference)) == dispatch.IGNORED                # delayed rejection
     old = payload("session.rejected", "mh5_0_an_earlier_reference", "rejected")
-    old["session"]["id"] = "sess-1"
+    old["session"]["id"] = "sess-2"                                       # the current session
     assert deliver(Session, old) == dispatch.IGNORED                                # earlier reference
     row, user = state(Session, verification_id)
     assert row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS
@@ -191,7 +200,7 @@ def test_duplicates_and_replays_are_idempotent(pg):
 def test_mixed_events_at_once_always_leave_a_consistent_state(pg, round_):
     _engine, Session = pg
     verification_id, reference = open_verification(Session, f"mix{round_}")
-    bodies = [rejected(reference), approved(reference),
+    bodies = [rejected(reference), retry_approved(reference),
               payload("session.document_submitted", reference, "processing"), rejected(reference)]
     results = in_threads(WORKERS, lambda i: deliver(Session, bodies[(i + round_) % len(bodies)]))
     assert not [r for r in results if isinstance(r, Exception)], results

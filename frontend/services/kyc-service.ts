@@ -47,15 +47,6 @@ export interface KYCInitiateResponse {
   provider?: 'kaluta' | 'shufti_pro' | string
 }
 
-export interface ProofOfAddressPayload {
-  document_type: 'utility_bill' | 'address_proof' | 'bank_statement'
-  /** Main proof file (image or PDF) */
-  document_front: File
-  document_back?: File | null
-  name_on_document: string
-  address_as_shown_on_document: string
-}
-
 export interface PaymentRequiredError {
   type: 'payment_required'
   message: string
@@ -158,29 +149,18 @@ class KYCService {
   }
 
   /**
-   * Étape 2 — justificatif de domicile (texte + URLs des fichiers déjà hébergés).
+   * Step 2: the provider verifies the proof of address in a session of its own
+   * (same attempt, no payment). Only that session's result decides.
    */
-  async submitProofOfAddress(
-    token: string,
-    payload: ProofOfAddressPayload
-  ): Promise<{ success: boolean; status: string; verification_id: number; message?: string }> {
+  async initiateAddressVerification(
+    token: string
+  ): Promise<{ verification_url: string | null; verification_id: number; reused: boolean; status: string }> {
     if (!token) {
       throw new Error('Authentication token is required')
     }
-    const fd = new FormData()
-    fd.append('document_type', payload.document_type)
-    fd.append('name_on_document', payload.name_on_document)
-    fd.append('address_as_shown_on_document', payload.address_as_shown_on_document)
-    fd.append('document_front', payload.document_front)
-    if (payload.document_back) {
-      fd.append('document_back', payload.document_back)
-    }
-    const response = await fetch(`${this.baseUrl}/api/v1/kyc/proof-of-address`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/kyc/address/initiate`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: fd,
+      headers: { Authorization: `Bearer ${token}` },
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
@@ -190,7 +170,7 @@ class KYCService {
           ? d
           : d && typeof d === 'object' && 'message' in d
             ? String((d as { message?: string }).message)
-            : error.message || 'Proof of address submission failed'
+            : 'Address verification could not be started'
       throw new Error(msg)
     }
     return response.json()
@@ -274,6 +254,7 @@ class KYCService {
         declared_residential_address: result.declared_residential_address ?? null,
         residential_address_locked: result.residential_address_locked || false,
         needs_proof_of_address: result.needs_proof_of_address || false,
+        address_step: result.address_step ?? null,
         kyc_step: result.kyc_step,
         can_start: result.can_restart || result.can_continue || false,
         needs_payment: result.needs_payment || false,

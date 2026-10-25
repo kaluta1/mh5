@@ -421,10 +421,17 @@ def grant_session(db: Session, actor, verification_id: int, *, password: Optiona
     if row is None:
         db.rollback()
         raise KycSettingsError("NOT_FOUND", "Verification not found.")
-    if row.status not in OPEN_STATUSES:
+    address = row.status == KYCStatus.PENDING_PROOF_OF_ADDRESS     # the provider's proof-of-address step
+    if row.status not in OPEN_STATUSES and not address:
         db.rollback()
         raise KycSettingsError("NOT_OPEN", "This verification has no open attempt. Nothing was changed.")
-    if sessions_left(row, per_attempt=per_attempt) > 0:
+    if address:
+        from app.services.kyc_provider_dispatch import address_step
+
+        left = address_step(db, row)["sessions_left"]
+    else:
+        left = sessions_left(row, per_attempt=per_attempt)
+    if left > 0:
         db.rollback()
         raise KycSettingsError("NOT_NEEDED", "The member can still open a session for this attempt. Nothing was changed.")
     if int(row.attempt_sessions_granted or 0) >= MAX_GRANTED_SESSIONS:
@@ -444,5 +451,6 @@ def grant_session(db: Session, actor, verification_id: int, *, password: Optiona
                       old_values={"attempt_sessions_granted": old},
                       new_values={"attempt_sessions_granted": old + 1}))
     db.commit()
-    return {"verification_id": row.id, "sessions_left": sessions_left(row, per_attempt=per_attempt),
+    left = address_step(db, row)["sessions_left"] if address else sessions_left(row, per_attempt=per_attempt)
+    return {"verification_id": row.id, "sessions_left": left,
             "attempt_sessions_granted": int(row.attempt_sessions_granted)}

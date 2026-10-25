@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, useCallback, useRef } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/language-context'
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { KYCSkeleton } from '@/components/ui/skeleton'
 import { kycService, KYCPaymentRequiredError } from '@/services/kyc-service'
 import { KalutaVerificationEmbed } from '@/components/kyc/kaluta-verification-embed'
-import { waitForDecision } from '@/lib/kaluta-verification'
+import { isKalutaVerificationUrl, waitForDecision } from '@/lib/kaluta-verification'
 import { formatKycFee, isKycFree } from '@/lib/kyc-fee'
 import { logger } from '@/lib/logger'
 import { 
@@ -53,6 +53,14 @@ interface KYCStatusData {
   declared_residential_address?: string | null
   residential_address_locked?: boolean
   needs_proof_of_address?: boolean
+  // The proof of address is verified by the provider, in its own session (no payment).
+  address_step?: {
+    provider: string
+    session_open: boolean
+    verification_url: string | null
+    sessions_left: number
+    address_not_checked: boolean
+  } | null
   kyc_step?: number
   identity_verified?: boolean
   address_verified?: boolean
@@ -85,14 +93,7 @@ function KYCPageContent() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [residentialAddress, setResidentialAddress] = useState('')
 
-  const [poaName, setPoaName] = useState('')
-  const [poaAddressOnDoc, setPoaAddressOnDoc] = useState('')
-  const [poaDocType, setPoaDocType] = useState<'utility_bill' | 'address_proof' | 'bank_statement'>(
-    'utility_bill'
-  )
-  const poaFrontInputRef = useRef<HTMLInputElement>(null)
-  const poaBackInputRef = useRef<HTMLInputElement>(null)
-  const [isSubmittingPoa, setIsSubmittingPoa] = useState(false)
+  const [isStartingAddress, setIsStartingAddress] = useState(false)
 
   const addrLocked = !!kycData?.residential_address_locked
 
@@ -289,38 +290,29 @@ function KYCPageContent() {
     }
   }
 
-  const handleSubmitProofOfAddress = async () => {
+  // Step 2: the provider verifies the proof of address in its own session (same attempt, no payment).
+  const handleStartAddressVerification = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
     if (!token) {
       setError(t('kyc.login_required') || 'Please sign in')
       return
     }
-    const frontFile = poaFrontInputRef.current?.files?.[0]
-    if (!frontFile) {
-      setError(
-        t('kyc.poa_file_required') || 'Please choose a proof-of-address file (photo or PDF).'
-      )
-      return
-    }
-
-    setIsSubmittingPoa(true)
+    setIsStartingAddress(true)
     setError(null)
     try {
-      const backFile = poaBackInputRef.current?.files?.[0]
-      await kycService.submitProofOfAddress(token, {
-        document_type: poaDocType,
-        document_front: frontFile,
-        document_back: backFile ?? null,
-        name_on_document: poaName.trim(),
-        address_as_shown_on_document: poaAddressOnDoc.trim(),
-      })
-      const st = await kycService.getKYCStatus(token)
-      setKycData(st)
-      await refreshUser?.()
+      const result = await kycService.initiateAddressVerification(token)
+      if (isKalutaVerificationUrl(result.verification_url)) {
+        setKycProvider('kaluta')
+        setVerificationUrl(result.verification_url)
+      } else {
+        setError(t('kyc.init_error') || 'Unable to start verification')
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error') || 'Error')
+      const st = await kycService.getKYCStatus(token).catch(() => null)
+      if (st) setKycData(st)
     } finally {
-      setIsSubmittingPoa(false)
+      setIsStartingAddress(false)
     }
   }
 
@@ -547,6 +539,8 @@ function KYCPageContent() {
       typeof kycData.declared_residential_address === 'string'
         ? kycData.declared_residential_address
         : ''
+    const addressStep = kycData.address_step ?? null
+    const addressCanStart = Boolean(addressStep && (addressStep.session_open || addressStep.sessions_left > 0))
     return (
       <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
@@ -558,8 +552,8 @@ function KYCPageContent() {
               {t('kyc.step2_title') || 'Step 2: Proof of address'}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6 text-center text-sm">
-              {t('kyc.step2_intro') ||
-                'Identity verification is complete. Submit a utility bill, bank statement, or official letter and copy the name and address exactly as shown on the document.'}
+              {t('kyc.step2_provider_intro') ||
+                'Your identity is verified. Kaluta now verifies your proof of address (a utility bill, bank statement or official letter) in its secure flow. This step is free: you will not be charged again.'}
             </p>
             {declared ? (
               <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-600 text-sm">
@@ -569,82 +563,26 @@ function KYCPageContent() {
                 <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{declared}</p>
               </div>
             ) : null}
+            {addressStep?.address_not_checked ? (
+              <div data-testid="address-check-not-available" className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">
+                {t('kyc.address_check_not_available') ||
+                  'The provider has not checked your address yet. Please contact support: they will tell you when the address check is available. You will not be charged again.'}
+              </div>
+            ) : null}
             {error && (
               <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
-            <div className="space-y-4 text-left">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('kyc.poa_document_type') || 'Document type'}
-                </label>
-                <select
-                  value={poaDocType}
-                  onChange={(e) =>
-                    setPoaDocType(e.target.value as 'utility_bill' | 'address_proof' | 'bank_statement')
-                  }
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                >
-                  <option value="utility_bill">{t('kyc.doc_utility') || 'Utility bill'}</option>
-                  <option value="bank_statement">{t('kyc.doc_bank') || 'Bank statement'}</option>
-                  <option value="address_proof">{t('kyc.doc_address_letter') || 'Official address letter'}</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('kyc.poa_front_file') || 'Document file (photo or PDF)'}
-                </label>
-                <input
-                  ref={poaFrontInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                  className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-md file:border-0 file:bg-myhigh5-primary file:px-3 file:py-2 file:text-sm file:text-white"
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('kyc.poa_file_hint') || 'JPEG, PNG, WebP, or PDF — max 10 MB.'}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('kyc.poa_back_file') || 'Second page / back (optional)'}
-                </label>
-                <input
-                  ref={poaBackInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                  className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-md file:border-0 file:bg-gray-200 dark:file:bg-gray-700 file:px-3 file:py-2 file:text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('kyc.poa_name_on_doc') || 'Full name as on document'}
-                </label>
-                <Input
-                  value={poaName}
-                  onChange={(e) => setPoaName(e.target.value)}
-                  className="bg-white dark:bg-gray-900"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('kyc.poa_address_on_doc') || 'Address as shown on document'}
-                </label>
-                <Textarea
-                  value={poaAddressOnDoc}
-                  onChange={(e) => setPoaAddressOnDoc(e.target.value)}
-                  className="min-h-[80px] bg-white dark:bg-gray-900"
-                />
-              </div>
-            </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
               <Button
-                onClick={() => void handleSubmitProofOfAddress()}
-                disabled={isSubmittingPoa}
+                data-testid="start-address-verification"
+                onClick={() => void handleStartAddressVerification()}
+                disabled={isStartingAddress || !addressCanStart}
                 className="bg-myhigh5-primary hover:bg-myhigh5-primary/90"
               >
-                {isSubmittingPoa ? (
+                {isStartingAddress ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     {t('common.loading') || 'Loading...'}
@@ -652,7 +590,9 @@ function KYCPageContent() {
                 ) : (
                   <>
                     <FileCheck className="w-4 h-4 mr-2" />
-                    {t('kyc.submit_poa') || 'Submit proof of address'}
+                    {addressStep?.session_open
+                      ? t('kyc.continue_address_verification') || 'Continue address verification'
+                      : t('kyc.start_address_verification') || 'Verify my address with Kaluta'}
                   </>
                 )}
               </Button>
