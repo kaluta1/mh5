@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-import AdminReferralPool, { refundStatusText } from './admin-referral-pool'
+import AdminReferralPool, { referralTypeLabel, refundStatusText } from './admin-referral-pool'
 
 function overview(given: { finance: boolean; kyc: boolean } = { finance: false, kyc: false }) {
   const permissions = { ...given, operations: given.finance || given.kyc }
@@ -158,6 +158,54 @@ describe('AdminReferralPool', () => {
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument()
   })
 
+  it('shows empty limits as Unlimited', async () => {
+    serve({ '/overview': overview({ finance: true, kyc: false }) })
+    render(<AdminReferralPool />)
+    await screen.findByTestId('feature-status')
+    expect(screen.getByText('Optional unit limits (empty = Unlimited)')).toBeInTheDocument()
+    for (const k of ['max_units_per_purchase', 'max_units_per_member', 'max_active_units']) {
+      expect(screen.getByTestId(`limit-${k}`)).toHaveTextContent('Unlimited')
+      expect(screen.getByLabelText(k)).toHaveAttribute('placeholder', 'Unlimited')
+    }
+    fireEvent.change(screen.getByLabelText('max_units_per_member'), { target: { value: '20' } })
+    expect(screen.getByTestId('limit-max_units_per_member')).toHaveTextContent('At most 20')
+  })
+
+  it('lists sponsors in three columns with profile links and readable referral types', async () => {
+    serve({
+      '/overview': overview({ finance: false, kyc: true }),
+      '/sponsors': {
+        ...page([
+          { user_id: 11, username: 'alice', sponsor_id: 7, sponsor_username: 'bob', sponsor_source: 'PERSONAL_REFERRAL' },
+          { user_id: 12, username: 'carol', sponsor_id: 7, sponsor_username: 'bob', sponsor_source: null },
+          { user_id: 13, username: null, sponsor_id: 99, sponsor_username: null, sponsor_source: 'JOIN_CODE' },
+        ], 3),
+        page_size: 50,
+      },
+      '/invalid-sponsors': { items: [{ user_id: 14, username: 'dave', sponsor_id: 8, sponsor_username: 'erin', source: 'PERSONAL_REFERRAL' }], page: 1, page_size: 50, checked_total: 6 },
+    })
+    render(<AdminReferralPool />)
+    await screen.findByTestId('feature-status')
+    fireEvent.click(screen.getByRole('tab', { name: 'Sponsors' }))
+    await screen.findByText('alice')
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['User', 'Sponsor', 'Referral Type'])
+    expect(screen.getByRole('link', { name: 'alice' })).toHaveAttribute('href', '/dashboard/users/11')
+    expect(screen.getAllByRole('link', { name: 'bob' })[0]).toHaveAttribute('href', '/dashboard/users/7')
+    expect(screen.getByText('Personal Referral')).toBeInTheDocument()
+    expect(screen.getByText('Not recorded (legacy)')).toBeInTheDocument()
+    expect(screen.getByText('Join Code')).toBeInTheDocument()
+    expect(screen.getByText('Unknown account (#13)')).toBeInTheDocument()
+    expect(screen.getByText('Unknown account (#99)')).toBeInTheDocument()
+    expect(screen.queryByText('user_id')).not.toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('/api/v1/admin/referral-pool/sponsors', { params: { page: 1, page_size: 50 } })
+    fireEvent.change(screen.getByLabelText('Sponsors view'), { target: { value: 'invalid' } })
+    expect(await screen.findByRole('link', { name: 'dave' })).toHaveAttribute('href', '/dashboard/users/14')
+    expect(screen.getByRole('link', { name: 'erin' })).toHaveAttribute('href', '/dashboard/users/8')
+    expect(screen.getByText(/of 6/)).toBeInTheDocument()
+    expect(put).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+  })
+
   it('saves optional limits with the password (empty means no limit)', async () => {
     serve({ '/overview': overview({ finance: true, kyc: false }) })
     put.mockResolvedValue({ status: 200, data: {} })
@@ -171,6 +219,18 @@ describe('AdminReferralPool', () => {
         password: 'pw', max_units_per_purchase: null, max_units_per_member: 20, max_active_units: null,
       }),
     )
+  })
+})
+
+describe('referralTypeLabel', () => {
+  it('turns stored sources into readable labels without changing them', () => {
+    expect(referralTypeLabel('PERSONAL_REFERRAL')).toBe('Personal Referral')
+    expect(referralTypeLabel('JOIN_CODE')).toBe('Join Code')
+    expect(referralTypeLabel('REFERRAL_POOL')).toBe('Referral Pool')
+    expect(referralTypeLabel('NONE')).toBe('None')
+    expect(referralTypeLabel(null)).toBe('Not recorded (legacy)')
+    expect(referralTypeLabel('')).toBe('Not recorded (legacy)')
+    expect(referralTypeLabel('ADMIN_ASSIGNED')).toBe('Admin Assigned')
   })
 })
 

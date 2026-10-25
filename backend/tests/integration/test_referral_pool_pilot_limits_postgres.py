@@ -1,26 +1,31 @@
-"""Multi-Unit Referral Pool, P15 Stage 2: the approved pilot limits on a real PostgreSQL server (opt-in
-RUN_POSTGRES_TESTS=1; one DISPOSABLE database per test; SYNTHETIC).
+"""Multi-Unit Referral Pool unit limits on a real PostgreSQL server (opt-in RUN_POSTGRES_TESTS=1; one
+DISPOSABLE database per test; SYNTHETIC).
 
-Pilot: at most 5 units per purchase, 5 per member, 50 in the pool. Proved with production's shape (the
-historical unit 1 of the founding member): held units of every source count, so the founding member may
-add 4 and the pool 49; purchases still being paid reserve their units; every refusal happens at checkout,
-before any money is taken.
+Owner decision 2026-10-25: purchases are UNLIMITED. With every limit empty (NULL, production's
+configuration), a member buys any positive number of units at $100 each, at once or again later, beyond
+the former 5/5/50 pilot, and every unit is created and recognized. The optional limits an administrator
+may still set are then proved with production's shape (the historical unit 1 of the founding member):
+held units of every source count; purchases still being paid reserve their units; every refusal happens
+at checkout, before any money is taken.
 """
 from __future__ import annotations
 
 import os
 from datetime import datetime
+from decimal import Decimal
 
 import pytest
 
-from app.models.business_model import ReferralPoolConfig, ReferralPoolUnit
+from app.models.business_model import ReferralPoolConfig, ReferralPoolPurchase, ReferralPoolUnit
 from app.models.payment import Deposit
 from app.models.user import User
 from app.services import referral_pool_conversion as conversion
 from app.services import referral_pool_units as units
 from tests.integration.test_payments_postgres import pg  # noqa: F401
 from tests.integration.test_referral_pool_conversion_postgres import seat
-from tests.integration.test_referral_pool_units_postgres import deposit, member, refusal, world  # noqa: F401
+from tests.integration.test_referral_pool_units_postgres import (  # noqa: F401
+    activate, buy, confirm, deposit, member, refusal, world,
+)
 
 pytestmark = [
     pytest.mark.postgres,
@@ -44,6 +49,21 @@ def pilot(world):
     return Session, founder
 
 
+@pytest.fixture
+def unlimited(world):
+    _e, Session = world
+    with Session() as db:
+        cfg = db.query(ReferralPoolConfig).one()
+        cfg.multiunit_sales_enabled, cfg.allocation_enabled = True, False
+        assert (cfg.max_units_per_purchase, cfg.max_units_per_member, cfg.max_active_units) == (None, None, None)
+        db.commit()
+    founder = member(Session)
+    mid = seat(Session, founder)
+    with Session() as db:
+        assert conversion.convert(db, mid, approved=[mid], run_id="unlimited").outcome == conversion.CREATED
+    return Session, founder
+
+
 def checkout(Session, user_id: int, quantity: int) -> str:
     d = deposit(Session, user_id, quantity)
     with Session() as db:
@@ -51,6 +71,33 @@ def checkout(Session, user_id: int, quantity: int) -> str:
                                                         quantity=quantity))
         db.commit() if outcome == "ok" else db.rollback()                   # an accepted checkout is kept
         return outcome
+
+
+def test_without_limits_any_quantity_is_accepted_beyond_the_former_5_5_50(unlimited):
+    Session, founder = unlimited                                             # 1 historical unit held
+    assert checkout(Session, founder, 25) == "ok"                            # > 5 at once, > 5 held
+    buyer = member(Session)
+    assert checkout(Session, buyer, 30) == "ok"                              # pool 56 > 50
+    assert checkout(Session, buyer, 30) == "ok"                              # again later: 60 held
+    with Session() as db:
+        totals = [(p.quantity, p.unit_price, p.total_amount) for p in db.query(ReferralPoolPurchase).order_by(ReferralPoolPurchase.id)]
+    assert totals == [(25, Decimal("100.00"), Decimal("2500.00")), (30, Decimal("100.00"), Decimal("3000.00")),
+                      (30, Decimal("100.00"), Decimal("3000.00"))]
+
+
+def test_without_limits_a_large_paid_purchase_creates_and_recognizes_every_unit(unlimited):
+    Session, _founder = unlimited
+    buyer = member(Session)
+    purchase_id, deposit_id = buy(Session, buyer, 60)
+    confirm(Session, deposit_id)
+    activate(Session, deposit_id)
+    with Session() as db:
+        purchase = db.get(ReferralPoolPurchase, purchase_id)
+        assert (purchase.status, purchase.total_amount, db.get(Deposit, deposit_id).amount) ==             ("PAID", Decimal("6000.00"), Decimal("6000.00"))
+        made = db.query(ReferralPoolUnit).filter_by(purchase_id=purchase_id).order_by(ReferralPoolUnit.unit_index).all()
+        assert [u.unit_index for u in made] == list(range(1, 61))
+        assert {(u.status, u.amount) for u in made} == {(units.ACTIVE, Decimal("100.00"))}
+        assert all(u.revenue_recognition_id for u in made)
 
 
 def test_at_most_5_units_per_purchase(pilot):

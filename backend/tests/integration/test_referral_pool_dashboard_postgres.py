@@ -342,6 +342,33 @@ def test_rounds_slots_queue_and_events_are_paginated_and_need_an_operations_perm
     assert (events["total"], len(events["items"])) == (3, 1) and events["items"][0]["last_error"] == "synthetic failure"
 
 
+def test_sponsors_view_lists_every_sponsored_member_with_usernames_and_the_recorded_type(shop, grants):
+    Session = shop
+    reviewer, finance_only = admin(Session), admin(Session)
+    grants[reviewer], grants[finance_only] = {KYC}, {FINANCE}
+    buyer, sponsor = sponsored_buyer(Session)                                # PERSONAL_REFERRAL
+    legacy, orphan_sponsor = member(Session), member(Session)
+    with Session() as db:
+        db.get(User, legacy).sponsor_id, db.get(User, legacy).sponsor_source = sponsor, None    # recorded before sources
+        db.commit()
+        names = {u.id: u.username for u in db.query(User).filter(User.id.in_((buyer, sponsor, legacy)))}
+        before = [(u.id, u.sponsor_id, u.sponsor_source) for u in db.query(User).order_by(User.id)]
+        with pytest.raises(HTTPException) as info:                           # same permission as invalid sponsors
+            pool_api.admin_sponsors(db=db, current_user=db.get(User, finance_only), page=1, page_size=10)
+        assert info.value.status_code == 403
+        listed = pool_api.admin_sponsors(db=db, current_user=db.get(User, reviewer), page=1, page_size=10)
+        page2 = pool_api.admin_sponsors(db=db, current_user=db.get(User, reviewer), page=2, page_size=1)
+        assert [(u.id, u.sponsor_id, u.sponsor_source) for u in db.query(User).order_by(User.id)] == before    # read only
+    assert listed["total"] == 2 and page2["total"] == 2 and len(page2["items"]) == 1
+    assert listed["items"] == [
+        {"user_id": buyer, "username": names[buyer], "sponsor_id": sponsor, "sponsor_username": names[sponsor],
+         "sponsor_source": "PERSONAL_REFERRAL"},
+        {"user_id": legacy, "username": names[legacy], "sponsor_id": sponsor, "sponsor_username": names[sponsor],
+         "sponsor_source": None},
+    ]
+    assert orphan_sponsor not in {i["user_id"] for i in listed["items"]}     # unsponsored members are not listed
+
+
 def test_optional_limits_show_in_the_overview_and_need_permission_to_change(shop, grants):
     Session = shop
     operator = admin(Session)

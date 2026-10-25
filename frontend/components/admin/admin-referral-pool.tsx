@@ -33,14 +33,22 @@ function cell(value: unknown): string {
   return String(value)
 }
 
-function Table({ rows, cols, actions }: { rows: Json[]; cols: string[]; actions?: (row: Json) => React.ReactNode }) {
+type Render = Record<string, (row: Json) => React.ReactNode>
+
+function Table({ rows, cols, actions, headers = {}, render = {} }: {
+  rows: Json[]
+  cols: string[]
+  actions?: (row: Json) => React.ReactNode
+  headers?: Record<string, string>
+  render?: Render
+}) {
   if (!rows.length) return <p className="text-sm text-gray-500">No rows.</p>
   return (
     <table className="w-full text-xs sm:text-sm">
       <thead className="text-left text-gray-500">
         <tr>
           {cols.map((c) => (
-            <th key={c} className="py-1 pr-3 whitespace-nowrap">{c}</th>
+            <th key={c} className="py-1 pr-3 whitespace-nowrap">{headers[c] ?? c}</th>
           ))}
           {actions && <th className="py-1 pr-3" />}
         </tr>
@@ -49,7 +57,7 @@ function Table({ rows, cols, actions }: { rows: Json[]; cols: string[]; actions?
         {rows.map((r, i) => (
           <tr key={r.id ?? i} className="border-t border-gray-100 dark:border-gray-700 align-top">
             {cols.map((c) => (
-              <td key={c} className="py-1 pr-3">{cell(r[c])}</td>
+              <td key={c} className="py-1 pr-3 break-words">{render[c] ? render[c](r) : cell(r[c])}</td>
             ))}
             {actions && <td className="py-1 pr-3 whitespace-nowrap">{actions(r)}</td>}
           </tr>
@@ -61,7 +69,7 @@ function Table({ rows, cols, actions }: { rows: Json[]; cols: string[]; actions?
 
 /** One server-paginated list: at most `pageSize` rows are ever requested or rendered. */
 function PagedTable({
-  path, cols, statuses, defaultStatus = '', pageSize = 25, reloadKey = 0, actions, extra, rowView, params = {},
+  path, cols, statuses, defaultStatus = '', pageSize = 25, reloadKey = 0, actions, extra, rowView, params = {}, headers, render,
 }: {
   path: string
   cols: string[]
@@ -73,6 +81,8 @@ function PagedTable({
   extra?: (data: Paged) => React.ReactNode
   rowView?: (row: Json) => Json
   params?: Json
+  headers?: Record<string, string>
+  render?: Render
 }) {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState(defaultStatus)
@@ -124,7 +134,7 @@ function PagedTable({
       {data && (
         <>
           {extra?.(data)}
-          <Table rows={data.items} cols={cols} actions={actions} />
+          <Table rows={data.items} cols={cols} actions={actions} headers={headers} render={render} />
           <div className="flex items-center gap-2 text-sm">
             <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded bg-gray-100 dark:bg-gray-700 px-2 py-1 disabled:opacity-50">
               Previous
@@ -181,12 +191,16 @@ function LimitsForm({ limits, onSaved }: { limits: Json; onSaved: (msg: string) 
   }
   return (
     <div className="space-y-2 text-sm">
-      <p className="text-gray-500">Optional. Empty means no limit. Requires manage_payment_settings and your password; audited. Units already paid for are never removed.</p>
+      <p className="text-gray-500">
+        Purchases are unlimited: leave a field empty for <strong>Unlimited</strong> (the default). Set a number only to impose a
+        cap. Requires manage_payment_settings and your password; audited. Units already paid for are never removed.
+      </p>
       <div className="flex flex-wrap gap-3 items-end">
         {Object.keys(values).map((k) => (
           <label key={k} className="flex flex-col">
             {k}
-            <input aria-label={k} inputMode="numeric" value={values[k]} onChange={(e) => setValues({ ...values, [k]: e.target.value })} className={`${input} w-32`} />
+            <input aria-label={k} inputMode="numeric" placeholder="Unlimited" value={values[k]} onChange={(e) => setValues({ ...values, [k]: e.target.value })} className={`${input} w-32`} />
+            <span className="text-xs text-gray-500" data-testid={`limit-${k}`}>{values[k].trim() === '' ? 'Unlimited' : `At most ${values[k].trim()}`}</span>
           </label>
         ))}
         <label className="flex flex-col">
@@ -286,6 +300,69 @@ export function refundStatusText(row: Json): string {
   return 'Awaiting a second administrator'
 }
 
+// users.sponsor_source values (services/sponsor_assignment.py); NULL = linked before the source was recorded.
+const REFERRAL_TYPES: Record<string, string> = {
+  PERSONAL_REFERRAL: 'Personal Referral',
+  JOIN_CODE: 'Join Code',
+  REFERRAL_POOL: 'Referral Pool',
+  NONE: 'None',
+}
+
+export function referralTypeLabel(source: unknown): string {
+  if (source === null || source === undefined || String(source).trim() === '') return 'Not recorded (legacy)'
+  const value = String(source)
+  return REFERRAL_TYPES[value] ?? value.toLowerCase().split('_').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+}
+
+/** The member's profile in the dashboard (/dashboard/users/{id}); plain text when the account has no username or is gone. */
+function ProfileLink({ id, username }: { id: unknown; username: unknown }) {
+  if (id === null || id === undefined) return <span className="text-gray-500">—</span>
+  if (!username) return <span className="text-gray-500">Unknown account (#{String(id)})</span>
+  return (
+    <a href={`/dashboard/users/${encodeURIComponent(String(id))}`} className="text-myhigh5-primary hover:underline break-all">
+      {String(username)}
+    </a>
+  )
+}
+
+const SPONSOR_VIEWS = {
+  all: { path: '/sponsors', label: 'All sponsor relationships' },
+  invalid: { path: '/invalid-sponsors', label: 'Personal sponsors that would not be valid inviters today' },
+} as const
+
+function SponsorsTable() {
+  const [view, setView] = useState<keyof typeof SPONSOR_VIEWS>('all')
+  return (
+    <div className="space-y-2">
+      <label className="text-sm flex flex-wrap items-center gap-2">
+        Show
+        <select aria-label="Sponsors view" value={view} onChange={(e) => setView(e.target.value as keyof typeof SPONSOR_VIEWS)} className="rounded border px-2 py-1 dark:bg-gray-700">
+          {Object.entries(SPONSOR_VIEWS).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+      </label>
+      <PagedTable
+        key={view}
+        path={SPONSOR_VIEWS[view].path}
+        pageSize={50}
+        cols={['user', 'sponsor', 'referral_type']}
+        headers={{ user: 'User', sponsor: 'Sponsor', referral_type: 'Referral Type' }}
+        render={{
+          user: (r) => <ProfileLink id={r.user_id} username={r.username} />,
+          sponsor: (r) => <ProfileLink id={r.sponsor_id} username={r.sponsor_username} />,
+          referral_type: (r) => referralTypeLabel(r.sponsor_source ?? r.source),
+        }}
+        extra={(data) =>
+          view === 'invalid' ? (
+            <p className="text-xs text-gray-500">Checks {data.page_size} personally sponsored members per page, of {data.checked_total}.</p>
+          ) : null
+        }
+      />
+    </div>
+  )
+}
+
 const TABS = ['Overview', 'Rounds', 'Queue', 'Purchases', 'Units', 'Refunds', 'Reconciliation', 'Events', 'Risk reviews', 'Sponsors', 'Audit'] as const
 
 export default function AdminReferralPool() {
@@ -380,7 +457,7 @@ export default function AdminReferralPool() {
               <p className="text-sm text-gray-500">Amounts are shown to administrators with a finance permission.</p>
             )}
           </Card>
-          <Card title="Optional unit limits">
+          <Card title="Optional unit limits (empty = Unlimited)">
             <LimitsForm key={JSON.stringify(overview.limits)} limits={overview.limits} onSaved={done} />
           </Card>
         </>
@@ -543,9 +620,12 @@ export default function AdminReferralPool() {
 
       {tab === 'Sponsors' && !kyc && needs('manage_kyc_settings')}
       {tab === 'Sponsors' && kyc && (
-        <Card title="Historical personal sponsors that would not be valid inviters today (read-only)">
-          <PagedTable path="/invalid-sponsors" pageSize={50} cols={['user_id', 'sponsor_id', 'source']}
-            extra={(data) => <p className="text-xs text-gray-500">Checks {data.page_size} personally sponsored members per page, of {data.checked_total}. Sponsors are never changed.</p>} />
+        <Card title="Sponsors (read-only)">
+          <p className="text-sm text-gray-500">
+            Who sponsors whom: each row is a member (User), the member who sponsors them (Sponsor) and how that link was made (Referral
+            Type). Click a username to open the profile. This view never changes a sponsor.
+          </p>
+          <SponsorsTable />
         </Card>
       )}
 

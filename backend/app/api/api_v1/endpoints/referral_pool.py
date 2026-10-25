@@ -9,10 +9,10 @@ Member:  GET /referral-pool/units/eligibility, /referral-pool/units/purchases[/{
 Admin:   GET /admin/referral-pool/settings (feature state, read only), PUT /admin/referral-pool/limits,
          GET/POST /admin/referral-pool/refunds, POST /admin/referral-pool/refunds/{id}/decision,
          P8 read views (overview, rounds, slots, queue, purchases, units, reconciliation, events,
-         risk reviews, invalid sponsors, audit) and POST /admin/referral-pool/risk-reviews/{id}/decision.
+         risk reviews, sponsors, invalid sponsors, audit) and POST /admin/referral-pool/risk-reviews/{id}/decision.
 Every list is paginated (at most 100 rows a page). Financial views need a finance permission,
 operations views (rounds, slots, allocations, queue, events) a finance permission or
-manage_kyc_settings, and anti-abuse cases and invalid sponsors manage_kyc_settings: checked here,
+manage_kyc_settings, and anti-abuse cases and sponsors manage_kyc_settings: checked here,
 never only in the browser. The overview (counts, no money without finance) is open to every admin.
 No endpoint switches sales, allocation or the worker on: activation is a separate, later decision.
 """
@@ -695,8 +695,28 @@ def admin_invalid_sponsors(db: Session = Depends(deps.get_db), current_user: Use
     candidates = db.query(User).filter(User.sponsor_id.isnot(None),
                                        User.sponsor_source.in_(("PERSONAL_REFERRAL", "JOIN_CODE"))).count()
     items = invalid_personal_sponsors(db, limit=page_size, offset=(page - 1) * page_size)
+    names = _usernames(db, [i["user_id"] for i in items] + [i["sponsor_id"] for i in items])
+    for item in items:
+        item["username"], item["sponsor_username"] = names.get(item["user_id"]), names.get(item["sponsor_id"])
     return {"items": items, "page": page, "page_size": page_size, "checked_total": candidates,
             "note": "Each page checks the next personally sponsored members; sponsors are never changed."}
+
+
+@admin_router.get("/sponsors")
+def admin_sponsors(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_admin_user),
+                   page: Page = 1, page_size: PageSize = 50):
+    """Every member who has a sponsor: both usernames and the recorded referral type (users.sponsor_source,
+    NULL for links made before it was recorded), in member id order. Read only; sponsors are never
+    changed here. Same permission as invalid sponsors: manage_kyc_settings."""
+    _require_any(current_user, _kyc(), "sponsor records")
+    query = (db.query(User.id, User.username, User.sponsor_id, User.sponsor_source)
+             .filter(User.sponsor_id.isnot(None)).order_by(User.id))
+    paged = _paged(query, page, page_size, lambda r: r)
+    names = _usernames(db, [r.sponsor_id for r in paged["items"]])
+    paged["items"] = [{"user_id": r.id, "username": r.username, "sponsor_id": r.sponsor_id,
+                       "sponsor_username": names.get(r.sponsor_id), "sponsor_source": r.sponsor_source}
+                      for r in paged["items"]]
+    return paged
 
 
 POOL_AUDIT_TABLES = ("referral_pool_config", "referral_pool_refund_records", "referral_pool_risk_reviews")
