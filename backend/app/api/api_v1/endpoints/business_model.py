@@ -228,8 +228,10 @@ class OrderCreate(BaseModel):
     item_id: int = Field(gt=0)
 
 
-class DisputeCreate(BaseModel):
-    reason: str = Field(min_length=5, max_length=2000)
+class AcceptanceRequest(BaseModel):
+    """The buyer's deliberate acceptance: the policy version shown to them, and an explicit yes."""
+    policy_version: str = Field(min_length=1, max_length=40)
+    acknowledge: Literal[True]
 
 
 def _require_marketplace() -> None:
@@ -250,6 +252,7 @@ def _order_out(db: Session, o: MarketOrder) -> dict:
         "id": o.id, "state": o.state, "item_type": o.item_type, "item_id": o.item_id,
         "seller_base_amount": _num(o.seller_base_amount), "markup_amount": _num(o.markup_amount),
         "buyer_total_amount": _num(o.buyer_total_amount), "custodian": o.custodian_provider,
+        **marketplace_service.handover_status(o),
         "events": [{"from": e.from_state, "to": e.to_state, "by": e.actor_role, "at": e.created_at.isoformat() + "Z", "note": e.note}
                    for e in events],
     }
@@ -283,23 +286,32 @@ def my_market_orders(db: Session = Depends(get_db), current_user: User = Depends
     return [_order_out(db, o) for o in rows]
 
 
-@router.post("/marketplace/orders/{order_id}/dispute", status_code=status.HTTP_201_CREATED)
-def dispute_market_order(order_id: int, body: DisputeCreate, db: Session = Depends(get_db),
-                         current_user: User = Depends(get_current_user)):
+@router.get("/marketplace/acceptance-policy")
+def market_acceptance_policy():
+    """The acceptance text version a buyer must acknowledge (shown with the order, product and amount)."""
+    return {"policy_version": marketplace_service.ACCEPTANCE_POLICY_VERSION}
+
+
+@router.post("/marketplace/orders/{order_id}/accept")
+def accept_market_order(order_id: int, body: AcceptanceRequest, db: Session = Depends(get_db),
+                        current_user: User = Depends(get_current_user)):
+    """The BUYER's final acceptance (once; a repeat returns the same reference). Starts settlement;
+    a settlement failure is shown as such and never undoes the acceptance."""
     _require_marketplace()
     order = _order_for(db, order_id, current_user)
-    _run(db, lambda: marketplace_service.open_dispute(db, order, user_id=current_user.id, reason=body.reason))
+    _run(db, lambda: marketplace_service.confirm_receipt(db, order, buyer_user_id=current_user.id,
+                                                         policy_version=body.policy_version))
     return _order_out(db, order)
 
 
 @router.post("/marketplace/orders/{order_id}/{action}")
-def market_order_action(order_id: int, action: Literal["fulfill", "confirm", "cancel"],
+def market_order_action(order_id: int, action: Literal["fulfill", "verify", "cancel"],
                         db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require_marketplace()
     order = _order_for(db, order_id, current_user)
     fn = {
         "fulfill": lambda: marketplace_service.mark_fulfilled(db, order, seller_user_id=current_user.id),
-        "confirm": lambda: marketplace_service.confirm_receipt(db, order, buyer_user_id=current_user.id),
+        "verify": lambda: marketplace_service.seller_verify_acceptance(db, order, seller_user_id=current_user.id),
         "cancel": lambda: marketplace_service.cancel_unpaid(db, order, actor_user_id=current_user.id),
     }[action]
     try:
@@ -512,28 +524,40 @@ def admin_market_orders(state: Optional[str] = None, db: Session = Depends(get_d
     return out
 
 
-class ResolveRequest(BaseModel):
-    outcome: Literal["RELEASE", "REFUND"]
+class SupportRefundRequest(BaseModel):
+    reason: Literal["NON_HANDOVER", "PAYMENT_FAILURE", "DUPLICATE_CHARGE", "FRAUD", "SELLER_UNABLE_TO_SUPPLY",
+                    "LEGAL_REMEDY"]
     note: str = Field(min_length=5, max_length=2000)
 
 
-@admin_router.post("/marketplace/orders/{order_id}/resolve-dispute")
-def admin_resolve_dispute(order_id: int, body: ResolveRequest, db: Session = Depends(get_db),
-                          current_user: User = Depends(get_current_user)):
+@admin_router.post("/marketplace/orders/{order_id}/refund")
+def admin_support_refund(order_id: int, body: SupportRefundRequest, db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_user)):
+    """Support refund of an order that was not accepted or released. There is no admin release: only
+    the buyer accepts."""
     order = db.query(MarketOrder).filter(MarketOrder.id == order_id).with_for_update().first()
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
 
     def go():
-        d = marketplace_service.resolve_dispute(db, order, admin_user_id=current_user.id, outcome=body.outcome, note=body.note)
-        _audit(db, actor_id=current_user.id, table="market_disputes", record_id=d.id, action="DISPUTE_RESOLVE",
-               new={"outcome": body.outcome, "note": body.note})
-        return d
+        marketplace_service.support_refund(db, order, admin_user_id=current_user.id, reason=body.reason, note=body.note)
+        _audit(db, actor_id=current_user.id, table="market_orders", record_id=order.id, action="MARKET_SUPPORT_REFUND",
+               new={"reason": body.reason, "note": body.note})
     try:
         _run(db, go)
     except marketplace_service.CustodianNotConfigured as exc:
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return _order_out(db, order)
+
+
+@admin_router.post("/marketplace/orders/{order_id}/retry-settlement")
+def admin_retry_settlement(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Ask the custodian again for an accepted order whose settlement request failed."""
+    order = db.query(MarketOrder).filter(MarketOrder.id == order_id).with_for_update().first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    _run(db, lambda: marketplace_service.request_settlement(db, order))
     return _order_out(db, order)
 
 

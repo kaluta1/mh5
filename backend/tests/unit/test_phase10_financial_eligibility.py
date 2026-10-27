@@ -520,8 +520,8 @@ def test_AC_refund_and_reversal_paths_are_unchanged(db):
     from app.services import financial_reversal, marketplace_service
 
     assert "financial_eligibility" not in inspect.getsource(financial_reversal)
-    src = inspect.getsource(marketplace_service.resolve_dispute)
-    assert 'if outcome == "RELEASE":' in src and "request_refund" in src
+    src = inspect.getsource(marketplace_service.support_refund)
+    assert "request_refund" in src and "request_release" not in src and "_require_" not in src
 
 
 @pytest.fixture

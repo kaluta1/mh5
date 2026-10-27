@@ -242,7 +242,8 @@ def test_marketplace_order_seller_keeps_100_website_20_commission_4(world, custo
                                              item_id=_listing(db, seller).id)
     marketplace_service.apply_custodian_event(db, order, event_type="FUNDED", external_event_id="m-1", custodian_reference="C")
     marketplace_service.mark_fulfilled(db, order, seller_user_id=seller.id)
-    marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)
+    marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id,
+                                        policy_version=marketplace_service.ACCEPTANCE_POLICY_VERSION)
     # Before release the seller liability is exactly the full $100 principal.
     assert _balance(db, "2121") == Decimal("-100.00")
     marketplace_service.apply_custodian_event(db, order, event_type="RELEASED", external_event_id="m-2")

@@ -510,6 +510,18 @@ class MarketOrder(Base):
     released_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     markup_settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     refunded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Buyer acceptance (server-recorded, buyer only): its unique reference and the policy text version
+    # the buyer acknowledged. confirmed_at is the acceptance time.
+    acceptance_reference: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, unique=True)
+    acceptance_policy_version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # The seller checked the acceptance on their dashboard before handing over.
+    seller_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Settlement initiation, separate from acceptance: asked of the custodian when, and the last failure
+    # (cleared on a successful request). A failure never undoes the acceptance.
+    release_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    release_request_error: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Why support refunded the order (non-handover, duplicate charge, fraud, ...).
+    support_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
 
 
 class MarketOrderEvent(Base):

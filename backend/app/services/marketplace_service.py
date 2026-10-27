@@ -13,9 +13,19 @@ confirmed events and books only what it is entitled to:
 
 State changes that move money happen only on custodian confirmations, which are idempotent
 by the provider's event id. No provider is selected yet: the default custodian refuses to act.
+
+Acceptance (client requirements 2026-10-28): only the authenticated BUYER accepts, deliberately,
+acknowledging the current policy text; the server records the time and a unique reference. Nothing
+else accepts: not a seller's "delivered", a courier, a deadline or an administrator. Acceptance then
+asks the custodian to settle; a failed or timed-out request is recorded for retry and never undoes the
+acceptance, and nobody is "paid" until the custodian confirms RELEASED. The seller hands over only
+after verifying the acceptance on their dashboard. Ordinary marketplace disputes are retired: support
+can still refund an order before release (non-handover, payment failure, duplicate charge, fraud,
+seller unable to supply, a legal remedy); historical disputes stay readable.
 """
 from __future__ import annotations
 
+import secrets
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Protocol
@@ -48,13 +58,26 @@ REFUND_PENDING = "REFUND_PENDING"
 REFUNDED = "REFUNDED"
 CANCELLED = "CANCELLED"
 
+# The acceptance/policy text the buyer acknowledges when accepting (bump when the wording changes).
+ACCEPTANCE_POLICY_VERSION = "MARKET-ACCEPTANCE-2026-10-28"
+# Why support may refund an order before release (no ordinary dispute process any more).
+SUPPORT_REFUND_REASONS = ("NON_HANDOVER", "PAYMENT_FAILURE", "DUPLICATE_CHARGE", "FRAUD", "SELLER_UNABLE_TO_SUPPLY",
+                          "LEGAL_REMEDY")
+DISPUTES_RETIRED = ("Marketplace disputes are no longer available. For a payment problem, a duplicate charge, "
+                    "suspected fraud or an order that was not handed over, contact MyHigh5 support.")
+AWAITING_ACCEPTANCE = "Awaiting buyer confirmation. Do not release the product or final service deliverables."
+ACCEPTANCE_VERIFIED = "Buyer confirmation verified. Release the product or final service deliverables."
+_ACCEPTED = (BUYER_CONFIRMED, RELEASE_PENDING, RELEASED)
+
 _TRANSITIONS = {
     PAYMENT_PENDING: {FUNDS_HELD, CANCELLED},
-    FUNDS_HELD: {FULFILLED, DISPUTED, REFUND_PENDING},
-    FULFILLED: {BUYER_CONFIRMED, DISPUTED},
+    # paid: the buyer may accept once the product is in front of them (FUNDS_HELD) or after a service
+    # was performed (FULFILLED); support may refund before release
+    FUNDS_HELD: {FULFILLED, BUYER_CONFIRMED, REFUND_PENDING},
+    FULFILLED: {BUYER_CONFIRMED, REFUND_PENDING},
     BUYER_CONFIRMED: {RELEASE_PENDING},
     RELEASE_PENDING: {RELEASED},
-    DISPUTED: {RELEASE_PENDING, REFUND_PENDING},
+    DISPUTED: {BUYER_CONFIRMED, REFUND_PENDING},          # historical only: no new dispute is opened
     REFUND_PENDING: {REFUNDED},
     RELEASED: set(),
     REFUNDED: set(),
@@ -200,49 +223,114 @@ def mark_fulfilled(db: Session, order: MarketOrder, *, seller_user_id: int, note
     order.fulfilled_at = datetime.utcnow()
 
 
-def confirm_receipt(db: Session, order: MarketOrder, *, buyer_user_id: int) -> None:
-    """Buyer confirmation requests release from the custodian (unless a dispute is open)."""
+def confirm_receipt(db: Session, order: MarketOrder, *, buyer_user_id: int,
+                    policy_version: Optional[str] = None) -> str:
+    """The buyer's final acceptance. Buyer only, deliberate (the current policy text acknowledged),
+    once: a repeated request returns the same reference and changes nothing. The caller holds the
+    order row lock. Settlement is then requested; its failure is kept for retry, not raised."""
     if int(buyer_user_id) != int(order.buyer_user_id):
-        raise MarketplaceError("Only the buyer can confirm receipt")
+        raise MarketplaceError("Only the buyer can confirm this order")
+    if order.state in _ACCEPTED and order.acceptance_reference:
+        return order.acceptance_reference                    # idempotent: already accepted
+    if order.state not in (FUNDS_HELD, FULFILLED, DISPUTED):
+        raise MarketplaceError("This order cannot be confirmed now")
+    if policy_version != ACCEPTANCE_POLICY_VERSION:
+        raise MarketplaceError("Read and acknowledge the current acceptance terms before confirming")
     if _open_dispute(db, order):
         raise MarketplaceError("An open dispute blocks release")
     _require_seller_release(db, order)  # Phase 10: CURRENT seller state before any release
-    _transition(db, order, BUYER_CONFIRMED, actor_user_id=buyer_user_id, actor_role="BUYER")
-    order.confirmed_at = datetime.utcnow()
-    _transition(db, order, RELEASE_PENDING, actor_user_id=None, actor_role="SYSTEM", note="Release requested from custodian")
-    get_custodian().request_release(order)
+    now = datetime.utcnow()
+    order.acceptance_reference = f"ACC-{order.id}-{secrets.token_hex(5).upper()}"
+    order.acceptance_policy_version = policy_version
+    order.confirmed_at = now
+    _transition(db, order, BUYER_CONFIRMED, actor_user_id=buyer_user_id, actor_role="BUYER",
+                note=f"Buyer acceptance {order.acceptance_reference} ({policy_version})")
+    _transition(db, order, RELEASE_PENDING, actor_user_id=None, actor_role="SYSTEM", note="Settlement requested")
+    request_settlement(db, order)
+    return order.acceptance_reference
+
+
+def request_settlement(db: Session, order: MarketOrder) -> bool:
+    """Ask the custodian to settle an accepted order (idempotent at the custodian by order). A failure
+    (no custodian, timeout, provider error) is recorded and retried later; the acceptance stands and
+    no money is booked here: RELEASED is booked only on the custodian's confirmation."""
+    if order.state != RELEASE_PENDING:
+        raise MarketplaceError("Only an accepted order awaiting settlement can be settled")
+    order.release_requested_at = datetime.utcnow()
+    try:
+        get_custodian().request_release(order)
+    except Exception as exc:  # noqa: BLE001 - recorded for retry, never undoes the acceptance
+        order.release_request_error = f"{type(exc).__name__}: {exc}"[:200]
+        db.flush()
+        return False
+    order.release_request_error = None
+    db.flush()
+    return True
+
+
+def seller_verify_acceptance(db: Session, order: MarketOrder, *, seller_user_id: int) -> datetime:
+    """The seller checked the buyer's acceptance (dashboard) and may hand over. Seller only, after a
+    buyer acceptance; recorded once."""
+    if int(seller_user_id) != int(order.seller_user_id):
+        raise MarketplaceError("Only the seller can verify this order")
+    if order.state not in _ACCEPTED or not order.acceptance_reference:
+        raise MarketplaceError(AWAITING_ACCEPTANCE)
+    if order.seller_verified_at is None:
+        order.seller_verified_at = datetime.utcnow()
+        _event(db, order, order.state, actor_user_id=seller_user_id, actor_role="SELLER",
+               note=f"Seller verified buyer acceptance {order.acceptance_reference}")
+    return order.seller_verified_at
+
+
+def handover_status(order: MarketOrder) -> dict:
+    """What each side sees: acceptance, handover and settlement, kept separate."""
+    accepted = order.state in _ACCEPTED and bool(order.acceptance_reference)
+    if order.state == RELEASED:
+        settlement = "SETTLED"
+    elif order.state == RELEASE_PENDING:
+        settlement = "SETTLEMENT_RETRY_NEEDED" if order.release_request_error else "SETTLEMENT_PENDING"
+    elif order.state in (REFUND_PENDING, REFUNDED):
+        settlement = order.state
+    else:
+        settlement = "NOT_STARTED"
+    fulfilment = {PAYMENT_PENDING: "UNPAID", FUNDS_HELD: "AWAITING_FULFILMENT", FULFILLED: "AWAITING_ACCEPTANCE",
+                  DISPUTED: "AWAITING_ACCEPTANCE", CANCELLED: "CANCELLED", REFUND_PENDING: "REFUND_PENDING",
+                  REFUNDED: "REFUNDED"}.get(order.state, "ACCEPTED")
+    return {
+        "acceptance_status": "ACCEPTED" if accepted else "NOT_ACCEPTED",
+        "acceptance_reference": order.acceptance_reference if accepted else None,
+        "accepted_at": order.confirmed_at.isoformat() + "Z" if accepted and order.confirmed_at else None,
+        "seller_verified_at": order.seller_verified_at.isoformat() + "Z" if order.seller_verified_at else None,
+        "handover_instruction": ACCEPTANCE_VERIFIED if accepted else AWAITING_ACCEPTANCE,
+        "fulfilment_status": fulfilment,
+        "settlement_status": settlement,
+        "support_reason": order.support_reason,
+    }
 
 
 def open_dispute(db: Session, order: MarketOrder, *, user_id: int, reason: str) -> MarketDispute:
-    if int(user_id) not in (int(order.buyer_user_id), int(order.seller_user_id)):
-        raise MarketplaceError("Only the buyer or seller can open a dispute")
-    if not (reason or "").strip():
-        raise MarketplaceError("A dispute needs a reason")
-    role = "BUYER" if int(user_id) == int(order.buyer_user_id) else "SELLER"
-    _transition(db, order, DISPUTED, actor_user_id=user_id, actor_role=role, note=reason[:500])
-    dispute = MarketDispute(order_id=order.id, opened_by_user_id=user_id, reason=reason.strip(), status="OPEN")
-    db.add(dispute)
-    db.flush()
-    return dispute
+    """Retired (client requirements 2026-10-28). Kept so nothing can open one by mistake."""
+    raise MarketplaceError(DISPUTES_RETIRED)
 
 
-def resolve_dispute(db: Session, order: MarketOrder, *, admin_user_id: int, outcome: str, note: str) -> MarketDispute:
+def support_refund(db: Session, order: MarketOrder, *, admin_user_id: int, reason: str, note: str) -> None:
+    """Support refunds an order BEFORE release (no buyer acceptance, or a historical dispute). Never a
+    release: support cannot accept on the buyer's behalf. Money moves on the custodian's REFUNDED."""
+    if reason not in SUPPORT_REFUND_REASONS:
+        raise MarketplaceError(f"reason must be one of {', '.join(SUPPORT_REFUND_REASONS)}")
+    if not (note or "").strip():
+        raise MarketplaceError("A refund needs a note")
+    if order.state not in (FUNDS_HELD, FULFILLED, DISPUTED):
+        raise MarketplaceError("Only a paid order that was not accepted or released can be refunded by support")
     dispute = _open_dispute(db, order)
-    if dispute is None or order.state != DISPUTED:
-        raise MarketplaceError("No open dispute on this order")
-    if outcome not in ("RELEASE", "REFUND"):
-        raise MarketplaceError("outcome must be RELEASE or REFUND")
-    if outcome == "RELEASE":
-        _require_seller_release(db, order)  # Phase 10: an admin release is not a bypass; refunds are unaffected
-    dispute.status = "RESOLVED_RELEASE" if outcome == "RELEASE" else "RESOLVED_REFUND"
-    dispute.resolution_note = note
-    dispute.resolved_by_user_id = admin_user_id
-    dispute.resolved_at = datetime.utcnow()
-    target = RELEASE_PENDING if outcome == "RELEASE" else REFUND_PENDING
-    _transition(db, order, target, actor_user_id=admin_user_id, actor_role="ADMIN", note=note)
-    custodian = get_custodian()
-    (custodian.request_release if outcome == "RELEASE" else custodian.request_refund)(order)
-    return dispute
+    if dispute is not None:                                   # a historical dispute is closed by the refund
+        dispute.status = "RESOLVED_REFUND"
+        dispute.resolution_note = note
+        dispute.resolved_by_user_id = admin_user_id
+        dispute.resolved_at = datetime.utcnow()
+    order.support_reason = reason
+    _transition(db, order, REFUND_PENDING, actor_user_id=admin_user_id, actor_role="ADMIN", note=f"{reason}: {note}"[:500])
+    get_custodian().request_refund(order)
 
 
 # ---------------------------------------------------------------- custodian confirmations (money moves here)

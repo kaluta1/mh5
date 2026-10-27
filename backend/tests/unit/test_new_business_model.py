@@ -699,9 +699,10 @@ def test_marketplace_happy_path_held_confirmed_released_settled(world, custodian
     assert marketplace_service.apply_custodian_event(db, order, event_type="FUNDED", external_event_id="evt-1") is False
     assert _balance(db, "1220") == Decimal("120.00") and _balance(db, "2121") == Decimal("-100.00")
     with pytest.raises(marketplace_service.MarketplaceError):
-        marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)  # not delivered yet
+        marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)  # terms not acknowledged
     marketplace_service.mark_fulfilled(db, order, seller_user_id=seller.id)
-    marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)
+    marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id,
+                                        policy_version=marketplace_service.ACCEPTANCE_POLICY_VERSION)
     assert order.state == marketplace_service.RELEASE_PENDING and ("release", order.id) in custodian.calls
     marketplace_service.apply_custodian_event(db, order, event_type="RELEASED", external_event_id="evt-2")
     marketplace_service.apply_custodian_event(db, order, event_type="MARKUP_SETTLED", external_event_id="evt-3")
@@ -714,19 +715,18 @@ def test_marketplace_happy_path_held_confirmed_released_settled(world, custodian
     _assert_all_journals_balance(db)
 
 
-def test_dispute_blocks_release_and_refund_reverses_custody_without_revenue(world, custodian):
+def test_disputes_are_retired_and_a_support_refund_reverses_custody_without_revenue(world, custodian):
     db = world
     buyer, seller = _user(db, "db@t.com"), _user(db, "dsl@t.com")
     order = marketplace_service.create_order(db, buyer_user_id=buyer.id, item_type="digital_product",
                                              item_id=_listing(db, seller, "50.00").id)
     marketplace_service.apply_custodian_event(db, order, event_type="FUNDED", external_event_id="e-1")
     marketplace_service.mark_fulfilled(db, order, seller_user_id=seller.id)
-    marketplace_service.open_dispute(db, order, user_id=buyer.id, reason="Item not as described")
-    with pytest.raises(marketplace_service.MarketplaceError):
-        marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)
+    with pytest.raises(marketplace_service.MarketplaceError, match="no longer available"):
+        marketplace_service.open_dispute(db, order, user_id=buyer.id, reason="Item not as described")
     with pytest.raises(marketplace_service.MarketplaceError):
         marketplace_service.apply_custodian_event(db, order, event_type="RELEASED", external_event_id="e-2")
-    marketplace_service.resolve_dispute(db, order, admin_user_id=seller.id, outcome="REFUND", note="Refund approved")
+    marketplace_service.support_refund(db, order, admin_user_id=seller.id, reason="NON_HANDOVER", note="Never handed over")
     marketplace_service.apply_custodian_event(db, order, event_type="REFUNDED", external_event_id="e-3")
     db.commit()
     assert order.state == marketplace_service.REFUNDED
@@ -735,15 +735,19 @@ def test_dispute_blocks_release_and_refund_reverses_custody_without_revenue(worl
     _assert_all_journals_balance(db)
 
 
-def test_without_a_configured_custodian_no_release_can_be_requested(world, monkeypatch):
+def test_without_a_configured_custodian_the_acceptance_stands_and_settlement_waits(world, monkeypatch):
     db = world
     monkeypatch.setattr(settings, "MARKETPLACE_CUSTODIAN", "")
+    marketplace_service.register_custodian(marketplace_service.UnconfiguredCustodian())
     buyer, seller = _user(db, "nb@t.com"), _user(db, "ns@t.com")
     order = marketplace_service.create_order(db, buyer_user_id=buyer.id, item_type="digital_product",
                                              item_id=_listing(db, seller).id)
     order.state = marketplace_service.FULFILLED
-    with pytest.raises(marketplace_service.CustodianNotConfigured):
-        marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id)
+    ref = marketplace_service.confirm_receipt(db, order, buyer_user_id=buyer.id,
+                                              policy_version=marketplace_service.ACCEPTANCE_POLICY_VERSION)
+    status = marketplace_service.handover_status(order)
+    assert ref and status["acceptance_status"] == "ACCEPTED" and status["settlement_status"] == "SETTLEMENT_RETRY_NEEDED"
+    assert order.state == marketplace_service.RELEASE_PENDING and order.released_at is None   # nobody paid
 
 
 # ================================================================ cutover
