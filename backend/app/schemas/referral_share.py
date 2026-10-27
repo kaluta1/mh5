@@ -28,6 +28,14 @@ class ShareLinkList(BaseModel):
     total: int
 
 
+class InvitationStatus(BaseModel):
+    """Whether the caller's invitation links can sponsor new members now (the registration rule)."""
+    eligible: bool
+    # null when eligible; NO_CODE, KYC_NOT_STARTED, KYC_IN_PROGRESS, KYC_REJECTED or RESTRICTED
+    reason: Optional[str] = None
+    message: Optional[str] = None
+
+
 class ReferralConversionCreate(BaseModel):
     conversion_type: Literal["signup", "subscription", "purchase", "newsletter", "other"]
     conversion_reference: Optional[str] = Field(default=None, max_length=255)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, ExternalLink, Link2, Loader2, RefreshCw, Ban, UserPlus } from 'lucide-react'
+import { AlertTriangle, Check, Copy, ExternalLink, Link2, Loader2, RefreshCw, Ban, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,9 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
+  InvitationStatus,
   ShortLink,
   createShortLink,
   disableShortLink,
+  getInvitationStatus,
   listShortLinks,
   looksLikeMyHigh5Link,
   shortLinkErrorMessage,
@@ -78,7 +80,18 @@ export function ShortenLinkForm({ onCreated }: { onCreated?: (link: ShortLink) =
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<ShortLink | null>(null)
+  const [invitation, setInvitation] = useState<InvitationStatus | null>(null)
   const { copied, copy } = useCopied()
+
+  // Asked only when the member turns the invitation on; a failure to ask never blocks anything.
+  useEffect(() => {
+    if (!includeInvitation || invitation) return
+    let cancelled = false
+    getInvitationStatus()
+      .then((status) => { if (!cancelled) setInvitation(status) })
+      .catch(() => { /* no warning shown; the server still applies the rule at registration */ })
+    return () => { cancelled = true }
+  }, [includeInvitation, invitation])
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -145,6 +158,19 @@ export function ShortenLinkForm({ onCreated }: { onCreated?: (link: ShortLink) =
             disabled={submitting}
           />
         </div>
+
+        {includeInvitation && invitation && !invitation.eligible && invitation.message && (
+          <div role="note" data-testid="invitation-warning"
+            className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <p>
+              {invitation.message}{' '}
+              {invitation.reason?.startsWith('KYC') && (
+                <a href="/dashboard/kyc" className="font-medium underline">Go to identity verification</a>
+              )}
+            </p>
+          </div>
+        )}
 
         {error && (
           <p id="short-link-error" role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">

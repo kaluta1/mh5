@@ -180,3 +180,49 @@ describe('layout, themes and navigation', () => {
     expect(business.items.find((i) => i.href === '/dashboard/short-links')!.label).toBe('Short Links')
   })
 })
+
+describe('KYC eligibility warning', () => {
+  const toggleOn = () => fireEvent.click(screen.getByRole('switch', { name: 'Include my personal invitation' }))
+
+  it('explains a KYC restriction when the invitation is turned on, and still allows creating', async () => {
+    get.mockImplementation((url: string) => url.endsWith('/invitation-status')
+      ? Promise.resolve({ data: { eligible: false, reason: 'KYC_IN_PROGRESS',
+          message: 'Your identity verification (KYC) is still being reviewed.' } })
+      : Promise.resolve({ data: { items: [], total: 0 } }))
+    post.mockResolvedValue({ data: { ...LINK, include_invitation: true } })
+    render(<ShortenLinkForm />)
+    expect(screen.queryByTestId('invitation-warning')).toBeNull()                 // not asked while OFF
+    expect(get).not.toHaveBeenCalled()
+    toggleOn()
+    const warning = await screen.findByTestId('invitation-warning')
+    expect(warning.textContent).toContain('still being reviewed')
+    expect(within(warning).getByRole('link', { name: 'Go to identity verification' }).getAttribute('href')).toBe('/dashboard/kyc')
+    fillUrl('https://myhigh5.com/register')
+    fireEvent.click(screen.getByRole('button', { name: 'Create Short Link' }))
+    expect(await screen.findByTestId('created-short-url')).toBeTruthy()
+    toggleOn()                                                                    // OFF again: warning gone
+    expect(screen.queryByTestId('invitation-warning')).toBeNull()
+  })
+
+  it('shows nothing for an eligible member or when the status cannot be read', async () => {
+    get.mockResolvedValueOnce({ data: { eligible: true, reason: null, message: null } })
+    const { unmount } = render(<ShortenLinkForm />)
+    toggleOn()
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/v1/share-links/invitation-status'))
+    expect(screen.queryByTestId('invitation-warning')).toBeNull()
+    unmount()
+    get.mockRejectedValueOnce(new Error('network'))
+    render(<ShortenLinkForm />)
+    toggleOn()
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+    expect(screen.queryByTestId('invitation-warning')).toBeNull()
+  })
+
+  it('a restriction is explained without a verification link', async () => {
+    get.mockResolvedValue({ data: { eligible: false, reason: 'RESTRICTED', message: 'Invitations from your account are currently restricted.' } })
+    render(<ShortenLinkForm />)
+    toggleOn()
+    const warning = await screen.findByTestId('invitation-warning')
+    expect(within(warning).queryByRole('link')).toBeNull()
+  })
+})

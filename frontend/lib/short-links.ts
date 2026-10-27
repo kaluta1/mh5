@@ -25,6 +25,15 @@ export async function createShortLink(url: string, includeInvitation: boolean): 
   return data
 }
 
+/** Whether the caller's invitation links can attribute new members now (the server's KYC-based
+ * inviter rule). Only the member's own state; neutral links never depend on it. */
+export type InvitationStatus = { eligible: boolean; reason: string | null; message: string | null }
+
+export async function getInvitationStatus(): Promise<InvitationStatus> {
+  const { data } = await api.get<InvitationStatus>('/api/v1/share-links/invitation-status')
+  return data
+}
+
 export async function listShortLinks(limit = 50, offset = 0): Promise<ShortLinkPage> {
   const { data } = await api.get<ShortLinkPage>('/api/v1/share-links', { params: { limit, offset } })
   return data

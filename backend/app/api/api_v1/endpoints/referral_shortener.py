@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.referral_share import ReferralShareLink
 from app.schemas.referral_share import (
+    InvitationStatus,
     ReferralConversionCreate,
     ReferralConversionResponse,
     ShareLinkCreate,
@@ -74,6 +75,19 @@ def list_share_links(
     """The signed-in member's own short links, newest first."""
     items, total = shortener.list_member_links(db, current_user.id, limit=limit, offset=offset)
     return ShareLinkList(items=[_link_response(link) for link in items], total=total)
+
+
+@router.get("/share-links/invitation-status", response_model=InvitationStatus)
+def share_link_invitation_status(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> InvitationStatus:
+    """Can the caller's invitation links attribute new members right now? The same rule the
+    registration applies; read-only. Neutral links never depend on it."""
+    eligible, reason = shortener.invitation_status(db, current_user)
+    return InvitationStatus(eligible=eligible, reason=reason,
+                            message=shortener.INVITATION_MESSAGES.get(reason) if reason else None)
 
 
 @router.post("/share-links/{link_id}/disable", response_model=ShareLinkResponse)

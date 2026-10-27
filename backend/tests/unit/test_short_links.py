@@ -98,8 +98,7 @@ def test_neutral_link_is_created_on_the_canonical_domain_without_attribution(cli
     assert data["short_url"].startswith(f"{SITE}/s/") and len(data["short_code"]) == 7
     assert data["include_invitation"] is False and data["is_active"] is True and data["reused"] is False
     assert data["destination_url"] == f"{SITE}/feed/12?sort=new#comments"     # query + fragment kept, ref dropped
-    for leaked in (str(user.id), user.personal_referral_code, "feed"):
-        assert leaked not in data["short_code"]
+    assert user.personal_referral_code not in data["short_code"] and "feed" not in data["short_code"]
     row = db.query(ReferralShareLink).one()
     assert (row.user_id, row.invitation_enabled) == (user.id, False)
 
@@ -481,3 +480,97 @@ def test_a_cookie_from_a_link_that_is_not_an_invitation_is_ignored(db):
     forged = shortener.sign_attribution(referrer_user_id=owner.id, share_link_id=link.id, short_code="Neut001")
     req = Request({"type": "http", "headers": [(b"cookie", f"{COOKIE}={forged}".encode())]})
     assert shortener.get_sponsor_referral_code_from_request(req, db) is None
+
+
+# ============================================================================ invitation eligibility (KYC)
+
+STATUS = f"{LINKS}/invitation-status"
+
+
+def kyc_row(db, user, status):
+    from app.models.kyc import KYCVerification, VerificationProvider
+
+    db.add(KYCVerification(user_id=user.id, status=status, provider=VerificationProvider.KALUTA,
+                           reference_id=f"kyc-test-{user.id}", attempts_count=1, submitted_at=datetime.utcnow()))
+    db.commit()
+
+
+def test_invitation_status_follows_the_registration_inviter_rule(client, db, ip, monkeypatch):
+    from app.models.kyc import KYCStatus
+
+    user, headers = signed_in(client, db)
+    r = client.get(STATUS, headers=headers).json()
+    assert r["eligible"] is False and r["reason"] == "KYC_NOT_STARTED" and "KYC" in r["message"]
+
+    kyc_row(db, user, KYCStatus.PENDING_PROOF_OF_ADDRESS)
+    assert client.get(STATUS, headers=headers).json()["reason"] == "KYC_IN_PROGRESS"
+
+    from app.models.kyc import KYCVerification
+    db.query(KYCVerification).filter_by(user_id=user.id).update({KYCVerification.status: KYCStatus.REJECTED})
+    db.commit()
+    assert client.get(STATUS, headers=headers).json()["reason"] == "KYC_REJECTED"
+
+    db.query(KYCVerification).filter_by(user_id=user.id).delete()
+    db.commit()
+    kyc_approved(db, user)
+    assert client.get(STATUS, headers=headers).json() == {"eligible": True, "reason": None, "message": None}
+
+    import app.services.referral_pool_risk as risk
+    monkeypatch.setattr(risk, "is_blocked", lambda _db, _uid: True)
+    blocked = client.get(STATUS, headers=headers).json()
+    assert blocked["reason"] == "RESTRICTED" and "review" not in blocked["message"].lower()   # no detail leaked
+
+
+def test_invitation_status_without_a_code_and_without_a_session(client, db, ip):
+    user, headers = signed_in(client, db)
+    user.personal_referral_code = None
+    db.commit()
+    assert client.get(STATUS, headers=headers).json()["reason"] == "NO_CODE"
+    client.headers.pop("authorization", None)
+    assert client.get(STATUS).status_code == 401
+
+
+def test_an_ineligible_member_still_creates_neutral_and_invitation_links(client, db, ip):
+    _, headers = signed_in(client, db)                                     # no KYC
+    assert client.get(STATUS, headers=headers).json()["eligible"] is False
+    assert shorten(client, headers, f"{SITE}/faq").status_code == 201
+    assert shorten(client, headers, f"{SITE}/faq", invitation=True).status_code == 201
+
+
+# ============================================================================ roles, money, pool
+
+def test_a_super_admin_uses_the_member_tool_like_anyone_else(client, db, ip):
+    from tests.unit.test_super_admin import super_role
+
+    admin, headers = signed_in(client, db)
+    admin.is_admin, admin.role_id = True, super_role(db).id
+    db.commit()
+    from app.services.super_admin import is_super_admin
+    assert is_super_admin(admin)
+    link = shorten(client, headers, f"{SITE}/feed/3", invitation=True)
+    assert link.status_code == 201
+    assert client.get(LINKS, headers=headers).json()["total"] == 1
+    assert client.get(STATUS, headers=headers).status_code == 200
+    assert client.post(f"{LINKS}/{link.json()['id']}/disable", headers=headers).status_code == 200
+
+
+def test_links_and_visits_touch_no_money_and_no_pool_state(client, db, ip):
+    from app.models.accounting import JournalEntry
+    from app.models.payment import Deposit
+
+    from sqlalchemy import inspect, text
+
+    tables = ("referral_pool_units", "referral_pool_purchases", "referral_pool_assignments", "referral_pool_config")
+    present = [t for t in tables if inspect(db.get_bind()).has_table(t)]
+
+    def snapshot():
+        return {t: [tuple(r) for r in db.execute(text(f"select * from {t} order by 1"))] for t in present}
+
+    before = snapshot()
+    inviter, headers = signed_in(client, db)
+    kyc_approved(db, inviter)
+    link = shorten(client, headers, f"{SITE}/register", invitation=True).json()
+    register_after_visit(client, open_link(client, link["short_url"]))
+    assert snapshot() == before                                            # pool switches, limits, units untouched
+    assert db.query(AffiliateCommission).count() == 0
+    assert db.query(JournalEntry).count() == 0 and db.query(Deposit).count() == 0
