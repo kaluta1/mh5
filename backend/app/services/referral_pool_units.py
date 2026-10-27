@@ -44,6 +44,9 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 UNIT_PRICE = Decimal("100.00")
+# Owner rule (Shafi Abeid, 2026-10-26): at most this many DISTINCT members take part. A member limit,
+# not a unit limit: a member already in the pool may always buy more units.
+MAX_POOL_MEMBERS = 10000
 PRODUCT_CODE = "referral_pool_entry"
 _CENT = Decimal("0.01")
 
@@ -156,6 +159,7 @@ def create_purchase(db: Session, *, user: User, deposit: Deposit, quantity: int)
         raise UnitsError("NOT_ELIGIBLE", "Only KYC-approved adult members can buy Referral Pool units.")
     _check_deposit(db, deposit, user_id=user.id, total=UNIT_PRICE * quantity, paid=False)
     _check_holding_limits(db, cfg, user.id, quantity)
+    _check_membership_cap(db, user.id)
 
     existing = db.query(ReferralPoolPurchase).filter(ReferralPoolPurchase.deposit_id == deposit.id).first()
     if existing is not None:
@@ -211,6 +215,37 @@ def _check_holding_limits(db: Session, cfg: ReferralPoolConfig, user_id: int, ad
         raise UnitsError("POOL_LIMIT", "The Referral Pool has reached its unit limit.")
 
 
+def _member_ids(db: Session, user_id: Optional[int] = None):
+    """Who takes part (user ids): a held unit (pending, active or suspended), or a purchase still
+    being paid, which reserves its seat like it reserves its units."""
+    held = db.query(ReferralPoolUnit.user_id.label("user_id")).filter(ReferralPoolUnit.status.in_(HELD))
+    paying = (db.query(ReferralPoolPurchase.user_id.label("user_id"))
+              .join(Deposit, Deposit.id == ReferralPoolPurchase.deposit_id)
+              .filter(ReferralPoolPurchase.status == P_PENDING,
+                      Deposit.status.in_((DepositStatus.PENDING, DepositStatus.PARTIALLY_PAID))))
+    if user_id is not None:
+        held = held.filter(ReferralPoolUnit.user_id == user_id)
+        paying = paying.filter(ReferralPoolPurchase.user_id == user_id)
+    return held.union(paying)
+
+
+def pool_member_count(db: Session) -> int:
+    return int(_member_ids(db).count())
+
+
+def is_pool_member(db: Session, user_id: int) -> bool:
+    return _member_ids(db, int(user_id)).first() is not None
+
+
+def _check_membership_cap(db: Session, user_id: int) -> None:
+    """MAX_POOL_MEMBERS distinct members, decided at checkout under the pool mutex (the caller holds
+    it), so two first purchases at once cannot both take the last seat."""
+    if not is_pool_member(db, user_id) and pool_member_count(db) >= MAX_POOL_MEMBERS:
+        raise UnitsError("POOL_MEMBERS_FULL",
+                         f"The Referral Pool is full ({MAX_POOL_MEMBERS:,} members). Members already in the pool "
+                         "can still buy more units.")
+
+
 def sales_open(db: Session) -> bool:
     cfg = db.query(ReferralPoolConfig).order_by(ReferralPoolConfig.id.asc()).first()
     return bool(cfg is not None and cfg.multiunit_sales_enabled)
@@ -245,6 +280,11 @@ def activate_purchase_for_deposit(db: Session, deposit: Deposit, *, now: Optiona
 
     if not accounting.receipt_ready(db, deposit):
         return purchase                               # the cash is not held in 2100 yet: nothing happens
+    # The member cap, once more under the mutex. A seat reserved at checkout always fits here (this
+    # purchase no longer counts as "paying"); only a payment that arrives after its reservation
+    # lapsed, into a pool that filled meanwhile, is held for review (refund), never a 10,001st member.
+    if not is_pool_member(db, purchase.user_id) and pool_member_count(db) >= MAX_POOL_MEMBERS:
+        return _hold(purchase, "POOL_MEMBERS_FULL", now)
 
     holder = db.query(User).filter(User.id == purchase.user_id).first()
     eligibility = member_eligibility(db, holder)

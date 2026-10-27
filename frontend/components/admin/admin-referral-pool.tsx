@@ -305,6 +305,8 @@ const REFERRAL_TYPES: Record<string, string> = {
   PERSONAL_REFERRAL: 'Personal Referral',
   JOIN_CODE: 'Join Code',
   REFERRAL_POOL: 'Referral Pool',
+  FOUNDER_ASSIGNED: 'First Pool member (no previous sponsor)',
+  DSM_IMPORT: 'DSM Import',
   NONE: 'None',
 }
 

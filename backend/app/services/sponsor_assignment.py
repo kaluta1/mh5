@@ -1,11 +1,11 @@
 """The one place that sets ``users.sponsor_id`` under the NEW_V2 model.
 
-Priority at registration: valid personal referral -> no sponsor.
-The Referral Pool is retired (2026-09-28): an organic signup (no code, or a code that does
-not resolve to an eligible member) is never given an invented sponsor.
-Assignment is one-time: an existing sponsor is never overwritten (row lock + NULL check).
-
-``REFERRAL_POOL`` stays defined only to read historical rows whose sponsor came from the pool.
+Priority at registration: valid personal referral -> no sponsor (NONE). An organic signup (no
+code, or a code that does not resolve to an eligible member) gets no sponsor here; once its own
+KYC is approved, the Multi-Unit Referral Pool assigns one, drawn per eligible ACTIVE unit
+(referral_pool_allocation, sponsor_source REFERRAL_POOL). DSM-imported members keep the sponsor
+the import resolved. Assignment is one-time: an existing sponsor is never overwritten (row lock
++ NULL check, here and in the pool).
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.models.user import User
 
 PERSONAL_REFERRAL = "PERSONAL_REFERRAL"
 JOIN_CODE = "JOIN_CODE"
-REFERRAL_POOL = "REFERRAL_POOL"  # historical provenance only; never assigned any more
+REFERRAL_POOL = "REFERRAL_POOL"  # set by referral_pool_allocation, never here
 NONE = "NONE"
 
 

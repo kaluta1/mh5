@@ -42,7 +42,7 @@ describe('Referral Pool explanation', () => {
     expect(RULE_KEYS).toHaveLength(10)
     const text = [...items].map((li) => li.textContent)
     expect(text[0]).toBe('Each unit costs $100.')
-    expect(text[1]).toMatch(/as many units as you like, unless an administrator sets a limit/)
+    expect(text[1]).toMatch(/as many units as you like. The pool is open to at most 10,000 members/)
     expect(text[2]).toMatch(/one allocation slot in each round/)
     expect(text[3]).toMatch(/at random, with every remaining eligible slot equally likely/)
     expect(text[4]).toMatch(/not used up/)
@@ -81,7 +81,10 @@ describe('Referral Pool explanation', () => {
 
   it('no longer describes the retired single-seat pool as the current program', () => {
     const copy = allCopy().join(' ')
-    expect(copy).not.toMatch(/10,000 members|one-time \$100|Seats taken|limited to 10,000/i)
+    expect(copy).not.toMatch(/one-time \$100|Seats taken/i)
+    // Owner rule 2026-10-26: a 10,000-MEMBER cap (not a unit cap); members in the pool keep buying.
+    expect(rp.rule_2).toMatch(/at most 10,000 members/)
+    expect(rp.faq_unlimited_a).toMatch(/members already in the pool can keep buying units/)
     expect(en.business_model.pool_page_title).toBe('Referral Pool')
   })
 })

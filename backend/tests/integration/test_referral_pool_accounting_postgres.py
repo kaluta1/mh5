@@ -202,6 +202,21 @@ def test_only_the_direct_sponsor_earns_no_ten_level_distribution(world):
         assert {c.level for c in db.query(AffiliateCommission)} == {1}
 
 
+@pytest.mark.parametrize("source", ["REFERRAL_POOL", "FOUNDER_ASSIGNED", "DSM_IMPORT"])
+def test_an_assigned_sponsor_earns_the_direct_commission_of_later_purchases_only(world, source):
+    """Owner rule 2026-10-26: a pool, founder or DSM sponsor is the direct sponsor the existing engine
+    pays (users.sponsor_id), once per unit, from future purchases; being assigned earns nothing."""
+    _engine, Session = world
+    buyer, sponsor = sponsored_buyer(Session)
+    with Session() as db:
+        db.get(User, buyer).sponsor_source = source
+        db.commit()
+        assert db.query(AffiliateCommission).count() == 0                     # the assignment itself: nothing
+    p, _d = paid_purchase(Session, buyer, 2)
+    assert commissions(Session, p) == [(sponsor, D("20.00"), CommissionStatus.APPROVED, 1, None)] * 2
+    assert reconciled(Session, p) == [] and ledger_balanced(Session)
+
+
 def test_duplicate_and_concurrent_payment_callbacks_post_once(world):
     _engine, Session = world
     buyer, sponsor = sponsored_buyer(Session)

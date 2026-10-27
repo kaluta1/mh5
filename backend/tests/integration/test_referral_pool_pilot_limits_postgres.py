@@ -132,3 +132,71 @@ def test_at_most_50_units_in_the_pool_counting_the_historical_unit(pilot):
     assert checkout(Session, late, 1) == "POOL_LIMIT"
     with Session() as db:
         assert db.query(ReferralPoolUnit).count() == 49                      # refusals created nothing
+
+
+# ---------------------------------------------------------------------------
+# Owner rule 2026-10-26: at most 10,000 DISTINCT members (a member cap, not a unit cap)
+# ---------------------------------------------------------------------------
+
+def test_the_member_cap_is_10000_distinct_members_in_code():
+    assert units.MAX_POOL_MEMBERS == 10000
+
+
+def test_a_full_pool_refuses_new_members_but_existing_members_keep_buying(unlimited, monkeypatch):
+    Session, founder = unlimited                                             # 1 member (historical unit)
+    monkeypatch.setattr(units, "MAX_POOL_MEMBERS", 3)
+    paid, unpaid, outsider = member(Session), member(Session), member(Session)
+    _p, d = buy(Session, paid, 1)
+    confirm(Session, d)
+    activate(Session, d)
+    assert checkout(Session, unpaid, 2) == "ok"                              # 3rd member: an unpaid seat counts
+    assert checkout(Session, outsider, 1) == "POOL_MEMBERS_FULL"
+    assert checkout(Session, founder, 40) == "ok"                            # existing members: unlimited units
+    assert checkout(Session, paid, 7) == "ok"
+    assert checkout(Session, unpaid, 1) == "ok"
+    with Session() as db:
+        assert units.pool_member_count(db) == 3
+        assert not db.query(ReferralPoolPurchase).filter_by(user_id=outsider).count()
+
+
+def test_units_beyond_the_member_cap_still_count_as_weight(unlimited, monkeypatch):
+    Session, founder = unlimited
+    monkeypatch.setattr(units, "MAX_POOL_MEMBERS", 1)
+    _p, d = buy(Session, founder, 4)                                         # the only member buys 4 more
+    confirm(Session, d)
+    activate(Session, d)
+    assert checkout(Session, member(Session), 1) == "POOL_MEMBERS_FULL"
+    with Session() as db:
+        assert db.query(ReferralPoolUnit).filter_by(user_id=founder, status=units.ACTIVE).count() == 5
+
+
+def test_two_new_members_racing_for_the_last_seat_get_one_seat(unlimited, monkeypatch):
+    from tests.integration.test_payments_postgres import in_threads
+
+    Session, _founder = unlimited
+    monkeypatch.setattr(units, "MAX_POOL_MEMBERS", 2)
+    racers = [member(Session) for _ in range(4)]
+    outcomes = in_threads(4, lambda i: checkout(Session, racers[i], 1))
+    assert sorted(outcomes) == ["POOL_MEMBERS_FULL"] * 3 + ["ok"], outcomes
+    with Session() as db:
+        assert units.pool_member_count(db) == 2
+
+
+def test_a_reserved_last_seat_activates_but_a_lapsed_one_cannot_overfill_the_pool(unlimited, monkeypatch):
+    from app.models.payment import DepositStatus
+
+    Session, _founder = unlimited                                            # 1 member
+    monkeypatch.setattr(units, "MAX_POOL_MEMBERS", 2)
+    lapsed, newcomer = member(Session), member(Session)
+    _p, late_deposit = buy(Session, lapsed, 1)                               # takes the last seat ...
+    with Session() as db:
+        db.get(Deposit, late_deposit).status = DepositStatus.EXPIRED         # ... then the payment window lapses
+        db.commit()
+    _p2, d2 = buy(Session, newcomer, 1)                                      # the seat is free again: taken
+    confirm(Session, d2)
+    assert activate(Session, d2) == units.P_PAID                             # a reserved last seat activates
+    confirm(Session, late_deposit)                                           # the lapsed payment arrives late
+    assert activate(Session, late_deposit) == units.P_HELD                   # held for review, no 3rd member
+    with Session() as db:
+        assert units.pool_member_count(db) == 2
+        assert db.query(ReferralPoolUnit).filter_by(user_id=lapsed).count() == 0

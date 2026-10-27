@@ -7,7 +7,9 @@ uniformly at random (``secrets``) among the slots it may take, fills it, and mak
 holder the referral's sponsor, once. A round completes when every slot is FILLED or VOID; the
 next one opens only when a waiting referral needs a slot, and never empty. Nobody is allocated
 while fewer than MIN_ALLOCATION_HOLDERS eligible holders hold MIN_ALLOCATION_UNITS eligible ACTIVE
-units: referrals keep waiting (POOL_BELOW_MINIMUM), an OPEN round included.
+units (1 and 1: the pool works from its first eligible unit): referrals keep waiting
+(POOL_BELOW_MINIMUM), an OPEN round included. DSM-imported members are never pool-assigned: their
+sponsor is the one the import resolved, or deliberately none.
 
 Fairness: every OPEN slot is equally likely; a unit holds one slot per round, so a holder of N
 continuously eligible units receives exactly N referrals per completed round. Slots a referral
@@ -49,11 +51,12 @@ METHOD = "QUOTA_ROUND_V1"
 POOL_SOURCE = "REFERRAL_POOL"
 _PERSONAL_SOURCES = ("PERSONAL_REFERRAL", "JOIN_CODE")
 _MAX_REDRAWS = 1000
-# Minimum pool before anyone is allocated (owner decision P15 D4-C): no round opens and no slot is
-# drawn unless at least this many distinct eligible holders hold at least this many eligible ACTIVE
-# units, so a small pool never becomes one member's sponsor feed. Fixed in code on purpose.
-MIN_ALLOCATION_HOLDERS = 5
-MIN_ALLOCATION_UNITS = 10
+# Minimum pool before anyone is allocated: no round opens and no slot is drawn unless at least this
+# many distinct eligible holders hold at least this many eligible ACTIVE units. Owner rule (Shafi
+# Abeid, 2026-10-26) replaces the P15 D4-C 5/10: the pool runs from the first eligible holder with
+# one eligible ACTIVE unit, who then receives every pool referral. Fixed in code on purpose.
+MIN_ALLOCATION_HOLDERS = 1
+MIN_ALLOCATION_UNITS = 1
 BELOW_MINIMUM = "POOL_BELOW_MINIMUM"
 
 # outcomes
@@ -82,12 +85,24 @@ def valid_personal_inviter(db: Session, user: User) -> bool:
     return inviter_eligible(db, inviter)                    # the one inviter rule (registration, codes, pool)
 
 
+def dsm_imported(db: Session, user_id: int) -> bool:
+    """The account came from (or was matched by) the DSM member import (legacy_import.dsm_members,
+    written by MH5/reports/dsm-import, not an ORM table: absent outside production)."""
+    if db.get_bind().dialect.name != "postgresql" or db.execute(
+            text("SELECT to_regclass('legacy_import.dsm_members')")).scalar() is None:
+        return False
+    return db.execute(text("SELECT 1 FROM legacy_import.dsm_members WHERE mh5_user_id = :u LIMIT 1"),
+                      {"u": int(user_id)}).first() is not None
+
+
 def _entry_refusal(db: Session, user: Optional[User]) -> Optional[str]:
     """Why this member may not wait for a pool sponsor now (None: they may)."""
     if user is None or not user.is_active or user.is_deleted:
         return "ACCOUNT_UNAVAILABLE"
     if db.query(ReferralPoolAssignment.id).filter(ReferralPoolAssignment.referred_user_id == user.id).first():
         return "ALREADY_POOL_ASSIGNED"
+    if dsm_imported(db, user.id):
+        return "DSM_IMPORTED"                                 # the import decided the sponsor (or none)
     if user.sponsor_id is not None:
         # A sponsor is never replaced, whatever its source: a valid personal invitation takes
         # precedence, and any other existing sponsor relationship is left exactly as it is.

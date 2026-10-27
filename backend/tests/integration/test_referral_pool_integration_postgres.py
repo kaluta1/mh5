@@ -269,6 +269,38 @@ def test_a_valid_personal_inviter_takes_precedence(pool):
         assert db.get(User, user_id).sponsor_id == inviter
 
 
+def test_organic_registrations_get_a_unit_weighted_pool_sponsor_once_after_kyc(pool):
+    """Owner rules 2026-10-26, end to end: no invitation at registration -> NONE; KYC approval -> the
+    worker -> a pool sponsor drawn per eligible ACTIVE unit (3 units : 1 unit = 3 : 1 of a round),
+    REFERRAL_POOL, permanent; an invited newcomer keeps the inviter; a later unit change moves nobody."""
+    Session = pool
+    big, small = holder(Session, 3), holder(Session, 1)
+    newcomers = []
+    for _ in range(4):
+        user_id, v = unverified(Session)
+        with Session() as db:
+            u = db.get(User, user_id)
+            u.sponsor_id, u.sponsor_source = None, None
+            db.commit()
+            assert assign_at_registration(db, db.get(User, user_id), None) == "NONE"
+            db.commit()
+        approve(Session, v)
+        newcomers.append(user_id)
+    invited, iv = unverified(Session, sponsor=small)
+    approve(Session, iv)
+    integration.run_once(Session, now=NOW)
+    with Session() as db:
+        got = [(db.get(User, n).sponsor_id, db.get(User, n).sponsor_source) for n in newcomers]
+        assert {src for _s, src in got} == {"REFERRAL_POOL"}
+        assert sorted(s for s, _src in got) == sorted([big, big, big, small])
+        assert db.get(User, invited).sponsor_id == small and db.get(User, invited).sponsor_source == "PERSONAL_REFERRAL"
+    add_units(Session, small, 5)                                            # weights change later: nobody moves
+    integration.run_once(Session, now=NOW)
+    with Session() as db:
+        assert [(db.get(User, n).sponsor_id, db.get(User, n).sponsor_source) for n in newcomers] == got
+    assert_counters(Session)
+
+
 def test_an_unverified_inviter_creates_no_sponsor_at_registration_or_by_code(pool):
     Session = pool
     unverified_inviter = member(Session, kyc=False)
