@@ -74,7 +74,11 @@ function StatusBadge({ active }: { active: boolean }) {
   )
 }
 
-export function ShortenLinkForm({ onCreated }: { onCreated?: (link: ShortLink) => void }) {
+export function ShortenLinkForm({ onCreated, disabledIds = [] }: {
+  onCreated?: (link: ShortLink) => void
+  /** Links disabled since (in My Short Links): the result panel must not offer them any more. */
+  disabledIds?: number[]
+}) {
   const [url, setUrl] = useState('')
   const [includeInvitation, setIncludeInvitation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -184,7 +188,14 @@ export function ShortenLinkForm({ onCreated }: { onCreated?: (link: ShortLink) =
         </Button>
       </form>
 
-      {created && (
+      {created && disabledIds.includes(created.id) && (
+        <p role="status" data-testid="created-link-disabled"
+          className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+          You disabled {created.short_url}. It no longer opens; create a new short link to share this page again.
+        </p>
+      )}
+
+      {created && !disabledIds.includes(created.id) && (
         <div role="status" className="mt-6 space-y-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-900/20">
           <p className="text-sm font-medium text-green-800 dark:text-green-300">
             {created.reused
@@ -214,7 +225,7 @@ export function ShortenLinkForm({ onCreated }: { onCreated?: (link: ShortLink) =
   )
 }
 
-export function MyShortLinks({ refreshKey = 0 }: { refreshKey?: number }) {
+export function MyShortLinks({ refreshKey = 0, onDisabled }: { refreshKey?: number; onDisabled?: (link: ShortLink) => void }) {
   const [links, setLinks] = useState<ShortLink[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -249,6 +260,7 @@ export function MyShortLinks({ refreshKey = 0 }: { refreshKey?: number }) {
     try {
       const updated = await disableShortLink(pending.id)
       setLinks((current) => current.map((l) => (l.id === updated.id ? updated : l)))
+      onDisabled?.(updated)
       setPending(null)
     } catch (err) {
       setActionError(shortLinkErrorMessage(err, 'The link could not be disabled. Please try again.'))
@@ -349,6 +361,7 @@ export function MyShortLinks({ refreshKey = 0 }: { refreshKey?: number }) {
 
 export function ShortLinksManager() {
   const [refreshKey, setRefreshKey] = useState(0)
+  const [disabledIds, setDisabledIds] = useState<number[]>([])
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6">
       <div>
@@ -357,8 +370,8 @@ export function ShortLinksManager() {
           Turn any shareable MyHigh5 page into a short link. A short link never changes who can see a page.
         </p>
       </div>
-      <ShortenLinkForm onCreated={() => setRefreshKey((k) => k + 1)} />
-      <MyShortLinks refreshKey={refreshKey} />
+      <ShortenLinkForm onCreated={() => setRefreshKey((k) => k + 1)} disabledIds={disabledIds} />
+      <MyShortLinks refreshKey={refreshKey} onDisabled={(link) => setDisabledIds((ids) => [...ids, link.id])} />
     </div>
   )
 }
