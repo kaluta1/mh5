@@ -77,7 +77,8 @@ export class ReferralShareManager {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ url: canonical }),
+      // Share buttons share the member's own invitation link (the server takes the identity).
+      body: JSON.stringify({ url: canonical, include_invitation: true }),
     })
 
     if (!response.ok) {
