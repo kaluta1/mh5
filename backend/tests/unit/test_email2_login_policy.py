@@ -392,3 +392,55 @@ def test_backend_minimum_password_length_is_twelve(password, accepted):
     else:
         with pytest.raises(ValueError):
             validate_password_strength(password)
+
+
+# ===========================================================================
+# SOFT-DELETED accounts: no sign-in, no recovery, no verification
+# ===========================================================================
+
+def test_a_soft_deleted_account_cannot_sign_in_or_recover_access(client, db, email_outbox, ip):
+    from app.models.auth_security import PURPOSE_PASSWORD_RESET
+    from tests.unit.test_email2_auth_security import issue
+
+    gone = member(db, verified=True)
+    pending_reset = issue(db, gone, PURPOSE_PASSWORD_RESET)          # a link mailed before the deletion
+    gone.is_deleted = True
+    gone.security_version = int(gone.security_version or 0) + 1
+    db.commit()
+
+    assert login(client, gone).status_code in (401, 403)            # even with the right password
+    assert login(client, gone.username).status_code in (401, 403)
+    reset = client.post(f"{A}/password-reset-request", json={"email": gone.email})
+    verify = client.post(f"{A}/resend-verification", json={"email": gone.email})
+    assert reset.status_code == 200 and verify.status_code == 200     # the usual answers (no enumeration) ...
+    assert client.post(f"{A}/register", json=body(email=gone.email)).status_code == 201
+    assert len(email_outbox) == 0                                     # ... but nothing is sent
+    used = client.post(f"{A}/password-reset-confirm", json={"token": pending_reset, "new_password": PW2})
+    assert used.status_code == 400                                    # the old link no longer works
+    db.refresh(gone)
+    assert gone.is_deleted is True and login(client, gone, PW2).status_code in (401, 403)
+
+
+# ===========================================================================
+# DSM-imported member: no password yet -> sets one by e-mail, keeps identity and sponsor
+# ===========================================================================
+
+def test_an_imported_member_sets_a_password_and_keeps_identity_and_sponsor(client, db, email_outbox, ip):
+    sponsor = member(db, verified=True)
+    imported = member(db, verified=False)
+    imported.hashed_password = "!dsm-import-no-password!synthetic"
+    imported.sponsor_id, imported.sponsor_source = sponsor.id, "DSM_IMPORT"
+    db.commit()
+    before = (imported.id, imported.username, imported.email, imported.sponsor_id, imported.sponsor_source)
+
+    assert login(client, imported, "!dsm-import-no-password!synthetic").status_code == 401   # no usable password
+    assert client.post(f"{A}/password-reset-request", json={"email": imported.email.upper()}).status_code == 200
+    mail = email_outbox[-1]
+    assert mail["to"] == imported.email
+    r = client.post(f"{A}/password-reset-confirm", json={"token": link_token(mail, "reset-password"), "new_password": PW2})
+    assert r.status_code == 200
+    assert login(client, imported, PW2).status_code == 200            # by e-mail ...
+    assert login(client, imported.username, PW2).status_code == 200   # ... and by username
+    db.refresh(imported)
+    assert (imported.id, imported.username, imported.email, imported.sponsor_id, imported.sponsor_source) == before
+    assert db.query(User).filter(User.email == imported.email).count() == 1
