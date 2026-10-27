@@ -173,6 +173,9 @@ def test_codes_come_from_the_secure_generator():
     (f"{SITE}/r/SOMEONE", f"{SITE}/"),
     (f"{SITE}/register/SOMEONE", f"{SITE}/register"),
     (f"{SITE}/dashboard/groups/7", f"{SITE}/dashboard/groups/7"),
+    # links made before the move to myhigh5.com keep working, and lead to myhigh5.com
+    ("https://kalutasociety.com/contests/3/entry/9", f"{SITE}/contests/3/entry/9"),
+    ("https://www.kalutafoundation.com/", f"{SITE}/"),
 ])
 def test_supported_pages(url, expected):
     assert shortener.validate_and_normalize_internal_url(url)[0] == expected
@@ -183,6 +186,8 @@ def test_supported_pages(url, expected):
     "https://myhigh5.com.evil.com/feed/1",
     "https://evilmyhigh5.com/",
     "https://myhigh5.co/",
+    "https://kalutasociety.com.evil.com/",
+    "https://evilkalutasociety.com/",
     "https://user:pass@myhigh5.com/feed/1",
     "https://myhigh5.com@evil.com/",
     "javascript:alert(1)",

@@ -141,6 +141,11 @@ class ShortLinkError(ValueError):
     """A refusal whose message is shown to the member as is."""
 
 
+# Former domains of this site (links shared before the move to myhigh5.com). Accepted as input only:
+# every destination is rebuilt on the canonical origin, so nothing ever leads to these hosts.
+_FORMER_HOSTS = ("kalutasociety.com", "www.kalutasociety.com", "kalutafoundation.com", "www.kalutafoundation.com")
+
+
 def _random_base62(length: int = SHORT_CODE_LENGTH) -> str:
     return "".join(secrets.choice(_BASE62) for _ in range(length))
 
@@ -156,7 +161,7 @@ def _is_local_origin() -> bool:
 def allowed_share_hosts() -> set[str]:
     """Hostnames (or host:port) whose pages may be shortened. Local hosts only while the application
     itself runs locally."""
-    hosts: set[str] = {"myhigh5.com", "www.myhigh5.com"}
+    hosts: set[str] = {"myhigh5.com", "www.myhigh5.com"} | set(_FORMER_HOSTS)
     for raw in (settings.SHORT_LINK_ALLOWED_HOSTS or "").split(","):
         host = raw.strip().lower()
         if host:
