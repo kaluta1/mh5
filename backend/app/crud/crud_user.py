@@ -464,8 +464,11 @@ class CRUDUser:
         Returns None if authentication fails, or raises an exception on database errors.
         """
         try:
-            # Essayer d'abord par email
-            user = self.get_by_email(db=db, email=email_or_username)
+            # Essayer d'abord par email (letter case ignored when unambiguous,
+            # as for password reset)
+            from app.services.auth_security import find_account
+
+            user = find_account(db, email_or_username)
             
             # Si pas trouvé par email, essayer par username
             if not user:

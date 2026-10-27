@@ -90,6 +90,48 @@ def _queue_verification_email(db: Session, user) -> None:
     )
 
 
+def _queue_password_reset_email(db: Session, user, *, existing_account: bool = False) -> None:
+    """A password reset link for an existing account. Durable limits per
+    account and platform-wide; the answer to the caller is the same whether or
+    not anything is queued."""
+    if not auth_throttle.hit(db, auth_throttle.RESET_ACCOUNT, user.id):
+        logger.info("Password reset email not queued for user %s: account limit reached", user.id)
+        return
+    if not auth_throttle.hit(db, auth_throttle.RESET_GLOBAL, auth_throttle.GLOBAL_KEY):
+        logger.error("Password reset email not queued: platform-wide ceiling reached")
+        return
+    # The one-time link is created when the email is sent; only its digest is
+    # stored. One email per account, session version and minute: a double
+    # submit or a client retry does not send twice.
+    email_service.enqueue(
+        db,
+        event=EmailEvent.AUTH_PASSWORD_RESET,
+        recipient=user.email,
+        user_id=user.id,
+        lang=getattr(user, 'preferred_language', None),
+        context={"existing_account": True} if existing_account else None,
+        idempotency_key=(
+            f"auth.password_reset:user:{user.id}:sv{int(user.security_version or 0)}"
+            f":{_minute_bucket()}"
+        ),
+    )
+
+
+def _notify_existing_account(db: Session, email: str) -> None:
+    """A registration named an address that already has an account. The caller
+    gets the ordinary answer; the address's OWNER gets the email that lets
+    them in: a new verification link while the account still waits for one,
+    otherwise a link to set a password (accounts imported without one, or a
+    forgotten one). Nothing about the account is changed here."""
+    user = auth_security.find_account(db, email)
+    if not auth_security.account_is_usable(user):
+        return
+    if auth_security.must_verify_email(user):
+        _queue_verification_email(db, user)
+    else:
+        _queue_password_reset_email(db, user, existing_account=True)
+
+
 router = APIRouter()
 
 
@@ -192,9 +234,10 @@ def register_user(
     if email_taken:
         # Same answer as a successful registration, and roughly the same work
         # (account creation is dominated by the password hash). Nothing is
-        # created, changed or sent.
+        # created or changed; only the address's owner is emailed.
         get_password_hash(user_in.password)
-        logger.info("Registration attempt for an address that already has an account: nothing changed")
+        logger.info("Registration attempt for an address that already has an account: owner notified")
+        _notify_existing_account(db, user_in.email)
         return _registration_accepted(user_in.email)
 
     # Créer l'utilisateur avec le parrain si un code est fourni (URL param or share-link cookie)
@@ -358,7 +401,7 @@ def _login_account(db: Session, identifier: str):
     identifier = (identifier or "").strip()
     if not identifier:
         return None
-    return crud_user.get_by_email(db=db, email=identifier) or crud_user.get_by_username(db=db, username=identifier)
+    return auth_security.find_account(db, identifier) or crud_user.get_by_username(db=db, username=identifier)
 
 
 def record_failed_login(db: Session, request: Request, account, reason: str) -> None:
@@ -560,25 +603,7 @@ def request_password_reset(
 
     user = auth_security.find_account(db, password_reset.email)
     if auth_security.account_is_usable(user):
-        if not auth_throttle.hit(db, auth_throttle.RESET_ACCOUNT, user.id):
-            logger.info("Password reset email not queued for user %s: account limit reached", user.id)
-        elif not auth_throttle.hit(db, auth_throttle.RESET_GLOBAL, auth_throttle.GLOBAL_KEY):
-            logger.error("Password reset email not queued: platform-wide ceiling reached")
-        else:
-            # The one-time link is created when the email is sent; only its
-            # digest is stored. One email per account, session version and
-            # minute: a double submit or a client retry does not send twice.
-            email_service.enqueue(
-                db,
-                event=EmailEvent.AUTH_PASSWORD_RESET,
-                recipient=user.email,
-                user_id=user.id,
-                lang=getattr(user, 'preferred_language', None),
-                idempotency_key=(
-                    f"auth.password_reset:user:{user.id}:sv{int(user.security_version or 0)}"
-                    f":{_minute_bucket()}"
-                ),
-            )
+        _queue_password_reset_email(db, user)
 
     return PasswordResetResponse(message=RESET_SENT_MESSAGE)
 

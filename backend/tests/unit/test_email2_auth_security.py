@@ -175,14 +175,18 @@ def test_registration_answer_is_the_same_for_new_verified_and_unverified_address
         assert "exist" not in a.text.lower() and "already" not in a.text.lower() and "déjà" not in a.text.lower()
         assert "id" not in a.json() and "username" not in a.json()
 
-    # nothing was created for, changed on, or sent to the existing accounts
+    # nothing was created for or changed on the existing accounts; only their
+    # owners were emailed a way in (one per account and minute, any letter case)
     assert db.query(User).count() == 3
     for user in (verified, unverified):
         db.refresh(user)
         assert (user.hashed_password, user.username, user.email_verified, user.security_version) == before[user.id]
-    deliveries = db.query(EmailDelivery).all()
-    assert [d.event_key for d in deliveries] == ["AUTH.EMAIL_VERIFICATION"]
-    assert deliveries[0].user_id == db.query(User).filter(User.email == "brand.new@example.com").one().id
+    deliveries = db.query(EmailDelivery).order_by(EmailDelivery.id).all()
+    assert [(d.event_key, d.user_id) for d in deliveries] == [
+        ("AUTH.EMAIL_VERIFICATION", db.query(User).filter(User.email == "brand.new@example.com").one().id),
+        ("AUTH.PASSWORD_RESET", verified.id),
+        ("AUTH.PASSWORD_RESET", unverified.id),
+    ]
     assert db.query(AuthToken).count() == 0 or all(t.user_id == deliveries[0].user_id for t in db.query(AuthToken))
 
 
@@ -207,7 +211,8 @@ def test_a_registration_cannot_take_over_an_unverified_account(client, db, email
     assert login(client, data["email"], PW).status_code == 200
     assert login(client, data["email"], PW2).status_code == 401
     assert db.query(User).filter(User.email == data["email"]).count() == 1
-    assert events(db) == ["AUTH.EMAIL_VERIFICATION"]                        # one email, from the first registration
+    # the second registration only sent the owner a fresh verification link
+    assert events(db) == ["AUTH.EMAIL_VERIFICATION", "AUTH.EMAIL_VERIFICATION"]
 
 
 def test_registration_race_on_the_unique_email_answers_the_same(client, db, ip, monkeypatch):

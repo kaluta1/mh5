@@ -242,10 +242,10 @@ def test_verified_new_account_password_change_still_invalidates(client, db, emai
 
 
 # ===========================================================================
-# REGISTRATION against an existing address: unchanged, nothing sent
+# REGISTRATION against an existing address: unchanged, only its owner is emailed
 # ===========================================================================
 
-def test_registration_for_an_existing_address_sends_nothing_and_changes_nothing(client, db, email_outbox, ip):
+def test_registration_for_an_existing_address_changes_nothing_and_emails_only_the_owner(client, db, email_outbox, ip):
     verified, legacy = member(db, verified=True), member(db, verified=False)
     pending = new_account(client, db, email_outbox)
     assert len(email_outbox) == 1                                           # pending's own verification email
@@ -260,9 +260,63 @@ def test_registration_for_an_existing_address_sends_nothing_and_changes_nothing(
     for u in (verified, legacy, pending):
         db.refresh(u)
         assert (u.hashed_password, u.email_verified, u.email_verification_required, u.security_version) == snapshot[u.id]
-    sent_to = [m["to"] for m in email_outbox]
-    assert sent_to == [pending.email, "someone.new@example.com"]            # no "account exists" email, no automatic resend
-    assert set(events(db)) == {"AUTH.EMAIL_VERIFICATION"}
+    sent = [(m["to"], m["subject"]) for m in email_outbox[1:]]
+    assert [to for to, _ in sent] == ["someone.new@example.com", verified.email, legacy.email, pending.email]
+    # an account that can already sign in (or was made before the rule): a link to set a password
+    for mail in email_outbox[2:4]:
+        assert "/reset-password#token=" in mail["html"] and "an account already exists" in mail["text"]
+    # an account still waiting for verification: a new verification link
+    assert "/verify-email#token=" in email_outbox[4]["html"]
+    assert events(db) == ["AUTH.EMAIL_VERIFICATION", "AUTH.EMAIL_VERIFICATION", "AUTH.PASSWORD_RESET",
+                          "AUTH.PASSWORD_RESET", "AUTH.EMAIL_VERIFICATION"]
+
+
+def test_an_imported_account_without_a_password_gets_in_through_registration(client, db, email_outbox, ip):
+    imported = member(db, verified=False)
+    imported.hashed_password = "!dsm-import-no-password!synthetic"
+    db.commit()
+
+    r = client.post(f"{A}/register", json=body(email=imported.email.upper()))
+    assert r.status_code == 201
+    assert db.query(User).filter(func_lower_email(imported.email)).count() == 1    # no second account
+    mail = email_outbox[-1]
+    assert mail["to"] == imported.email and "an account already exists" in mail["text"]
+    assert client.post(f"{A}/password-reset-confirm",
+                       json={"token": link_token(mail, "reset-password"), "new_password": PW2}).status_code == 200
+    assert login(client, imported, PW2).status_code == 200
+
+
+def test_a_deactivated_account_is_not_emailed_on_registration(client, db, email_outbox, ip):
+    gone = member(db, verified=True, active=False)
+    assert client.post(f"{A}/register", json=body(email=gone.email)).status_code == 201
+    assert len(email_outbox) == 0
+
+
+# ===========================================================================
+# SIGN-IN identifiers: email ignores letter case (when unambiguous), username too
+# ===========================================================================
+
+def test_sign_in_by_email_or_username_in_any_letter_case(client, db, ip):
+    user = member(db, verified=True)
+    for identifier in (user.email, user.email.upper(), user.username, user.username.upper()):
+        assert login(client, identifier).status_code == 200, identifier
+    assert login(client, user.email.upper(), PW2).status_code == 401
+    assert login(client, user.username, PW2).status_code == 401
+    assert login(client, "nobody_" + user.username).status_code == 401
+
+
+def test_sign_in_by_email_does_not_guess_between_case_duplicates(client, db, ip):
+    first = member(db, verified=True, email="Dup.Case@example.com")
+    second = member(db, verified=True, email="dup.case@EXAMPLE.com", password=PW2)
+    assert login(client, "Dup.Case@example.com").status_code == 200        # exact match still works
+    assert login(client, "dup.case@EXAMPLE.com", PW2).status_code == 200
+    assert login(client, "DUP.CASE@EXAMPLE.COM").status_code == 401        # ambiguous: no account chosen
+    assert first.id != second.id
+
+
+def func_lower_email(address):
+    from sqlalchemy import func
+    return func.lower(User.email) == address.lower()
 
 
 # ===========================================================================

@@ -115,7 +115,8 @@ def _password_reset(db: Session, to: str, user_id: Optional[int], ctx: dict, lan
 
     _link_account(db, to, user_id, PURPOSE_PASSWORD_RESET)
     minutes = int(auth_tokens.lifetime(PURPOSE_PASSWORD_RESET).total_seconds() // 60)
-    return tpl.get_password_reset_email(lang, _one_time_link("/reset-password"), minutes)
+    return tpl.get_password_reset_email(lang, _one_time_link("/reset-password"), minutes,
+                                        existing_account=bool(ctx.get("existing_account")))
 
 
 def _password_changed(db: Session, to: str, user_id: Optional[int], ctx: dict, lang: str) -> Rendered:

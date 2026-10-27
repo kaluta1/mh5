@@ -96,6 +96,7 @@ EMAIL_TRANSLATIONS = {
         "reset_subject": "Réinitialisation de votre mot de passe - MyHigh5",
         "reset_title": "Réinitialisation du mot de passe",
         "reset_message": "Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe.",
+        "reset_existing_account_message": "Quelqu'un a essayé de créer un compte MyHigh5 avec cette adresse email, mais un compte existe déjà. Si c'était vous, cliquez sur le bouton ci-dessous pour choisir votre mot de passe, puis connectez-vous.",
         "reset_button": "Réinitialiser mon mot de passe",
         "reset_expiry": "Ce lien expire dans {minutes} minutes et ne peut être utilisé qu'une seule fois.",
         "reset_ignore": "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.",
@@ -220,6 +221,7 @@ EMAIL_TRANSLATIONS = {
         "reset_subject": "Password Reset - MyHigh5",
         "reset_title": "Password Reset",
         "reset_message": "You requested to reset your password. Click the button below to create a new password.",
+        "reset_existing_account_message": "Someone tried to create a MyHigh5 account with this email address, but an account already exists. If this was you, click the button below to set your password, then sign in.",
         "reset_button": "Reset my password",
         "reset_expiry": "This link expires in {minutes} minutes and can be used only once.",
         "reset_ignore": "If you did not request this reset, please ignore this email. Your password will not be changed.",
@@ -344,6 +346,7 @@ EMAIL_TRANSLATIONS = {
         "reset_subject": "Restablecimiento de contraseña - MyHigh5",
         "reset_title": "Restablecimiento de contraseña",
         "reset_message": "Solicitaste restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva contraseña.",
+        "reset_existing_account_message": "Alguien intentó crear una cuenta de MyHigh5 con esta dirección de correo, pero ya existe una cuenta. Si fuiste tú, haz clic en el botón de abajo para establecer tu contraseña y luego inicia sesión.",
         "reset_button": "Restablecer mi contraseña",
         "reset_expiry": "Este enlace expira en {minutes} minutos y solo se puede usar una vez.",
         "reset_ignore": "Si no solicitaste este restablecimiento, ignora este correo. Tu contraseña no será modificada.",
@@ -468,6 +471,7 @@ EMAIL_TRANSLATIONS = {
         "reset_subject": "Passwort zurücksetzen - MyHigh5",
         "reset_title": "Passwort zurücksetzen",
         "reset_message": "Sie haben angefordert, Ihr Passwort zurückzusetzen. Klicken Sie auf die Schaltfläche unten, um ein neues Passwort zu erstellen.",
+        "reset_existing_account_message": "Jemand hat versucht, mit dieser E-Mail-Adresse ein MyHigh5-Konto zu erstellen, aber es existiert bereits ein Konto. Wenn Sie das waren, klicken Sie auf die Schaltfläche unten, um Ihr Passwort festzulegen, und melden Sie sich dann an.",
         "reset_button": "Passwort zurücksetzen",
         "reset_expiry": "Dieser Link läuft in {minutes} Minuten ab und kann nur einmal verwendet werden.",
         "reset_ignore": "Wenn Sie dieses Zurücksetzen nicht angefordert haben, ignorieren Sie bitte diese E-Mail. Ihr Passwort wird nicht geändert.",
@@ -750,15 +754,19 @@ def get_verify_email(lang: str, verify_url: str, minutes: int, *, new_account: b
     return t('verify_subject'), html, text
 
 
-def get_password_reset_email(lang: str, reset_url: str, minutes: int) -> tuple[str, str, str]:
+def get_password_reset_email(lang: str, reset_url: str, minutes: int, *,
+                             existing_account: bool = False) -> tuple[str, str, str]:
     """Password reset (AUTH.PASSWORD_RESET). `reset_url` carries the one-time
-    credential: it appears in the body only, never in the subject."""
+    credential: it appears in the body only, never in the subject.
+    `existing_account`: sent because a registration named this address, which
+    already has an account (possibly imported without a password)."""
     t = lambda key, **kwargs: get_translation(lang, key, **kwargs)
     expiry = t('reset_expiry', minutes=int(minutes))
+    message = t('reset_existing_account_message') if existing_account else t('reset_message')
 
     content = f"""
         <p style="margin: 0 0 24px 0;">
-            {t('reset_message')}
+            {esc(message)}
         </p>
         <p style="margin: 0 0 16px 0; color: #a1a1aa; font-size: 14px;">
             {esc(expiry)}
@@ -779,7 +787,7 @@ def get_password_reset_email(lang: str, reset_url: str, minutes: int) -> tuple[s
     text = f"""
 {t('reset_title')}
 
-{t('reset_message')}
+{message}
 
 {reset_url}
 
