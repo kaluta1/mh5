@@ -20,7 +20,7 @@ import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
 import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
 import { SuccessPage } from "./success-page"
-import { resolveAuthLoginErrorMessage } from "@/lib/auth-login-error-message"
+import { isEmailNotVerifiedError, resolveAuthLoginErrorMessage } from "@/lib/auth-login-error-message"
 
 interface LoginModalProps {
   open: boolean
@@ -43,6 +43,8 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Correct password, unconfirmed address: offer a new confirmation link (same as the /login page).
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false)
 
   // Sauvegarder l'URL actuelle quand le modal s'ouvre
   useEffect(() => {
@@ -57,6 +59,7 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       return false
     }
     setError(null)
+    setNeedsEmailVerification(false)
     return true
   }
 
@@ -104,7 +107,9 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
       }, 1500)
     } catch (err: unknown) {
       logger.error('Login error', err)
-      setError(resolveAuthLoginErrorMessage(err, t))
+      const unverified = isEmailNotVerifiedError(err)
+      setNeedsEmailVerification(unverified)
+      setError(unverified ? null : resolveAuthLoginErrorMessage(err, t))
     } finally {
       clearTimeout(loadingTimeoutId)
       setIsLoading(false)
@@ -140,6 +145,17 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
           {error && (
             <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
               {error}
+            </div>
+          )}
+
+          {needsEmailVerification && (
+            <div role="alert" data-testid="login-email-not-verified"
+              className="p-3 text-sm rounded-md border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-100">
+              <p>{t('auth.login.errors.email_not_verified') || 'Please confirm your email address before signing in. Check your inbox for the confirmation link.'}</p>
+              <button type="button" className="mt-2 font-semibold underline"
+                onClick={() => { onOpenChange(false); router.push('/verify-email') }}>
+                {t('auth.login.errors.email_not_verified_action') || 'Request a new confirmation link'}
+              </button>
             </div>
           )}
 
