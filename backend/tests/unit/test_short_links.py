@@ -579,3 +579,31 @@ def test_links_and_visits_touch_no_money_and_no_pool_state(client, db, ip):
     assert snapshot() == before                                            # pool switches, limits, units untouched
     assert db.query(AffiliateCommission).count() == 0
     assert db.query(JournalEntry).count() == 0 and db.query(Deposit).count() == 0
+
+
+# ============================================================================ deleted inviters, rate limits
+
+def test_a_soft_deleted_member_cannot_be_an_inviter_through_a_short_link(client, db, ip):
+    inviter, headers = signed_in(client, db)
+    kyc_approved(db, inviter)
+    link = shorten(client, headers, f"{SITE}/register", invitation=True).json()
+    earlier_visit = open_link(client, link["short_url"])                 # a visitor got the cookie before
+    assert attribution_of(earlier_visit)
+    inviter.is_deleted = True
+    inviter.security_version = int(inviter.security_version or 0) + 1
+    db.commit()
+
+    assert open_link(client, link["short_url"]).status_code == 404       # the link stops resolving
+    joined = new_user(db, register_after_visit(client, earlier_visit))   # the old cookie no longer sponsors
+    assert joined.sponsor_id is None and joined.sponsor_source == "NONE"
+    joined_by_code = new_user(db, register_after_visit(client, None, sponsor_code=inviter.personal_referral_code))
+    assert joined_by_code.sponsor_id is None                             # nor does the code itself
+
+
+def test_creating_and_opening_links_are_rate_limited(client, db, ip):
+    _, headers = signed_in(client, db)
+    answers = [shorten(client, headers, f"{SITE}/feed/{n}").status_code for n in range(61)]
+    assert answers[:60] == [201] * 60 and answers[60] == 429
+    code = db.query(ReferralShareLink).first().short_code
+    opens = [client.get(f"/api/v1/l/{code}", follow_redirects=False).status_code for _ in range(121)]
+    assert opens[:120] == [302] * 120 and opens[120] == 429

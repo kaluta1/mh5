@@ -226,3 +226,24 @@ describe('KYC eligibility warning', () => {
     expect(within(warning).queryByRole('link')).toBeNull()
   })
 })
+
+describe('result panel after disabling', () => {
+  it('stops offering Copy/Open for a link disabled from the list', async () => {
+    get.mockImplementation((url: string) => url.endsWith('/invitation-status')
+      ? Promise.resolve({ data: { eligible: true, reason: null, message: null } })
+      : Promise.resolve({ data: { items: [LINK], total: 1 } }))
+    post.mockImplementation((url: string) => Promise.resolve(
+      { data: url.endsWith('/disable') ? { ...LINK, is_active: false } : LINK }))
+    render(<ShortLinksManager />)
+    fillUrl('https://myhigh5.com/feed/12')
+    fireEvent.click(screen.getByRole('button', { name: 'Create Short Link' }))
+    expect(await screen.findByTestId('created-short-url')).toBeTruthy()
+    const row = await screen.findByTestId('short-link-7')
+    fireEvent.click(within(row).getByRole('button', { name: /Disable/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Disable link' }))
+    expect((await screen.findByTestId('created-link-disabled')).textContent).toContain('no longer opens')
+    expect(screen.queryByTestId('created-short-url')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Open Link/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy Link' })).toBeNull()
+  })
+})
