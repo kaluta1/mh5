@@ -528,8 +528,8 @@ class PaymentConfig:
     @property
     def auto_payout_allowed(self) -> bool:
         """Every SWITCH that must be on for the engine (credentials are checked separately)."""
-        return bool(crypto_master_switch() and self.provider_enabled and self.crypto_cashout_enabled
-                    and self.crypto_auto_payout_enabled)
+        return bool(crypto_master_switch() and payout_activation_switch() and self.provider_enabled
+                    and self.crypto_cashout_enabled and self.crypto_auto_payout_enabled)
 
     @property
     def usd_settlement_allowed(self) -> bool:
@@ -558,6 +558,11 @@ def _plain(value: Decimal) -> str:
 
 def crypto_master_switch() -> bool:
     return bool(settings.CRYPTO_AUTO_PAYOUT_ENABLED)
+
+
+def payout_activation_switch() -> bool:
+    """The server-side activation of automatic payouts, independent of every Admin Panel switch."""
+    return bool(settings.AUTOMATIC_PAYOUT_ACTIVATED)
 
 
 def usd_settlement_master_switch() -> bool:
@@ -1977,6 +1982,8 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
     credentials_ready = all(in_use[n] for n in PAYOUT_CREDENTIALS)
     if not crypto_master_switch():
         payouts, detail = "DISABLED", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off."
+    elif not payout_activation_switch():
+        payouts, detail = "DISABLED", "Automatic payouts are not activated on the server (AUTOMATIC_PAYOUT_ACTIVATED)."
     elif not (config.provider_enabled and config.crypto_cashout_enabled and config.crypto_auto_payout_enabled):
         payouts, detail = "DISABLED", "Automatic payouts are switched off in Crypto Cashout."
     elif config.fee_gate() is not None:

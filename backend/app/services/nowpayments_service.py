@@ -878,6 +878,13 @@ def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency:
     verified=False: the provider then rejects it by itself after an hour, and
     until it reports that the outcome is uncertain and is reconciled, never
     retried."""
+    from app.services.payment_config import payout_activation_switch
+
+    if not payout_activation_switch():
+        # Last line before money moves: whoever calls, nothing is sent while not activated.
+        # A 4xx "refusal" before any request, so the caller releases the reservation.
+        raise NowPaymentsError("Automatic payouts are not activated on this server", status_code=403,
+                               code="PAYOUTS_NOT_ACTIVATED", stage="create")
     pay_currency = normalize_pay_currency(currency) or "usdtbsc"
     # "amount ... Must not exceed 6 decimals"; a cashout amount has two.
     withdrawal = {"address": wallet_address, "currency": pay_currency, "amount": float(money(amount)),

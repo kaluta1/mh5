@@ -660,7 +660,21 @@ def create_payout(**changes):
     return nowpayments.create_single_payout_sync(**kwargs)
 
 
-def test_a_payout_is_created_once_then_confirmed_with_a_fresh_one_time_code(provider):
+@pytest.fixture
+def activated(monkeypatch):
+    """Automatic payouts activated on the server (AUTOMATIC_PAYOUT_ACTIVATED); off by default."""
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
+
+
+def test_without_activation_no_request_reaches_the_provider(provider):
+    provider.routes[("POST", "/v1/payout")] = (200, doc_create_response(unique_external_id="ref-abc"))
+    with pytest.raises(nowpayments.NowPaymentsError) as refused:
+        create_payout()
+    assert (refused.value.status_code, refused.value.code) == (403, "PAYOUTS_NOT_ACTIVATED")
+    assert provider.paths() == []                                  # not even the login
+
+
+def test_a_payout_is_created_once_then_confirmed_with_a_fresh_one_time_code(provider, activated):
     provider.routes[("POST", "/v1/payout")] = (200, doc_create_response(unique_external_id="ref-abc"))
     provider.routes[("POST", "/v1/payout/5000000713/verify")] = (200, "OK")
     result = create_payout()
@@ -684,7 +698,7 @@ def test_a_payout_is_created_once_then_confirmed_with_a_fresh_one_time_code(prov
     ((403, {"message": "Invalid IP"}), None),
     ((422, "plain text"), None),
 ])
-def test_a_refused_creation_reports_its_status_and_code_and_confirms_nothing(provider, answer, code):
+def test_a_refused_creation_reports_its_status_and_code_and_confirms_nothing(provider, activated, answer, code):
     provider.routes[("POST", "/v1/payout")] = answer
     with pytest.raises(nowpayments.NowPaymentsError) as error:
         create_payout()
@@ -693,7 +707,7 @@ def test_a_refused_creation_reports_its_status_and_code_and_confirms_nothing(pro
     assert not any("/verify" in path for path in provider.paths())
 
 
-def test_a_created_payout_whose_confirmation_fails_is_reported_as_created_and_unverified(provider):
+def test_a_created_payout_whose_confirmation_fails_is_reported_as_created_and_unverified(provider, activated):
     provider.routes[("POST", "/v1/payout")] = (200, doc_create_response())
     for answer, attempts in (((400, {"message": "Invalid verification code"}), 2), (httpx.ReadTimeout("x"), 1),
                              ((500, "x"), 1), ((401, {"message": "Unauthorized"}), 1), ((429, "slow"), 1)):
@@ -705,7 +719,7 @@ def test_a_created_payout_whose_confirmation_fails_is_reported_as_created_and_un
         assert provider.paths().count("POST /v1/payout") == 1                      # verifying again never re-creates
 
 
-def test_a_refused_code_is_tried_once_more_with_the_next_code_and_never_reused(provider):
+def test_a_refused_code_is_tried_once_more_with_the_next_code_and_never_reused(provider, activated):
     answers = iter([(400, {"message": "Invalid verification code"}), (200, "OK")])
     provider.routes[("POST", "/v1/payout")] = (200, doc_create_response())
     provider.routes[("POST", "/v1/payout/5000000713/verify")] = lambda request: next(answers)
@@ -719,7 +733,7 @@ def test_a_refused_code_is_tried_once_more_with_the_next_code_and_never_reused(p
 @pytest.mark.parametrize("answer", [httpx.ReadTimeout("no answer"), httpx.ConnectError("reset"),
                                     (500, "upstream"), (502, "bad gateway"), (200, "<html>"), (200, {"id": ""}),
                                     (200, {"withdrawals": []}), (429, {"message": "slow down"})])
-def test_no_answer_or_an_unreadable_answer_is_never_reported_as_a_refusal(provider, answer):
+def test_no_answer_or_an_unreadable_answer_is_never_reported_as_a_refusal(provider, activated, answer):
     """The engine releases a reservation only for a definite 4xx refusal."""
     provider.routes[("POST", "/v1/payout")] = answer
     with pytest.raises(Exception) as error:
@@ -1198,6 +1212,7 @@ def test_readiness_follows_the_switches(db, monkeypatch):
     admin = member(db, "boss", admin=True)
     pc.run_connection_test(db, admin, http=http_for(), now=NOW, login=lambda c: None)
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     assert states(db)["automatic_payouts"] == "DISABLED"                           # the admin switch is still off
     configure(db, crypto_auto_payout_enabled=True)
     assert states(db)["automatic_payouts"] == "UNVERIFIED"                         # the network fee rules are not in force

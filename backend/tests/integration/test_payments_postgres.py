@@ -152,6 +152,7 @@ def _settings(monkeypatch):
 @pytest.fixture
 def engine_on(monkeypatch):
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     for name, value in PAYOUT_ENV.items():
         monkeypatch.setattr(settings, name, value)
 

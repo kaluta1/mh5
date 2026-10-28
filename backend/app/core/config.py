@@ -246,6 +246,11 @@ class Settings(BaseModel):
     # The automatic crypto payout engine. OFF unless explicitly set to "true":
     # while off, no payout is reserved and the provider is never called.
     CRYPTO_AUTO_PAYOUT_ENABLED: bool = os.getenv("CRYPTO_AUTO_PAYOUT_ENABLED", "false").lower() == "true"
+    # The separate ACTIVATION of automatic payouts. Every other switch (the one
+    # above, the provider, Crypto Cashout, Automatic payouts) may be on and still
+    # nothing is sent until the operator also sets this to "true" on the server:
+    # switching the provider back on can never start payouts by itself.
+    AUTOMATIC_PAYOUT_ACTIVATED: bool = os.getenv("AUTOMATIC_PAYOUT_ACTIVATED", "false").strip().lower() == "true"
     CRYPTO_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("CRYPTO_CASHOUT_MIN_USD", "1.00"))
     USD_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("USD_CASHOUT_MIN_USD", "100.00"))
     # A new or changed payout wallet is not paid to until this many hours have passed.

@@ -738,3 +738,83 @@ def test_no_wallet_email_while_a_wallet_waits_for_approval_or_is_approved(client
     _submit(client, db, waiting)
     _kyc_commission(db, waiting, "p2")
     assert notes.sweep(db) == 0
+
+
+# ===========================================================================
+# Independent activation: switching the provider on never starts payouts
+# ===========================================================================
+
+def test_the_activation_switch_is_off_unless_the_server_sets_it():
+    assert settings.AUTOMATIC_PAYOUT_ACTIVATED is False
+
+
+@pytest.mark.parametrize("provider_on,activated,expected", [
+    (False, False, {}),
+    (True, False, {}),                         # the dangerous case: provider back on, activation still off
+    (False, True, {}),
+    (True, True, {"SUBMITTED": 1}),            # everything mocked: FakeProvider
+])
+def test_a_payout_is_created_only_with_the_provider_on_and_payouts_activated(ledger, engine_on, monkeypatch,
+                                                                              provider_on, activated, expected):
+    db = ledger
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", activated)
+    configure(db, provider_enabled=provider_on)
+    user = member(db, "m1", method="CRYPTO")
+    row = commission(db, user, "2.00")
+    provider = FakeProvider()
+    report = run(db, provider)
+    assert report["members"] == expected
+    assert len(provider.created) == len(expected)
+    db.refresh(row)
+    if not expected:
+        assert report["enabled"] is False
+        assert cashouts(db, user) == [] and row.status != CommissionStatus.PAID
+    _assert_all_journals_balance(db)
+
+
+def test_activation_withdrawn_after_reservation_releases_it_and_sends_nothing(ledger, engine_on, monkeypatch):
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    commission(db, user, "2.00")
+    provider = FakeProvider()
+    real_lock = payment_config.lock_settings
+
+    def lock_after_withdrawal(session):           # the operator deactivates between reservation and hand-over
+        monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", False)
+        return real_lock(session)
+
+    monkeypatch.setattr(payment_config, "lock_settings", lock_after_withdrawal)
+    facts = {"balance": Decimal("1000"), "minimum": Decimal("0.10")}
+    assert engine.process_member(db, user.id, provider, facts=facts, now=NOW) == "ENGINE_DISABLED"
+    assert provider.created == []
+    assert [o.status for o in cashouts(db, user)] == ["cancelled"]
+    _assert_all_journals_balance(db)
+
+
+from app.services import nowpayments_service as _nowpayments  # noqa: E402
+
+_REAL_CREATE_PAYOUT = _nowpayments.create_single_payout_sync   # captured before no_network replaces it
+
+
+def test_the_provider_call_itself_refuses_without_activation(monkeypatch):
+    nowpayments = _nowpayments
+
+    def no_http(*_a, **_k):
+        raise AssertionError("an HTTP client was opened")
+
+    monkeypatch.setattr(nowpayments.httpx, "Client", no_http)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", False)
+    with pytest.raises(nowpayments.NowPaymentsError) as refused:
+        _REAL_CREATE_PAYOUT(wallet_address=WALLET, amount=Decimal("2.00"), currency="usdtbsc",
+                            external_id="c1-a1", credentials=None)
+    assert refused.value.status_code == 403 and refused.value.code == "PAYOUTS_NOT_ACTIVATED"
+
+
+def test_status_names_the_missing_activation(ledger, engine_on, monkeypatch):
+    db = ledger
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", False)
+    status = engine.crypto_payout_status(db)
+    assert status["can_create_payouts"] is False
+    assert "NOT_ACTIVATED" in [b["code"] for b in status["blockers"]]
+    assert status["switches"]["activation"] is False
+    assert engine.engine_status(db)["activation"] is False and engine.engine_status(db)["enabled"] is False

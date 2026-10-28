@@ -194,6 +194,7 @@ def engine_status(db: Session) -> dict:
     credentials = payment_config.resolve_credentials(db, config)
     return {"enabled": bool(config.auto_payout_allowed) and credentials.payout_ready,
             "server_switch": payment_config.crypto_master_switch(),
+            "activation": payment_config.payout_activation_switch(),
             "provider_enabled": bool(config.provider_enabled),
             "crypto_cashout_enabled": bool(config.crypto_cashout_enabled),
             "automatic_payouts": bool(config.crypto_auto_payout_enabled),
@@ -1163,6 +1164,10 @@ def crypto_payout_status(db: Session) -> dict:
     if not payment_config.crypto_master_switch():
         block("SERVER_SWITCH_OFF", "activation", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off.",
               "It is set on the server by the operator and cannot be changed here.")
+    if not payment_config.payout_activation_switch():
+        block("NOT_ACTIVATED", "activation", "Automatic payouts are not activated on the server.",
+              "The operator activates them with AUTOMATIC_PAYOUT_ACTIVATED=true on the server; switching the "
+              "provider on does not.")
     if not config.provider_enabled:
         block("PROVIDER_DISABLED", "provider", "The payment provider is switched off.",
               "Switch it on in NOWPayments Configuration.")
@@ -1227,7 +1232,8 @@ def crypto_payout_status(db: Session) -> dict:
         "suspension": suspension,
         "recording_gate": {"limit": limit, **exposure, "blocked": exposure["total"] > limit},
         "flagged_payouts": {"pending_review": cs.unreviewed_flagged_count(db)},
-        "switches": {"server": payment_config.crypto_master_switch(), "provider": bool(config.provider_enabled),
+        "switches": {"server": payment_config.crypto_master_switch(),
+                     "activation": payment_config.payout_activation_switch(), "provider": bool(config.provider_enabled),
                      "crypto_cashout": bool(config.crypto_cashout_enabled),
                      "automatic_payouts": bool(config.crypto_auto_payout_enabled),
                      "credentials_ready": credentials.payout_ready},

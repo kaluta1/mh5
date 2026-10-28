@@ -135,6 +135,8 @@ def test_the_built_in_defaults_pay_nobody(ledger, monkeypatch):
     from tests.unit.test_dual_cashout import PAYOUT_ENV
 
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     for name, value in PAYOUT_ENV.items():
         monkeypatch.setattr(settings, name, value)
     configure(db, crypto_auto_payout_enabled=True)                 # everything else is the default

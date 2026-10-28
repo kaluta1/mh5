@@ -652,7 +652,7 @@ def test_with_the_defaults_every_reason_is_listed_not_just_the_first(books):
     db = books
     status = engine.crypto_payout_status(db)
     assert status["can_create_payouts"] is False
-    assert codes(status) == ["SERVER_SWITCH_OFF", "PAYOUT_CREDENTIALS_MISSING", "PROVIDER_FEE_MODE_UNVERIFIED",
+    assert codes(status) == ["SERVER_SWITCH_OFF", "NOT_ACTIVATED", "PAYOUT_CREDENTIALS_MISSING", "PROVIDER_FEE_MODE_UNVERIFIED",
                              "FEE_LIMITS_NOT_CONFIGURED", "FEE_SAFETY_MARGIN_NOT_SET", "FEE_LIMITS_NOT_APPROVED",
                              "AUTOMATIC_PAYOUTS_OFF"]
     assert all(b["message"] and b["action"] and b["section"] for b in status["blockers"])
@@ -681,7 +681,7 @@ def test_when_nothing_is_listed_the_engine_pays_and_only_then(books, engine_on, 
     assert status["provider_semantics"] == {
         "fee_mode": "DEDUCTED_BY_PROVIDER", "fee_mode_confirmed": True, "receiver_fee_values_confirmed": True,
         "company_fee_values_confirmed": True, "amount_meaning": "REQUESTED", "automatic_verification": True}
-    assert status["switches"] == {"server": True, "provider": True, "crypto_cashout": True,
+    assert status["switches"] == {"server": True, "activation": True, "provider": True, "crypto_cashout": True,
                                   "automatic_payouts": True, "credentials_ready": True}
     assert run(db, RichProvider())["members"] == {"SUBMITTED": 1} and cashouts(db, user)[0].status == "processing"
 

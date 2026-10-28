@@ -18,6 +18,8 @@ def _crypto_payouts_enabled(monkeypatch):
 
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
 
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
+
 
 def test_legacy_writers_do_nothing_while_crypto_payouts_are_disabled(db, monkeypatch):
     from app.core.config import settings

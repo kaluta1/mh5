@@ -141,6 +141,7 @@ def engine_on(monkeypatch, db):
     """Server master switch on, payout credentials present, automatic payouts
     switched on in Finance & Payments."""
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     for name, value in PAYOUT_ENV.items():
         monkeypatch.setattr(settings, name, value)
     configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
@@ -279,6 +280,7 @@ def test_the_flag_alone_does_not_enable_the_engine_without_provider_credentials(
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "5.00")
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)     # credentials still missing
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     provider = FakeProvider()
     configure(db, crypto_auto_payout_enabled=True)
     assert engine.engine_enabled(db) is False and run(db, provider)["enabled"] is False

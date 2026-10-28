@@ -193,6 +193,7 @@ def test_the_server_master_switches_cannot_be_overridden_from_the_admin_panel(db
     assert pc.load(db).auto_payout_allowed is False and engine.engine_enabled(db) is False
     assert pc.load(db).usd_settlement_allowed is False
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     monkeypatch.setattr(settings, "USD_CASHOUT_SETTLEMENT_ENABLED", True)
     assert engine.engine_enabled(db) is True and pc.load(db).usd_settlement_allowed is True
     configure(db, provider_enabled=False)
@@ -621,6 +622,7 @@ def test_the_pay_in_key_is_never_used_as_the_payout_key(db, monkeypatch):
     for name in ("NOWPAYMENTS_EMAIL", "NOWPAYMENTS_PASSWORD", "NOWPAYMENTS_PAYOUT_TOTP_SECRET"):
         monkeypatch.setattr(settings, name, PAYOUT_ENV[name])
     monkeypatch.setattr(settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     configure(db, crypto_auto_payout_enabled=True)
     credentials = pc.resolve_credentials(db)
     assert credentials.get("PAYOUT_API_KEY") is None and credentials.payout_missing == ["Payout API key"]

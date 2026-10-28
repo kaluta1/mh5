@@ -89,6 +89,7 @@ def provider(monkeypatch):
 
     monkeypatch.setattr(payouts, "payouts_configured", lambda: True)
     monkeypatch.setattr(payouts.settings, "CRYPTO_AUTO_PAYOUT_ENABLED", True)
+    monkeypatch.setattr(payouts.settings, "AUTOMATIC_PAYOUT_ACTIVATED", True)
     monkeypatch.setattr(payouts, "send_single_payout_sync", fake)
     return calls
 
