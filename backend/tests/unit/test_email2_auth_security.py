@@ -1279,3 +1279,69 @@ def test_a_dsm_member_confirms_the_address_after_a_reset_like_any_member(client,
     sent = len(email_outbox)
     assert client.post(f"{A}/resend-verification", json={"email": dsm.email}).status_code == 200
     assert len(email_outbox) == sent                                        # verified: nothing more is sent
+
+
+# ---------------------------------------------------------------------------
+# Account retirement (owner request 2026-10-29): the address and username can be registered again
+# ---------------------------------------------------------------------------
+
+def test_a_retired_account_is_locked_out_and_its_address_registers_as_a_new_member(client, db, email_outbox, ip):
+    from app.models.account_retirement import AccountRetirement
+    from app.services import account_retirement as ar
+
+    sponsor = member(db, verified=True)
+    old = member(db, verified=True, sponsor_id=sponsor.id, sponsor_source="DSM_IMPORT",
+                 email=f"Retire.Me.{uuid.uuid4().hex[:6]}@Example.com")
+    old_id, old_email, old_username = old.id, old.email, old.username
+    session = login(client, old).json()["access_token"]
+    pending_reset = issue(db, old, PURPOSE_PASSWORD_RESET)
+    others = sorted((u.id, u.email, u.sponsor_id) for u in db.query(User).filter(User.id != old_id))
+
+    ar.retire(db, old_id, old_email.lower(), reason="owner request", actor_id=None)
+    db.commit()
+    db.refresh(old)
+    assert (old.email, old.username) == (ar.placeholder_email(old_id), ar.placeholder_username(old_id))
+    assert (old.is_active, old.is_deleted, old.sponsor_id, old.sponsor_source) == (False, True, sponsor.id, "DSM_IMPORT")
+    assert audits(db, ar.AUDIT_ACCOUNT_RETIRED)
+
+    # the retired identity can do nothing any more
+    assert client.get("/api/v1/users/me", headers=bearer(session)).status_code == 401
+    for identifier in (old_email, old_username):                       # nobody has them any more
+        assert login(client, identifier).status_code == 401
+    refused = login(client, ar.placeholder_email(old_id))              # the row itself: disabled account
+    assert refused.status_code == 403 and "access_token" not in refused.json()
+    assert client.post(f"{A}/password-reset-confirm", json={"token": pending_reset, "new_password": PW2}).status_code == 400
+    sent = len(email_outbox)
+    assert client.post(f"{A}/password-reset-request", json={"email": old_email}).status_code == 200
+    assert len(email_outbox) == sent                                   # nobody owns the address: nothing sent
+
+    # the same address and username register a NEW member with nothing of the old one
+    r = client.post(f"{A}/register", json=body(email=old_email, username=old_username))
+    assert r.status_code == 201, r.text
+    new = db.query(User).filter(User.email.ilike(old_email)).one()     # registration stores it normalised
+    assert new.id != old_id and new.username == old_username
+    assert new.sponsor_id is None and new.email_verified is False      # no sponsor, nothing inherited
+    link = db.query(AccountRetirement).filter(AccountRetirement.user_id == old_id).one()
+    assert (link.successor_user_id, link.original_email, link.original_username) == (new.id, old_email, old_username)
+    assert email_outbox[-1]["to"] == new.email                         # its own verification link
+    assert sorted((u.id, u.email, u.sponsor_id) for u in db.query(User).filter(
+        User.id.notin_([old_id, new.id]))) == others                   # nobody else changed
+
+    # a second retirement of the same account is refused; so are mismatched id/address pairs
+    with pytest.raises(ar.RetirementRefused):
+        ar.retire(db, old_id, ar.placeholder_email(old_id), reason="again")
+    with pytest.raises(ar.RetirementRefused):
+        ar.retire(db, new.id, sponsor.email, reason="wrong pair")
+    db.rollback()
+
+
+def test_an_account_holding_money_or_members_is_not_retired(client, db, ip):
+    from app.services import account_retirement as ar
+
+    parent = member(db, verified=True)
+    member(db, verified=True, sponsor_id=parent.id)
+    with pytest.raises(ar.RetirementRefused, match="sponsored_members"):
+        ar.retire(db, parent.id, parent.email, reason="owner request")
+    db.rollback()
+    db.refresh(parent)
+    assert parent.is_active is True and parent.is_deleted is False

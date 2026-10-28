@@ -139,3 +139,38 @@ def test_allocation_off_assigns_nobody(pool):
     with Session() as db:
         assert db.query(ReferralPoolAssignment).count() == 0
         assert db.query(ReferralPoolPending).filter_by(referred_user_id=r).one().status == "WAITING"
+
+
+def test_a_new_account_on_a_retired_dsm_members_address_stays_excluded(pool):
+    # Owner request 2026-10-29: a DSM-matched account is retired so its address can register again.
+    # DSM record and sponsor stay on the retired row; the new account is linked to it explicitly and
+    # keeps the DSM exclusion. A retired NON-DSM account's successor is an ordinary member.
+    from app.services import account_retirement as ar
+
+    Session = pool
+    holder(Session, 1)
+    old_dsm = member(Session, kyc=False)
+    old_plain = member(Session, kyc=False)
+    dsm_mapping(Session, old_dsm)
+    with Session() as db:
+        emails = {u.id: u.email for u in db.query(User).filter(User.id.in_([old_dsm, old_plain]))}
+        for uid in (old_dsm, old_plain):
+            ar.retire(db, uid, emails[uid].upper(), reason="owner request")
+        db.commit()
+    successors = {}
+    for uid in (old_dsm, old_plain):
+        new_id = member(Session)                               # KYC-approved, no sponsor
+        with Session() as db:
+            new = db.get(User, new_id)
+            new.email = emails[uid]                            # the freed address
+            assert ar.link_successor(db, new).user_id == uid
+            db.commit()
+        successors[uid] = new_id
+    with Session() as db:
+        assert alloc.dsm_imported(db, successors[old_dsm]) is True
+        assert alloc.dsm_imported(db, successors[old_plain]) is False
+        assert db.execute(text("SELECT mh5_user_id FROM legacy_import.dsm_members")).scalar() == old_dsm
+        r = alloc.enqueue_after_kyc(db, successors[old_dsm], now=NOW)
+        assert (r.outcome, r.reason) == (alloc.NOT_QUEUED, "DSM_IMPORTED")
+        assert alloc.enqueue_after_kyc(db, successors[old_plain], now=NOW).outcome == alloc.WAITING
+        db.rollback()

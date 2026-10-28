@@ -54,6 +54,7 @@ from .auth_security import AuthToken, AuthRateLimit, ExposedPasswordFingerprint
 from .financial_controls import CommissionPayoutReview, ManualPaymentConfirmation  # noqa: F401
 from .progression_safety import ProgressionSafetyHold
 from .interaction_safety import UserBlock
+from .account_retirement import AccountRetirement  # noqa: F401
 # Finance & Payments configuration (dual cashout)
 from .payment_config import (  # noqa: F401
     PaymentSettings, PaymentCredential, PaymentConfigAudit, PayoutWalletVerification, PaymentWebhookStat,

@@ -91,8 +91,13 @@ def dsm_imported(db: Session, user_id: int) -> bool:
     if db.get_bind().dialect.name != "postgresql" or db.execute(
             text("SELECT to_regclass('legacy_import.dsm_members')")).scalar() is None:
         return False
-    return db.execute(text("SELECT 1 FROM legacy_import.dsm_members WHERE mh5_user_id = :u LIMIT 1"),
-                      {"u": int(user_id)}).first() is not None
+    if db.execute(text("SELECT 1 FROM legacy_import.dsm_members WHERE mh5_user_id = :u LIMIT 1"),
+                  {"u": int(user_id)}).first() is not None:
+        return True
+    # A new account registered with the address of a RETIRED DSM account keeps that classification.
+    from app.services.account_retirement import dsm_predecessor
+
+    return dsm_predecessor(db, user_id)
 
 
 def _entry_refusal(db: Session, user: Optional[User]) -> Optional[str]:

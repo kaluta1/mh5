@@ -146,6 +146,9 @@ class CRUDUser:
         elif personal_sponsor and personal_sponsor.is_active is not False and personal_sponsor.is_deleted is not True:
             db_obj.sponsor_id = personal_sponsor.id
             db_obj.sponsor_source = PERSONAL_REFERRAL
+        from app.services.account_retirement import link_successor
+
+        link_successor(db, db_obj)          # an address freed by a retired account: explicit successor link
         if before_commit is not None:
             before_commit(db, db_obj)
         db.commit()
