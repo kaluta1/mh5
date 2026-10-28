@@ -35,6 +35,7 @@ from app.models.auth_security import (
 from app.models.email import EmailDelivery, EmailEventSetting
 from app.models.login_log import LoginLog
 from app.models.user import User
+from app.api.api_v1.endpoints.auth import USERNAME_TAKEN_MESSAGE
 from app.services import auth_security, auth_throttle, auth_tokens
 from app.services import email_settings_service as svc
 from app.services import email_templates as tpl
@@ -192,10 +193,30 @@ def test_registration_answer_is_the_same_for_new_verified_and_unverified_address
 
 def test_a_taken_username_cannot_be_used_to_probe_an_email(client, db, ip):
     existing = member(db, verified=True)
-    for email in ("someone.new@example.com", existing.email):
-        r = client.post(f"{A}/register", json=body(email=email, username=existing.username))
-        assert r.status_code == 400 and r.json()["detail"] == "This username is already taken."   # same answer for both addresses
+    answers = [client.post(f"{A}/register", json=body(email=email, username=existing.username))
+               for email in ("someone.new@example.com", existing.email)]
+    assert [(r.status_code, r.json()["detail"]) for r in answers] == [(400, USERNAME_TAKEN_MESSAGE)] * 2   # same answer for both
     assert db.query(User).count() == 1
+
+
+def test_a_dsm_member_who_registers_with_their_own_username_is_emailed_the_way_in(client, db, email_outbox, ip):
+    # Accounts moved from DSM have a username and no usable password: a member
+    # who "registers" with both gets the taken-username answer AND, at their own
+    # address, the link to set a password. Nothing about the account changes.
+    dsm = member(db, verified=False)
+    dsm.email_verification_required = False
+    db.commit()
+    before = (dsm.hashed_password, dsm.username, dsm.email_verified, dsm.security_version, dsm.sponsor_id)
+    other = member(db, verified=True)
+    r = client.post(f"{A}/register", json=body(email=dsm.email.upper(), username=dsm.username))
+    assert (r.status_code, r.json()["detail"]) == (400, USERNAME_TAKEN_MESSAGE)
+    r = client.post(f"{A}/register", json=body(email="nobody.here@example.com", username=other.username))
+    assert (r.status_code, r.json()["detail"]) == (400, USERNAME_TAKEN_MESSAGE)
+    db.refresh(dsm)
+    assert (dsm.hashed_password, dsm.username, dsm.email_verified, dsm.security_version, dsm.sponsor_id) == before
+    assert db.query(User).count() == 2
+    assert [(d.event_key, d.user_id) for d in db.query(EmailDelivery).order_by(EmailDelivery.id)] == [
+        ("AUTH.PASSWORD_RESET", dsm.id)]
 
 
 def test_a_registration_cannot_take_over_an_unverified_account(client, db, email_outbox, ip):

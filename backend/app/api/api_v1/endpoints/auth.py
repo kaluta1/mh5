@@ -52,6 +52,9 @@ VERIFICATION_SENT_MESSAGE = ("If this address belongs to an account that still n
                              "a new confirmation link has been sent.")
 RESET_SENT_MESSAGE = "If this email exists, a reset link has been sent"
 INVALID_LINK_MESSAGE = "This link is invalid, has expired or has already been used."
+# The same for every address (it never says whether the address has an account).
+USERNAME_TAKEN_MESSAGE = ("This username is already taken. If it is your account (accounts moved from DSM included), "
+                          "sign in or use Forgot password; if you entered its address, we have sent you a sign-in link.")
 
 
 def client_ip(request: Request) -> str:
@@ -168,9 +171,17 @@ def register_user(
     if user_in.username:
         existing_user = crud_user.get_by_username(db, username=user_in.username)
         if existing_user:
+            # Members moved from DSM already have an account under their DSM
+            # username, so they hit this answer when they "register". The
+            # address's owner is emailed the way in, exactly as for a taken
+            # address below; the answer stays the same whatever the address.
+            if auth_security.email_in_use(db, user_in.email):
+                logger.info("Registration with a taken username for an address that already has an account: "
+                            "owner notified")
+                _notify_existing_account(db, user_in.email)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This username is already taken."
+                detail=USERNAME_TAKEN_MESSAGE,
             )
 
     email_taken = auth_security.email_in_use(db, user_in.email)
@@ -260,7 +271,7 @@ def register_user(
         if 'username' in error_str and 'email' not in error_str:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This username is already taken."
+                detail=USERNAME_TAKEN_MESSAGE,
             )
         if 'email' in error_str:
             # A concurrent registration for the same address won the race.

@@ -227,7 +227,7 @@
         "invalid_email": "Invalid email format",
         "terms_required": "You must accept the terms to continue",
         "email_exists": "This email is already registered",
-        "username_exists": "This username is already taken"
+        "username_exists": "This username is already taken. If it is your account (accounts moved from DSM included), sign in or use Forgot password; if you entered its address, we have sent you a sign-in link."
       },
       "country": "Country",
       "country_placeholder": "Select your country",
