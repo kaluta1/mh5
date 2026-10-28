@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, XCircle, MailCheck, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useLanguage } from '@/contexts/language-context'
+import { useAuth } from '@/hooks/use-auth'
 import { authService } from '@/lib/api'
 import { takeLink } from '@/lib/one-time-link'
 
@@ -28,6 +29,9 @@ type Phase = 'loading' | 'success' | 'error' | 'old' | 'request'
 export default function VerifyEmailPage() {
   const { t } = useLanguage()
   const [phase, setPhase] = useState<Phase>('loading')
+  const { refreshUser } = useAuth()
+  const refreshRef = useRef(refreshUser)
+  refreshRef.current = refreshUser
   const [email, setEmail] = useState('')
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limited'>('idle')
   // The credential works once: never submit it twice (React re-runs effects in development).
@@ -54,6 +58,8 @@ export default function VerifyEmailPage() {
       try {
         await authService.verifyEmail(link.token)
         setPhase('success')
+        // A member signed in here sees the dashboard banner go away without reloading.
+        refreshRef.current().catch(() => {})
       } catch {
         setPhase('error')
       }

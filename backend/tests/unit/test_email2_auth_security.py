@@ -1244,3 +1244,38 @@ def test_login_does_the_same_work_for_an_unknown_identifier(client, db, ip, monk
     assert checks[0].startswith("$2") and checks[0] != user.hashed_password  # a real hash nobody knows
     assert "nobody.here@example.com" not in caplog.text and user.email not in caplog.text
     assert "Wr0ng*Passw0rd!" not in caplog.text
+
+
+def test_a_dsm_member_confirms_the_address_after_a_reset_like_any_member(client, db, email_outbox, ip):
+    # Owner rule 2026-10-28: a password reset does NOT verify the address. The
+    # member moved from DSM confirms it with the same link every member gets,
+    # asked for from the dashboard banner (POST /resend-verification).
+    sponsor = member(db, verified=True)
+    dsm = member(db, verified=False, password=uuid.uuid4().hex, sponsor_id=sponsor.id, sponsor_source="DSM_IMPORT",
+                 email=f"Dsm.Member.{uuid.uuid4().hex[:6]}@Example.com")
+    dsm.email_verification_required = False
+    db.commit()
+    kept = (dsm.username, dsm.email, dsm.sponsor_id, dsm.sponsor_source)
+    accounts = db.query(User).count()
+
+    assert client.post(f"{A}/password-reset-request", json={"email": dsm.email.lower()}).status_code == 200
+    token = link_token(email_outbox[-1], "reset-password")
+    assert client.post(f"{A}/password-reset-confirm", json={"token": token, "new_password": PW2}).status_code == 200
+    db.refresh(dsm)
+    assert dsm.email_verified is False                                     # the reset verified nothing
+    session = login(client, dsm.username, PW2).json()["access_token"]
+    assert client.get("/api/v1/users/me", headers=bearer(session)).json()["email_verified"] is False
+
+    assert client.post(f"{A}/resend-verification", json={"email": dsm.email}).status_code == 200
+    mail = email_outbox[-1]
+    assert mail["to"] == dsm.email                                          # its own address, as stored
+    assert client.post(f"{A}/verify-email", json={"token": link_token(mail, "verify-email")}).status_code == 200
+    me = client.get("/api/v1/users/me", headers=bearer(session)).json()
+    assert me["email_verified"] is True                                     # the banner's condition is gone
+
+    db.refresh(dsm)
+    assert (dsm.username, dsm.email, dsm.sponsor_id, dsm.sponsor_source) == kept
+    assert db.query(User).count() == accounts
+    sent = len(email_outbox)
+    assert client.post(f"{A}/resend-verification", json={"email": dsm.email}).status_code == 200
+    assert len(email_outbox) == sent                                        # verified: nothing more is sent

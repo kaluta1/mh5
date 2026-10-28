@@ -265,6 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           is_active: userData.is_active ?? true,
           is_verified: userData.is_verified ?? false
         } as User)
+        cacheService.set('user', userData, 300000) // a reload must not show the stale account first
         await loadPermissions()
       } catch (error) {
         const status = (error as AxiosError).response?.status

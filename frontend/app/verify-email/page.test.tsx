@@ -27,6 +27,9 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
+const refreshUser = vi.fn()
+vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ refreshUser: (...a: unknown[]) => refreshUser(...a) }) }))
+
 import VerifyEmailPage from './page'
 
 const open = (url: string) => window.history.replaceState(null, '', url)
@@ -36,6 +39,8 @@ beforeEach(() => {
   state.lang = 'en'
   verifyEmail.mockReset()
   resendVerification.mockReset()
+  refreshUser.mockReset()
+  refreshUser.mockResolvedValue(undefined)
 })
 
 describe('verify-email page', () => {
@@ -50,6 +55,7 @@ describe('verify-email page', () => {
     expect(window.location.hash).toBe('')
     expect(window.location.href).not.toContain(TOKEN)
     expect(screen.getByRole('link', { name: v('en', 'continue_to_sign_in') })).toHaveAttribute('href', '/login')
+    expect(refreshUser).toHaveBeenCalledTimes(1)       // a signed-in member's banner goes away at once
   })
 
   it('shows one message for every refused link and offers a new one', async () => {
@@ -58,6 +64,7 @@ describe('verify-email page', () => {
     open(`/verify-email#token=${TOKEN}`)
     render(<VerifyEmailPage />)
     await waitFor(() => expect(screen.getByText(v('en', 'error_title'))).toBeInTheDocument())
+    expect(refreshUser).not.toHaveBeenCalled()
     expect(screen.getByText(v('en', 'error_invalid_link'))).toBeInTheDocument()
     expect(screen.queryByText(/server wording/)).not.toBeInTheDocument()
 
