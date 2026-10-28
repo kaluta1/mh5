@@ -10,8 +10,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import (Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, String, Text,
-                        UniqueConstraint, text)
+from sqlalchemy import (JSON, BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, String,
+                        Text, UniqueConstraint, text)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base
@@ -522,6 +522,11 @@ class MarketOrder(Base):
     release_request_error: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     # Why support refunded the order (non-handover, duplicate charge, fraud, ...).
     support_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # What the buyer was shown when ordering a member listing (title, kind, warranty and insurance
+    # disclosures, price), kept as it was: a later listing edit never changes an order.
+    listing_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Digital listing: the buyer's first COMPLETE download (server-observed). It finalises the purchase.
+    digital_delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class MarketOrderEvent(Base):
@@ -550,6 +555,46 @@ class MarketDispute(Base):
     resolution_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class MarketListing(Base):
+    """A member's marketplace listing: a physical product, a service or a digital product (e-book).
+
+    price_usd is the SELLER BASE; the buyer pays it plus the marketplace markup. A digital listing's
+    file lives in private storage (never a public URL) and is served only to its paid buyers.
+    """
+
+    __tablename__ = "market_listings"
+    __table_args__ = (
+        CheckConstraint("kind IN ('PHYSICAL', 'SERVICE', 'DIGITAL')", name="ck_market_listings_kind"),
+        CheckConstraint("status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')", name="ck_market_listings_status"),
+        CheckConstraint("price_usd > 0", name="ck_market_listings_price"),
+        CheckConstraint("quantity_available IS NULL OR quantity_available >= 0", name="ck_market_listings_quantity"),
+        Index("ix_market_listings_status_published", "status", "published_at"),
+    )
+
+    seller_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    price_usd: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    # Physical goods: units left (NULL = not tracked). Services and digital products: NULL.
+    quantity_available: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="DRAFT")
+    # How the product or service is handed over (shipping, collection, where the service happens).
+    handover_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Disclosures: coverage is claimed only with its terms; otherwise the listing says "not offered".
+    warranty_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    warranty_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    insurance_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    insurance_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Digital file (private storage key, never a path a browser can reach).
+    file_storage_key: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, unique=True)
+    file_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    file_content_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    file_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class AffiliateRateQualification(Base):

@@ -62,3 +62,5 @@ Thumbs.db
 
 # Private KYC documents (local storage) - never commit
 backend/private_kyc/
+# Private marketplace files (paid digital products) - never commit
+backend/private_marketplace/

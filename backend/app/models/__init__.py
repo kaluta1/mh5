@@ -36,7 +36,7 @@ from .referral_share import ReferralShareLink, ReferralShareClick, ReferralShare
 from .business_model import (
     BusinessModelVersion, RevenuePolicy, RevenueRecognition, ReferralPoolConfig, ReferralPoolMembership,
     ReferralPoolAssignment, ReferralPoolMigrationRun, LeadersPeriod, LeadersAllocationLine,
-    MarketOrder, MarketOrderEvent, MarketDispute, AffiliateRateQualification,
+    MarketOrder, MarketOrderEvent, MarketDispute, MarketListing, AffiliateRateQualification,
     ReferralPoolPurchase, ReferralPoolUnit, ReferralPoolRound, ReferralPoolRoundSlot, ReferralPoolPending,
     ReferralPoolEvent, ReferralPoolRiskReview, ReferralPoolRefundRecord,
 )

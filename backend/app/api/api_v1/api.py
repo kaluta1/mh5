@@ -99,6 +99,9 @@ api_router.include_router(scheduler.router, prefix="/scheduler", tags=["Schedule
 from app.api.api_v1.endpoints import business_model as business_model_endpoints  # noqa: E402
 
 api_router.include_router(business_model_endpoints.router, tags=["Business model (NEW_V2)"])
+from app.api.api_v1.endpoints import marketplace as marketplace_endpoints  # noqa: E402
+
+api_router.include_router(marketplace_endpoints.router, tags=["Marketplace"])
 api_router.include_router(
     business_model_endpoints.admin_router,
     prefix="/admin/business-model",

@@ -60,6 +60,8 @@ CANCELLED = "CANCELLED"
 
 # The acceptance/policy text the buyer acknowledges when accepting (bump when the wording changes).
 ACCEPTANCE_POLICY_VERSION = "MARKET-ACCEPTANCE-2026-10-28"
+# A digital purchase is finalised by the buyer's first complete download (client rule), recorded as this.
+DIGITAL_DELIVERY_POLICY = "MARKET-DIGITAL-DOWNLOAD-2026-10-29"
 # Why support may refund an order before release (no ordinary dispute process any more).
 SUPPORT_REFUND_REASONS = ("NON_HANDOVER", "PAYMENT_FAILURE", "DUPLICATE_CHARGE", "FRAUD", "SELLER_UNABLE_TO_SUPPLY",
                           "LEGAL_REMEDY")
@@ -152,7 +154,29 @@ def _resolve_item(db: Session, item_type: str, item_id: int) -> tuple[int, Decim
         if club is None or club.status != ClubStatus.ACTIVE or not club.premium_fee:
             raise MarketplaceError("Club subscription is not available")
         return int(club.owner_id), money(club.premium_fee)
+    if item_type == "listing":
+        from app.services import marketplace_listings as ml
+
+        listing = _listing_for_order(db, item_id)
+        if not ml.is_buyable(listing):
+            raise MarketplaceError("This listing is not available")
+        return int(listing.seller_user_id), money(listing.price_usd)
     raise MarketplaceError("Unsupported marketplace item type")
+
+
+def _listing_for_order(db: Session, listing_id: int):
+    from app.models.business_model import MarketListing
+
+    return db.query(MarketListing).filter(MarketListing.id == listing_id).with_for_update().first()
+
+
+def _restock(db: Session, order: MarketOrder) -> None:
+    """An order that will never be fulfilled gives its physical unit back."""
+    if order.item_type != "listing" or (order.listing_snapshot or {}).get("kind") != "PHYSICAL":
+        return
+    listing = _listing_for_order(db, order.item_id)
+    if listing is not None and listing.quantity_available is not None:
+        listing.quantity_available += 1
 
 
 def _event(db: Session, order: MarketOrder, to_state: str, *, actor_user_id: Optional[int], actor_role: str,
@@ -202,6 +226,13 @@ def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: in
         seller_base_amount=base, markup_rate=MARKETPLACE_MARKUP_RATE, markup_amount=markup, buyer_total_amount=total,
         state=PAYMENT_PENDING, custodian_provider=get_custodian().name, business_model_version=NEW_MODEL_VERSION,
     )
+    if item_type == "listing":
+        from app.services import marketplace_listings as ml
+
+        listing = _listing_for_order(db, item_id)
+        order.listing_snapshot = ml.snapshot(listing)
+        if listing.kind == ml.PHYSICAL and listing.quantity_available is not None:
+            listing.quantity_available -= 1               # reserved; given back on cancel or refund
     db.add(order)
     db.flush()
     db.add(MarketOrderEvent(order_id=order.id, from_state=None, to_state=PAYMENT_PENDING, actor_user_id=buyer_user_id,
@@ -214,6 +245,19 @@ def cancel_unpaid(db: Session, order: MarketOrder, *, actor_user_id: int) -> Non
     if int(actor_user_id) != int(order.buyer_user_id):
         raise MarketplaceError("Only the buyer can cancel an unpaid order")
     _transition(db, order, CANCELLED, actor_user_id=actor_user_id, actor_role="BUYER")
+    _restock(db, order)
+
+
+def initiate_payment(db: Session, order: MarketOrder, *, buyer_user_id: int) -> dict:
+    """Ask the custodian to collect and hold the buyer's payment. Initiating is NOT paying: the order
+    stays PAYMENT_PENDING until the custodian confirms FUNDED. Without a custodian this refuses."""
+    if int(buyer_user_id) != int(order.buyer_user_id):
+        raise MarketplaceError("Only the buyer can pay for this order")
+    if order.state != PAYMENT_PENDING:
+        raise MarketplaceError("This order is not awaiting payment")
+    result = get_custodian().create_hold(order) or {}
+    _event(db, order, PAYMENT_PENDING, actor_user_id=buyer_user_id, actor_role="BUYER", note="Payment initiated")
+    return result
 
 
 def mark_fulfilled(db: Session, order: MarketOrder, *, seller_user_id: int, note: Optional[str] = None) -> None:
@@ -265,6 +309,41 @@ def request_settlement(db: Session, order: MarketOrder) -> bool:
         return False
     order.release_request_error = None
     db.flush()
+    return True
+
+
+def is_digital(order: MarketOrder) -> bool:
+    return order.item_type == "listing" and (order.listing_snapshot or {}).get("kind") == "DIGITAL"
+
+
+def can_download(order: MarketOrder, user_id: int) -> bool:
+    """The buyer of a PAID digital order (not refunded) may download its file."""
+    return is_digital(order) and int(user_id) == int(order.buyer_user_id) and order.state in (
+        FUNDS_HELD, FULFILLED, BUYER_CONFIRMED, RELEASE_PENDING, RELEASED)
+
+
+def record_digital_download(db: Session, order: MarketOrder, *, buyer_user_id: int) -> bool:
+    """The buyer's first COMPLETE download (observed by the server once the last byte was handed over)
+    finalises a digital purchase: it stands as the buyer's acceptance and starts settlement, once.
+    Upload, a page view, a link or a failed download never get here. The caller holds the row lock.
+    Returns False when the purchase was already finalised."""
+    if not can_download(order, buyer_user_id):
+        raise MarketplaceError("This download is not available")
+    if order.digital_delivered_at is not None or order.state in _ACCEPTED:
+        if order.digital_delivered_at is None:
+            order.digital_delivered_at = datetime.utcnow()
+            db.flush()
+        return False
+    _require_seller_release(db, order)
+    now = datetime.utcnow()
+    order.digital_delivered_at = now
+    order.acceptance_reference = f"DLV-{order.id}-{secrets.token_hex(5).upper()}"
+    order.acceptance_policy_version = DIGITAL_DELIVERY_POLICY
+    order.confirmed_at = now
+    _transition(db, order, BUYER_CONFIRMED, actor_user_id=buyer_user_id, actor_role="BUYER",
+                note=f"Digital file downloaded by the buyer ({order.acceptance_reference})")
+    _transition(db, order, RELEASE_PENDING, actor_user_id=None, actor_role="SYSTEM", note="Settlement requested")
+    request_settlement(db, order)
     return True
 
 
@@ -391,6 +470,7 @@ def apply_custodian_event(db: Session, order: MarketOrder, *, event_type: str, e
     elif event_type == "REFUNDED":
         _transition(db, order, REFUNDED, actor_user_id=None, actor_role="CUSTODIAN", external_event_id=external_event_id)
         order.refunded_at = now
+        _restock(db, order)
         funded = find_entry(db, idempotency_key(SourceType.MARKET_ORDER, order.id, PostingType.CUSTODY_FUNDED))
         if funded is not None:
             reverse_entry(db, funded, reason="Custodian refunded buyer")

@@ -161,6 +161,9 @@ class Settings(BaseModel):
     # contracted; MARKETPLACE_CUSTODIAN names a registered provider adapter (none exists yet).
     MARKETPLACE_ENABLED: bool = os.getenv("MARKETPLACE_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     MARKETPLACE_CUSTODIAN: str = os.getenv("MARKETPLACE_CUSTODIAN", "").strip()
+    # Private storage for digital listing files (e-books). Never under a public/static path.
+    MARKETPLACE_STORAGE_DIR: str = os.getenv("MARKETPLACE_STORAGE_DIR", "").strip() or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "private_marketplace")
     ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
     ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env(
         "ANNUALADS_TENANT_API_KEY",

@@ -224,7 +224,7 @@ def posted_leaders_periods(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------- marketplace (member)
 
 class OrderCreate(BaseModel):
-    item_type: Literal["digital_product", "club_subscription"]
+    item_type: Literal["digital_product", "club_subscription", "listing"]
     item_id: int = Field(gt=0)
 
 
@@ -252,6 +252,11 @@ def _order_out(db: Session, o: MarketOrder) -> dict:
         "id": o.id, "state": o.state, "item_type": o.item_type, "item_id": o.item_id,
         "seller_base_amount": _num(o.seller_base_amount), "markup_amount": _num(o.markup_amount),
         "buyer_total_amount": _num(o.buyer_total_amount), "custodian": o.custodian_provider,
+        "buyer_user_id": o.buyer_user_id, "seller_user_id": o.seller_user_id,
+        "created_at": o.created_at.isoformat() + "Z" if o.created_at else None,
+        "listing": o.listing_snapshot, "digital": marketplace_service.is_digital(o),
+        "digital_delivered_at": o.digital_delivered_at.isoformat() + "Z" if o.digital_delivered_at else None,
+        "can_download": marketplace_service.can_download(o, o.buyer_user_id),
         **marketplace_service.handover_status(o),
         "events": [{"from": e.from_state, "to": e.to_state, "by": e.actor_role, "at": e.created_at.isoformat() + "Z", "note": e.note}
                    for e in events],
@@ -274,6 +279,9 @@ def _run(db: Session, fn):
 @router.post("/marketplace/orders", status_code=status.HTTP_201_CREATED)
 def create_market_order(body: OrderCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require_marketplace()
+    if isinstance(marketplace_service.get_custodian(), marketplace_service.UnconfiguredCustodian):
+        # No order (and no reserved unit) while nobody can hold the buyer's payment.
+        raise HTTPException(status_code=503, detail="Checkout is not available yet: no payment custodian is configured")
     order = _run(db, lambda: marketplace_service.create_order(db, buyer_user_id=current_user.id,
                                                               item_type=body.item_type, item_id=body.item_id))
     return _order_out(db, order)
@@ -302,6 +310,19 @@ def accept_market_order(order_id: int, body: AcceptanceRequest, db: Session = De
     _run(db, lambda: marketplace_service.confirm_receipt(db, order, buyer_user_id=current_user.id,
                                                          policy_version=body.policy_version))
     return _order_out(db, order)
+
+
+@router.post("/marketplace/orders/{order_id}/pay")
+def pay_market_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Starts the buyer's payment at the custodian. The order stays unpaid until the custodian confirms."""
+    _require_marketplace()
+    order = _order_for(db, order_id, current_user)
+    try:
+        payment = _run(db, lambda: marketplace_service.initiate_payment(db, order, buyer_user_id=current_user.id))
+    except marketplace_service.CustodianNotConfigured as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {**_order_out(db, order), "payment": {k: v for k, v in payment.items() if k in ("payment_url", "reference")}}
 
 
 @router.post("/marketplace/orders/{order_id}/{action}")
