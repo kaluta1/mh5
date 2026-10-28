@@ -29,9 +29,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Member-safe (allowlisted in main.MEMBER_SAFE_UNAVAILABLE_CODES), so production shows it as written.
+MARKETPLACE_CLOSED = {"code": "MARKETPLACE_CLOSED", "message": "The marketplace is not open yet."}
+
+
 def _require_marketplace() -> None:
     if not settings.MARKETPLACE_ENABLED:
-        raise HTTPException(status_code=503, detail="The marketplace is not open yet")
+        raise HTTPException(status_code=503, detail=MARKETPLACE_CLOSED)
 
 
 class ListingIn(BaseModel):

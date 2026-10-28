@@ -7,6 +7,8 @@ from decimal import Decimal
 
 import pytest
 
+import main
+
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.business_model import MarketListing, MarketOrderEvent
@@ -167,7 +169,16 @@ def test_api_is_closed_while_the_marketplace_is_off(client, world, ip, monkeypat
     monkeypatch.setattr(settings, "MARKETPLACE_ENABLED", False)
     assert client.get(f"{API}/status").json() == {
         "enabled": False, "checkout_available": False, "acceptance_policy_version": m.ACCEPTANCE_POLICY_VERSION}
-    assert client.get(f"{API}/listings").status_code == 503
+    closed = {"code": "MARKETPLACE_CLOSED", "message": "The marketplace is not open yet."}
+    monkeypatch.setattr(main, "IS_PRODUCTION", True)               # production masks every other 5xx detail
+    for path in ("/listings", "/listings/1"):                       # public; /my-listings needs sign-in (401) first
+        answer = client.get(f"{API}{path}")
+        assert answer.status_code == 503 and answer.json()["detail"] == closed, path
+    seller, s, _buyer, b = _api_users(world, client)
+    for headers in (s, b):                                         # signed-in seller and buyer get the same answer
+        assert client.get(f"{API}/listings", headers=headers).json()["detail"] == closed
+        assert client.post(f"{API}/listings", headers=headers, json=ebook()).json()["detail"] == closed
+        assert client.get(f"{API}/my-listings", headers=headers).json()["detail"] == closed
 
 
 def test_api_listing_lifecycle_checkout_gate_and_download(client, world, custodian, storage, ip, monkeypatch):
