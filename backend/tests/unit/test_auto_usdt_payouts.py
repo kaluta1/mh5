@@ -545,6 +545,21 @@ def test_insufficient_treasury_and_provider_minimum_keep_the_commission_unpaid(l
     assert get_commission_balance(db, small.id).available == Decimal("0.50")      # kept, never combined
 
 
+def test_a_one_dollar_commission_is_paid_on_its_own_with_the_providers_real_figures(ledger, engine_on):
+    # Owner rule 2026-10-18: the automatic payout minimum is $1.00. Minimum and
+    # fee are the values NOWPayments reported for usdtbsc on 2026-10-18.
+    db = ledger
+    assert cs.crypto_minimum(db) == Decimal("1.00")
+    user = member(db, "m1", method="CRYPTO")
+    commission(db, user, "1.00")
+    assert run(db, FakeProvider(balance="0", minimum="0.04418904", fee="0.02209452"))["members"] == \
+        {"INSUFFICIENT_PROVIDER_BALANCE": 1}
+    provider = FakeProvider(balance="1000", minimum="0.04418904", fee="0.02209452")
+    assert run(db, provider)["members"] == {"SUBMITTED": 1}
+    assert [c["amount"] for c in provider.created] == [Decimal("1.00")]     # the provider takes its fee out of it
+    assert cashouts(db, user)[0].gross_amount == Decimal("1.00")
+
+
 def test_a_small_old_commission_never_holds_back_a_newer_one(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
