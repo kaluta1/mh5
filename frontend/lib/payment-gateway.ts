@@ -35,6 +35,27 @@ export function parseCheckoutGateway(data: unknown): CheckoutAvailability {
   return provider === 'soncopay' || provider === 'nowpayments' ? provider : 'unavailable'
 }
 
+/** How a member pays through SoncoPay: only the methods the server lists for the account. */
+export type SoncoPayMethod = 'usdt_bsc' | 'card'
+
+export const SONCOPAY_METHOD_LABELS: Record<SoncoPayMethod, string> = {
+  usdt_bsc: 'USDT on BNB Smart Chain (BEP20)',
+  card: 'Bank card',
+}
+
+/**
+ * The SoncoPay methods in the server's /payments/checkout-gateway answer, in its order. Unknown codes are
+ * dropped; an answer without a list (an older server) means USDT on BSC only, as before.
+ */
+export function parseSoncoPayMethods(data: unknown): SoncoPayMethod[] {
+  const listed = data && typeof data === 'object' ? (data as { methods?: unknown }).methods : undefined
+  if (!Array.isArray(listed)) return ['usdt_bsc']
+  const codes = listed
+    .map((m) => (m && typeof m === 'object' ? (m as { code?: unknown }).code : undefined))
+    .filter((c): c is SoncoPayMethod => c === 'usdt_bsc' || c === 'card')
+  return codes.length ? Array.from(new Set(codes)) : ['usdt_bsc']
+}
+
 /** The member-facing state of a SoncoPay payment, as the server reports it. */
 export type PaymentState = 'pending' | 'awaiting_confirmation' | 'paid' | 'expired' | 'failed' | 'partial' | 'refunded'
 

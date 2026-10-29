@@ -66,6 +66,7 @@ class FakeSonco:
         self.fail_read = None          # HTTP status to answer GET /v1/payments/{id} with
         self.drop_create = 0           # number of creations that get no answer at all
         self.payer_required = False    # answer 422 payer_required when a method is preselected
+        self.card = False              # GET /v1/methods lists the bank card (as for MyHigh5 on 2026-10-29)
 
     def public(self, p):
         return {k: v for k, v in p.items() if not k.startswith("_")}
@@ -97,6 +98,9 @@ class FakeSonco:
                  "amount": body["amount"], "currency": body["currency"], "order_id": body["order_id"],
                  "checkout_url": f"https://soncopay.com/pay/{pid}", "expires_at": "2026-10-21T15:30:00+00:00",
                  "asset": body.get("asset"), "network": body.get("network"), "_env": env, "_body": body}
+            if body.get("method") == "card":
+                p["next_action"] = {"type": "redirect", "url": f"https://soncopay.com/pay/{pid}/redirect",
+                                    "amount": body["amount"], "currency": "USD"}
             self.payments[pid] = p
             return httpx.Response(201, json=self.public(p))
         if request.method == "GET" and path.startswith("/v1/payments/"):
@@ -107,7 +111,12 @@ class FakeSonco:
                 return httpx.Response(404, json={"detail": "not found"})
             return httpx.Response(200, json=self.public(p))
         if request.method == "GET" and path == "/v1/methods":
-            return httpx.Response(200, json={"methods": [{"method": "crypto"}], "payment_methods": [{"code": "crypto"}]})
+            methods = [{"method": "crypto", "code": "crypto", "asset": "USDT", "network": "BSC"}]
+            switches = [{"code": "crypto", "enabled": True}]
+            if self.card:
+                methods.append({"method": "card", "code": "card", "kind": "card", "currency": "CDF", "redirect": True})
+                switches.append({"code": "card", "enabled": True})
+            return httpx.Response(200, json={"methods": methods, "payment_methods": switches})
         return httpx.Response(404, json={"detail": "not found"})
 
     def set(self, pid, **fields):
@@ -127,6 +136,7 @@ def fake(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def environment(monkeypatch):
+    monkeypatch.setattr(scp, "_methods_cache", {"environment": None, "methods": None, "checked": 0.0})
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
     monkeypatch.setattr(settings, "BACKEND_PUBLIC_URL", "https://api.example.test")
     monkeypatch.setattr(settings, "FRONTEND_URL", "https://app.example.test")
@@ -233,7 +243,9 @@ def test_nowpayments_stays_the_gateway_until_soncopay_is_the_ready_default(clien
 def test_a_new_payment_goes_to_soncopay_when_it_is_the_ready_default(client, ledger, fake, buyer, nowpayments_calls):
     db = ledger
     configure(db)
-    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {"provider": "soncopay", "available": True}
+    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {
+        "provider": "soncopay", "available": True,
+        "methods": [{"code": "usdt_bsc", "label": "USDT on BNB Smart Chain (BEP20)"}]}
     created, dep = soncopay_purchase(client, db, fake, buyer)
     body = created.json()
     assert body["provider"] == "soncopay" and body["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}"
@@ -705,8 +717,8 @@ def test_nowpayments_takes_no_new_payment_even_as_the_stored_default(client, led
     assert created.status_code == 503
     assert nowpayments_calls == [] and db.query(Deposit).count() == 0
     configure(db)                                                   # SoncoPay ready and the default
-    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == \
-        {"provider": "soncopay", "available": True}
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert (shown["provider"], shown["available"]) == ("soncopay", True)
 
 
 @pytest.mark.discontinued
@@ -744,3 +756,204 @@ def test_when_payer_details_are_required_the_payment_is_created_without_a_presel
     assert db.get(Deposit, dep.id).status == DepositStatus.PENDING                    # never credited
     fake.set(dep.external_payment_id, network="BSC")
     assert client.post(f"/api/v1/payments/sync/{dep.id}", headers=bearer(buyer)).json()["is_confirmed"] is True
+
+
+# ===========================================================================
+# 6. Bank card (2026-10-29): only while SoncoPay opens it to the account
+# ===========================================================================
+
+def card_row(db):
+    from app.models.payment import PaymentMethod, PaymentMethodCategory
+
+    row = db.query(PaymentMethod).filter(PaymentMethod.code == "CARD").first()
+    if row is None:
+        row = PaymentMethod(code="CARD", name="Carte bancaire", category=PaymentMethodCategory.CARD, is_active=True)
+        db.add(row)
+        db.commit()
+    return row
+
+
+def buy_with(client, user, method, key="k-card"):
+    return client.post(CREATE, headers={**bearer(user), "Idempotency-Key": key},
+                       json={"amount": float(PRICE), "currency": "usd", "product_code": PRODUCT,
+                             "payment_method": method})
+
+
+def card_purchase(client, db, fake, buyer, key="k-card"):
+    fake.card = True
+    card_row(db)
+    created = buy_with(client, buyer, "card", key)
+    assert created.status_code == 200, created.text
+    return created, deposit_of(db, created)
+
+
+def test_the_card_is_offered_only_while_soncopay_lists_it(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    card_row(db)
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert [m["code"] for m in shown["methods"]] == ["usdt_bsc"]
+    refused = buy_with(client, buyer, "card", "k-no-card")
+    assert refused.status_code == 409 and code_of(refused) == "PAYMENT_METHOD_UNAVAILABLE"
+    assert db.query(Deposit).count() == 0 and not any(c[1] == "/v1/payments" for c in fake.calls)
+    scp._methods_cache.update(checked=0.0)                          # SoncoPay opens cards to the account
+    fake.card = True
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert shown["methods"] == [{"code": "usdt_bsc", "label": "USDT on BNB Smart Chain (BEP20)"},
+                                {"code": "card", "label": "Bank card"}]
+    assert buy_with(client, buyer, "mobile_money", "k-mm").status_code == 400  # never offered: not open
+
+
+def test_the_card_is_refused_when_soncopay_cannot_be_read(client, ledger, fake, buyer, monkeypatch):
+    db = ledger
+    configure(db)
+    card_row(db)
+    fake.card = True
+
+    async def down(self):
+        raise soncopay_client.SoncoPayError("synthetic", status_code=503, stage="methods")
+
+    monkeypatch.setattr(soncopay_client.SoncoPayClient, "account_methods", down)
+    assert buy_with(client, buyer, "card").status_code == 409                # fail closed
+    assert buy(client, buyer, "k-usdt").status_code == 200                   # USDT on BSC still works
+
+
+def test_a_card_payment_is_created_card_only_and_opens_the_secure_card_page(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    created, dep = card_purchase(client, db, fake, buyer)
+    body = created.json()
+    sent = fake.payments[dep.external_payment_id]["_body"]
+    assert sent["methods"] == ["card"] and sent["method"] == "card" and "asset" not in sent and "network" not in sent
+    assert body["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}/redirect"
+    assert body["payment_method"] == "card" and dep.payment_method_id == card_row(db).id
+    shown = client.get(f"/api/v1/payments/check-status/{dep.id}", headers=bearer(buyer)).json()
+    assert (shown["payment_method"], shown["payment_method_label"]) == ("card", "Bank card")
+    from app.services.admin_transactions import _deposit_to_row
+
+    assert _deposit_to_row(dep)["payment_method"] == "SoncoPay - Bank card"
+    usdt, usdt_dep = soncopay_purchase(client, db, fake, buyer, key="k-usdt")
+    assert usdt.json()["payment_method"] == "usdt_bsc" and _deposit_to_row(usdt_dep)["payment_method"] == \
+        "SoncoPay - USDT on BNB Smart Chain (BEP20)"
+
+
+def test_the_browser_return_confirms_nothing_until_soncopay_says_paid(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    _created, dep = card_purchase(client, db, fake, buyer)
+    before = benefits(db, dep)
+    for provider_status, deposit_status in (("waiting", DepositStatus.PENDING), ("new", DepositStatus.PENDING)):
+        row, shown = status_after(client, db, fake, buyer, dep, status=provider_status)
+        assert row.status == deposit_status and shown["is_confirmed"] is False and benefits(db, dep) == before
+    row, shown = status_after(client, db, fake, buyer, dep, status="failed")
+    assert row.status == DepositStatus.FAILED and benefits(db, dep) == before
+
+
+def test_a_paid_card_payment_is_confirmed_once_and_its_commission_waits_14_days(client, ledger, fake, buyer):
+    from datetime import datetime, timedelta
+
+    from app.services import commission_payout_hold as hold
+    from app.services.financial_balances import get_commission_balance
+
+    db = ledger
+    configure(db)
+    _created, dep = card_purchase(client, db, fake, buyer)
+    fake.set(dep.external_payment_id, status="paid", asset="CDF", network=None)
+    data = {"id": dep.external_payment_id, "order_id": dep.order_id}
+    assert post_webhook(client, "payment.paid", data, delivery="dlv_c1").status_code == 200
+    again = post_webhook(client, "payment.paid", data, delivery="dlv_c1")
+    assert again.json().get("duplicate") is True
+    assert post_webhook(client, "payment.paid", data, delivery="dlv_c2").status_code == 200
+    db.expire_all()
+    paid = db.get(Deposit, dep.id)
+    assert paid.status == DepositStatus.VALIDATED
+    commissions = db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == dep.id).all()
+    assert len(commissions) == 1                                    # one confirmation, one commission
+    [commission] = commissions
+    balance = get_commission_balance(db, commission.user_id)
+    assert balance.available == 0 and balance.card_hold == commission.commission_amount
+    assert not hold.is_payable(db, commission)
+    paid.validated_at = datetime.utcnow() - timedelta(days=hold.CARD_HOLD_DAYS, minutes=1)
+    db.commit()
+    balance = get_commission_balance(db, commission.user_id)
+    assert balance.available == commission.commission_amount and balance.card_hold == 0
+    assert hold.is_payable(db, commission)
+
+
+@pytest.mark.parametrize("paid", [{"asset": "USDT", "network": "BSC"}, {"asset": "CDF", "network": "TRON"},
+                                  {"asset": "CDF", "method": "crypto"}])
+def test_a_card_deposit_reported_paid_in_crypto_is_never_confirmed(client, ledger, fake, buyer, paid):
+    db = ledger
+    configure(db)
+    _created, dep = card_purchase(client, db, fake, buyer)
+    before = benefits(db, dep)
+    row, shown = status_after(client, db, fake, buyer, dep, status="paid", **paid)
+    assert row.status == DepositStatus.PENDING and row.provider_status == scp.OTHER_ASSET_STATUS
+    assert shown["is_confirmed"] is False and benefits(db, dep) == before
+
+
+def test_a_refunded_card_payment_is_reversed_once(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    _created, dep = card_purchase(client, db, fake, buyer)
+    status_after(client, db, fake, buyer, dep, status="paid", asset="USD", network=None)
+    fake.set(dep.external_payment_id, status="refunded", refunded_amount="50")
+    data = {"id": dep.external_payment_id, "order_id": dep.order_id}
+    assert post_webhook(client, "payment.refunded", data, delivery="dlv_cr").status_code == 200
+    assert post_webhook(client, "payment.refunded", data, delivery="dlv_cr2").status_code == 200
+    db.expire_all()
+    assert db.get(Deposit, dep.id).status == DepositStatus.FAILED
+    from tests.unit.test_new_business_model import _assert_all_journals_balance
+
+    _assert_all_journals_balance(db)
+
+
+def test_a_card_cannot_be_chosen_while_nowpayments_takes_the_payments(client, ledger, fake, buyer, nowpayments_calls):
+    db = ledger
+    card_row(db)
+    fake.card = True
+    refused = buy_with(client, buyer, "card", "k-np-card")
+    assert refused.status_code == 409 and nowpayments_calls == [] and db.query(Deposit).count() == 0
+
+
+def test_methods_are_read_from_soncopays_answer_for_the_account():
+    real = {"methods": [{"method": "crypto", "asset": "USDT", "network": "TRON"},
+                        {"method": "crypto", "asset": "USDT", "network": "BSC"},
+                        {"method": "card", "code": "card", "kind": "card", "currency": "CDF", "redirect": True}],
+            "payment_methods": [{"code": "crypto", "enabled": True}, {"code": "card", "enabled": True}]}
+    assert scp.methods_from_answer(real) == ["usdt_bsc", "card"]
+    disabled = {**real, "payment_methods": [{"code": "crypto", "enabled": True}, {"code": "card", "enabled": False}]}
+    assert scp.methods_from_answer(disabled) == ["usdt_bsc"]
+    assert scp.methods_from_answer({"methods": [{"method": "mobile_money", "code": "mtn_bj"}]}) == []
+
+
+def test_a_referral_pool_units_commission_from_a_card_payment_waits_too(client, ledger, fake, buyer):
+    from datetime import datetime, timedelta
+
+    from app.models.affiliate import CommissionStatus, CommissionType
+    from app.models.business_model import ReferralPoolPurchase, ReferralPoolUnit
+    from app.services import commission_payout_hold as hold
+
+    db = ledger
+    configure(db)
+    _created, dep = card_purchase(client, db, fake, buyer)
+    dep.status, dep.validated_at = DepositStatus.VALIDATED, datetime.utcnow()
+    purchase = ReferralPoolPurchase(user_id=buyer.id, deposit_id=dep.id, quantity=1, unit_price=Decimal("100"),
+                                    total_amount=Decimal("100"), status="PAID")
+    db.add(purchase)
+    db.flush()
+    unit = ReferralPoolUnit(user_id=buyer.id, purchase_id=purchase.id, unit_index=1, source="PAID",
+                            status="PENDING", amount=Decimal("100"))
+    db.add(unit)
+    db.flush()
+    row = AffiliateCommission(user_id=buyer.sponsor_id, source_user_id=buyer.id, deposit_id=None,
+                              commission_type=CommissionType.KYC_PAYMENT, level=1, base_amount=Decimal("100"),
+                              commission_amount=Decimal("10"), status=CommissionStatus.APPROVED,
+                              transaction_date=datetime.utcnow(), business_model_version="NEW_V2",
+                              source_type=hold.SOURCE_POOL_UNIT, source_id=unit.id)
+    db.add(row)
+    db.commit()
+    assert not hold.is_payable(db, row)                             # reached through the unit's purchase
+    dep.validated_at = datetime.utcnow() - timedelta(days=15)
+    db.commit()
+    assert hold.is_payable(db, row)

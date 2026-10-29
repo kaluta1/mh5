@@ -56,6 +56,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
 import {
   CHECKOUT_UNAVAILABLE_TEXT, CheckoutUnavailableError, isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl,
+  SONCOPAY_METHOD_LABELS, type SoncoPayMethod,
   type CheckoutAvailability,
 } from '@/lib/payment-gateway'
 
@@ -179,6 +180,18 @@ export function PaymentDialog({
   // while its checkout is on, otherwise none ('unavailable'). 'checking' until the server answers: nothing is
   // offered before the server confirms a gateway (fail closed).
   const [gateway, setGateway] = useState<CheckoutAvailability | 'checking'>('checking')
+  // SoncoPay: the methods the server lists for the account (a bank card only while SoncoPay offers it).
+  const [soncopayMethods, setSoncopayMethods] = useState<SoncoPayMethod[]>(['usdt_bsc'])
+
+  useEffect(() => {
+    if (!open || gateway !== 'soncopay') return
+    const token = localStorage.getItem('access_token')
+    const read = paymentService.getSoncoPayMethods
+    if (!token || typeof read !== 'function') return
+    let cancelled = false
+    void read.call(paymentService, token).then((m) => { if (!cancelled && Array.isArray(m)) setSoncopayMethods(m) })
+    return () => { cancelled = true }
+  }, [open, gateway])
 
   useEffect(() => {
     if (!open) return
@@ -473,9 +486,10 @@ export function PaymentDialog({
           amount: totalAmount,
           currency: 'usd',
           product_code: apiRecipients[0]?.product_code || 'kyc',
-          // SoncoPay: the member picks crypto, mobile money or card on SoncoPay's own page.
+          // SoncoPay: USDT on BSC, or a bank card when SoncoPay offers one (chosen above).
           pay_currency: gateway === 'soncopay' ? undefined : payCurrency,
           recipients: apiRecipients,
+          ...(gateway === 'soncopay' ? { payment_method: methodId === 'soncopay-card' ? 'card' : 'usdt_bsc' } : {}),
         },
         paymentIdempotencyKeyRef.current
       )
@@ -947,6 +961,26 @@ export function PaymentDialog({
                   </span>
                 </button>
               )}
+              {!isLoading && gateway === 'soncopay' && soncopayMethods.includes('card') && (
+                <button
+                  data-testid="pay-with-soncopay-card"
+                  onClick={() => handleMethodSelect('soncopay-card')}
+                  disabled={isLoading}
+                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-myhigh5-primary" />
+                  </div>
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                      {t('payment.pay_with_card') || 'Pay by bank card'}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      {t('payment.soncopay_card') || 'Card details are entered only on the secure SoncoPay card page'}
+                    </span>
+                  </span>
+                </button>
+              )}
 
               {/* Methods */}
               {!isLoading && gateway === 'nowpayments' && (
@@ -1027,6 +1061,9 @@ export function PaymentDialog({
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t('payment.soncopay_fee_note') || 'SoncoPay shows the exact amount for the method you choose.'}
+                </p>
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-1" data-testid="soncopay-method">
+                  {SONCOPAY_METHOD_LABELS[payment.payment_method === 'card' ? 'card' : 'usdt_bsc']}
                 </p>
               </div>
 

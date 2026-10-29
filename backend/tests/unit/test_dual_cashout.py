@@ -255,7 +255,7 @@ def test_level_one_commission_is_calculated_as_before_and_becomes_the_balance(le
     assert (balance.available, balance.reserved, balance.paid_lifetime) == (Decimal("10.00"), 0, 0)
     assert cs.summary(db, sponsor, now=NOW)["balances"] == {
         "total_earned": 10.0, "pending": 0.0, "available": 10.0, "reserved": 0.0, "paid": 0.0, "held": 0.0,
-        "available_unpaid": 10.0, "awaiting_wallet_approval": 0.0, "processing": 0.0}
+        "available_unpaid": 10.0, "awaiting_wallet_approval": 0.0, "processing": 0.0, "card_hold": 0.0}
 
 
 # ===========================================================================

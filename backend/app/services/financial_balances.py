@@ -8,7 +8,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models.affiliate import AffiliateCommission, CommissionStatus
-from app.services.commission_payout_hold import held_clause, payable_clause
+from app.services.commission_payout_hold import card_hold_clause, held_clause, payable_clause
 from app.services.financial_integrity import money
 
 
@@ -24,6 +24,8 @@ class CommissionBalance:
     held: Decimal = Decimal("0.00")
     # PENDING rows that may be paid once a destination exists (never a held row).
     pending_payable: Decimal = Decimal("0.00")
+    # Earned from a bank card payment still in its 14-day chargeback period: paid once it is over.
+    card_hold: Decimal = Decimal("0.00")
 
 
 def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
@@ -73,6 +75,20 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                 ),
                 0,
             ).label("pending_payable"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            AffiliateCommission.status.in_((CommissionStatus.PENDING, CommissionStatus.APPROVED))
+                            & AffiliateCommission.payout_reference.is_(None)
+                            & card_hold_clause(),
+                            AffiliateCommission.commission_amount,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("card_hold"),
             func.coalesce(
                 func.sum(
                     case(
@@ -127,5 +143,6 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
         reserved=money(row.reserved),
         held=money(row.held),
         pending_payable=money(row.pending_payable),
+        card_hold=money(row.card_hold),
     )
 

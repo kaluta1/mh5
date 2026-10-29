@@ -72,7 +72,12 @@ class CreatePaymentRequest(BaseModel):
     # server's quantity x unit price. The upper bound is a technical guard per payment, not a
     # business limit (members may buy again; administrators can set real limits).
     quantity: int = Field(default=1, ge=1, le=10000)
+    # SoncoPay only: "usdt_bsc" (the default) or "card", when SoncoPay opens cards to the account.
+    payment_method: Optional[str] = Field(default=None, max_length=20)
 
+
+METHOD_UNAVAILABLE = {"code": "PAYMENT_METHOD_UNAVAILABLE",
+                      "message": "This payment method is not available at the moment. Please choose another one."}
 
 POOL_CHECKOUT_LIMIT, POOL_CHECKOUT_WINDOW = 10, 600     # new Referral Pool checkouts per member per 10 minutes
 
@@ -92,6 +97,7 @@ class PaymentResponse(BaseModel):
     # nowpayments: pay_address/pay_amount are shown. soncopay: the member continues on checkout_url.
     provider: str = "nowpayments"
     checkout_url: Optional[str] = None
+    payment_method: Optional[str] = None       # soncopay: usdt_bsc | card
 
 
 def _idempotent_order_id(user_id: int, key: str) -> str:
@@ -135,6 +141,7 @@ def _soncopay_response(deposit: Deposit) -> PaymentResponse:
         status=deposit.status.value,
         provider="soncopay",
         checkout_url=deposit.provider_checkout_url,
+        payment_method=soncopay_payments.deposit_method(deposit),
     )
 
 
@@ -175,6 +182,11 @@ async def checkout_gateway(
     gateway = checkout_routing.new_payment_gateway(db)
     if gateway is None:
         return {"provider": "none", "available": False, "message": checkout_routing.UNAVAILABLE_MESSAGE}
+    if gateway == "soncopay":
+        # Only the methods SoncoPay opens to this account (a card only while it lists one).
+        methods = await soncopay_payments.account_methods(db)
+        return {"provider": gateway, "available": True,
+                "methods": [{"code": m, "label": soncopay_payments.METHOD_LABELS[m]} for m in methods]}
     return {"provider": gateway, "available": True}
 
 
@@ -342,6 +354,20 @@ async def create_payment(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
 
+    # How the member pays (SoncoPay): USDT on BSC unless they chose a card that SoncoPay offers now.
+    # Decided before any row is locked: reading SoncoPay's methods may call it.
+    wanted_method = (request.payment_method or soncopay_payments.METHOD_USDT_BSC).strip().lower()
+    if wanted_method not in soncopay_payments.METHOD_LABELS:
+        raise HTTPException(status_code=400, detail=METHOD_UNAVAILABLE)
+    method_row_id = None
+    if wanted_method == soncopay_payments.METHOD_CARD:
+        card_row = soncopay_payments.payment_method_row(db, soncopay_payments.METHOD_CARD)
+        if (checkout_routing.new_payment_gateway(db) != "soncopay" or card_row is None
+                or soncopay_payments.METHOD_CARD not in await soncopay_payments.account_methods(db)):
+            db.rollback()
+            raise HTTPException(status_code=409, detail=METHOD_UNAVAILABLE)
+        method_row_id = int(card_row.id)
+
     # Child/Teen Safety Phase 10: a NEW payment (deposit row, seat reservation,
     # provider invoice) only for a member the central gate allows. An idempotent
     # replay above creates nothing new and is answered as before.
@@ -380,6 +406,9 @@ async def create_payment(
     if gateway is None or (gateway == "soncopay" and environment is None):
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=CHECKOUT_UNAVAILABLE)
+    if method_row_id is not None and gateway != "soncopay":
+        db.rollback()
+        raise HTTPException(status_code=409, detail=METHOD_UNAVAILABLE)
     deposit = Deposit(
         user_id=current_user.id,
         product_type_id=product.id,
@@ -391,6 +420,7 @@ async def create_payment(
         business_model_version=model_version_for_new_event(db),
         payment_provider=gateway,
         provider_environment=environment,
+        payment_method_id=method_row_id,
     )
     db.add(deposit)
     if is_pool:

@@ -209,3 +209,17 @@ describe('CashoutPanel: SoncoPay smallest payout', () => {
     expect(screen.queryByTestId('payout-threshold')).toBeNull()
   })
 })
+
+describe('CashoutPanel: bank card hold', () => {
+  it('shows commissions from card payments as held for 14 days, never as available', async () => {
+    current = summary({
+      balances: { total_earned: 5, pending: 0, available: 0, reserved: 0, paid: 0, held: 0,
+        available_unpaid: 0, awaiting_wallet_approval: 0, processing: 0, card_hold: 5 },
+    })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.getByTestId('balance-card-hold')).toHaveTextContent('$5.00')
+    expect(screen.getByTestId('balance-available')).toHaveTextContent('$0.00')
+    expect(screen.getByTestId('card-hold-note')).toHaveTextContent('14 days')
+  })
+})

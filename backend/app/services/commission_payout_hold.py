@@ -5,6 +5,10 @@ reservation, the crypto engine, the older payout service, release of PENDING
 rows) and by the balances shown to members:
 
   * a NEW_V2 commission (business_model_version = 'NEW_V2') is payable as before;
+  * a commission earned from a SoncoPay BANK CARD payment is held until CARD_HOLD_DAYS after that
+    payment was confirmed: SoncoPay keeps card funds for that long (the card networks' chargeback
+    period, documented `payout_hold.card_rule`), so nothing it funded leaves before then. The hold
+    ends by itself; nothing is written when it does (card_hold_clause);
   * a HISTORICAL commission (any other stamp, NULL included: the codebase's
     rule in new_model_ledger.is_new_model; production's are NULL, written by
     the retired 10-level engine) is HELD until an authorised administrator records
@@ -18,7 +22,7 @@ password, is never taken on one's own commission, and is audited.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import and_, exists, func, not_, or_, select
@@ -54,9 +58,35 @@ def historical_clause():
     return func.coalesce(AffiliateCommission.business_model_version, "") != NEW_MODEL_VERSION
 
 
+CARD_HOLD_DAYS = 14          # SoncoPay: card payments are withdrawable 14 days after they are paid
+CARD_METHOD_CODE = "card"    # payment_methods.code of a bank card (compared case-insensitively)
+SOURCE_POOL_UNIT = "REFERRAL_POOL_UNIT"     # referral_pool_accounting.SOURCE_UNIT
+
+
+def card_hold_clause(now: Optional[datetime] = None):
+    """SQL condition: this commission was earned from a SoncoPay bank card payment confirmed less than
+    CARD_HOLD_DAYS ago (or not confirmed at all). Reached through the commission's own deposit, or, for a
+    Referral Pool unit's commission, through the unit's purchase."""
+    from app.models.business_model import ReferralPoolPurchase, ReferralPoolUnit
+    from app.models.payment import Deposit, PaymentMethod
+
+    since = (now or datetime.utcnow()) - timedelta(days=CARD_HOLD_DAYS)
+    card_deposit = and_(Deposit.payment_provider == "soncopay",
+                        Deposit.payment_method_id.in_(select(PaymentMethod.id).where(
+                            func.lower(PaymentMethod.code) == CARD_METHOD_CODE)),
+                        or_(Deposit.validated_at.is_(None), Deposit.validated_at > since))
+    direct = exists(select(Deposit.id).where(Deposit.id == AffiliateCommission.deposit_id, card_deposit))
+    pool = exists(select(ReferralPoolUnit.id)
+                  .join(ReferralPoolPurchase, ReferralPoolPurchase.id == ReferralPoolUnit.purchase_id)
+                  .join(Deposit, Deposit.id == ReferralPoolPurchase.deposit_id)
+                  .where(AffiliateCommission.source_type == SOURCE_POOL_UNIT,
+                         ReferralPoolUnit.id == AffiliateCommission.source_id, card_deposit))
+    return or_(direct, pool)
+
+
 def payable_clause():
     """SQL condition: this commission row may enter a payout (status checks are separate)."""
-    return or_(not_(historical_clause()), _released())
+    return and_(or_(not_(historical_clause()), _released()), not_(card_hold_clause()))
 
 
 def held_clause():
@@ -65,6 +95,9 @@ def held_clause():
 
 
 def is_payable(db: Session, commission: AffiliateCommission) -> bool:
+    if db.query(AffiliateCommission.id).filter(AffiliateCommission.id == commission.id,
+                                               card_hold_clause()).first() is not None:
+        return False                                # card payment still in its chargeback period
     if is_new_model(commission.business_model_version):
         return True
     return db.query(CommissionPayoutReview.id).filter(

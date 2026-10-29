@@ -160,6 +160,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
     ['Total paid', b.paid, 'balance-paid'],
     ['Historical held', b.held ?? 0, 'balance-held'],
   ]
+  if ((b.card_hold ?? 0) > 0) tiles.push(['Card payment hold', b.card_hold ?? 0, 'balance-card-hold'])
   const approval = summary.wallet_approval
   const method = summary.cashout_method
   const feeTerms = summary.fees.CRYPTO.terms
@@ -191,6 +192,12 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
       {(b.held ?? 0) > 0 && (
         <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="held-note">
           Historical held commissions are under review. They are not available and are not paid automatically.
+        </p>
+      )}
+      {(b.card_hold ?? 0) > 0 && (
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="card-hold-note">
+          Commissions from bank card payments are paid 14 days after the card payment, once the card
+          chargeback period is over. They are then paid automatically.
         </p>
       )}
 

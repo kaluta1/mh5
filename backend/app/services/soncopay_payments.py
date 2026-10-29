@@ -38,6 +38,17 @@ The rules, in one place:
     payer changed it on the payment page, or SoncoPay switched a wrong-asset
     payment to what arrived) is never confirmed: the deposit stays pending
     with provider_status paid_other_asset for an administrator.
+  * Bank card (2026-10-29): offered only while SoncoPay lists the card method as
+    enabled for this account (GET /v1/methods, account_methods()). The deposit
+    points at the payment_methods row "card" (payment_method_id). Its payment is
+    created restricted to cards (methods ["card"], method "card"); the payer
+    enters the card on SoncoPay's secure page only and comes back to our page,
+    which asks OUR server. It is confirmed only when SoncoPay reports it paid and
+    not in a crypto asset or on a network. Commissions it funds are held from
+    payout for 14 days (commission_payout_hold.card_hold_clause), SoncoPay's
+    card chargeback period. A refund is reversed by the existing refund path.
+    Mobile money and bank transfer are not offered: they are not open to this
+    account.
 """
 from __future__ import annotations
 
@@ -68,6 +79,10 @@ NOWPAYMENTS = "nowpayments"
 PAY_METHOD, PAY_ASSET, PAY_NETWORK = "crypto", "USDT", "BSC"
 PAY_LABEL = "USDT on BNB Smart Chain (BEP20)"
 OTHER_ASSET_STATUS = "paid_other_asset"
+# What a member pays with (deposits.payment_method_id -> payment_methods.code, compared lower-case).
+METHOD_USDT_BSC, METHOD_CARD = "usdt_bsc", "card"
+METHOD_LABELS = {METHOD_USDT_BSC: PAY_LABEL, METHOD_CARD: "Bank card"}
+CRYPTO_ASSETS = {"USDT", "USDC", "BTC", "ETH", "BNB", "TRX", "LTC", "SOL", "MATIC"}
 
 STATUS_TO_DEPOSIT = {
     "new": DepositStatus.PENDING,
@@ -108,6 +123,66 @@ def is_soncopay(deposit: Any) -> bool:
 
 def provider_of(deposit: Any) -> str:
     return PROVIDER if is_soncopay(deposit) else NOWPAYMENTS
+
+
+def payment_method_row(db: Session, code: str):
+    """The payment_methods row of a member method (None when the table has none)."""
+    from sqlalchemy import func
+
+    from app.models.payment import PaymentMethod
+
+    return db.query(PaymentMethod).filter(func.lower(PaymentMethod.code) == code).first()
+
+
+def deposit_method(deposit: Deposit) -> str:
+    """How this SoncoPay deposit is paid: a bank card when it points at the card row, else USDT on BSC."""
+    row = getattr(deposit, "payment_method", None)
+    return METHOD_CARD if row is not None and str(row.code or "").lower() == METHOD_CARD else METHOD_USDT_BSC
+
+
+# The methods SoncoPay opens to this account (GET /v1/methods), read at most every METHODS_MAX_AGE seconds.
+METHODS_MAX_AGE, METHODS_RETRY = 600.0, 120.0
+_methods_cache: Dict[str, Any] = {"environment": None, "methods": None, "checked": 0.0}
+
+
+def methods_from_answer(answer: Mapping[str, Any]) -> list:
+    """Member methods SoncoPay lists as open for this account: USDT on BSC (a crypto method with that
+    asset and network), and a bank card (method card, not disabled). Nothing else is offered."""
+    out = []
+    listed = answer.get("methods") if isinstance(answer.get("methods"), list) else []
+    switches = {str(m.get("code") or "").lower(): m.get("enabled")
+                for m in (answer.get("payment_methods") or []) if isinstance(m, dict)}
+    usdt = any(isinstance(m, dict) and str(m.get("method")) == PAY_METHOD
+               and str(m.get("asset") or "").upper() == PAY_ASSET and str(m.get("network") or "").upper() == PAY_NETWORK
+               for m in listed)
+    if usdt and switches.get("crypto") is not False:
+        out.append(METHOD_USDT_BSC)
+    card = any(isinstance(m, dict) and str(m.get("method")) == METHOD_CARD for m in listed)
+    if card and switches.get(METHOD_CARD) is not False:
+        out.append(METHOD_CARD)
+    return out
+
+
+async def account_methods(db: Session) -> list:
+    """The member methods a NEW SoncoPay payment may use now. USDT on BSC is always offered (it is how
+    every SoncoPay payment was made before); a bank card only while SoncoPay lists it for the account.
+    When SoncoPay cannot be read, the card is not offered (fail closed)."""
+    environment = soncopay_settings.checkout_environment(db)
+    if environment is None:
+        return []
+    cached = _methods_cache
+    age = time.monotonic() - cached["checked"]
+    limit = METHODS_MAX_AGE if cached["methods"] is not None else METHODS_RETRY
+    if cached["environment"] != environment or age > limit:
+        cached.update(environment=environment, checked=time.monotonic(), methods=None)
+        try:
+            client = client_for(db, environment)
+            db.rollback()
+            cached["methods"] = methods_from_answer(await client.account_methods())
+        except SoncoPayError as exc:
+            logger.warning("SoncoPay methods could not be read (%s)", exc.code or exc.status_code)
+    methods = list(cached["methods"] or [])
+    return [METHOD_USDT_BSC] + [m for m in methods if m != METHOD_USDT_BSC]
 
 
 def client_for(db: Session, environment: Optional[str]) -> SoncoPayClient:
@@ -205,7 +280,13 @@ def apply_payment(db: Session, deposit: Deposit, payment: Mapping[str, Any]) -> 
     if target is None:
         logger.warning("Deposit %s: unknown SoncoPay status %r, nothing changed", deposit.id, status[:40])
         return True
-    if target == DepositStatus.VALIDATED and not paid_in_usdt_bsc(payment):
+    if target == DepositStatus.VALIDATED and deposit_method(deposit) == METHOD_CARD:
+        if not paid_by_card(payment):
+            deposit.provider_status = OTHER_ASSET_STATUS
+            logger.error("Deposit %s: a card payment reported paid in %s on %s; not confirmed", deposit.id,
+                         str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20])
+            return True
+    elif target == DepositStatus.VALIDATED and not paid_in_usdt_bsc(payment):
         deposit.provider_status = OTHER_ASSET_STATUS
         logger.error("Deposit %s: SoncoPay reports it paid in %s on %s, not USDT on BSC; not confirmed",
                      deposit.id, str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20])
@@ -237,6 +318,17 @@ def paid_in_usdt_bsc(payment: Mapping[str, Any]) -> bool:
             and str(payment.get("network") or "").strip().upper() == PAY_NETWORK)
 
 
+def paid_by_card(payment: Mapping[str, Any]) -> bool:
+    """A payment of a card deposit that may be confirmed: not reported in a crypto asset, on a network
+    or with any method but a card. (Its payment was created restricted to cards.)"""
+    method = str(payment.get("method") or payment.get("payment_method") or "").strip().lower()
+    if method and method != METHOD_CARD:
+        return False
+    if str(payment.get("network") or "").strip():
+        return False
+    return str(payment.get("asset") or "").strip().upper() not in CRYPTO_ASSETS
+
+
 def status_payload(deposit: Deposit) -> Dict[str, Any]:
     """What a member's payment page shows. Never a key, a secret or the provider's raw answer."""
     word = str(deposit.provider_status or "")
@@ -261,6 +353,8 @@ def status_payload(deposit: Deposit) -> Dict[str, Any]:
         "price_amount": float(deposit.amount) if deposit.amount else 0,
         "price_currency": (deposit.currency or "usd").lower(),
         "tx_hash": deposit.tx_hash,
+        "payment_method": deposit_method(deposit),
+        "payment_method_label": METHOD_LABELS[deposit_method(deposit)],
     }
 
 
@@ -287,21 +381,25 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
         db.rollback()
         raise CheckoutClosed()
     amount, currency = f"{money(deposit.amount):.2f}", normalize_fiat_currency(deposit.currency or "USD")
+    card = deposit_method(deposit) == METHOD_CARD
     client = client_for(db, environment)
     db.rollback()
     request = dict(amount=amount, currency=currency, order_id=order_id,
                    description=description.encode("ascii", "replace").decode("ascii")[:200],
                    return_url=return_url(deposit_id), callback_url=soncopay_settings.webhook_url(),
                    metadata={"deposit_id": int(deposit_id)})
+    if card:
+        request["methods"] = [METHOD_CARD]        # only a card can pay it, whatever happens on the page
+    chosen = dict(method=METHOD_CARD) if card else dict(method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
     try:
-        payment = await client.create_payment(**request, method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
+        payment = await client.create_payment(**request, **chosen)
     except SoncoPayError as exc:
         if exc.status_code != 422 or exc.code != "payer_required":
             raise
         # Documented: choosing the method by API needs every payer field the account requires, and
-        # nothing is created when one is missing. The payer then chooses on SoncoPay's page; only a
-        # payment made in USDT on BSC is ever confirmed (paid_in_usdt_bsc).
-        logger.warning("Deposit %s: SoncoPay needs payer details to preselect USDT on BSC; "
+        # nothing is created when one is missing. The payer then fills them in on SoncoPay's page; only a
+        # payment made the way the member chose (USDT on BSC, or a card) is ever confirmed.
+        logger.warning("Deposit %s: SoncoPay needs payer details to preselect the method; "
                        "created without a preselected method", deposit_id)
         payment = await client.create_payment(**request)
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
@@ -312,10 +410,14 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
         raise FinancialIntegrityError("SoncoPay returned a payment that another deposit already holds")
     # The payment just created must be this order, at this price, in this mode.
     check_identity(deposit, payment)
-    if not str(payment.get("checkout_url") or "").startswith("https://"):
+    page = str(payment.get("checkout_url") or "")
+    action = payment.get("next_action") if isinstance(payment.get("next_action"), dict) else {}
+    if card and action.get("type") == "redirect" and str(action.get("url") or "").startswith("https://"):
+        page = str(action["url"])                  # straight to SoncoPay's secure card page
+    if not page.startswith("https://"):
         raise FinancialIntegrityError("SoncoPay returned no secure checkout page")
     deposit.external_payment_id = payment_id
-    deposit.provider_checkout_url = str(payment["checkout_url"])
+    deposit.provider_checkout_url = page
     deposit.provider_status = str(payment.get("status") or "new")[:40]
     deposit.provider_expires_at = _parse_time(payment.get("expires_at"))
     if deposit.status == DepositStatus.FAILED and not deposit.validated_at:

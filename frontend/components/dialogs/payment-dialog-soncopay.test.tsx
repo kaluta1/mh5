@@ -216,3 +216,31 @@ describe('Resume payment dialog', () => {
     expect(service.getCheckoutGateway).not.toHaveBeenCalled()
   })
 })
+
+describe('SoncoPay bank card', () => {
+  it('offers the card only when the server lists it, and asks the server for a card payment', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue(['usdt_bsc', 'card'])
+    service.createPayment.mockResolvedValue({ ...soncopayPayment, payment_method: 'card',
+      checkout_url: `${CHECKOUT}/redirect` })
+    await toMethodStep()
+    fireEvent.click(await screen.findByTestId('pay-with-soncopay-card'))
+    await screen.findByTestId('soncopay-payment-step')
+    expect(service.createPayment.mock.calls[0][1].payment_method).toBe('card')
+    expect(screen.getByTestId('soncopay-method')).toHaveTextContent('Bank card')
+    expect((screen.getByTestId('soncopay-checkout-link') as HTMLAnchorElement).href).toBe(`${CHECKOUT}/redirect`)
+    delete (service as Record<string, unknown>).getSoncoPayMethods
+  })
+
+  it('shows no card when the server does not list one', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue(['usdt_bsc'])
+    service.createPayment.mockResolvedValue(soncopayPayment)
+    await toMethodStep()
+    fireEvent.click(await screen.findByTestId('pay-with-soncopay'))
+    await screen.findByTestId('soncopay-payment-step')
+    expect(screen.queryByTestId('pay-with-soncopay-card')).toBeNull()
+    expect(service.createPayment.mock.calls[0][1].payment_method).toBe('usdt_bsc')
+    delete (service as Record<string, unknown>).getSoncoPayMethods
+  })
+})

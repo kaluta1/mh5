@@ -2070,6 +2070,8 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
             "reserved": float(balance.reserved),
             "paid": float(balance.paid_lifetime),
             "held": float(balance.held),
+            # From a bank card payment in its 14-day chargeback period; paid automatically once it is over.
+            "card_hold": float(balance.card_hold),
             "available_unpaid": float(unpaid),
             "awaiting_wallet_approval": float(unpaid) if wallet.status == WALLET_PENDING_APPROVAL else 0.0,
             "processing": float(balance.reserved),

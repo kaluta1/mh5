@@ -104,6 +104,8 @@ export type CashoutSummary = {
     awaiting_wallet_approval?: number
     /** Handed to a payout that is not settled yet. */
     processing?: number
+    /** From a bank card payment still in its 14-day chargeback period; paid automatically afterwards. */
+    card_hold?: number
   }
   wallet_approval?: WalletApproval | null
   payable_amount: number

@@ -13,6 +13,15 @@ from app.models.payment import Deposit, DepositStatus
 from app.models.transaction import TransactionStatus, TransactionType, UserTransaction
 
 
+def _deposit_method_label(deposit) -> Optional[str]:
+    """How the member paid: a SoncoPay deposit names its method (bank card or USDT BEP20)."""
+    from app.services import soncopay_payments
+
+    if soncopay_payments.is_soncopay(deposit):
+        return "SoncoPay - " + soncopay_payments.METHOD_LABELS[soncopay_payments.deposit_method(deposit)]
+    return deposit.payment_method.name if deposit.payment_method else None
+
+
 def _deposit_to_row(deposit) -> dict[str, Any]:
     return {
         "record_source": "deposit",
@@ -32,7 +41,7 @@ def _deposit_to_row(deposit) -> dict[str, Any]:
         "user_avatar_url": deposit.user.avatar_url if deposit.user else None,
         "contest_id": None,
         "contest_name": None,
-        "payment_method": deposit.payment_method.name if deposit.payment_method else None,
+        "payment_method": _deposit_method_label(deposit),
         "product_type": deposit.product_type.name if deposit.product_type else None,
         "order_id": deposit.order_id,
         "external_payment_id": deposit.external_payment_id,

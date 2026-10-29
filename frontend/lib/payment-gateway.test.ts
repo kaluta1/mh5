@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isFinalState, isSoncoPay, parseCheckoutGateway, paymentStateText, safeCheckoutUrl } from './payment-gateway'
+import { isFinalState, isSoncoPay, parseCheckoutGateway, parseSoncoPayMethods, paymentStateText, safeCheckoutUrl } from './payment-gateway'
 
 describe('lib/payment-gateway', () => {
   it('reads a gateway only from an explicit available answer', () => {
@@ -38,5 +38,14 @@ describe('lib/payment-gateway', () => {
     expect(isSoncoPay({ provider: 'soncopay' })).toBe(true)
     expect(isSoncoPay({ provider: 'nowpayments' })).toBe(false)
     expect(isSoncoPay(null)).toBe(false)
+  })
+})
+
+describe('parseSoncoPayMethods', () => {
+  it('keeps only the methods the server lists, USDT on BSC when there is no list', () => {
+    expect(parseSoncoPayMethods({ methods: [{ code: 'usdt_bsc' }, { code: 'card' }] })).toEqual(['usdt_bsc', 'card'])
+    expect(parseSoncoPayMethods({ methods: [{ code: 'usdt_bsc' }, { code: 'mobile_money' }] })).toEqual(['usdt_bsc'])
+    expect(parseSoncoPayMethods({ provider: 'soncopay', available: true })).toEqual(['usdt_bsc'])
+    expect(parseSoncoPayMethods(null)).toEqual(['usdt_bsc'])
   })
 })
