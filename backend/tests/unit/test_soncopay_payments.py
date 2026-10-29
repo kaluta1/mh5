@@ -65,6 +65,7 @@ class FakeSonco:
         self.fail_create = None        # HTTP status to answer POST /v1/payments with
         self.fail_read = None          # HTTP status to answer GET /v1/payments/{id} with
         self.drop_create = 0           # number of creations that get no answer at all
+        self.payer_required = False    # answer 422 payer_required when a method is preselected
 
     def public(self, p):
         return {k: v for k, v in p.items() if not k.startswith("_")}
@@ -83,6 +84,9 @@ class FakeSonco:
             if self.fail_create:
                 return httpx.Response(self.fail_create, json={"detail": "synthetic", "code": "provider_down"})
             body = json.loads(request.content)
+            if self.payer_required and body.get("method"):
+                return httpx.Response(422, json={"detail": "payer details missing", "code": "payer_required",
+                                                 "fields": ["phone"]})
             for p in self.payments.values():
                 if p["order_id"] == body["order_id"] and p["_env"] == env:     # same order_id -> same payment
                     if p["amount"] != body["amount"]:
@@ -723,3 +727,20 @@ async def test_the_nowpayments_client_itself_refuses_a_new_payment():
         await nowpayments_service.create_payment(price_amount=Decimal("50"), price_currency="usd",
                                                  order_id="o-1", order_description="x")
     assert caught.value.code == "PROVIDER_DISCONTINUED"
+
+
+def test_when_payer_details_are_required_the_payment_is_created_without_a_preselected_method(client, ledger, fake,
+                                                                                            buyer):
+    db = ledger
+    configure(db)
+    fake.payer_required = True
+    created, dep = soncopay_purchase(client, db, fake, buyer)
+    assert created.json()["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}"
+    sent = fake.payments[dep.external_payment_id]["_body"]
+    assert "method" not in sent and len(fake.payments) == 1
+    fake.set(dep.external_payment_id, status="paid", asset="USDT", network="TRON")     # payer chose TRON
+    client.post(f"/api/v1/payments/sync/{dep.id}", headers=bearer(buyer))
+    db.expire_all()
+    assert db.get(Deposit, dep.id).status == DepositStatus.PENDING                    # never credited
+    fake.set(dep.external_payment_id, network="BSC")
+    assert client.post(f"/api/v1/payments/sync/{dep.id}", headers=bearer(buyer)).json()["is_confirmed"] is True

@@ -289,11 +289,21 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
     amount, currency = f"{money(deposit.amount):.2f}", normalize_fiat_currency(deposit.currency or "USD")
     client = client_for(db, environment)
     db.rollback()
-    payment = await client.create_payment(
-        amount=amount, currency=currency, order_id=order_id,
-        description=description.encode("ascii", "replace").decode("ascii")[:200],
-        return_url=return_url(deposit_id), callback_url=soncopay_settings.webhook_url(),
-        metadata={"deposit_id": int(deposit_id)}, method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
+    request = dict(amount=amount, currency=currency, order_id=order_id,
+                   description=description.encode("ascii", "replace").decode("ascii")[:200],
+                   return_url=return_url(deposit_id), callback_url=soncopay_settings.webhook_url(),
+                   metadata={"deposit_id": int(deposit_id)})
+    try:
+        payment = await client.create_payment(**request, method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
+    except SoncoPayError as exc:
+        if exc.status_code != 422 or exc.code != "payer_required":
+            raise
+        # Documented: choosing the method by API needs every payer field the account requires, and
+        # nothing is created when one is missing. The payer then chooses on SoncoPay's page; only a
+        # payment made in USDT on BSC is ever confirmed (paid_in_usdt_bsc).
+        logger.warning("Deposit %s: SoncoPay needs payer details to preselect USDT on BSC; "
+                       "created without a preselected method", deposit_id)
+        payment = await client.create_payment(**request)
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
     payment_id = str(payment.get("id") or "")
     holder = (db.query(Deposit.id).filter(Deposit.payment_provider == PROVIDER, Deposit.external_payment_id == payment_id,
