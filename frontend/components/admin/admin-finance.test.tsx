@@ -442,7 +442,7 @@ describe('AdminFinance', () => {
     expect(await screen.findByText('Crypto pay-in and payout')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Finance & Payments sections' })
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual([
-      'Payment Providers', 'NOWPayments Configuration', 'SoncoPay Configuration', 'Crypto Cashout Settings', 'USD Cashout Settings',
+      'Payment Providers', 'NOWPayments (discontinued)', 'SoncoPay Configuration', 'Crypto Cashout Settings', 'USD Cashout Settings',
       'Payout Security', 'Cashout Transactions', 'Reconciliation & Audit Logs'])
     expect(within(nav).getByRole('link', { name: 'Payment Providers' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('USD settlement (manual)')).toBeInTheDocument()

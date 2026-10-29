@@ -308,9 +308,10 @@ def view(db: Session, actor) -> dict:
         "gateways": [
             {"provider": g.gateway, "label": checkout_routing.LABELS[g.gateway], "enabled": g.enabled,
              "ready": g.ready, "reason": g.reason, "environment": g.environment,
-             "incoming": "Member payments",
-             "outgoing": ("Automatic USDT BEP20 commission payouts (managed in Crypto Cashout)"
-                          if g.gateway == NOWPAYMENTS else "Not supported")}
+             "incoming": ("Discontinued: history only" if g.gateway == NOWPAYMENTS
+                          else "Member payments in USDT on BNB Smart Chain (BEP20)"),
+             "outgoing": ("Discontinued: no payout" if g.gateway == NOWPAYMENTS
+                          else "Not connected yet (automatic payouts stay off)")}
             for g in gateways.values()],
         "checkout_providers": [
             {"provider": g.gateway, "label": checkout_routing.LABELS[g.gateway], "available": g.ready,

@@ -134,9 +134,17 @@ class SoncoPayClient:
 
     async def create_payment(self, *, amount: str, currency: str, order_id: str, description: str,
                              return_url: str, callback_url: Optional[str], metadata: Optional[dict] = None,
-                             lifetime_minutes: Optional[int] = None) -> Dict[str, Any]:
+                             lifetime_minutes: Optional[int] = None, method: Optional[str] = None,
+                             asset: Optional[str] = None, network: Optional[str] = None) -> Dict[str, Any]:
         body: Dict[str, Any] = {"amount": amount, "currency": currency, "order_id": order_id,
                                 "description": description, "return_url": return_url}
+        if method:
+            # Create and choose in one call: method crypto with its asset and network.
+            body["method"] = method
+            if asset:
+                body["asset"] = asset
+            if network:
+                body["network"] = network
         if callback_url:
             body["callback_url"] = callback_url
         if metadata:

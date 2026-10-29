@@ -221,8 +221,9 @@ export default function AdminSoncoPaySettings() {
             ))}
           </ul>
           <p className="text-xs text-gray-500">
-            NOWPayments is switched on and off in NOWPayments Configuration; its automatic payouts are managed in
-            Crypto Cashout. A gateway that is off takes no new payment; payments already started are still confirmed.
+            SoncoPay is the only payment provider: every payment is USDT on BNB Smart Chain (BEP20). NOWPayments is
+            discontinued: it takes no new payment and makes no payout; payments it already holds stay in the history.
+            A gateway that is off takes no new payment; payments already started are still confirmed.
           </p>
         </div>
 

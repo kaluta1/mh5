@@ -31,7 +31,7 @@ from app.services import payment_config, soncopay_settings
 UNAVAILABLE_MESSAGE = "Payments are temporarily unavailable. Please try again later."
 NOWPAYMENTS, SONCOPAY = soncopay_settings.NOWPAYMENTS, soncopay_settings.PROVIDER
 GATEWAYS = (NOWPAYMENTS, SONCOPAY)
-LABELS = {NOWPAYMENTS: "NOWPayments", SONCOPAY: "SoncoPay"}
+LABELS = {NOWPAYMENTS: "NOWPayments (discontinued)", SONCOPAY: "SoncoPay"}
 
 
 @dataclass(frozen=True)

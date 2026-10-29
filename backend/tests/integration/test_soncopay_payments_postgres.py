@@ -144,7 +144,7 @@ def test_two_workers_applying_the_same_paid_payment_confirm_it_once(pg, monkeypa
     monkeypatch.setattr(commission_distribution, "process_payment_validation",
                         lambda _db, deposit, **_kw: confirmations.append(deposit.id) or True)
     paid = {"id": "pay_00000000000000000009", "order_id": "mh5-sp-race", "status": "paid", "amount": "50.00",
-            "currency": "USD", "livemode": False}
+            "currency": "USD", "livemode": False, "asset": "USDT", "network": "BSC"}
 
     def work(i: int):
         with Session() as db:

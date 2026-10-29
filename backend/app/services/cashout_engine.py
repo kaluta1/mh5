@@ -1161,6 +1161,9 @@ def crypto_payout_status(db: Session) -> dict:
         block("PAYOUTS_SUSPENDED", "suspension", f"Crypto payouts are suspended: {suspension['message']}",
               "Review the flagged payout, verify its actual network fee, restore the settings below, then "
               "reactivate explicitly in section E.")
+    if payment_config.nowpayments_discontinued():
+        block("NOWPAYMENTS_DISCONTINUED", "provider", payment_config.DISCONTINUED_MESSAGE,
+              "Automatic payouts need a SoncoPay payout path; NOWPayments is never used again.")
     if not payment_config.crypto_master_switch():
         block("SERVER_SWITCH_OFF", "activation", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off.",
               "It is set on the server by the operator and cannot be changed here.")

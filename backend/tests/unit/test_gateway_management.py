@@ -142,7 +142,7 @@ def test_the_effective_default_says_why_there_is_none(ledger):
     np_configure(db, provider_enabled=False)
     effective = checkout_routing.effective_default(db)
     assert (effective.stored, effective.gateway) == ("nowpayments", None)
-    assert "NOWPayments cannot take new payments: NOWPayments is switched off." in effective.reason
+    assert "NOWPayments (discontinued) cannot take new payments: NOWPayments is switched off." in effective.reason
     np_configure(db, provider_enabled=True, checkout_enabled=False)
     assert "checkout is switched off" in checkout_routing.effective_default(db).reason
 
@@ -232,10 +232,10 @@ def test_the_admin_view_shows_each_gateway_and_both_defaults(client, ledger, fak
     gateways = {g["provider"]: g for g in view["gateways"]}
     assert (gateways["nowpayments"]["enabled"], gateways["nowpayments"]["ready"]) == (False, False)
     assert gateways["nowpayments"]["reason"] == "NOWPayments is switched off."
-    assert "USDT BEP20" in gateways["nowpayments"]["outgoing"]
+    assert gateways["nowpayments"]["outgoing"] == "Discontinued: no payout"
     assert (gateways["soncopay"]["enabled"], gateways["soncopay"]["ready"], gateways["soncopay"]["reason"]) == (
         True, True, None)
-    assert gateways["soncopay"]["outgoing"] == "Not supported"     # D5
+    assert gateways["soncopay"]["outgoing"] == "Not connected yet (automatic payouts stay off)"     # D5
     assert {p["provider"]: p["available"] for p in view["checkout_providers"]} == {"nowpayments": False,
                                                                                   "soncopay": True}
     assert (view["default_provider"], view["default_provider_in_force"]) == ("nowpayments", "none")

@@ -9,7 +9,7 @@ export const CASHOUTS_BASE = '/api/v1/admin/cashouts'
 
 export const FINANCE_SECTIONS = [
   { slug: 'providers', label: 'Payment Providers' },
-  { slug: 'nowpayments', label: 'NOWPayments Configuration' },
+  { slug: 'nowpayments', label: 'NOWPayments (discontinued)' },
   { slug: 'soncopay', label: 'SoncoPay Configuration' },
   { slug: 'crypto-cashout', label: 'Crypto Cashout Settings' },
   { slug: 'usd-cashout', label: 'USD Cashout Settings' },

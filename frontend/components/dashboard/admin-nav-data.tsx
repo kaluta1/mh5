@@ -67,7 +67,7 @@ export const adminNavSections: DashboardNavSection[] = [
     titleLabel: "Finance & Payments",
     items: [
       { name: "admin.nav.finance_providers", label: "Payment Providers", href: "/dashboard/admin/finance/providers", icon: Landmark },
-      { name: "admin.nav.finance_nowpayments", label: "NOWPayments Configuration", href: "/dashboard/admin/finance/nowpayments", icon: KeyRound },
+      { name: "admin.nav.finance_nowpayments", label: "NOWPayments (discontinued)", href: "/dashboard/admin/finance/nowpayments", icon: KeyRound },
       { name: "admin.nav.finance_crypto", label: "Crypto Cashout Settings", href: "/dashboard/admin/finance/crypto-cashout", icon: Coins },
       { name: "admin.nav.finance_usd", label: "USD Cashout Settings", href: "/dashboard/admin/finance/usd-cashout", icon: Banknote },
       { name: "admin.nav.finance_security", label: "Payout Security", href: "/dashboard/admin/finance/payout-security", icon: Lock },

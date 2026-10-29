@@ -32,6 +32,12 @@ The rules, in one place:
         partially_refunded                   -> refused for manual reconciliation
                                                 (as for NOWPayments)
     An unknown status changes nothing.
+  * Owner decision 2026-10-29: USDT on BNB Smart Chain (BEP20) only. Every
+    payment is created with that method chosen (method crypto, asset USDT,
+    network BSC), and a paid payment in any other asset or network (the
+    payer changed it on the payment page, or SoncoPay switched a wrong-asset
+    payment to what arrived) is never confirmed: the deposit stays pending
+    with provider_status paid_other_asset for an administrator.
 """
 from __future__ import annotations
 
@@ -58,6 +64,10 @@ logger = logging.getLogger(__name__)
 
 PROVIDER = "soncopay"
 NOWPAYMENTS = "nowpayments"
+# The only asset and network a member pays in (documented: method crypto, asset USDT, network BSC).
+PAY_METHOD, PAY_ASSET, PAY_NETWORK = "crypto", "USDT", "BSC"
+PAY_LABEL = "USDT on BNB Smart Chain (BEP20)"
+OTHER_ASSET_STATUS = "paid_other_asset"
 
 STATUS_TO_DEPOSIT = {
     "new": DepositStatus.PENDING,
@@ -74,7 +84,7 @@ STATUS_TO_DEPOSIT = {
 MEMBER_STATE = {
     "new": "pending", "waiting": "pending", "confirming": "awaiting_confirmation", "paid": "paid",
     "underpaid": "partial", "partially_paid": "partial", "expired": "expired", "failed": "failed",
-    "refunded": "refunded", "partially_refunded": "refunded",
+    "refunded": "refunded", "partially_refunded": "refunded", OTHER_ASSET_STATUS: "awaiting_confirmation",
 }
 
 # Webhook
@@ -195,6 +205,11 @@ def apply_payment(db: Session, deposit: Deposit, payment: Mapping[str, Any]) -> 
     if target is None:
         logger.warning("Deposit %s: unknown SoncoPay status %r, nothing changed", deposit.id, status[:40])
         return True
+    if target == DepositStatus.VALIDATED and not paid_in_usdt_bsc(payment):
+        deposit.provider_status = OTHER_ASSET_STATUS
+        logger.error("Deposit %s: SoncoPay reports it paid in %s on %s, not USDT on BSC; not confirmed",
+                     deposit.id, str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20])
+        return True
     if target == DepositStatus.VALIDATED:
         deposit.status = DepositStatus.VALIDATED
         deposit.validated_at = datetime.utcnow()
@@ -212,6 +227,14 @@ def apply_payment(db: Session, deposit: Deposit, payment: Mapping[str, Any]) -> 
 
             _release_pool_seat_for_deposit(db, deposit.id)
     return True
+
+
+def paid_in_usdt_bsc(payment: Mapping[str, Any]) -> bool:
+    """The payment was made in USDT on BSC: its asset and network say so (both fields are part of
+    the documented payment object, and become those of the asset received when SoncoPay switches a
+    wrong-asset payment). A missing field is not USDT on BSC."""
+    return (str(payment.get("asset") or "").strip().upper() == PAY_ASSET
+            and str(payment.get("network") or "").strip().upper() == PAY_NETWORK)
 
 
 def status_payload(deposit: Deposit) -> Dict[str, Any]:
@@ -270,7 +293,7 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
         amount=amount, currency=currency, order_id=order_id,
         description=description.encode("ascii", "replace").decode("ascii")[:200],
         return_url=return_url(deposit_id), callback_url=soncopay_settings.webhook_url(),
-        metadata={"deposit_id": int(deposit_id)})
+        metadata={"deposit_id": int(deposit_id)}, method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).with_for_update().one()
     payment_id = str(payment.get("id") or "")
     holder = (db.query(Deposit.id).filter(Deposit.payment_provider == PROVIDER, Deposit.external_payment_id == payment_id,

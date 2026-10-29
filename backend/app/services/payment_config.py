@@ -529,7 +529,8 @@ class PaymentConfig:
     def auto_payout_allowed(self) -> bool:
         """Every SWITCH that must be on for the engine (credentials are checked separately)."""
         return bool(crypto_master_switch() and payout_activation_switch() and self.provider_enabled
-                    and self.crypto_cashout_enabled and self.crypto_auto_payout_enabled)
+                    and self.crypto_cashout_enabled and self.crypto_auto_payout_enabled
+                    and not nowpayments_discontinued())
 
     @property
     def usd_settlement_allowed(self) -> bool:
@@ -554,6 +555,17 @@ def _dollars(value: Decimal) -> str:
 def _plain(value: Decimal) -> str:
     text = format(Decimal(value).normalize(), "f")
     return text if "." not in text else text.rstrip("0").rstrip(".") or "0"
+
+
+# Owner decision 2026-10-29: MyHigh5 uses SoncoPay only. NOWPayments starts nothing new, neither a
+# checkout nor a payout, whatever its switches and credentials say. Its history stays: callbacks,
+# status reads and reconciliation of what it already holds keep working.
+NOWPAYMENTS_DISCONTINUED = True
+DISCONTINUED_MESSAGE = "NOWPayments is discontinued for MyHigh5; SoncoPay is the only payment provider."
+
+
+def nowpayments_discontinued() -> bool:
+    return bool(NOWPAYMENTS_DISCONTINUED)
 
 
 def crypto_master_switch() -> bool:
@@ -1422,6 +1434,8 @@ def nowpayments_checkout_problem(db: Session, config: Optional[PaymentConfig] = 
     """Why a NEW NOWPayments checkout cannot be created now (None = it can). Read from the
     database, never from a cache: the provider and checkout switches, then the pay-in API key
     and the IPN secret in force (without the secret no payment could ever be confirmed)."""
+    if nowpayments_discontinued():
+        return DISCONTINUED_MESSAGE
     config = config or load(db)
     if not config.provider_enabled:
         return "NOWPayments is switched off."
@@ -1980,7 +1994,9 @@ def readiness_view(db: Session, *, config: Optional[PaymentConfig] = None, statu
                     "secret here (email codes cannot be automated).")
 
     credentials_ready = all(in_use[n] for n in PAYOUT_CREDENTIALS)
-    if not crypto_master_switch():
+    if nowpayments_discontinued():
+        payouts, detail = "DISABLED", DISCONTINUED_MESSAGE
+    elif not crypto_master_switch():
         payouts, detail = "DISABLED", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off."
     elif not payout_activation_switch():
         payouts, detail = "DISABLED", "Automatic payouts are not activated on the server (AUTOMATIC_PAYOUT_ACTIVATED)."

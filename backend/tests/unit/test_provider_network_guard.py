@@ -115,9 +115,6 @@ def test_every_synchronous_adapter_call_is_refused(provider_network):
         lambda: nowpayments.find_payout_by_external_id_sync("ref", CREDENTIALS),
         lambda: nowpayments._engine_token_sync(CREDENTIALS),
         lambda: nowpayments._confirm_payout_sync("5000000713", CREDENTIALS),
-        lambda: nowpayments.create_single_payout_sync(wallet_address="0x" + "a" * 40, amount=Decimal("5"),
-                                                      currency="usdtbsc", external_id="ref",
-                                                      credentials=CREDENTIALS),
         lambda: pc._http_get("https://api.nowpayments.io/v1/status", {}),
         lambda: pc._http_get("https://api-sandbox.nowpayments.io/v1/balance", {"x-api-key": "synthetic"}),
         lambda: pc._payout_login(CREDENTIALS),
@@ -126,7 +123,12 @@ def test_every_synchronous_adapter_call_is_refused(provider_network):
         with pytest.raises(BlockedProviderRequest):
             call()
     assert len(provider_network.attempts) == len(calls)
-    # A payout is never created: its login is refused first, so POST /v1/payout is not even attempted.
+    # Creating a payout is refused by MyHigh5 itself before any request (NOWPayments is discontinued and
+    # payouts are not activated), so nothing at all is attempted.
+    with pytest.raises(nowpayments.NowPaymentsError):
+        nowpayments.create_single_payout_sync(wallet_address="0x" + "a" * 40, amount=Decimal("5"),
+                                              currency="usdtbsc", external_id="ref", credentials=CREDENTIALS)
+    assert len(provider_network.attempts) == len(calls)
     assert not any(a.startswith("httpx POST /v1/payout ") for a in provider_network.attempts)
 
 

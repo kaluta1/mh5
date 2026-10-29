@@ -95,6 +95,18 @@ def setup_test_database():
 
 
 @pytest.fixture(autouse=True)
+def _nowpayments_machinery_under_test(request, monkeypatch):
+    """NOWPayments is discontinued in production (payment_config.NOWPAYMENTS_DISCONTINUED). Its code
+    stays for history and reconciliation, so its tests run as if it were not; a test marked
+    `discontinued` sees the production value."""
+    from app.services import payment_config
+
+    if request.node.get_closest_marker("discontinued") is None:
+        monkeypatch.setattr(payment_config, "NOWPAYMENTS_DISCONTINUED", False)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _no_kyc_admin_values_between_tests():
     """Kaluta settings saved in the Admin Panel reach the shared service object;
     no test may see the values another test saved."""

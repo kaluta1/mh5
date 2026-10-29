@@ -400,6 +400,8 @@ async def create_payment(
 ) -> Dict[str, Any]:
     from app.services import payment_config
 
+    if payment_config.nowpayments_discontinued():
+        raise NowPaymentsError(payment_config.DISCONTINUED_MESSAGE, status_code=403, code="PROVIDER_DISCONTINUED")
     payin = payment_config.payin_runtime()
     if not payin.provider_enabled:
         raise NowPaymentsError("Crypto payments are switched off (Finance & Payments > Payment Providers)")
@@ -878,8 +880,11 @@ def create_single_payout_sync(*, wallet_address: str, amount: Decimal, currency:
     verified=False: the provider then rejects it by itself after an hour, and
     until it reports that the outcome is uncertain and is reconciled, never
     retried."""
-    from app.services.payment_config import payout_activation_switch
+    from app.services.payment_config import nowpayments_discontinued, payout_activation_switch
 
+    if nowpayments_discontinued():
+        raise NowPaymentsError("NOWPayments is discontinued for MyHigh5", status_code=403,
+                               code="PROVIDER_DISCONTINUED", stage="create")
     if not payout_activation_switch():
         # Last line before money moves: whoever calls, nothing is sent while not activated.
         # A 4xx "refusal" before any request, so the caller releases the reservation.

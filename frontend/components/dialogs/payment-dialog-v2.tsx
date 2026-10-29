@@ -942,7 +942,7 @@ export function PaymentDialog({
                       {t('payment.pay_with_soncopay') || 'Pay with SoncoPay'}
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400">
-                      {t('payment.soncopay_methods') || 'Crypto, mobile money or card, on the secure SoncoPay page'}
+                      {t('payment.soncopay_usdt_bsc') || 'USDT on BNB Smart Chain (BEP20), on the secure SoncoPay page'}
                     </span>
                   </span>
                 </button>

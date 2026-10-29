@@ -860,3 +860,52 @@ def test_status_names_the_missing_activation(ledger, engine_on, monkeypatch):
     assert "NOT_ACTIVATED" in [b["code"] for b in status["blockers"]]
     assert status["switches"]["activation"] is False
     assert engine.engine_status(db)["activation"] is False and engine.engine_status(db)["enabled"] is False
+
+
+# ===========================================================================
+# NOWPayments discontinued (owner decision 2026-10-29): it never pays again
+# ===========================================================================
+
+@pytest.mark.discontinued
+def test_with_nowpayments_discontinued_nothing_is_paid_even_with_every_switch_on(ledger, engine_on):
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    row = commission(db, user, "2.00")
+    provider = FakeProvider()
+    report = run(db, provider)
+    assert report["enabled"] is False and report["members"] == {} and provider.created == []
+    db.refresh(row)
+    assert cashouts(db, user) == [] and row.status != CommissionStatus.PAID
+    codes = [b["code"] for b in engine.crypto_payout_status(db)["blockers"]]
+    assert "NOWPAYMENTS_DISCONTINUED" in codes
+    assert engine.engine_status(db)["enabled"] is False
+
+
+@pytest.mark.discontinued
+def test_the_nowpayments_payout_call_itself_refuses_when_discontinued(engine_on, monkeypatch):
+    nowpayments = _nowpayments
+
+    def no_http(*_a, **_k):
+        raise AssertionError("an HTTP client was opened")
+
+    monkeypatch.setattr(nowpayments.httpx, "Client", no_http)
+    with pytest.raises(nowpayments.NowPaymentsError) as caught:              # activation is ON here
+        _REAL_CREATE_PAYOUT(wallet_address=WALLET, amount=Decimal("2.00"), currency="usdtbsc",
+                            external_id="c1-a1", credentials=None)
+    assert (caught.value.code, caught.value.status_code) == ("PROVIDER_DISCONTINUED", 403)
+
+
+@pytest.mark.discontinued
+def test_a_payout_handed_over_before_discontinuation_is_still_followed_up(ledger, engine_on):
+    db = ledger
+    user = member(db, "m1", method="CRYPTO")
+    row = commission(db, user, "2.00")
+    db.add(AffiliateCashoutRequest(user_id=user.id, gross_amount=Decimal("2.00"), fee=0, net_amount=Decimal("2.00"),
+                                   status="processing", cashout_method="CRYPTO", commission_id=row.id,
+                                   wallet_snapshot=WALLET, payout_currency="usdtbsc", provider_batch_id="batch-9",
+                                   payout_reference=f"intent:c{row.id}-a1", requested_at=NOW - timedelta(hours=1)))
+    row.payout_reference = f"intent:c{row.id}-a1"
+    db.commit()
+    provider = FakeProvider(statuses={"batch-9": "FINISHED"})
+    report = run(db, provider)
+    assert report["reconciled"] and provider.created == []

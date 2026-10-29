@@ -92,7 +92,7 @@ class FakeSonco:
             p = {"id": pid, "object": "payment", "livemode": env == "live", "status": "new",
                  "amount": body["amount"], "currency": body["currency"], "order_id": body["order_id"],
                  "checkout_url": f"https://soncopay.com/pay/{pid}", "expires_at": "2026-10-21T15:30:00+00:00",
-                 "_env": env, "_body": body}
+                 "asset": body.get("asset"), "network": body.get("network"), "_env": env, "_body": body}
             self.payments[pid] = p
             return httpx.Response(201, json=self.public(p))
         if request.method == "GET" and path.startswith("/v1/payments/"):
@@ -293,7 +293,7 @@ def test_a_soncopay_webhook_never_matches_a_nowpayments_deposit(client, ledger, 
     created = buy(client, buyer, "k-np")
     dep = deposit_of(db, created)
     answer = post_webhook(client, "payment.paid", {"id": "pay_00000000000000000001", "order_id": dep.order_id,
-                                                   "status": "paid", "livemode": False})
+                                                   "status": "paid", "livemode": False, "asset": "USDT", "network": "BSC"})
     assert answer.status_code == 200
     db.expire_all()
     assert db.get(Deposit, dep.id).status == DepositStatus.PENDING
@@ -397,7 +397,7 @@ def test_an_unsigned_stale_or_wrongly_signed_webhook_changes_nothing(client, led
     configure(db)
     _created, dep = soncopay_purchase(client, db, fake, buyer)
     fake.set(dep.external_payment_id, status="paid")
-    data = {"id": dep.external_payment_id, "order_id": dep.order_id, "status": "paid", "livemode": False}
+    data = {"id": dep.external_payment_id, "order_id": dep.order_id, "status": "paid", "livemode": False, "asset": "USDT", "network": "BSC"}
     assert post_webhook(client, "payment.paid", data, secret="whsec_wrong_synthetic_00000").status_code == 400
     assert post_webhook(client, "payment.paid", data, ts=int(time.time()) - 600).status_code == 400
     raw, headers = signed("payment.paid", data)
@@ -426,7 +426,7 @@ def test_a_paid_webhook_confirms_once_from_the_payment_read_back(client, ledger,
     before = benefits(db, dep)
     # The body claims "paid" but SoncoPay still says "waiting": nothing is credited.
     fake.set(dep.external_payment_id, status="waiting")
-    data = {"id": dep.external_payment_id, "order_id": dep.order_id, "status": "paid", "livemode": False}
+    data = {"id": dep.external_payment_id, "order_id": dep.order_id, "status": "paid", "livemode": False, "asset": "USDT", "network": "BSC"}
     assert post_webhook(client, "payment.paid", data, delivery="dlv_a").status_code == 200
     db.expire_all()
     assert db.get(Deposit, dep.id).status == DepositStatus.PENDING and benefits(db, dep) == before
@@ -659,3 +659,67 @@ def test_connection_test_is_super_admin_only_and_has_no_side_effect(client, ledg
     for secret in (TEST_KEY, TEST_SECRET):
         assert secret not in done.text + missing.text
     assert code_of(client.post(url, headers=bearer(boss), json={"environment": "prod"})) is not None
+
+
+# ===========================================================================
+# USDT on BNB Smart Chain only (owner decision 2026-10-29)
+# ===========================================================================
+
+def test_every_payment_is_created_as_usdt_on_bsc(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    _created, dep = soncopay_purchase(client, db, fake, buyer)
+    sent = fake.payments[dep.external_payment_id]["_body"]
+    assert (sent["method"], sent["asset"], sent["network"]) == ("crypto", "USDT", "BSC")
+
+
+@pytest.mark.parametrize("paid", [{"asset": "USDT", "network": "TRON"}, {"asset": "USDC", "network": "BSC"},
+                                  {"asset": None, "network": None}])
+def test_a_payment_paid_in_another_asset_or_network_is_never_confirmed(client, ledger, fake, buyer, paid):
+    db = ledger
+    configure(db)
+    _created, dep = soncopay_purchase(client, db, fake, buyer)
+    before = benefits(db, dep)
+    fake.set(dep.external_payment_id, status="paid", **paid)
+    synced = client.post(f"/api/v1/payments/sync/{dep.id}", headers=bearer(buyer))
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["is_confirmed"] is False
+    db.expire_all()
+    dep = db.get(Deposit, dep.id)
+    assert (dep.status, dep.provider_status) == (DepositStatus.PENDING, "paid_other_asset")
+    assert benefits(db, dep) == before                              # no commission, no journal
+
+
+@pytest.mark.discontinued
+def test_nowpayments_takes_no_new_payment_even_as_the_stored_default(client, ledger, fake, buyer,
+                                                                     nowpayments_calls):
+    db = ledger
+    assert payment_config.nowpayments_checkout_problem(db) == payment_config.DISCONTINUED_MESSAGE
+    answer = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert answer["available"] is False                             # stored default nowpayments -> none
+    created = buy(client, buyer, "k-np")
+    assert created.status_code == 503
+    assert nowpayments_calls == [] and db.query(Deposit).count() == 0
+    configure(db)                                                   # SoncoPay ready and the default
+    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == \
+        {"provider": "soncopay", "available": True}
+
+
+@pytest.mark.discontinued
+def test_nowpayments_cannot_be_chosen_as_the_default_again(ledger):
+    db = ledger
+    boss = configure(db)
+    with pytest.raises(Exception):
+        sp.update(db, boss, password=ADMIN_PASSWORD, default_provider="nowpayments")
+    db.rollback()
+    assert sp.current_state(db)["default_provider"] == "soncopay"
+
+
+@pytest.mark.discontinued
+async def test_the_nowpayments_client_itself_refuses_a_new_payment():
+    from app.services import nowpayments_service
+
+    with pytest.raises(nowpayments_service.NowPaymentsError) as caught:
+        await nowpayments_service.create_payment(price_amount=Decimal("50"), price_currency="usd",
+                                                 order_id="o-1", order_description="x")
+    assert caught.value.code == "PROVIDER_DISCONTINUED"
