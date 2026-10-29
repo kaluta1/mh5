@@ -186,3 +186,26 @@ describe('CashoutPanel: network fee terms', () => {
     expect(screen.getByText('Commission #42')).toBeInTheDocument()
   })
 })
+
+describe('CashoutPanel: SoncoPay smallest payout', () => {
+  it('shows the smallest payout, the fee and what is adding up towards it', async () => {
+    current = summary({
+      crypto_payout_threshold: { threshold: '2.23', network_fee: '0.23', provider_minimum: '2',
+        read_at: '2026-10-29T12:00:00Z', accumulated: '1.80', awaiting_threshold: true,
+        destination: { destination_state: 'READY', message: 'Your wallet is ready for automatic payouts.', usable_from: null } },
+    })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.getByTestId('payout-threshold')).toHaveTextContent('2.23 USDT')
+    expect(screen.getByTestId('payout-fee')).toHaveTextContent('0.23 USDT per payout')
+    expect(screen.getByTestId('payout-accumulated')).toHaveTextContent('1.80 USDT')
+    expect(screen.getByTestId('payout-destination')).toHaveTextContent('ready for automatic payouts')
+    expect(screen.getByTestId('payout-accumulating-note')).toHaveTextContent('added together')
+  })
+
+  it('says nothing about a threshold the server did not send', async () => {
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.queryByTestId('payout-threshold')).toBeNull()
+  })
+})

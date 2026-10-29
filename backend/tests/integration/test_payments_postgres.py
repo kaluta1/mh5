@@ -658,6 +658,37 @@ def test_concurrent_engine_workers_pay_one_member_exactly_once(pg, engine_on):
         assert len(references) == 3 and None not in references                    # every row reserved once, alone
 
 
+def test_concurrent_workers_send_one_combined_payout_of_small_commissions(pg, engine_on):
+    """Owner decision 2026-10-29 (Option A): commissions below the provider's minimum plus its fee are
+    paid together, per member. However many workers race, they are reserved and sent exactly once."""
+    _engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "m1", method="CRYPTO")
+        for amount in ("1.20", "1.20", "1.20"):
+            commission(db, user, amount)
+        configure(db, crypto_auto_payout_enabled=True, **FEE_RULES)
+        user_id = user.id
+    provider = slow_provider(minimum="2.00", fee="0.23")             # threshold 2.23: each 1.20 waits
+    provider.accumulates_small_commissions = True
+
+    def cycle(_i):
+        with Session() as db:
+            return engine_service.run_cycle(db, provider=provider, now=NOW)
+
+    reports = in_threads(4, cycle)
+    assert not any(isinstance(r, Exception) for r in reports), reports
+    outcomes = [code for r in reports for code, n in r["members"].items() for _ in range(n)]
+    assert outcomes.count("SUBMITTED") == 1 and len(provider.created) == 1
+    assert provider.created[0]["amount"] == Decimal("3.60")
+    with Session() as db:
+        [row] = db.query(AffiliateCashoutRequest).filter_by(user_id=user_id).all()
+        assert row.commission_id is None and Decimal(str(row.gross_amount)) == Decimal("3.60")
+        references = {c.payout_reference for c in db.query(AffiliateCommission).filter_by(user_id=user_id)}
+        assert references == {row.payout_reference}                       # all three in this one payout
+        assert len(engine_service.payout_commission_ids(db, [row.id])[row.id]) == 3
+
+
 def test_concurrent_reconciliation_posts_a_finished_payout_exactly_once(pg, engine_on):
     _engine, Session = pg
     with Session() as db:

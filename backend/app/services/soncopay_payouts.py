@@ -666,11 +666,64 @@ class _Facts:
     minimum: Optional[Decimal] = None
 
 
+def published_fee_and_minimum(answer: dict) -> _Facts:
+    """USDT:BSC fee and minimum from GET /v1/payout-fees. The minimum is the HIGHER of the account-wide
+    min_payout_usd and the per-asset `limits[USDT:BSC].minimum` (read 2026-10-29: 0.5 and 2). The fee is
+    `limits[USDT:BSC].fee`, else `fees[USDT:BSC]`; two different figures are not guessed between."""
+    fees = answer.get("fees") if isinstance(answer.get("fees"), dict) else answer.get("payout_fees")
+    limits = answer.get("limits") if isinstance(answer.get("limits"), dict) else answer.get("payout_limits")
+    asset = limits.get(FEE_KEY) if isinstance(limits, dict) and isinstance(limits.get(FEE_KEY), dict) else {}
+    if asset and asset.get("available") is False:
+        raise PayoutUnavailable("SoncoPay reports USDT:BSC payouts as unavailable", stage="read")
+    listed = fees.get(FEE_KEY) if isinstance(fees, dict) else None
+    fee = asset.get("fee") if asset.get("fee") not in (None, "") else listed
+    if fee is None:
+        raise PayoutUnavailable("SoncoPay publishes no USDT:BSC payout fee for this account", stage="read")
+    fee = _decimal(fee, "payout fee")
+    if listed is not None and _decimal(listed, "payout fee") != fee:
+        raise PayoutUnavailable("SoncoPay publishes two different USDT:BSC payout fees", stage="read")
+    minimums = [_decimal(value, "minimum") for value in (answer.get("min_payout_usd"), asset.get("minimum"))
+                if value not in (None, "")]
+    if not minimums:
+        raise PayoutUnavailable("SoncoPay publishes no minimum payout", stage="read")
+    return _Facts(fee=fee, minimum=max(minimums))
+
+
+# The last USDT:BSC fee and minimum read from SoncoPay, for the dashboards (the engine reads its own
+# every cycle). Kept in this process only; a read that failed is not retried for LIMITS_RETRY seconds.
+LIMITS_MAX_AGE, LIMITS_RETRY = 900.0, 300.0
+_limits: Dict[str, Any] = {"facts": None, "read_at": None, "checked": 0.0}
+
+
+def _remember(facts: _Facts) -> None:
+    _limits.update(facts=facts, read_at=datetime.utcnow(), checked=time.monotonic())
+
+
+def published_limits(db: Session) -> Optional[dict]:
+    """{fee, minimum, read_at} of USDT:BSC payouts, at most LIMITS_MAX_AGE old; None when never read.
+    Reads SoncoPay (one GET) only when the cached figures are older than that and a Live key is saved."""
+    if time.monotonic() - _limits["checked"] > (LIMITS_MAX_AGE if _limits["facts"] else LIMITS_RETRY):
+        _limits["checked"] = time.monotonic()
+        key = soncopay_settings.api_key(db, ENVIRONMENT)
+        if key:
+            try:
+                _remember(published_fee_and_minimum(PayoutClient(key).payout_fees()))
+            except (PayoutRefused, PayoutUnavailable):
+                logger.warning("SoncoPay payout fees could not be read for the dashboards")
+    facts = _limits["facts"]
+    if facts is None:
+        return None
+    return {"fee": facts.fee, "minimum": facts.minimum, "read_at": _limits["read_at"]}
+
+
 class SoncoPayPayoutProvider:
     """The engine's provider interface (balance, minimum, network_fee, create_payout, payout_status,
     payout_details, find_payout, check_session, validate_address) on SoncoPay. One per cycle."""
 
     name = "soncopay"
+    # Owner decision 2026-10-29 (Option A): commissions too small to clear SoncoPay's minimum plus fee on
+    # their own are paid together, per member (cashout_engine.select_payout).
+    accumulates_small_commissions = True
 
     def __init__(self, db: Session, api: Optional[PayoutClient] = None):
         self._db = db
@@ -684,16 +737,8 @@ class SoncoPayPayoutProvider:
 
     def _fees(self) -> _Facts:
         if self._facts.fee is None:
-            answer = self._client().payout_fees()
-            fees = answer.get("fees") if isinstance(answer.get("fees"), dict) else answer.get("payout_fees")
-            if not isinstance(fees, dict) or FEE_KEY not in fees:
-                raise PayoutUnavailable("SoncoPay publishes no USDT:BSC payout fee for this account", stage="read")
-            minimum = answer.get("min_payout_usd")
-            if minimum is None and isinstance(answer.get("limits"), dict):
-                minimum = answer["limits"].get("min_payout_usd")
-            if minimum is None:
-                raise PayoutUnavailable("SoncoPay publishes no minimum payout", stage="read")
-            self._facts = _Facts(fee=_decimal(fees[FEE_KEY], "payout fee"), minimum=_decimal(minimum, "minimum"))
+            self._facts = published_fee_and_minimum(self._client().payout_fees())
+            _remember(self._facts)
         return self._facts
 
     @staticmethod
@@ -704,10 +749,11 @@ class SoncoPayPayoutProvider:
     def balance(self, currency: str) -> Decimal:
         self._currency(currency)
         answer = self._client().balances()
+        # What may be spent is `available`; funds on hold are in `balances` too and are never counted.
         for key in ("available", "balances"):
             table = answer.get(key)
-            if isinstance(table, dict) and ASSET in table:
-                value = table[ASSET]
+            if isinstance(table, dict):
+                value = table.get(ASSET, "0")
                 if isinstance(value, dict):
                     value = value.get("amount")
                 return _decimal(value, "balance")
@@ -858,6 +904,7 @@ def admin_view(db: Session, *, read_provider: bool = False) -> dict:
         "provider": None,
     }
     if read_provider and ready(db):
+        _limits["checked"] = 0.0                    # an explicit read refreshes the figures below too
         facts: Dict[str, Any] = {}
         try:
             api = client(db)
@@ -868,6 +915,9 @@ def admin_view(db: Session, *, read_provider: bool = False) -> dict:
             table = fees.get("fees") if isinstance(fees.get("fees"), dict) else fees.get("payout_fees")
             facts["fee"] = (table or {}).get(FEE_KEY) if isinstance(table, dict) else None
             facts["min_payout_usd"] = fees.get("min_payout_usd")
+            published = published_fee_and_minimum(fees)
+            _remember(published)
+            facts["minimum"] = str(published.minimum)
             listing = api.all_destinations()
             items = listing.get("items") if isinstance(listing.get("items"), list) else []
             facts["open_destinations"] = sum(1 for i in items if isinstance(i, dict)
@@ -878,5 +928,23 @@ def admin_view(db: Session, *, read_provider: bool = False) -> dict:
         except (PayoutRefused, PayoutUnavailable) as exc:
             facts["error"] = getattr(exc, "code", None) or str(exc)[:120]
         view["provider"] = facts
+    view["accumulation"] = accumulation_view(db)
     db.rollback()
     return view
+
+
+def accumulation_view(db: Session) -> dict:
+    """Owner decision 2026-10-29 (Option A): the threshold from SoncoPay's last published USDT:BSC fee and
+    minimum, every Crypto Cashout member's accumulating commissions against it, and the latest combined
+    payouts with the commissions each carries."""
+    from app.services import cashout_engine as engine
+
+    published = published_limits(db)
+    threshold = (engine.payout_threshold(payment_config.load(db), published["minimum"], published["fee"])
+                 if published is not None else None)
+    return {"threshold": f"{threshold:.2f}" if threshold is not None else None,
+            "fee": str(published["fee"]) if published is not None else None,
+            "minimum": str(published["minimum"]) if published is not None else None,
+            "read_at": published["read_at"].isoformat() + "Z" if published is not None else None,
+            "members": engine.accumulation_overview(db, threshold),
+            "payouts": engine.accumulated_payouts(db)}

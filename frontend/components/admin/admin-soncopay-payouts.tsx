@@ -21,7 +21,21 @@ type Destination = {
   id: number; user_id: number; username: string; address: string | null; status: string; usable: boolean
   usable_from: string | null; confirmed_at: string | null; destination_id: string | null; last_error: string | null
 }
+type AccumulatingMember = {
+  user_id: number; username: string | null; unpaid: string; commissions: number; accumulating: string
+  accumulating_commissions: number; reaches_threshold: boolean; blocked_by: string | null
+}
+type CombinedPayout = {
+  cashout_id: number; user_id: number; status: string; failure_code: string | null; gross_amount: string
+  amount_sent: string | null; network_fee_estimate: string | null; commission_ids: number[]
+  provider_payout_id: string | null; tx_hash: string | null; requested_at: string | null
+}
+type Accumulation = {
+  threshold: string | null; fee: string | null; minimum: string | null; read_at: string | null
+  members: AccumulatingMember[]; payouts: CombinedPayout[]
+}
 type PayoutsView = {
+  accumulation?: Accumulation
   blockers: Blocker[]
   authorization: { authorized_at: string; authorized_by: number | null; note: string | null } | null
   confirmation_phrase: string
@@ -30,7 +44,7 @@ type PayoutsView = {
   destinations: Destination[]
   provider: null | {
     balance?: Record<string, string | null>; fee?: string | null; min_payout_usd?: string | number | null
-    open_destinations?: number; settings?: Record<string, unknown>; error?: string
+    open_destinations?: number; settings?: Record<string, unknown>; error?: string; minimum?: string
   }
 }
 
@@ -95,7 +109,9 @@ export default function AdminSoncoPayPayouts() {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Each available direct commission is paid on its own, in USDT on BNB Smart Chain (BEP20), to the member&apos;s
             approved wallet once SoncoPay has confirmed it as a payout destination and its security waiting period is
-            over. The member receives the commission less SoncoPay&apos;s network fee.
+            over. The member receives the commission less SoncoPay&apos;s network fee. Commissions below the smallest
+            payout (SoncoPay&apos;s minimum plus its fee) are added together, per member, and paid in one payout once
+            together they reach it.
           </p>
         </div>
 
@@ -159,13 +175,15 @@ export default function AdminSoncoPayPayouts() {
               <dt>Available USDT</dt><dd>{facts.balance?.available ?? facts.balance?.balances ?? '—'}</dd>
               <dt>Reserved USDT</dt><dd>{facts.balance?.reserved ?? '0'}</dd>
               <dt>Network fee (USDT:BSC)</dt><dd>{facts.fee ?? 'not published'}</dd>
-              <dt>Minimum payout (USD)</dt><dd>{String(facts.min_payout_usd ?? '—')}</dd>
+              <dt>Minimum payout (USDT:BSC)</dt><dd>{facts.minimum ?? String(facts.min_payout_usd ?? '—')}</dd>
               <dt>Open destinations</dt><dd>{facts.open_destinations ?? '—'} of {view.destination_limit}</dd>
               <dt>Waiting period (hours)</dt><dd>{String(facts.settings?.cooldown_hours ?? '—')}</dd>
               <dt>Automatic confirmation</dt><dd>{facts.settings?.api_auto_confirm ? 'On' : 'Off'}</dd>
             </dl>
           )}
         </section>
+
+        <AccumulationSection accumulation={view.accumulation} />
 
         <section className="space-y-2" aria-labelledby="sp-destinations">
           <h3 id="sp-destinations" className="text-sm font-semibold">Member destinations</h3>
@@ -193,5 +211,57 @@ export default function AdminSoncoPayPayouts() {
         {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       </CardContent>
     </Card>
+  )
+}
+
+export function AccumulationSection({ accumulation }: { accumulation?: Accumulation }) {
+  if (!accumulation) return null
+  return (
+    <section className="space-y-2" aria-labelledby="sp-accumulation" data-testid="sp-accumulation">
+      <h3 id="sp-accumulation" className="text-sm font-semibold">Small commissions added together</h3>
+      <p className="text-sm" data-testid="sp-threshold">
+        {accumulation.threshold
+          ? `Smallest payout ${accumulation.threshold} USDT (SoncoPay minimum ${accumulation.minimum} + network fee ${accumulation.fee}, with the safety margin).`
+          : 'The smallest payout is shown once the SoncoPay fee and minimum have been read.'}
+      </p>
+      {accumulation.members.length === 0
+        ? <p className="text-sm text-gray-500">No Crypto Cashout member has unpaid commissions.</p>
+        : <table className="w-full text-sm" data-testid="sp-accumulation-table">
+            <thead><tr className="text-left text-gray-500">
+              <th>Member</th><th>Unpaid</th><th>Adding up</th><th>Ready</th><th>Blocked by</th>
+            </tr></thead>
+            <tbody>
+              {accumulation.members.map((m) => (
+                <tr key={m.user_id} className="border-t border-gray-100 dark:border-gray-800">
+                  <td>{m.username ?? '—'} (#{m.user_id})</td>
+                  <td className="tabular-nums">{m.unpaid} ({m.commissions})</td>
+                  <td className="tabular-nums">{m.accumulating} ({m.accumulating_commissions})</td>
+                  <td>{m.reaches_threshold ? 'Yes' : 'No'}</td>
+                  <td className="text-xs text-gray-500">{m.blocked_by ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>}
+      <h4 className="text-sm font-semibold">Combined payouts</h4>
+      {accumulation.payouts.length === 0
+        ? <p className="text-sm text-gray-500">No combined payout yet.</p>
+        : <table className="w-full text-sm" data-testid="sp-combined-table">
+            <thead><tr className="text-left text-gray-500">
+              <th>Payout</th><th>Member</th><th>Amount</th><th>Commissions</th><th>Status</th><th>SoncoPay</th>
+            </tr></thead>
+            <tbody>
+              {accumulation.payouts.map((p) => (
+                <tr key={p.cashout_id} className="border-t border-gray-100 dark:border-gray-800">
+                  <td>#{p.cashout_id}</td>
+                  <td>#{p.user_id}</td>
+                  <td className="tabular-nums">{p.gross_amount}{p.amount_sent ? ` (sent ${p.amount_sent})` : ''}</td>
+                  <td className="font-mono text-xs">{p.commission_ids.map((id) => `#${id}`).join(', ')}</td>
+                  <td>{p.status}{p.failure_code ? ` (${p.failure_code})` : ''}</td>
+                  <td className="font-mono text-xs">{p.provider_payout_id ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>}
+    </section>
   )
 }

@@ -94,7 +94,7 @@ import asyncio
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_UP, Decimal
 from typing import Optional
 
 from sqlalchemy import func, or_
@@ -182,6 +182,61 @@ def commission_intent_reference(db: Session, commission_id: int) -> str:
     attempts = (db.query(func.count(AffiliateCashoutRequest.id))
                 .filter(AffiliateCashoutRequest.commission_id == int(commission_id)).scalar() or 0)
     return f"intent:c{int(commission_id)}-a{int(attempts) + 1}"
+
+
+def accumulated_intent_reference(db: Session, user_id: int, first_commission_id: int) -> str:
+    """Deterministic idempotency key of the next combined payout of ONE member's small commissions:
+    intent:m<member>-c<oldest commission id>-a<attempt number>. The attempt number counts earlier
+    combined payouts of the member that started from the same commission (each was recorded as not
+    paid before another can be reserved: uq_cashout_one_active_per_user)."""
+    prefix = f"intent:m{int(user_id)}-c{int(first_commission_id)}-a"
+    attempts = (db.query(func.count(AffiliateCashoutRequest.id))
+                .filter(AffiliateCashoutRequest.user_id == int(user_id),
+                        AffiliateCashoutRequest.payout_reference.like(prefix + "%")).scalar() or 0)
+    return f"{prefix}{int(attempts) + 1}"
+
+
+def payout_threshold(config, minimum: Decimal, fee: Optional[Decimal]) -> Decimal:
+    """The smallest amount one payout may carry: the Crypto Cashout minimum, and the provider's minimum
+    (and the minimum received) plus the provider's fee raised by the safety margin, because the member
+    bears the fee and the provider's minimum applies to what the address receives. Rounded UP to the
+    cent. Without a fee (a caller that has none) only the minimums count."""
+    fee_part = Decimal("0")
+    if fee is not None:
+        margin = config.fee_estimate_margin_percent
+        fee_part = cs.adjusted_estimate(fee, margin) if margin is not None else Decimal(str(fee))
+    floor = max(cs.crypto_minimum(config=config), Decimal(str(minimum)) + fee_part,
+                money(config.min_net_payout_usd) + fee_part if fee is not None else Decimal("0"))
+    return Decimal(floor).quantize(Decimal("0.01"), rounding=ROUND_UP)
+
+
+def select_payout(available: list, threshold: Decimal, ceiling: Decimal, *, accumulate: bool,
+                  own_minimum: Decimal) -> tuple[list, Optional[str]]:
+    """Which of a member's available rows (oldest first) the next payout carries, or why none.
+
+    A row at or above the threshold (and within the single-payout limit) is paid on its own, oldest
+    first: the individual payout rule of 2026-10-18 is unchanged for it. Only when no such row exists,
+    and the provider accumulates (owner decision 2026-10-29, Option A), are the rows BELOW the threshold
+    combined, oldest first, as long as the total stays within the single-payout limit; they are paid
+    together once that total reaches the threshold. A row above the limit is never paid automatically."""
+    single = [r for r in available if threshold <= money(r.commission_amount) <= ceiling]
+    if single:
+        return single[:1], None
+    amounts = [money(r.commission_amount) for r in available]
+    if amounts and all(a > ceiling for a in amounts):
+        return [], "EXCEEDS_SINGLE_LIMIT"
+    if not accumulate:
+        return [], ("BELOW_PROVIDER_MINIMUM" if any(own_minimum <= a <= ceiling for a in amounts)
+                    else "BELOW_MINIMUM")
+    chosen, total = [], Decimal("0.00")
+    for row in available:
+        amount = money(row.commission_amount)
+        if amount < threshold and money(total + amount) <= ceiling:
+            chosen.append(row)
+            total = money(total + amount)
+    if total < threshold:
+        return [], "ACCUMULATING_BELOW_THRESHOLD"
+    return chosen, None
 
 
 def _soncopay():
@@ -565,29 +620,31 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         return blocker
 
     cs.release_pending(db, user, now=now, config=config)
-    # Owner rule 2026-10-18: every commission is paid by its OWN payout (no
-    # combining). This call pays the oldest available commission that can be paid
-    # on its own; one below the minimum or above the single-payout limit stays
-    # available and unpaid (never combined) and never holds the others back.
+    # Owner rule 2026-10-18: every commission is paid by its OWN payout. This
+    # call pays the oldest available commission that can be paid on its own; one
+    # above the single-payout limit stays available and unpaid and never holds the
+    # others back. Owner decision 2026-10-29 (Option A, SoncoPay): commissions
+    # too small to clear the provider's minimum plus its fee on their own are
+    # combined, for this member only, into one payout once together they do.
     available = cs.available_rows(db, user.id)
     if not available:
         db.commit()
         return "NOTHING_TO_PAY"
     own_minimum = cs.crypto_minimum(config=config)
-    provider_minimum = Decimal(str(facts.get("minimum") or 0))
-    ceiling = money(config.max_single_payout_usd)
-    payable_rows = [r for r in available
-                    if max(own_minimum, provider_minimum) <= money(r.commission_amount) <= ceiling]
-    if not payable_rows:
+    accumulate = bool(getattr(provider, "accumulates_small_commissions", False))
+    fee = facts.get("fee") if accumulate else None
+    threshold = payout_threshold(config, Decimal(str(facts.get("minimum") or 0)),
+                                 Decimal(str(fee)) if fee is not None else None)
+    rows, why_not = select_payout(available, threshold, money(config.max_single_payout_usd),
+                                  accumulate=accumulate and fee is not None, own_minimum=own_minimum)
+    if why_not is not None:
         db.commit()
-        amounts = [money(r.commission_amount) for r in available]
-        if all(a > ceiling for a in amounts):
-            return "EXCEEDS_SINGLE_LIMIT"
-        if any(own_minimum <= a <= ceiling for a in amounts):
-            return "BELOW_PROVIDER_MINIMUM"
-        return "BELOW_MINIMUM"
-    rows = payable_rows[:1]
-    commission_id = int(rows[0].id)
+        return why_not
+    selected = [int(r.id) for r in rows]
+    # One commission: its own payout, as before. Several: one combined payout of
+    # this member's small commissions (commission_id stays empty; the database
+    # allows one such open payout per member).
+    commission_id = selected[0] if len(selected) == 1 else None
     amount = cs.rows_total(rows)
 
     def stop(code: str) -> str:
@@ -644,8 +701,8 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             or not wallet.payable or cs.active_pooled_cashout(db, user.id)):
         db.rollback()
         return "WALLET_CHANGED"
-    rows = [row for row in cs.available_rows(db, user.id) if int(row.id) == commission_id]
-    if cs.rows_total(rows) != amount:
+    rows = [row for row in cs.available_rows(db, user.id) if int(row.id) in selected]
+    if sorted(int(r.id) for r in rows) != sorted(selected) or cs.rows_total(rows) != amount:
         db.rollback()
         return "BALANCE_CHANGED"                    # paid, reserved or cancelled meanwhile
     consent = cs.active_fee_consent(db, user.id, config, now)
@@ -679,14 +736,20 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     blocked = blocked or cs.recording_gate(db, locked_config)
     if blocked is not None:
         return stop(blocked)
-    intent_ref = commission_intent_reference(db, commission_id)
+    if commission_id is not None:
+        intent_ref = commission_intent_reference(db, commission_id)
+    else:
+        intent_ref = accumulated_intent_reference(db, user_id, selected[0])
     cashout = cs.reserve(db, user, rows, method=cs.METHOD_CRYPTO, fee=Decimal("0.00"), intent_ref=intent_ref,
                          now=now, wallet=wallet.address, currency=wallet.currency, net=money(expected),
                          network_fee=money(estimate), network_fee_policy=config.network_fee_policy,
-                         beneficiary_fee=plan, audit_extra={"settings_version": int(locked_config.version)},
+                         beneficiary_fee=plan,
+                         audit_extra={"settings_version": int(locked_config.version),
+                                      "payout_kind": "INDIVIDUAL" if commission_id is not None else "ACCUMULATED",
+                                      "payout_threshold": str(threshold)},
                          commission_id=commission_id, wallet_approval_id=approval_id)
     if cashout is None:
-        return "ALREADY_RESERVED"                   # another worker reserved this commission first
+        return "ALREADY_RESERVED"                   # another worker reserved these commissions first
     cashout_id = int(cashout.id)
 
     # Committed intent. Re-check the CURRENT state immediately before provider I/O.
@@ -888,6 +951,9 @@ def _pay_cycle(db: Session, provider, config, now: datetime, limit: Optional[int
     try:
         # The network fee is asked for each payout, for its own amount (process_member).
         facts = {"balance": Decimal(provider.balance(currency)), "minimum": Decimal(provider.minimum(currency))}
+        if getattr(provider, "accumulates_small_commissions", False):
+            # The fee of the smallest payout: with it the threshold below which commissions accumulate.
+            facts["fee"] = Decimal(str(provider.network_fee(currency, facts["minimum"])))
     except Exception:  # noqa: BLE001 - without the provider's facts nothing is reserved
         logger.warning("Cashout cycle stopped: provider balance / minimum could not be read")
         report["stopped"] = "PROVIDER_FACTS_UNAVAILABLE"
@@ -970,6 +1036,78 @@ def verify_payout_asset(provider, currency: str) -> Optional[str]:
 # Liability vs provider balance, and what does not add up
 # ---------------------------------------------------------------------------
 
+def payout_commission_ids(db: Session, cashout_ids: list) -> dict:
+    """{cashout id: [commission ids]} as recorded when each payout was reserved (the CASHOUT_RESERVED
+    audit record, written in the same transaction as the reservation). Read-only."""
+    from app.models.accounting import AuditTrail
+
+    out: dict = {}
+    if not cashout_ids:
+        return out
+    for record_id, values in (db.query(AuditTrail.record_id, AuditTrail.new_values)
+                              .filter(AuditTrail.table_name == "affiliate_cashout_requests",
+                                      AuditTrail.action == "CASHOUT_RESERVED",
+                                      AuditTrail.record_id.in_([int(i) for i in cashout_ids])).all()):
+        ids = (values or {}).get("commission_ids") if isinstance(values, dict) else None
+        out[int(record_id)] = [int(i) for i in ids or []]
+    return out
+
+
+def accumulated_payouts(db: Session, *, limit: int = 100) -> list[dict]:
+    """The latest combined payouts (several commissions of one member), each with its commissions. Read-only."""
+    rows = (db.query(AffiliateCashoutRequest)
+            .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
+                    AffiliateCashoutRequest.commission_id.is_(None),
+                    AffiliateCashoutRequest.payout_reference.like("intent:m%"))
+            .order_by(AffiliateCashoutRequest.id.desc()).limit(limit).all())
+    mapping = payout_commission_ids(db, [r.id for r in rows])
+    return [{"cashout_id": r.id, "user_id": r.user_id, "status": r.status, "failure_code": r.failure_code,
+             "gross_amount": f"{money(r.gross_amount):.2f}",
+             "amount_sent": str(r.amount_sent) if r.amount_sent is not None else None,
+             "network_fee_estimate": str(r.network_fee_estimate) if r.network_fee_estimate is not None else None,
+             "commission_ids": mapping.get(int(r.id), []), "provider_payout_id": r.provider_batch_id,
+             "tx_hash": r.tx_hash, "requested_at": r.requested_at.isoformat() if r.requested_at else None}
+            for r in rows]
+
+
+def accumulation_overview(db: Session, threshold: Optional[Decimal], *, now: Optional[datetime] = None,
+                          limit: int = 200) -> list[dict]:
+    """Crypto Cashout members with unpaid commissions: how much is paid on its own, how much is made of
+    commissions below the threshold (accumulating), whether that part reaches the threshold, and what
+    stops a payout to the member now. Read-only; calls nobody."""
+    from app.services.commission_payout_hold import payable_clause
+
+    now = now or datetime.utcnow()
+    config = payment_config.load(db)
+    rows = (db.query(AffiliateCommission.user_id, AffiliateCommission.commission_amount)
+            .join(User, User.id == AffiliateCommission.user_id)
+            .filter(User.cashout_method == cs.METHOD_CRYPTO,
+                    AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
+                    AffiliateCommission.payout_reference.is_(None), payable_clause())
+            .order_by(AffiliateCommission.user_id).all())
+    by_member: dict = {}
+    for user_id, amount in rows:
+        by_member.setdefault(int(user_id), []).append(money(amount))
+    out = []
+    for user_id, amounts in list(by_member.items())[:limit]:
+        user = db.query(User).filter(User.id == user_id).first()
+        small = [a for a in amounts if threshold is not None and a < threshold]
+        accumulated = sum(small, Decimal("0.00"))
+        blocker = _blocker(db, user, now, config) if user is not None else "ACCOUNT_UNAVAILABLE"
+        if blocker is None and cs.active_pooled_cashout(db, user_id) is not None:
+            blocker = "CASHOUT_IN_PROGRESS"
+        if blocker is None and user is not None:
+            wallet = cs.wallet_state(user, now, config=config)
+            row = _soncopay().destination_for(db, user_id, wallet.approval_id, str(wallet.address or ""))
+            blocker = _soncopay().destination_problem(row, str(wallet.address or ""), now)
+        out.append({"user_id": user_id, "username": user.username if user is not None else None,
+                    "unpaid": f"{sum(amounts, Decimal('0.00')):.2f}", "commissions": len(amounts),
+                    "accumulating": f"{accumulated:.2f}", "accumulating_commissions": len(small),
+                    "reaches_threshold": threshold is not None and len(small) > 0 and accumulated >= threshold,
+                    "blocked_by": blocker})
+    return out
+
+
 def commission_payout_reconciliation(db: Session, *, limit: int = 200) -> dict:
     """Each NEW_V2 commission against its own payout attempts. Read-only.
 
@@ -989,29 +1127,45 @@ def commission_payout_reconciliation(db: Session, *, limit: int = 200) -> dict:
     for row in (db.query(AffiliateCashoutRequest).filter(AffiliateCashoutRequest.commission_id.in_(ids or [0]))
                 .order_by(AffiliateCashoutRequest.id.asc()).all()):
         attempts.setdefault(int(row.commission_id), []).append(row)
+    # Combined payouts (owner decision 2026-10-29): each carries several commissions of one member.
+    combined = (db.query(AffiliateCashoutRequest)
+                .filter(AffiliateCashoutRequest.commission_id.is_(None),
+                        AffiliateCashoutRequest.payout_reference.like("intent:m%"),
+                        AffiliateCashoutRequest.user_id.in_({int(c.user_id) for c in commissions} or {0}))
+                .order_by(AffiliateCashoutRequest.id.asc()).all())
+    combined_of: dict = {}
+    for cashout_id, commission_ids in payout_commission_ids(db, [r.id for r in combined]).items():
+        for commission_id in commission_ids:
+            combined_of.setdefault(commission_id, set()).add(cashout_id)
     items, problems = [], []
     for c in commissions:
         rows = attempts.get(int(c.id), [])
+        together = [r for r in combined if int(r.id) in combined_of.get(int(c.id), ())]
         completed = [r for r in rows if r.status == CashoutStatus.COMPLETED.value]
-        open_rows = [r for r in rows if r.status in ACTIVE_CASHOUT_STATUSES]
+        completed_together = [r for r in together if r.status == CashoutStatus.COMPLETED.value]
+        open_rows = [r for r in rows + together if r.status in ACTIVE_CASHOUT_STATUSES]
         found = []
         status = c.status.value if hasattr(c.status, "value") else str(c.status)
-        if status == "PAID" and rows and not completed:
-            found.append("PAID_WITHOUT_PAYOUT")     # it had individual attempts, none of them completed
-        if completed and status != "PAID":
+        if status == "PAID" and (rows or together) and not (completed or completed_together):
+            found.append("PAID_WITHOUT_PAYOUT")     # it had payout attempts, none of them completed
+        if (completed or completed_together) and status != "PAID":
             found.append("PAYOUT_NOT_POSTED")
+        if len(completed) + len(completed_together) > 1:
+            found.append("PAID_MORE_THAN_ONCE")
         if completed and money(completed[-1].gross_amount) != money(c.commission_amount):
             found.append("AMOUNT_MISMATCH")
-        if completed and not completed[-1].tx_hash:
+        if any(not r.tx_hash for r in completed[-1:] + completed_together[-1:]):
             found.append("COMPLETED_WITHOUT_HASH")
-        if (status == "APPROVED" and str(c.payout_reference or "").startswith("intent:c") and not open_rows):
+        if (status == "APPROVED" and str(c.payout_reference or "").startswith(("intent:c", "intent:m"))
+                and not open_rows):
             found.append("RESERVED_WITHOUT_PAYOUT")
         item = {"commission_id": c.id, "user_id": c.user_id, "amount": f"{money(c.commission_amount):.2f}",
                 "status": status, "reserved": bool(c.payout_reference) and status == "APPROVED",
                 "attempts": [{"cashout_id": r.id, "status": r.status, "failure_code": r.failure_code,
                               "wallet_approval_id": r.wallet_approval_id, "tx_hash": r.tx_hash,
-                              "requested_at": r.requested_at.isoformat() if r.requested_at else None}
-                             for r in rows],
+                              "requested_at": r.requested_at.isoformat() if r.requested_at else None,
+                              "combined": r.commission_id is None}
+                             for r in sorted(rows + together, key=lambda r: r.id)],
                 "problems": found}
         items.append(item)
         if found:

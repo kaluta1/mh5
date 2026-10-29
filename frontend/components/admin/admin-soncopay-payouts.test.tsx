@@ -42,3 +42,21 @@ describe('AdminSoncoPayPayouts', () => {
     expect(destinationText({ status: 'ACTIVE', usable: true, usable_from: null })).toBe('Ready for automatic payouts')
   })
 })
+
+describe('AdminSoncoPayPayouts: small commissions added together', () => {
+  it('shows the threshold, the accumulating members and the commissions of each combined payout', async () => {
+    getMock.mockResolvedValue({ status: 200, data: { ...VIEW, accumulation: {
+      threshold: '2.23', fee: '0.23', minimum: '2', read_at: '2026-10-29T12:00:00Z',
+      members: [{ user_id: 7, username: 'm1', unpaid: '1.80', commissions: 2, accumulating: '1.80',
+        accumulating_commissions: 2, reaches_threshold: false, blocked_by: null }],
+      payouts: [{ cashout_id: 11, user_id: 8, status: 'processing', failure_code: null, gross_amount: '2.30',
+        amount_sent: '2.07', network_fee_estimate: '0.23', commission_ids: [3, 4, 5],
+        provider_payout_id: 'po_000001', tx_hash: null, requested_at: '2026-10-29T12:00:00' }],
+    } } })
+    render(<AdminSoncoPayPayouts />)
+    expect(await screen.findByTestId('sp-threshold')).toHaveTextContent('Smallest payout 2.23 USDT')
+    expect(screen.getByTestId('sp-accumulation-table')).toHaveTextContent('m1 (#7)')
+    expect(screen.getByTestId('sp-combined-table')).toHaveTextContent('#3, #4, #5')
+    expect(screen.getByTestId('sp-combined-table')).toHaveTextContent('2.30 (sent 2.07)')
+  })
+})

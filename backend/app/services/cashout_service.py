@@ -2020,6 +2020,9 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
     payable = money(balance.available + (balance.pending_payable if ready else Decimal("0.00")))
     unpaid = money(balance.available + balance.pending_payable)
     crypto_min, usd_min = crypto_minimum(config=config), usd_minimum(config=config)
+    threshold = crypto_threshold(db, user, config) if payment_config.nowpayments_discontinued() else None
+    if threshold is not None and threshold["threshold"] is not None:
+        crypto_min = max(crypto_min, Decimal(threshold["threshold"]))
     minimum = crypto_min if method == METHOD_CRYPTO else usd_min if method == METHOD_USD else None
     open_cashout = active_cashout(db, user.id)
     eligibility = fe.evaluate(db, user, fe.FinancialOperation.WITHDRAWAL)
@@ -2113,4 +2116,33 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         "eligibility_status": eligibility.outcome.value,
         "eligibility_next_step": eligibility.next_step,
         "active_cashout": cashout_dict(open_cashout) if open_cashout is not None else None,
+        "crypto_payout_threshold": threshold,
     }
+
+
+def crypto_threshold(db: Session, user: User, config: PaymentConfig) -> dict:
+    """What a SoncoPay payout needs (owner decision 2026-10-29, Option A): the smallest amount one payout
+    may carry (provider minimum + its fee with the safety margin, at least the Crypto Cashout minimum),
+    the fee, and how much of the member's unpaid balance is made of commissions too small to be paid on
+    their own, which wait until together they reach it. The figures are the last ones read from SoncoPay
+    (None until they could be read). Never a held historical row. Read-only."""
+    from app.services import soncopay_payouts
+    from app.services.cashout_engine import payout_threshold
+    from app.services.commission_payout_hold import payable_clause
+
+    published = soncopay_payouts.published_limits(db)
+    out = {"threshold": None, "network_fee": None, "provider_minimum": None, "read_at": None,
+           "accumulated": None, "awaiting_threshold": None,
+           "destination": soncopay_payouts.member_status(db, user)}
+    if published is None:
+        return out
+    threshold = payout_threshold(config, published["minimum"], published["fee"])
+    amounts = [money(a) for (a,) in db.query(AffiliateCommission.commission_amount)
+               .filter(AffiliateCommission.user_id == user.id,
+                       AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
+                       AffiliateCommission.payout_reference.is_(None), payable_clause()).all()]
+    small = sum((a for a in amounts if a < threshold), Decimal("0.00"))
+    out.update(threshold=f"{threshold:.2f}", network_fee=str(published["fee"]),
+               provider_minimum=str(published["minimum"]), read_at=published["read_at"].isoformat() + "Z",
+               accumulated=f"{money(small):.2f}", awaiting_threshold=bool(small) and small < threshold)
+    return out

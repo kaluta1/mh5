@@ -140,6 +140,20 @@ export type CashoutSummary = {
   eligibility_status?: string | null
   eligibility_next_step?: string | null
   active_cashout: CashoutRecord | null
+  /** SoncoPay payouts (owner decision 2026-10-29): smaller commissions are added together until they reach it. */
+  crypto_payout_threshold?: CryptoPayoutThreshold | null
+}
+
+export type CryptoPayoutThreshold = {
+  /** Provider minimum + its network fee, at least the Crypto Cashout minimum (USDT, 2 decimals). */
+  threshold: string | null
+  network_fee: string | null
+  provider_minimum: string | null
+  read_at: string | null
+  /** Unpaid commissions each below the threshold, kept until together they reach it. */
+  accumulated: string | null
+  awaiting_threshold: boolean | null
+  destination: { destination_state: string | null; message: string | null; usable_from: string | null } | null
 }
 
 export function formatUsd(amount: number | null | undefined): string {
@@ -159,7 +173,7 @@ export function cashoutStatusText(summary: CashoutSummary): string {
     case 'WALLET_CONFIRMATION_PENDING':
       return 'Open the confirmation link we sent to your email address to confirm your payout wallet.'
     case 'WALLET_APPROVAL_PENDING':
-      return 'Your payout wallet is waiting for approval by MyHigh5. Your commissions are kept in full and are paid automatically, each one separately, once it is approved.'
+      return 'Your payout wallet is waiting for approval by MyHigh5. Your commissions are kept in full and are paid automatically once it is approved.'
     case 'WALLET_REJECTED':
       return 'Your payout wallet was not approved. Submit a valid USDT BEP20 wallet in Settings. Your commissions are kept in full.'
     case 'METHOD_UNAVAILABLE':
@@ -174,7 +188,7 @@ export function cashoutStatusText(summary: CashoutSummary): string {
       return `Your balance is below the ${minimum} minimum for ${methodLabel(summary.cashout_method)}.`
     case 'AUTOMATIC_PAYOUT_PENDING':
       return summary.fees.CRYPTO.network_fee_policy === 'MEMBER_PAYS'
-        ? 'Each commission is sent to your approved wallet automatically, on its own, as soon as it is available, less the network fee. The fee is estimated before the payout; the actual fee may differ.'
+        ? 'Each commission is sent to your approved wallet automatically, on its own, as soon as it is available, less the network fee. Commissions too small to be sent on their own are added together and sent in one payout. The fee is estimated before the payout; the actual fee may differ.'
         : 'Each commission is sent to your approved wallet automatically, on its own, as soon as it is available.'
     case 'AUTOMATIC_PAYOUT_NOT_ACTIVE':
       return 'Automatic crypto payouts are not active yet. Your balance is kept in full and will be paid once they start.'

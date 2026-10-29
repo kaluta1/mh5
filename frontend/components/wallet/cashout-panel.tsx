@@ -337,6 +337,50 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
                       : `${summary.destination.hold_hours ?? 72} hours after the wallet is confirmed`}
                 </dd>
               </div>
+              {summary.crypto_payout_threshold && (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500 dark:text-gray-400">Smallest payout</dt>
+                    <dd className="text-right font-medium tabular-nums text-gray-900 dark:text-white" data-testid="payout-threshold">
+                      {summary.crypto_payout_threshold.threshold !== null
+                        ? `${summary.crypto_payout_threshold.threshold} USDT`
+                        : 'Shown once read from SoncoPay'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500 dark:text-gray-400">Estimated network fee</dt>
+                    <dd className="text-right font-medium tabular-nums text-gray-900 dark:text-white" data-testid="payout-fee">
+                      {summary.crypto_payout_threshold.network_fee !== null
+                        ? `${summary.crypto_payout_threshold.network_fee} USDT per payout`
+                        : '-'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-gray-500 dark:text-gray-400">Waiting to reach the smallest payout</dt>
+                    <dd className="text-right font-medium tabular-nums text-gray-900 dark:text-white" data-testid="payout-accumulated">
+                      {summary.crypto_payout_threshold.accumulated !== null
+                        ? `${summary.crypto_payout_threshold.accumulated} USDT`
+                        : '-'}
+                    </dd>
+                  </div>
+                  {summary.crypto_payout_threshold.destination?.message && (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-500 dark:text-gray-400">SoncoPay wallet</dt>
+                      <dd className="text-right font-medium text-gray-900 dark:text-white" data-testid="payout-destination">
+                        {summary.crypto_payout_threshold.destination.message}
+                      </dd>
+                    </div>
+                  )}
+                  {summary.crypto_payout_threshold.awaiting_threshold && (
+                    <div className="sm:col-span-2 rounded-lg bg-blue-50 p-2 text-xs text-blue-900 dark:bg-blue-900/20 dark:text-blue-100" data-testid="payout-accumulating-note">
+                      Commissions smaller than the smallest payout are kept and added together. They are sent to your
+                      wallet in one payout as soon as together they reach{' '}
+                      {summary.crypto_payout_threshold.threshold} USDT. SoncoPay&apos;s network fee is taken once from
+                      that payout.
+                    </div>
+                  )}
+                </>
+              )}
               {summary.destination.pending_wallet && (
                 <div className="sm:col-span-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
                   A change to <span className="font-mono">{summary.destination.pending_wallet.wallet}</span> is waiting

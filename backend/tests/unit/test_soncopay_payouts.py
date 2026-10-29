@@ -51,6 +51,7 @@ class FakeSoncoPay:
         self.destinations: dict = {}
         self.payouts: dict = {}
         self.balance, self.fee, self.min_payout = "100", FEE, "1"
+        self.asset_minimum = None            # limits["USDT:BSC"].minimum, as SoncoPay answered on 2026-10-29
         self.auto_confirm = False
         self.refuse_payout = None            # (status, code) answered to POST /v1/payouts
         self.drop_payout = False             # POST /v1/payouts gets no answer (after creating it)
@@ -83,8 +84,12 @@ class FakeSoncoPay:
             return httpx.Response(200, json={"livemode": True, "balances": {"USDT": self.balance},
                                              "available": {"USDT": self.balance}, "reserved": {}})
         if path == "/v1/payout-fees":
-            return httpx.Response(200, json={"fees": {"USDT:BSC": self.fee, "USDT:TRON": "1"},
-                                             "min_payout_usd": self.min_payout})
+            answer = {"fees": {"USDT:BSC": self.fee, "USDT:TRON": "1"}, "min_payout_usd": self.min_payout}
+            if self.asset_minimum is not None:
+                answer["limits"] = {"USDT:BSC": {"asset": "USDT", "network": "BSC", "minimum": self.asset_minimum,
+                                                 "fee": self.fee, "available": True},
+                                    "USDT:TRON": {"minimum": "5", "fee": "2.2701", "available": True}}
+            return httpx.Response(200, json=answer)
         if path == "/v1/payout-destinations" and method == "GET":
             items = [self._dest_view(d) for d in self.destinations.values()]
             items += [{"id": f"pd_other{i}", "status": "active"} for i in range(self.extra_open)]
@@ -152,6 +157,7 @@ def fake(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def keys(monkeypatch):
+    monkeypatch.setattr(spo, "_limits", {"facts": None, "read_at": None, "checked": 0.0})
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
     monkeypatch.setattr(settings, "BACKEND_PUBLIC_URL", "https://api.example.test")
 
@@ -376,7 +382,7 @@ def test_a_fee_other_than_the_one_withheld_suspends_payouts(payouts_on, fake):
     assert run(db).get("stopped") == "PAYOUTS_SUSPENDED"
 
 
-def test_each_commission_gets_its_own_payout_never_batched(payouts_on, fake):
+def test_each_commission_that_clears_the_threshold_gets_its_own_payout(payouts_on, fake):
     db = payouts_on
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "2.00")
@@ -396,7 +402,8 @@ def test_below_the_minimum_stays_unpaid(payouts_on, fake):
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
-    assert run(db)["members"] == {"BELOW_PROVIDER_MINIMUM": 1} and fake.posts("/v1/payouts") == []
+    # Owner decision 2026-10-29 (Option A): it waits for more commissions instead of being lost.
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1} and fake.posts("/v1/payouts") == []
 
 
 def test_insufficient_balance_stays_unpaid(payouts_on, fake):
@@ -587,3 +594,300 @@ def test_the_admin_view_masks_addresses_and_never_shows_the_key(payouts_on, fake
     assert LIVE_KEY not in answer.text and body["provider"]["fee"] == FEE
     plain = member(db, "plain")
     assert client.get("/api/v1/admin/finance/soncopay/payouts", headers=bearer(plain)).status_code == 403
+
+
+# ===========================================================================
+# Owner decision 2026-10-29 (Option A): small commissions accumulate per member
+# ===========================================================================
+# The figures SoncoPay answered for this account on 2026-10-29: USDT:BSC fee 0.23, per-asset
+# minimum 2, account-wide min_payout_usd 0.5. Threshold = 2 + 0.23 = 2.23.
+
+def real_figures(db, fake, *, margin="0"):
+    fake.fee, fake.min_payout, fake.asset_minimum = "0.23", "0.5", "2"
+    configure(db, member_fee_cap_percent=Decimal("20.000"), member_fee_cap_usd=Decimal("1.00"),
+              max_network_fee_percent=Decimal("20.000"), fee_estimate_margin_percent=Decimal(margin))
+
+
+def payable_member(db, fake, name="m1", *, wallet=WALLET, amounts=()):
+    """A member with an approved wallet whose SoncoPay destination is usable, then `amounts`."""
+    from app.models.payment_config import CashoutFeeConsent
+
+    user = member(db, name, method="CRYPTO", wallet=wallet)
+    consent = db.query(CashoutFeeConsent).filter(CashoutFeeConsent.user_id == user.id).one()
+    consent.cap_percent = Decimal("20.000")                         # the member accepted a 20 % limit
+    db.commit()
+    run(db)                                                         # registered at SoncoPay
+    fake.confirm(destination(db, user).destination_id, usable=True)
+    return user, [commission(db, user, a, when=NOW - timedelta(days=10 - i)) for i, a in enumerate(amounts)]
+
+
+def test_the_asset_minimum_and_fee_come_from_soncopays_limits(fake):
+    from dataclasses import replace
+
+    real = {"fees": {"USDT:BSC": "0.23", "USDT:TRON": "1"}, "min_payout_usd": 0.5,
+            "limits": {"USDT:BSC": {"minimum": "2", "fee": "0.23", "total_minimum": "2.23", "available": True},
+                       "USDT:TRON": {"minimum": "5", "fee": "2.2701", "available": True}}}
+    facts = spo.published_fee_and_minimum(real)
+    assert (facts.fee, facts.minimum) == (Decimal("0.23"), Decimal("2"))     # not the account-wide 0.5
+    config = payment_config.default_config()
+    assert engine.payout_threshold(replace(config, fee_estimate_margin_percent=Decimal("0")),
+                                   facts.minimum, facts.fee) == Decimal("2.23")
+    assert engine.payout_threshold(replace(config, fee_estimate_margin_percent=Decimal("10")),
+                                   facts.minimum, facts.fee) == Decimal("2.26")   # 2.253 rounded up
+    with pytest.raises(spo.PayoutUnavailable):                      # two different fees: never guessed
+        spo.published_fee_and_minimum({**real, "fees": {"USDT:BSC": "0.20"}})
+    with pytest.raises(spo.PayoutUnavailable):
+        spo.published_fee_and_minimum({**real, "limits": {"USDT:BSC": {"minimum": "2", "fee": "0.23",
+                                                                       "available": False}}})
+
+
+def test_a_single_commission_above_the_threshold_is_still_paid_on_its_own(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, [row] = payable_member(db, fake, amounts=["3.00"])
+    assert run(db)["members"] == {"SUBMITTED": 1}
+    [po] = fake.payouts.values()
+    assert po["reference"] == f"c{row.id}-a1" and Decimal(po["amount"]) == Decimal("2.77")
+    assert cashouts(db, user)[0].commission_id == row.id
+
+
+def test_small_commissions_are_paid_together_once_they_reach_the_threshold(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.00", "0.80"])
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1}       # 1.80 < 2.23
+    assert fake.posts("/v1/payouts") == [] and cashouts(db, user) == []
+    rows.append(commission(db, user, "0.50"))                                # 2.30 >= 2.23
+    assert run(db)["members"] == {"SUBMITTED": 1}
+    [po] = fake.payouts.values()
+    assert po["reference"] == f"m{user.id}-c{rows[0].id}-a1"
+    assert Decimal(po["amount"]) == Decimal("2.07")                         # 2.30 less the 0.23 fee
+    out = cashouts(db, user)[0]
+    assert out.commission_id is None and out.gross_amount == Decimal("2.30")
+    assert engine.payout_commission_ids(db, [out.id]) == {out.id: [r.id for r in rows]}
+    for row in rows:
+        db.refresh(row)
+        assert row.status == CommissionStatus.APPROVED and row.payout_reference == out.payout_reference
+    fake.complete(po["id"])
+    run(db)
+    run(db)                                                         # a repeated read changes nothing
+    out = cashouts(db, user)[0]
+    assert out.status == "completed" and out.fee_flag is None and Decimal(out.net_received) == Decimal("2.07")
+    for row in rows:
+        db.refresh(row)
+        assert row.status == CommissionStatus.PAID and row.payout_reference == po["id"]
+    assert len(fake.posts("/v1/payouts")) == 1
+    assert engine.commission_payout_reconciliation(db)["problems"] == []
+    assert engine.accumulated_payouts(db)[0]["commission_ids"] == [r.id for r in rows]
+    _assert_all_journals_balance(db)
+    from app.models.accounting import JournalEntry
+
+    assert db.query(JournalEntry).filter(JournalEntry.description == f"Affiliate Cashout #{out.id}").count() == 1
+
+
+def test_a_larger_commission_is_paid_alone_and_the_small_ones_together(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.20", "5.00", "1.20"])
+    run(db)
+    references = sorted(p["reference"] for p in fake.payouts.values())
+    assert references == sorted([f"c{rows[1].id}-a1", f"m{user.id}-c{rows[0].id}-a1"])
+    combined = [c for c in cashouts(db, user) if c.commission_id is None]
+    assert len(combined) == 1 and combined[0].gross_amount == Decimal("2.40")
+
+
+def test_commissions_of_different_members_are_never_combined(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    payable_member(db, fake, "m1", amounts=["1.20"])
+    payable_member(db, fake, "m2", wallet=OTHER_WALLET, amounts=["1.20"])
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 2}
+    assert fake.posts("/v1/payouts") == []
+
+
+@pytest.mark.parametrize("change, waits", [
+    ({"fee": "0.50"}, True),                  # threshold 2.50 > 2.30
+    ({"asset_minimum": "3"}, True),           # threshold 3.23
+    ({"fee": "0.10"}, False),                 # threshold 2.10
+])
+def test_the_threshold_follows_soncopays_published_fee_and_minimum(payouts_on, fake, change, waits):
+    db = payouts_on
+    real_figures(db, fake)
+    for name, value in change.items():
+        setattr(fake, name, value)
+    _user, _rows = payable_member(db, fake, amounts=["1.15", "1.15"])
+    outcome = run(db)["members"]
+    if waits:
+        assert outcome == {"ACCUMULATING_BELOW_THRESHOLD": 1} and fake.posts("/v1/payouts") == []
+    else:
+        assert outcome == {"SUBMITTED": 1}
+        [po] = fake.payouts.values()
+        assert Decimal(po["amount"]) == Decimal("2.30") - Decimal(fake.fee)
+
+
+def test_a_fee_above_the_members_limit_holds_the_payout(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    configure(db, member_fee_cap_usd=Decimal("0.10"))               # SoncoPay charges 0.23
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    assert run(db)["members"] == {"NETWORK_FEE_ABOVE_MEMBER_LIMIT": 1}
+    assert fake.posts("/v1/payouts") == [] and cashouts(db, user) == []
+    for row in rows:
+        db.refresh(row)
+        assert row.payout_reference is None and row.status == CommissionStatus.APPROVED
+
+
+def test_an_unapproved_wallet_or_a_cooling_destination_keeps_the_accumulated_commissions(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    waiting = member(db, "m1", method="CRYPTO", approved=False)
+    commission(db, waiting, "1.20")
+    commission(db, waiting, "1.20")
+    [(code, count)] = run(db)["members"].items()
+    assert code.startswith("WALLET_") and count == 1
+    cooling = member(db, "m2", method="CRYPTO", wallet=OTHER_WALLET)
+    run(db)
+    fake.confirm(destination(db, cooling).destination_id, usable=False)  # in its 24-hour waiting period
+    commission(db, cooling, "1.20")
+    commission(db, cooling, "1.20")
+    assert run(db)["members"].get("DESTINATION_WAITING_PERIOD") == 1
+    assert fake.posts("/v1/payouts") == [] and cashouts(db) == []
+
+
+def test_a_lost_answer_on_a_combined_payout_is_never_resent(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    fake.drop_payout = True
+    assert run(db)["members"] == {"OUTCOME_UNKNOWN": 1}
+    fake.drop_payout = False
+    commission(db, user, "1.50")                                    # new earnings wait meanwhile
+    for _ in range(3):
+        run(db)
+    assert len(fake.posts("/v1/payouts")) == 1 and len(fake.payouts) == 1
+    out = cashouts(db, user)[0]
+    assert out.provider_batch_id == next(iter(fake.payouts))        # located by its reference
+    fake.complete(out.provider_batch_id)
+    run(db)
+    for row in rows:
+        db.refresh(row)
+        assert row.status == CommissionStatus.PAID
+    _assert_all_journals_balance(db)
+
+
+def test_a_failed_combined_payout_releases_every_commission_and_retries_as_a_new_attempt(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    configure(db, retry_backoff_hours=1)
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    run(db)
+    [po] = fake.payouts.values()
+    fake.payouts[po["id"]]["status"] = "failed"
+    run(db)
+    assert cashouts(db, user)[0].status == "failed"
+    for row in rows:
+        db.refresh(row)
+        assert row.payout_reference is None and row.status == CommissionStatus.APPROVED
+    run(db, now=NOW + timedelta(hours=2))
+    assert len(fake.payouts) == 2
+    assert fake.payouts["po_000002"]["reference"] == f"m{user.id}-c{rows[0].id}-a2"
+
+
+def test_a_cancelled_commission_is_never_part_of_a_combined_payout(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    _user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    rows[1].status = CommissionStatus.CANCELLED                     # reversed before any payout
+    db.commit()
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1}
+    assert fake.posts("/v1/payouts") == []
+
+
+def test_a_reversal_after_reservation_is_never_posted_as_paid(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    run(db)
+    [po] = fake.payouts.values()
+    rows[1].status = CommissionStatus.CANCELLED                     # reversed while SoncoPay pays
+    db.commit()
+    fake.complete(po["id"])
+    run(db)
+    out = cashouts(db, user)[0]
+    assert out.status != "completed"                                # left for an administrator
+    db.refresh(rows[0])
+    assert rows[0].status != CommissionStatus.PAID
+    assert any(d["type"] == "RESERVATION_MISMATCH" for d in engine.discrepancies(db))
+
+
+def test_two_workers_never_consume_the_same_commission_twice(payouts_on, fake):
+    from app.services import cashout_service as cs
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, _rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    run(db)
+    run(db)
+    assert len(fake.payouts) == 1 and len(fake.posts("/v1/payouts")) == 1
+    # A second combined payout of the same member is refused by the database while one is open.
+    extra = commission(db, user, "2.00")
+    db.refresh(user)
+    second = cs.reserve(db, user, [extra], method=cs.METHOD_CRYPTO, fee=Decimal("0"), intent_ref="intent:m-test",
+                        now=NOW, wallet=WALLET, currency="usdtbsc")
+    assert second is None
+    db.refresh(extra)
+    assert extra.payout_reference is None
+
+
+def test_a_worker_that_lost_the_race_reserves_nothing(payouts_on, fake, monkeypatch):
+    from app.services import cashout_service as cs
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    calls = {"n": 0}
+    real_available = cs.available_rows
+
+    def available(session, uid):
+        calls["n"] += 1
+        if calls["n"] == 2:            # the re-check before reserving: another worker took one row
+            session.query(AffiliateCommission).filter(AffiliateCommission.id == rows[0].id) \
+                .update({"payout_reference": "intent:other"})
+        return real_available(session, uid)
+
+    monkeypatch.setattr(cs, "available_rows", available)
+    assert run(db)["members"] == {"BALANCE_CHANGED": 1}
+    assert fake.posts("/v1/payouts") == [] and cashouts(db, user) == []
+
+
+def test_the_member_sees_the_threshold_and_what_is_accumulating(payouts_on, fake):
+    from app.services import cashout_service as cs
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, _rows = payable_member(db, fake, amounts=["1.00", "0.80", "5.00"])
+    run(db)                                                         # 5.00 is paid on its own; 1.80 waits
+    summary = cs.summary(db, user, now=NOW)
+    view = summary["crypto_payout_threshold"]
+    assert (view["threshold"], view["network_fee"], view["provider_minimum"]) == ("2.23", "0.23", "2")
+    assert view["accumulated"] == "1.80" and view["awaiting_threshold"] is True
+    assert view["destination"]["destination_state"] == "READY"
+    assert summary["minimums"]["CRYPTO"] == 2.23
+
+
+def test_the_admin_sees_accumulating_members_and_each_combined_payouts_commissions(payouts_on, fake, client):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["1.20", "1.20"])
+    waiting, _small = payable_member(db, fake, "m2", wallet=OTHER_WALLET, amounts=["1.00"])
+    run(db)
+    boss = superadmin(db, "viewer")
+    answer = client.get("/api/v1/admin/finance/soncopay/payouts?provider=true", headers=bearer(boss))
+    assert answer.status_code == 200, answer.text
+    view = answer.json()["accumulation"]
+    assert (view["threshold"], view["fee"], view["minimum"]) == ("2.23", "0.23", "2")
+    [line] = [m for m in view["members"] if m["user_id"] == waiting.id]
+    assert (line["accumulating"], line["reaches_threshold"]) == ("1.00", False)
+    [payout] = view["payouts"]
+    assert payout["user_id"] == user.id and payout["commission_ids"] == [r.id for r in rows]
+    assert payout["gross_amount"] == "2.40" and LIVE_KEY not in answer.text
