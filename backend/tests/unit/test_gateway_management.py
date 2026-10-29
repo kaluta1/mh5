@@ -105,7 +105,9 @@ def test_every_combination_routes_to_the_ready_default_or_nowhere(client, ledger
         assert db.query(Deposit).count() == deposits                # nothing written
         assert nowpayments_calls == [] and not [c for c in fake.calls if c[0] == "POST"]
     else:
-        assert answer == {"provider": expected, "available": True}
+        assert (answer["provider"], answer["available"]) == (expected, True)
+        if expected == "soncopay":                                  # with the methods SoncoPay offers
+            assert [m["code"] for m in answer["methods"]][:1] == ["usdt_bsc"]
         assert created.status_code == 200, created.text
         assert deposit_of(db, created).payment_provider == expected
 

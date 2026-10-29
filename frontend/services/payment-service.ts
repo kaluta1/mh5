@@ -4,7 +4,7 @@
  */
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { apiErrorText } from '@/lib/financial-eligibility'
-import { CheckoutUnavailableError, parseCheckoutGateway, parseSoncoPayMethods, type CheckoutAvailability, type CheckoutGateway, type PaymentState, type SoncoPayMethod } from '@/lib/payment-gateway'
+import { CheckoutUnavailableError, parseCheckoutGateway, parseSoncoPayMethods, type CheckoutAvailability, type CheckoutGateway, type PaymentState, type SoncoPayMethod, type SoncoPayMethodOption } from '@/lib/payment-gateway'
 
 export interface PaymentRecipient {
   username_or_email: string
@@ -111,13 +111,12 @@ class PaymentService {
   }
 
   /** The SoncoPay methods a NEW payment may use (USDT on BSC only when the server cannot be read). */
-  async getSoncoPayMethods(token: string): Promise<SoncoPayMethod[]> {
+  async getSoncoPayMethods(token: string): Promise<SoncoPayMethodOption[]> {
     try {
       const response = await fetch(`${this.getBaseUrl()}/checkout-gateway`, { headers: this.getHeaders(token) })
-      if (!response.ok) return ['usdt_bsc']
-      return parseSoncoPayMethods(await response.json())
+      return parseSoncoPayMethods(response.ok ? await response.json() : null)
     } catch {
-      return ['usdt_bsc']
+      return parseSoncoPayMethods(null)
     }
   }
 

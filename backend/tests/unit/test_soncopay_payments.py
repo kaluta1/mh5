@@ -67,6 +67,8 @@ class FakeSonco:
         self.drop_create = 0           # number of creations that get no answer at all
         self.payer_required = False    # answer 422 payer_required when a method is preselected
         self.card = False              # GET /v1/methods lists the bank card (as for MyHigh5 on 2026-10-29)
+        self.trc20 = False             # ... USDT on Tron (listed for MyHigh5 on 2026-10-29)
+        self.mobile_money = []         # ... mobile money entries (none for MyHigh5 on 2026-10-30)
 
     def public(self, p):
         return {k: v for k, v in p.items() if not k.startswith("_")}
@@ -113,9 +115,12 @@ class FakeSonco:
         if request.method == "GET" and path == "/v1/methods":
             methods = [{"method": "crypto", "code": "crypto", "asset": "USDT", "network": "BSC"}]
             switches = [{"code": "crypto", "enabled": True}]
+            if self.trc20:
+                methods.append({"method": "crypto", "code": "crypto", "asset": "USDT", "network": "TRON"})
             if self.card:
                 methods.append({"method": "card", "code": "card", "kind": "card", "currency": "CDF", "redirect": True})
                 switches.append({"code": "card", "enabled": True})
+            methods.extend(self.mobile_money)
             return httpx.Response(200, json={"methods": methods, "payment_methods": switches})
         return httpx.Response(404, json={"detail": "not found"})
 
@@ -243,9 +248,9 @@ def test_nowpayments_stays_the_gateway_until_soncopay_is_the_ready_default(clien
 def test_a_new_payment_goes_to_soncopay_when_it_is_the_ready_default(client, ledger, fake, buyer, nowpayments_calls):
     db = ledger
     configure(db)
-    assert client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json() == {
-        "provider": "soncopay", "available": True,
-        "methods": [{"code": "usdt_bsc", "label": "USDT on BNB Smart Chain (BEP20)"}]}
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert (shown["provider"], shown["available"], [m["code"] for m in shown["methods"]]) == \
+        ("soncopay", True, ["usdt_bsc"])
     created, dep = soncopay_purchase(client, db, fake, buyer)
     body = created.json()
     assert body["provider"] == "soncopay" and body["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}"
@@ -793,15 +798,17 @@ def test_the_card_is_offered_only_while_soncopay_lists_it(client, ledger, fake, 
     card_row(db)
     shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
     assert [m["code"] for m in shown["methods"]] == ["usdt_bsc"]
+    assert shown["methods"][0]["label"] == "USDT on BNB Smart Chain (BEP20)"
     refused = buy_with(client, buyer, "card", "k-no-card")
     assert refused.status_code == 409 and code_of(refused) == "PAYMENT_METHOD_UNAVAILABLE"
     assert db.query(Deposit).count() == 0 and not any(c[1] == "/v1/payments" for c in fake.calls)
     scp._methods_cache.update(checked=0.0)                          # SoncoPay opens cards to the account
     fake.card = True
     shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
-    assert shown["methods"] == [{"code": "usdt_bsc", "label": "USDT on BNB Smart Chain (BEP20)"},
-                                {"code": "card", "label": "Bank card"}]
-    assert buy_with(client, buyer, "mobile_money", "k-mm").status_code == 400  # never offered: not open
+    assert [(m["code"], m["label"]) for m in shown["methods"]] == [
+        ("usdt_bsc", "USDT on BNB Smart Chain (BEP20)"), ("card", "Bank card")]
+    assert buy_with(client, buyer, "mobile_money", "k-mm").status_code == 400  # not a method code
+    assert buy_with(client, buyer, "mm:mtn_bj", "k-mm2").status_code == 409    # not open to the account
 
 
 def test_the_card_is_refused_when_soncopay_cannot_be_read(client, ledger, fake, buyer, monkeypatch):
@@ -921,10 +928,11 @@ def test_methods_are_read_from_soncopays_answer_for_the_account():
                         {"method": "crypto", "asset": "USDT", "network": "BSC"},
                         {"method": "card", "code": "card", "kind": "card", "currency": "CDF", "redirect": True}],
             "payment_methods": [{"code": "crypto", "enabled": True}, {"code": "card", "enabled": True}]}
-    assert scp.methods_from_answer(real) == ["usdt_bsc", "card"]
+    assert [m["code"] for m in scp.methods_from_answer(real)] == ["usdt_bsc", "usdt_trc20", "card"]
     disabled = {**real, "payment_methods": [{"code": "crypto", "enabled": True}, {"code": "card", "enabled": False}]}
-    assert scp.methods_from_answer(disabled) == ["usdt_bsc"]
-    assert scp.methods_from_answer({"methods": [{"method": "mobile_money", "code": "mtn_bj"}]}) == []
+    assert [m["code"] for m in scp.methods_from_answer(disabled)] == ["usdt_bsc", "usdt_trc20"]
+    no_crypto = {**real, "payment_methods": [{"code": "crypto", "enabled": False}]}
+    assert [m["code"] for m in scp.methods_from_answer(no_crypto)] == ["card"]
 
 
 def test_a_referral_pool_units_commission_from_a_card_payment_waits_too(client, ledger, fake, buyer):
@@ -957,3 +965,113 @@ def test_a_referral_pool_units_commission_from_a_card_payment_waits_too(client, 
     dep.validated_at = datetime.utcnow() - timedelta(days=15)
     db.commit()
     assert hold.is_payable(db, row)
+
+
+# ===========================================================================
+# 7. Every SoncoPay method (2026-10-30): USDT on Tron, mobile money
+# ===========================================================================
+
+MTN_BJ = {"method": "mobile_money", "code": "mtn_bj", "kind": "mobile_money", "label": "MTN Mobile Money",
+          "operator": "MTN", "countries": ["BJ"], "currency": "XOF", "redirect": False, "fields": ["phone"]}
+ORANGE_CI = {"method": "mobile_money", "code": "orange_ci", "kind": "mobile_money", "label": "Orange Money",
+             "operator": "ORANGE", "countries": ["CI"], "currency": "XOF", "redirect": False, "fields": ["phone"]}
+
+
+def test_usdt_on_tron_is_created_restricted_and_confirmed_only_on_tron(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    fake.trc20 = True
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert [m["code"] for m in shown["methods"]] == ["usdt_bsc", "usdt_trc20"]
+    created = buy_with(client, buyer, "usdt_trc20", "k-trc")
+    assert created.status_code == 200, created.text
+    dep = deposit_of(db, created)
+    sent = fake.payments[dep.external_payment_id]["_body"]
+    assert (sent["method"], sent["asset"], sent["network"], sent["methods"]) == ("crypto", "USDT", "TRON", ["USDT:TRON"])
+    assert dep.crypto_currency == "usdt_trc20" and created.json()["payment_method"] == "usdt_trc20"
+    before = benefits(db, dep)
+    row, shown = status_after(client, db, fake, buyer, dep, status="paid", asset="USDT", network="BSC")
+    assert row.status == DepositStatus.PENDING and benefits(db, dep) == before      # paid on another network
+    row, shown = status_after(client, db, fake, buyer, dep, status="paid", asset="USDT", network="TRON")
+    assert row.status == DepositStatus.VALIDATED and shown["payment_method_label"] == "USDT on Tron (TRC20)"
+    status_after(client, db, fake, buyer, dep, status="paid", asset="USDT", network="TRON")
+    assert len(db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == dep.id).all()) == 1
+
+
+def test_mobile_money_appears_only_once_soncopay_enables_it_with_its_country_and_currency(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    assert not any(m["kind"] == "mobile_money" for m in shown["methods"])
+    fake.mobile_money = [MTN_BJ, ORANGE_CI, {"method": "mobile_money", "code": "x" * 30, "label": "Too long"},
+                         {"method": "mobile_money", "code": "bad code!", "label": "Bad"}]
+    scp._methods_cache.update(checked=0.0)
+    shown = client.get("/api/v1/payments/checkout-gateway", headers=bearer(buyer)).json()
+    money_methods = [m for m in shown["methods"] if m["kind"] == "mobile_money"]
+    assert money_methods == [
+        {"code": "mm:mtn_bj", "kind": "mobile_money", "label": "MTN Mobile Money (BJ)", "countries": ["BJ"],
+         "currency": "XOF"},
+        {"code": "mm:orange_ci", "kind": "mobile_money", "label": "Orange Money (CI)", "countries": ["CI"],
+         "currency": "XOF"}]
+
+
+def test_a_mobile_money_payment_goes_to_soncopays_page_for_that_operator_only(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    fake.mobile_money = [MTN_BJ]
+    created = buy_with(client, buyer, "mm:mtn_bj", "k-mtn")
+    assert created.status_code == 200, created.text
+    dep = deposit_of(db, created)
+    sent = fake.payments[dep.external_payment_id]["_body"]
+    assert sent["methods"] == ["mtn_bj"] and "method" not in sent and "phone" not in sent
+    assert created.json()["checkout_url"] == f"https://soncopay.com/pay/{dep.external_payment_id}"
+    assert dep.crypto_currency == "mm:mtn_bj"
+    from app.services.admin_transactions import _deposit_to_row
+    from app.services.invoice_renderer import payment_method_label
+
+    assert _deposit_to_row(dep)["payment_method"] == "SoncoPay - MTN Mobile Money (BJ)"
+    assert payment_method_label(dep, "en") == "SoncoPay - MTN Mobile Money (BJ)"
+    before = benefits(db, dep)
+    for wrong in ({"asset": "USDT", "network": "TRON"}, {"asset": "XOF", "method": "card"},
+                  {"asset": "XOF", "method": "orange_ci"}):
+        row, shown = status_after(client, db, fake, buyer, dep, status="paid", **wrong)
+        assert row.status == DepositStatus.PENDING and benefits(db, dep) == before
+    fake.payments[dep.external_payment_id].pop("method")
+    row, shown = status_after(client, db, fake, buyer, dep, status="paid", asset="XOF", network=None)
+    assert row.status == DepositStatus.VALIDATED and shown["is_confirmed"] is True
+    data = {"id": dep.external_payment_id, "order_id": dep.order_id}
+    assert post_webhook(client, "payment.paid", data, delivery="dlv_mm1").status_code == 200
+    assert post_webhook(client, "payment.paid", data, delivery="dlv_mm1").json().get("duplicate") is True
+    assert len(db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == dep.id).all()) == 1
+    fake.set(dep.external_payment_id, status="refunded", refunded_amount="50")
+    assert post_webhook(client, "payment.refunded", data, delivery="dlv_mm2").status_code == 200
+    db.expire_all()
+    assert db.get(Deposit, dep.id).status == DepositStatus.FAILED
+    from tests.unit.test_new_business_model import _assert_all_journals_balance
+
+    _assert_all_journals_balance(db)
+
+
+@pytest.mark.parametrize("status_, deposit_status", [("expired", DepositStatus.EXPIRED),
+                                                     ("failed", DepositStatus.FAILED),
+                                                     ("waiting", DepositStatus.PENDING)])
+def test_mobile_money_pending_failed_and_expired_credit_nothing(client, ledger, fake, buyer, status_, deposit_status):
+    db = ledger
+    configure(db)
+    fake.mobile_money = [MTN_BJ]
+    dep = deposit_of(db, buy_with(client, buyer, "mm:mtn_bj", "k-mtn2"))
+    before = benefits(db, dep)
+    row, shown = status_after(client, db, fake, buyer, dep, status=status_)
+    assert row.status == deposit_status and shown["is_confirmed"] is False and benefits(db, dep) == before
+
+
+def test_a_method_soncopay_withdrew_is_refused_and_earlier_deposits_keep_theirs(client, ledger, fake, buyer):
+    db = ledger
+    configure(db)
+    fake.mobile_money = [MTN_BJ]
+    dep = deposit_of(db, buy_with(client, buyer, "mm:mtn_bj", "k-mtn3"))
+    fake.mobile_money = []                                          # SoncoPay switched it off
+    scp._methods_cache.update(checked=0.0)
+    assert buy_with(client, buyer, "mm:mtn_bj", "k-mtn4").status_code == 409
+    row, _shown = status_after(client, db, fake, buyer, dep, status="paid", asset="XOF", network=None)
+    assert row.status == DepositStatus.VALIDATED                    # a payment already started keeps working

@@ -35,25 +35,70 @@ export function parseCheckoutGateway(data: unknown): CheckoutAvailability {
   return provider === 'soncopay' || provider === 'nowpayments' ? provider : 'unavailable'
 }
 
-/** How a member pays through SoncoPay: only the methods the server lists for the account. */
-export type SoncoPayMethod = 'usdt_bsc' | 'card'
+/**
+ * How a member pays through SoncoPay: only the methods the server lists for the account. A code is
+ * usdt_bsc, usdt_trc20, card, or "mm:" + a mobile money method (one operator in one or more countries).
+ */
+export type SoncoPayMethodKind = 'crypto' | 'card' | 'mobile_money'
+export type SoncoPayMethod = string
 
-export const SONCOPAY_METHOD_LABELS: Record<SoncoPayMethod, string> = {
+export interface SoncoPayMethodOption {
+  code: SoncoPayMethod
+  kind: SoncoPayMethodKind
+  label: string
+  countries: string[]
+  currency: string | null
+}
+
+export const SONCOPAY_METHOD_LABELS: Record<string, string> = {
   usdt_bsc: 'USDT on BNB Smart Chain (BEP20)',
+  usdt_trc20: 'USDT on Tron (TRC20)',
   card: 'Bank card',
 }
 
+const USDT_BSC_ONLY: SoncoPayMethodOption[] = [
+  { code: 'usdt_bsc', kind: 'crypto', label: SONCOPAY_METHOD_LABELS.usdt_bsc, countries: [], currency: null },
+]
+
+function validCode(code: unknown, kind: unknown): boolean {
+  if (typeof code !== 'string') return false
+  if (kind === 'mobile_money') return /^mm:[a-z0-9_]{1,17}$/.test(code)
+  return code === 'usdt_bsc' || code === 'usdt_trc20' || code === 'card'
+}
+
 /**
- * The SoncoPay methods in the server's /payments/checkout-gateway answer, in its order. Unknown codes are
- * dropped; an answer without a list (an older server) means USDT on BSC only, as before.
+ * The SoncoPay methods in the server's /payments/checkout-gateway answer, in its order. Anything that is
+ * not a known method is dropped; an answer without a list (an older server) means USDT on BSC only.
  */
-export function parseSoncoPayMethods(data: unknown): SoncoPayMethod[] {
+export function parseSoncoPayMethods(data: unknown): SoncoPayMethodOption[] {
   const listed = data && typeof data === 'object' ? (data as { methods?: unknown }).methods : undefined
-  if (!Array.isArray(listed)) return ['usdt_bsc']
-  const codes = listed
-    .map((m) => (m && typeof m === 'object' ? (m as { code?: unknown }).code : undefined))
-    .filter((c): c is SoncoPayMethod => c === 'usdt_bsc' || c === 'card')
-  return codes.length ? Array.from(new Set(codes)) : ['usdt_bsc']
+  if (!Array.isArray(listed)) return USDT_BSC_ONLY
+  const seen = new Set<string>()
+  const out: SoncoPayMethodOption[] = []
+  for (const item of listed) {
+    if (!item || typeof item !== 'object') continue
+    const m = item as Record<string, unknown>
+    const kind = m.kind === 'card' || m.kind === 'mobile_money' ? m.kind : 'crypto'
+    if (!validCode(m.code, kind) || seen.has(m.code as string)) continue
+    seen.add(m.code as string)
+    out.push({
+      code: m.code as string,
+      kind: kind as SoncoPayMethodKind,
+      label: typeof m.label === 'string' && m.label ? m.label : SONCOPAY_METHOD_LABELS[m.code as string] ?? (m.code as string),
+      countries: Array.isArray(m.countries) ? m.countries.filter((c): c is string => typeof c === 'string') : [],
+      currency: typeof m.currency === 'string' ? m.currency : null,
+    })
+  }
+  return out.length ? out : USDT_BSC_ONLY
+}
+
+/** The label of a stored method code (a payment the server already holds). */
+export function soncopayMethodLabel(code: string | null | undefined, options: SoncoPayMethodOption[] = []): string {
+  const known = options.find((o) => o.code === code)
+  if (known) return known.label
+  if (code && SONCOPAY_METHOD_LABELS[code]) return SONCOPAY_METHOD_LABELS[code]
+  if (code && code.startsWith('mm:')) return `Mobile money (${code.slice(3)})`
+  return SONCOPAY_METHOD_LABELS.usdt_bsc
 }
 
 /** The member-facing state of a SoncoPay payment, as the server reports it. */

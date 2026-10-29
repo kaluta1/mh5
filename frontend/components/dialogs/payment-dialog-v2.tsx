@@ -56,7 +56,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { paymentService, PaymentResponse, VerifiedUser, PaymentRecipient } from '@/services/payment-service'
 import {
   CHECKOUT_UNAVAILABLE_TEXT, CheckoutUnavailableError, isFinalState, isSoncoPay, paymentStateText, safeCheckoutUrl,
-  SONCOPAY_METHOD_LABELS, type SoncoPayMethod,
+  parseSoncoPayMethods, soncopayMethodLabel, type SoncoPayMethodOption,
   type CheckoutAvailability,
 } from '@/lib/payment-gateway'
 
@@ -181,7 +181,10 @@ export function PaymentDialog({
   // offered before the server confirms a gateway (fail closed).
   const [gateway, setGateway] = useState<CheckoutAvailability | 'checking'>('checking')
   // SoncoPay: the methods the server lists for the account (a bank card only while SoncoPay offers it).
-  const [soncopayMethods, setSoncopayMethods] = useState<SoncoPayMethod[]>(['usdt_bsc'])
+  const [soncopayMethods, setSoncopayMethods] = useState<SoncoPayMethodOption[]>(() => parseSoncoPayMethods(null))
+  // Mobile money: the member picks a country, then an operator SoncoPay offers there.
+  const [mobileCountry, setMobileCountry] = useState('')
+  const [mobileMethod, setMobileMethod] = useState('')
 
   useEffect(() => {
     if (!open || gateway !== 'soncopay') return
@@ -489,7 +492,9 @@ export function PaymentDialog({
           // SoncoPay: USDT on BSC, or a bank card when SoncoPay offers one (chosen above).
           pay_currency: gateway === 'soncopay' ? undefined : payCurrency,
           recipients: apiRecipients,
-          ...(gateway === 'soncopay' ? { payment_method: methodId === 'soncopay-card' ? 'card' : 'usdt_bsc' } : {}),
+          ...(gateway === 'soncopay'
+            ? { payment_method: methodId.startsWith('soncopay:') ? methodId.slice('soncopay:'.length) : 'usdt_bsc' }
+            : {}),
         },
         paymentIdempotencyKeyRef.current
       )
@@ -961,10 +966,30 @@ export function PaymentDialog({
                   </span>
                 </button>
               )}
-              {!isLoading && gateway === 'soncopay' && soncopayMethods.includes('card') && (
+              {!isLoading && gateway === 'soncopay' && soncopayMethods.some((m) => m.code === 'usdt_trc20') && (
+                <button
+                  data-testid="pay-with-soncopay-usdt_trc20"
+                  onClick={() => handleMethodSelect('soncopay:usdt_trc20')}
+                  disabled={isLoading}
+                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-myhigh5-primary" />
+                  </div>
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                      {t('payment.pay_with_usdt_trc20') || 'Pay with USDT on Tron (TRC20)'}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      {t('payment.soncopay_usdt_trc20') || 'USDT on the Tron network (TRC20), on the secure SoncoPay page'}
+                    </span>
+                  </span>
+                </button>
+              )}
+              {!isLoading && gateway === 'soncopay' && soncopayMethods.some((m) => m.code === 'card') && (
                 <button
                   data-testid="pay-with-soncopay-card"
-                  onClick={() => handleMethodSelect('soncopay-card')}
+                  onClick={() => handleMethodSelect('soncopay:card')}
                   disabled={isLoading}
                   className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-myhigh5-primary hover:bg-myhigh5-primary/5 transition-all text-left disabled:opacity-50"
                 >
@@ -981,6 +1006,53 @@ export function PaymentDialog({
                   </span>
                 </button>
               )}
+              {!isLoading && gateway === 'soncopay' && soncopayMethods.some((m) => m.kind === 'mobile_money') && (() => {
+                const mobile = soncopayMethods.filter((m) => m.kind === 'mobile_money')
+                const countries = Array.from(new Set(mobile.flatMap((m) => m.countries))).sort()
+                const operators = mobile.filter((m) => !mobileCountry || m.countries.includes(mobileCountry))
+                return (
+                  <div className="w-full space-y-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700" data-testid="pay-with-mobile-money">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {t('payment.pay_with_mobile_money') || 'Pay by mobile money'}
+                    </p>
+                    {countries.length > 0 && (
+                      <select
+                        aria-label="Mobile money country"
+                        data-testid="mobile-money-country"
+                        value={mobileCountry}
+                        onChange={(e) => { setMobileCountry(e.target.value); setMobileMethod('') }}
+                        className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-gray-600 dark:bg-gray-900"
+                      >
+                        <option value="">{t('payment.choose_country') || 'Choose your country'}</option>
+                        {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    )}
+                    <select
+                      aria-label="Mobile money operator"
+                      data-testid="mobile-money-operator"
+                      value={mobileMethod}
+                      onChange={(e) => setMobileMethod(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-gray-600 dark:bg-gray-900"
+                    >
+                      <option value="">{t('payment.choose_operator') || 'Choose your operator'}</option>
+                      {operators.map((m) => (
+                        <option key={m.code} value={m.code}>{m.label}{m.currency ? ` - ${m.currency}` : ''}</option>
+                      ))}
+                    </select>
+                    <Button
+                      data-testid="mobile-money-pay"
+                      disabled={!mobileMethod || isLoading}
+                      onClick={() => handleMethodSelect(`soncopay:${mobileMethod}`)}
+                      className="w-full"
+                    >
+                      {t('payment.continue') || 'Continue'}
+                    </Button>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('payment.mobile_money_note') || 'SoncoPay asks for your phone number and sends the payment request to your phone.'}
+                    </p>
+                  </div>
+                )
+              })()}
 
               {/* Methods */}
               {!isLoading && gateway === 'nowpayments' && (
@@ -1063,7 +1135,7 @@ export function PaymentDialog({
                   {t('payment.soncopay_fee_note') || 'SoncoPay shows the exact amount for the method you choose.'}
                 </p>
                 <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-1" data-testid="soncopay-method">
-                  {SONCOPAY_METHOD_LABELS[payment.payment_method === 'card' ? 'card' : 'usdt_bsc']}
+                  {soncopayMethodLabel(payment.payment_method, soncopayMethods)}
                 </p>
               </div>
 

@@ -18,7 +18,7 @@ def _deposit_method_label(deposit) -> Optional[str]:
     from app.services import soncopay_payments
 
     if soncopay_payments.is_soncopay(deposit):
-        return "SoncoPay - " + soncopay_payments.METHOD_LABELS[soncopay_payments.deposit_method(deposit)]
+        return "SoncoPay - " + soncopay_payments.method_label(soncopay_payments.deposit_method(deposit))
     return deposit.payment_method.name if deposit.payment_method else None
 
 

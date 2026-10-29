@@ -87,7 +87,9 @@ def provider_event(Session, deposit_id: int, status: str, **fields) -> str:
     with Session() as db:
         dep = db.get(Deposit, deposit_id)
         payment = {"id": dep.external_payment_id, "order_id": dep.order_id, "status": status,
-                   "amount": f"{D(dep.amount):.2f}", "currency": "USD", "livemode": False, **fields}
+                   "amount": f"{D(dep.amount):.2f}", "currency": "USD", "livemode": False,
+                   # Paid as the member chose (USDT on BSC by default): only such a payment is confirmed.
+                   "asset": "USDT", "network": "BSC", **fields}
         try:
             outcome, _ = soncopay_payments.apply_locked(db, deposit_id, payment)
             db.commit()

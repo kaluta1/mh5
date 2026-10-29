@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isFinalState, isSoncoPay, parseCheckoutGateway, parseSoncoPayMethods, paymentStateText, safeCheckoutUrl } from './payment-gateway'
+import { isFinalState, isSoncoPay, parseCheckoutGateway, parseSoncoPayMethods, paymentStateText, safeCheckoutUrl, soncopayMethodLabel } from './payment-gateway'
 
 describe('lib/payment-gateway', () => {
   it('reads a gateway only from an explicit available answer', () => {
@@ -43,9 +43,17 @@ describe('lib/payment-gateway', () => {
 
 describe('parseSoncoPayMethods', () => {
   it('keeps only the methods the server lists, USDT on BSC when there is no list', () => {
-    expect(parseSoncoPayMethods({ methods: [{ code: 'usdt_bsc' }, { code: 'card' }] })).toEqual(['usdt_bsc', 'card'])
-    expect(parseSoncoPayMethods({ methods: [{ code: 'usdt_bsc' }, { code: 'mobile_money' }] })).toEqual(['usdt_bsc'])
-    expect(parseSoncoPayMethods({ provider: 'soncopay', available: true })).toEqual(['usdt_bsc'])
-    expect(parseSoncoPayMethods(null)).toEqual(['usdt_bsc'])
+    const codes = (data: unknown) => parseSoncoPayMethods(data).map((m) => m.code)
+    expect(codes({ methods: [{ code: 'usdt_bsc' }, { code: 'usdt_trc20' }, { code: 'card', kind: 'card' }] }))
+      .toEqual(['usdt_bsc', 'usdt_trc20', 'card'])
+    expect(codes({ methods: [{ code: 'usdt_bsc' }, { code: 'mobile_money' }, { code: 'mm:<script>', kind: 'mobile_money' }] }))
+      .toEqual(['usdt_bsc'])
+    expect(codes({ provider: 'soncopay', available: true })).toEqual(['usdt_bsc'])
+    expect(codes(null)).toEqual(['usdt_bsc'])
+    const [mm] = parseSoncoPayMethods({ methods: [{ code: 'mm:mtn_bj', kind: 'mobile_money', label: 'MTN Mobile Money (BJ)',
+      countries: ['BJ'], currency: 'XOF' }] })
+    expect(mm).toEqual({ code: 'mm:mtn_bj', kind: 'mobile_money', label: 'MTN Mobile Money (BJ)', countries: ['BJ'], currency: 'XOF' })
+    expect(soncopayMethodLabel('mm:airtel_cd')).toBe('Mobile money (airtel_cd)')
+    expect(soncopayMethodLabel('card')).toBe('Bank card')
   })
 })

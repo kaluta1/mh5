@@ -47,8 +47,16 @@ The rules, in one place:
     not in a crypto asset or on a network. Commissions it funds are held from
     payout for 14 days (commission_payout_hold.card_hold_clause), SoncoPay's
     card chargeback period. A refund is reversed by the existing refund path.
-    Mobile money and bank transfer are not offered: they are not open to this
-    account.
+  * Every method (2026-10-30): a member pays with one of the methods SoncoPay
+    lists as open for the account (GET /v1/methods): USDT on BSC (always offered),
+    USDT on Tron (TRC20), a bank card, and each mobile money method (operator,
+    country, currency) once SoncoPay enables it. The chosen method is written on
+    the deposit when it is created (crypto_currency: usdt_bsc, usdt_trc20, card,
+    or "mm:" + SoncoPay's method code; a card also points at payment_methods
+    "card") and never changes. Its payment is created restricted to that method
+    (mobile money on SoncoPay's own page, which asks the payer's number). It is
+    confirmed only when SoncoPay reports it paid with that method (paid_as).
+    Bank transfer is not a SoncoPay payment method and is never offered.
 """
 from __future__ import annotations
 
@@ -80,8 +88,11 @@ PAY_METHOD, PAY_ASSET, PAY_NETWORK = "crypto", "USDT", "BSC"
 PAY_LABEL = "USDT on BNB Smart Chain (BEP20)"
 OTHER_ASSET_STATUS = "paid_other_asset"
 # What a member pays with (deposits.payment_method_id -> payment_methods.code, compared lower-case).
-METHOD_USDT_BSC, METHOD_CARD = "usdt_bsc", "card"
-METHOD_LABELS = {METHOD_USDT_BSC: PAY_LABEL, METHOD_CARD: "Bank card"}
+METHOD_USDT_BSC, METHOD_USDT_TRC20, METHOD_CARD = "usdt_bsc", "usdt_trc20", "card"
+MOBILE_MONEY_PREFIX = "mm:"                   # + SoncoPay's mobile money method code (mtn_bj, orange_ci...)
+METHOD_CODE_MAX = 20                          # deposits.crypto_currency holds the method
+METHOD_LABELS = {METHOD_USDT_BSC: PAY_LABEL, METHOD_USDT_TRC20: "USDT on Tron (TRC20)", METHOD_CARD: "Bank card"}
+CRYPTO_METHODS = {METHOD_USDT_BSC: (PAY_ASSET, PAY_NETWORK), METHOD_USDT_TRC20: ("USDT", "TRON")}
 CRYPTO_ASSETS = {"USDT", "USDC", "BTC", "ETH", "BNB", "TRX", "LTC", "SOL", "MATIC"}
 
 STATUS_TO_DEPOSIT = {
@@ -135,9 +146,29 @@ def payment_method_row(db: Session, code: str):
 
 
 def deposit_method(deposit: Deposit) -> str:
-    """How this SoncoPay deposit is paid: a bank card when it points at the card row, else USDT on BSC."""
+    """How this SoncoPay deposit is paid, as written when it was created: a bank card when it points at the
+    card row, the method in crypto_currency otherwise (USDT on BSC for every deposit written before)."""
     row = getattr(deposit, "payment_method", None)
-    return METHOD_CARD if row is not None and str(row.code or "").lower() == METHOD_CARD else METHOD_USDT_BSC
+    if row is not None and str(row.code or "").lower() == METHOD_CARD:
+        return METHOD_CARD
+    written = str(getattr(deposit, "crypto_currency", None) or "").strip()
+    if written in CRYPTO_METHODS or is_mobile_money(written):
+        return written
+    return METHOD_USDT_BSC
+
+
+def is_mobile_money(code: Optional[str]) -> bool:
+    return str(code or "").startswith(MOBILE_MONEY_PREFIX) and len(str(code)) > len(MOBILE_MONEY_PREFIX)
+
+
+def method_label(code: str) -> str:
+    """What the member and the administrators read for a method."""
+    if code in METHOD_LABELS:
+        return METHOD_LABELS[code]
+    for entry in (_methods_cache.get("methods") or []):
+        if entry.get("code") == code:
+            return entry["label"]
+    return "Mobile money (" + code[len(MOBILE_MONEY_PREFIX):] + ")" if is_mobile_money(code) else code
 
 
 # The methods SoncoPay opens to this account (GET /v1/methods), read at most every METHODS_MAX_AGE seconds.
@@ -145,21 +176,40 @@ METHODS_MAX_AGE, METHODS_RETRY = 600.0, 120.0
 _methods_cache: Dict[str, Any] = {"environment": None, "methods": None, "checked": 0.0}
 
 
+def _entry(code: str, kind: str, label: str, *, countries=None, currency=None) -> Dict[str, Any]:
+    return {"code": code, "kind": kind, "label": label,
+            "countries": [str(c).upper() for c in countries or [] if isinstance(c, str) and len(c) == 2],
+            "currency": str(currency).upper()[:10] if currency else None}
+
+
 def methods_from_answer(answer: Mapping[str, Any]) -> list:
-    """Member methods SoncoPay lists as open for this account: USDT on BSC (a crypto method with that
-    asset and network), and a bank card (method card, not disabled). Nothing else is offered."""
-    out = []
-    listed = answer.get("methods") if isinstance(answer.get("methods"), list) else []
+    """Member methods SoncoPay lists as open for this account, in this order: USDT on BSC, USDT on Tron,
+    a bank card, then every mobile money method (with its countries and currency). A method SoncoPay
+    switched off in payment_methods, any other asset or network, and anything else is not offered."""
+    listed = [m for m in (answer.get("methods") if isinstance(answer.get("methods"), list) else [])
+              if isinstance(m, dict)]
     switches = {str(m.get("code") or "").lower(): m.get("enabled")
                 for m in (answer.get("payment_methods") or []) if isinstance(m, dict)}
-    usdt = any(isinstance(m, dict) and str(m.get("method")) == PAY_METHOD
-               and str(m.get("asset") or "").upper() == PAY_ASSET and str(m.get("network") or "").upper() == PAY_NETWORK
-               for m in listed)
-    if usdt and switches.get("crypto") is not False:
-        out.append(METHOD_USDT_BSC)
-    card = any(isinstance(m, dict) and str(m.get("method")) == METHOD_CARD for m in listed)
-    if card and switches.get(METHOD_CARD) is not False:
-        out.append(METHOD_CARD)
+    out = []
+    if switches.get("crypto") is not False:
+        for code, (asset, network) in CRYPTO_METHODS.items():
+            if any(str(m.get("method")) == PAY_METHOD and str(m.get("asset") or "").upper() == asset
+                   and str(m.get("network") or "").upper() == network for m in listed):
+                out.append(_entry(code, "crypto", METHOD_LABELS[code]))
+    if switches.get(METHOD_CARD) is not False and any(str(m.get("method")) == METHOD_CARD for m in listed):
+        out.append(_entry(METHOD_CARD, "card", METHOD_LABELS[METHOD_CARD]))
+    if switches.get("mobile_money") is not False:
+        for m in listed:
+            code = str(m.get("code") or "").strip().lower()
+            if (str(m.get("method")) != "mobile_money" or not code or switches.get(code) is False
+                    or len(MOBILE_MONEY_PREFIX + code) > METHOD_CODE_MAX
+                    or not all(ch.isalnum() or ch == "_" for ch in code)):
+                continue
+            countries = m.get("countries") if isinstance(m.get("countries"), list) else []
+            name = str(m.get("label") or m.get("operator") or code)[:60]
+            where = ", ".join(str(c).upper() for c in countries if isinstance(c, str))[:40]
+            out.append(_entry(MOBILE_MONEY_PREFIX + code, "mobile_money",
+                              f"{name} ({where})" if where else name, countries=countries, currency=m.get("currency")))
     return out
 
 
@@ -181,8 +231,13 @@ async def account_methods(db: Session) -> list:
             cached["methods"] = methods_from_answer(await client.account_methods())
         except SoncoPayError as exc:
             logger.warning("SoncoPay methods could not be read (%s)", exc.code or exc.status_code)
-    methods = list(cached["methods"] or [])
-    return [METHOD_USDT_BSC] + [m for m in methods if m != METHOD_USDT_BSC]
+    methods = [m for m in (cached["methods"] or []) if m["code"] != METHOD_USDT_BSC]
+    return [_entry(METHOD_USDT_BSC, "crypto", PAY_LABEL)] + methods
+
+
+async def offered(db: Session, code: str) -> bool:
+    """May a NEW SoncoPay payment use this method now?"""
+    return any(entry["code"] == code for entry in await account_methods(db))
 
 
 def client_for(db: Session, environment: Optional[str]) -> SoncoPayClient:
@@ -280,16 +335,11 @@ def apply_payment(db: Session, deposit: Deposit, payment: Mapping[str, Any]) -> 
     if target is None:
         logger.warning("Deposit %s: unknown SoncoPay status %r, nothing changed", deposit.id, status[:40])
         return True
-    if target == DepositStatus.VALIDATED and deposit_method(deposit) == METHOD_CARD:
-        if not paid_by_card(payment):
-            deposit.provider_status = OTHER_ASSET_STATUS
-            logger.error("Deposit %s: a card payment reported paid in %s on %s; not confirmed", deposit.id,
-                         str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20])
-            return True
-    elif target == DepositStatus.VALIDATED and not paid_in_usdt_bsc(payment):
+    if target == DepositStatus.VALIDATED and not paid_as(deposit_method(deposit), payment):
         deposit.provider_status = OTHER_ASSET_STATUS
-        logger.error("Deposit %s: SoncoPay reports it paid in %s on %s, not USDT on BSC; not confirmed",
-                     deposit.id, str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20])
+        logger.error("Deposit %s: SoncoPay reports it paid in %s on %s, not as chosen (%s); not confirmed",
+                     deposit.id, str(payment.get("asset") or "?")[:12], str(payment.get("network") or "?")[:20],
+                     deposit_method(deposit)[:20])
         return True
     if target == DepositStatus.VALIDATED:
         deposit.status = DepositStatus.VALIDATED
@@ -318,15 +368,34 @@ def paid_in_usdt_bsc(payment: Mapping[str, Any]) -> bool:
             and str(payment.get("network") or "").strip().upper() == PAY_NETWORK)
 
 
-def paid_by_card(payment: Mapping[str, Any]) -> bool:
-    """A payment of a card deposit that may be confirmed: not reported in a crypto asset, on a network
-    or with any method but a card. (Its payment was created restricted to cards.)"""
+def _paid_in_fiat(payment: Mapping[str, Any], allowed_methods: tuple) -> bool:
+    """Not reported in a crypto asset, on a network, or with a method other than the allowed ones."""
     method = str(payment.get("method") or payment.get("payment_method") or "").strip().lower()
-    if method and method != METHOD_CARD:
+    if method and method not in allowed_methods:
         return False
     if str(payment.get("network") or "").strip():
         return False
     return str(payment.get("asset") or "").strip().upper() not in CRYPTO_ASSETS
+
+
+def paid_by_card(payment: Mapping[str, Any]) -> bool:
+    """A payment of a card deposit that may be confirmed. (Its payment was created restricted to cards.)"""
+    return _paid_in_fiat(payment, (METHOD_CARD,))
+
+
+def paid_as(method: str, payment: Mapping[str, Any]) -> bool:
+    """Was this payment made the way the member chose? Crypto: that asset on that network (both
+    documented fields, which become those of the asset received when SoncoPay switches a wrong-asset
+    payment; a missing field is not a match). Card or mobile money: not in crypto, by that method."""
+    if method in CRYPTO_METHODS:
+        asset, network = CRYPTO_METHODS[method]
+        return (str(payment.get("asset") or "").strip().upper() == asset
+                and str(payment.get("network") or "").strip().upper() == network)
+    if method == METHOD_CARD:
+        return paid_by_card(payment)
+    if is_mobile_money(method):
+        return _paid_in_fiat(payment, ("mobile_money", method[len(MOBILE_MONEY_PREFIX):]))
+    return False
 
 
 def status_payload(deposit: Deposit) -> Dict[str, Any]:
@@ -354,7 +423,7 @@ def status_payload(deposit: Deposit) -> Dict[str, Any]:
         "price_currency": (deposit.currency or "usd").lower(),
         "tx_hash": deposit.tx_hash,
         "payment_method": deposit_method(deposit),
-        "payment_method_label": METHOD_LABELS[deposit_method(deposit)],
+        "payment_method_label": method_label(deposit_method(deposit)),
     }
 
 
@@ -381,7 +450,8 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
         db.rollback()
         raise CheckoutClosed()
     amount, currency = f"{money(deposit.amount):.2f}", normalize_fiat_currency(deposit.currency or "USD")
-    card = deposit_method(deposit) == METHOD_CARD
+    method = deposit_method(deposit)
+    card = method == METHOD_CARD
     client = client_for(db, environment)
     db.rollback()
     request = dict(amount=amount, currency=currency, order_id=order_id,
@@ -390,15 +460,24 @@ async def create_checkout(db: Session, deposit_id: int, *, description: str) -> 
                    metadata={"deposit_id": int(deposit_id)})
     if card:
         request["methods"] = [METHOD_CARD]        # only a card can pay it, whatever happens on the page
-    chosen = dict(method=METHOD_CARD) if card else dict(method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
+        chosen = dict(method=METHOD_CARD)
+    elif is_mobile_money(method):
+        # Only this operator; SoncoPay's own page asks the payer's number (and operator when needed).
+        request["methods"] = [method[len(MOBILE_MONEY_PREFIX):]]
+        chosen = {}
+    elif method == METHOD_USDT_TRC20:
+        request["methods"] = ["USDT:TRON"]
+        chosen = dict(method=PAY_METHOD, asset="USDT", network="TRON")
+    else:
+        chosen = dict(method=PAY_METHOD, asset=PAY_ASSET, network=PAY_NETWORK)
     try:
         payment = await client.create_payment(**request, **chosen)
     except SoncoPayError as exc:
-        if exc.status_code != 422 or exc.code != "payer_required":
+        if exc.status_code != 422 or exc.code != "payer_required" or not chosen:
             raise
         # Documented: choosing the method by API needs every payer field the account requires, and
         # nothing is created when one is missing. The payer then fills them in on SoncoPay's page; only a
-        # payment made the way the member chose (USDT on BSC, or a card) is ever confirmed.
+        # payment made the way the member chose is ever confirmed (paid_as).
         logger.warning("Deposit %s: SoncoPay needs payer details to preselect the method; "
                        "created without a preselected method", deposit_id)
         payment = await client.create_payment(**request)

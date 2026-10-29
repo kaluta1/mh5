@@ -217,10 +217,13 @@ describe('Resume payment dialog', () => {
   })
 })
 
+const opt = (code: string, kind = 'crypto', label = code, countries: string[] = [], currency: string | null = null) =>
+  ({ code, kind, label, countries, currency })
+
 describe('SoncoPay bank card', () => {
   it('offers the card only when the server lists it, and asks the server for a card payment', async () => {
     service.getCheckoutGateway.mockResolvedValue('soncopay')
-    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue(['usdt_bsc', 'card'])
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue([opt('usdt_bsc'), opt('card', 'card', 'Bank card')])
     service.createPayment.mockResolvedValue({ ...soncopayPayment, payment_method: 'card',
       checkout_url: `${CHECKOUT}/redirect` })
     await toMethodStep()
@@ -234,13 +237,60 @@ describe('SoncoPay bank card', () => {
 
   it('shows no card when the server does not list one', async () => {
     service.getCheckoutGateway.mockResolvedValue('soncopay')
-    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue(['usdt_bsc'])
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue([opt('usdt_bsc')])
     service.createPayment.mockResolvedValue(soncopayPayment)
     await toMethodStep()
     fireEvent.click(await screen.findByTestId('pay-with-soncopay'))
     await screen.findByTestId('soncopay-payment-step')
     expect(screen.queryByTestId('pay-with-soncopay-card')).toBeNull()
     expect(service.createPayment.mock.calls[0][1].payment_method).toBe('usdt_bsc')
+    delete (service as Record<string, unknown>).getSoncoPayMethods
+  })
+})
+
+describe('SoncoPay USDT on Tron and mobile money', () => {
+  it('offers USDT on Tron when listed and asks the server for it', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue(
+      [opt('usdt_bsc'), opt('usdt_trc20', 'crypto', 'USDT on Tron (TRC20)')])
+    service.createPayment.mockResolvedValue({ ...soncopayPayment, payment_method: 'usdt_trc20' })
+    await toMethodStep()
+    fireEvent.click(await screen.findByTestId('pay-with-soncopay-usdt_trc20'))
+    await screen.findByTestId('soncopay-payment-step')
+    expect(service.createPayment.mock.calls[0][1].payment_method).toBe('usdt_trc20')
+    expect(screen.getByTestId('soncopay-method')).toHaveTextContent('USDT on Tron (TRC20)')
+    delete (service as Record<string, unknown>).getSoncoPayMethods
+  })
+
+  it('lets the member pick a country, then an operator offered there, and sends that operator', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue([
+      opt('usdt_bsc'),
+      opt('mm:mtn_bj', 'mobile_money', 'MTN Mobile Money (BJ)', ['BJ'], 'XOF'),
+      opt('mm:orange_ci', 'mobile_money', 'Orange Money (CI)', ['CI'], 'XOF'),
+    ])
+    service.createPayment.mockResolvedValue({ ...soncopayPayment, payment_method: 'mm:orange_ci' })
+    await toMethodStep()
+    const country = await screen.findByTestId('mobile-money-country')
+    expect(screen.getByTestId('mobile-money-pay')).toBeDisabled()
+    fireEvent.change(country, { target: { value: 'CI' } })
+    const operator = screen.getByTestId('mobile-money-operator') as HTMLSelectElement
+    expect(Array.from(operator.options).map((o) => o.value)).toEqual(['', 'mm:orange_ci'])
+    fireEvent.change(operator, { target: { value: 'mm:orange_ci' } })
+    fireEvent.click(screen.getByTestId('mobile-money-pay'))
+    await screen.findByTestId('soncopay-payment-step')
+    expect(service.createPayment.mock.calls[0][1].payment_method).toBe('mm:orange_ci')
+    expect(screen.getByTestId('soncopay-method')).toHaveTextContent('Orange Money (CI)')
+    delete (service as Record<string, unknown>).getSoncoPayMethods
+  })
+
+  it('shows no mobile money when the server lists none', async () => {
+    service.getCheckoutGateway.mockResolvedValue('soncopay')
+    ;(service as Record<string, ReturnType<typeof vi.fn>>).getSoncoPayMethods = vi.fn().mockResolvedValue([opt('usdt_bsc')])
+    await toMethodStep()
+    await screen.findByTestId('pay-with-soncopay')
+    expect(screen.queryByTestId('pay-with-mobile-money')).toBeNull()
+    expect(screen.queryByTestId('pay-with-soncopay-usdt_trc20')).toBeNull()
     delete (service as Record<string, unknown>).getSoncoPayMethods
   })
 })

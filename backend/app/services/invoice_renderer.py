@@ -89,6 +89,10 @@ def payment_origin_label(deposit: Deposit, lang: str) -> str:
 
 
 def payment_method_label(deposit: Deposit, lang: str) -> str:
+    from app.services import soncopay_payments
+
+    if soncopay_payments.is_soncopay(deposit):
+        return "SoncoPay - " + soncopay_payments.method_label(soncopay_payments.deposit_method(deposit))
     if deposit.payment_method and getattr(deposit.payment_method, "name", None):
         return str(deposit.payment_method.name)
     if deposit.crypto_currency:
