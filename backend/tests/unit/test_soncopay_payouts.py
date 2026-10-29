@@ -1065,3 +1065,45 @@ def test_the_owner_minimum_is_stored_through_the_audited_settings(ledger):
         payment_config.apply_owner_crypto_minimum(db, "10.00", decision="Shafi Abeid 2026-10-30: $10 as on Kinjy")
     with pytest.raises(payment_config.PaymentConfigError):
         payment_config._coerce(payment_config.FIELDS["crypto_min_usd"], "10.001")      # cents only
+
+
+@pytest.mark.ten_dollar_minimum
+def test_the_production_fee_settings_after_the_correction_pay_ten_dollars_as_verified(payouts_on, fake):
+    """Production values on 2026-10-30 with the proposed correction: fee mode ADDED_BY_PROVIDER, member limit
+    5 % / $0.50 (was $0.10), safety margin 25 %, maximum network fee 10 %, minimum received $0.50, reserve 0.
+    SoncoPay fee 0.23, USDT:BSC minimum 2. A $10.00 balance: 9.77 sent, 0.23 added by SoncoPay = 10.00 debit;
+    the books settle the whole $10.00 liability against the treasury."""
+    from app.models.accounting import JournalEntry, JournalLine
+
+    db = payouts_on
+    real_figures(db, fake, margin="25")
+    configure(db, member_fee_cap_percent=Decimal("5.000"), member_fee_cap_usd=Decimal("0.50"),
+              max_network_fee_percent=Decimal("10.00"), min_net_payout_usd=Decimal("0.50"),
+              provider_balance_reserve_usd=Decimal("0.00"), crypto_min_usd=Decimal("10.00"))
+    from app.models.payment_config import CashoutFeeConsent
+
+    user, rows = payable_member(db, fake, amounts=["6.00", "4.00"])
+    consent = db.query(CashoutFeeConsent).filter(CashoutFeeConsent.user_id == user.id).one()
+    consent.cap_percent, consent.cap_usd = Decimal("5.000"), Decimal("0.50")   # the terms the member accepts
+    db.commit()
+    assert run(db)["members"] == {"SUBMITTED": 1}
+    [po] = fake.payouts.values()
+    assert Decimal(po["amount"]) == Decimal("9.77")
+    out = cashouts(db, user)[0]
+    assert (out.gross_amount, Decimal(out.amount_sent), Decimal(out.network_fee_estimate)) == \
+        (Decimal("10.00"), Decimal("9.77"), Decimal("0.23"))
+    assert Decimal(out.fee_estimate_adjusted) == Decimal("0.2875") and Decimal(out.fee_cap) == Decimal("0.50")
+    fake.complete(po["id"])
+    run(db)
+    out = cashouts(db, user)[0]
+    assert out.status == "completed" and out.fee_flag is None and out.fee_reconciliation == "PROVIDER_VERIFIED"
+    assert (Decimal(out.net_received), Decimal(out.network_fee_actual)) == (Decimal("9.77"), Decimal("0.23"))
+    entry = db.query(JournalEntry).filter(JournalEntry.description == f"Affiliate Cashout #{out.id}").one()
+    lines = db.query(JournalLine).filter(JournalLine.entry_id == entry.id).all()
+    assert sum(Decimal(str(l.debit_amount)) for l in lines) == sum(Decimal(str(l.credit_amount)) for l in lines) \
+        == Decimal("10.00")
+    _assert_all_journals_balance(db)
+    # The fee a little higher than the margin covers: still within $0.50 up to 0.40; above, held.
+    fake.fee = "0.41"
+    commission(db, user, "10.00")
+    assert run(db)["members"] == {"NETWORK_FEE_ABOVE_MEMBER_LIMIT": 1}
