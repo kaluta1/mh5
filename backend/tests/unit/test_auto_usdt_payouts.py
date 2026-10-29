@@ -631,6 +631,48 @@ def test_failed_transfer_is_released_and_retried_as_a_new_attempt(ledger, engine
     assert provider.created[1]["external_id"] == f"c{row.id}-a2"
 
 
+def test_a_refused_wallet_is_a_failed_attempt_that_sends_nothing_and_keeps_the_commission(ledger, engine_on):
+    # The provider refusing the address (an address-whitelist rule, an invalid wallet)
+    # answers 4xx at creation: nothing left, the commission waits for the next attempt.
+    from app.services import nowpayments_service as nowpayments
+    db = ledger
+    configure(db, retry_backoff_hours=1)
+    user = member(db, "m1", method="CRYPTO")
+    row = commission(db, user, "2.00")
+
+    def refuse(**_k):
+        raise nowpayments.NowPaymentsError("NowPayments create -> 400", status_code=400, stage="create")
+
+    provider = DetailedProvider(create=refuse)
+    assert run(db, provider)["members"] == {"PROVIDER_REFUSED": 1}
+    out = cashouts(db, user)[0]
+    assert (out.status, out.failure_code) == ("failed", "PROVIDER_REFUSED")
+    assert len(_deliveries(db, "payout-failed:")) == 1
+    db.refresh(row)
+    assert row.status != CommissionStatus.PAID and row.payout_reference is None
+    run(db, provider)                                                  # inside the back-off: no new attempt
+    assert len(provider.created) == 1
+
+
+def test_a_refused_server_ip_stops_the_cycle_and_is_not_the_members_failure(ledger, engine_on):
+    from app.services import nowpayments_service as nowpayments
+    db = ledger
+    first, second = member(db, "m1", method="CRYPTO"), member(db, "m2", method="CRYPTO")
+    commission(db, first, "2.00")
+    commission(db, second, "2.00")
+
+    def refuse(**_k):
+        raise nowpayments.NowPaymentsError("NowPayments create -> 403", status_code=403, stage="create",
+                                           ip_refused=True)
+
+    provider = DetailedProvider(create=refuse)
+    report = run(db, provider)
+    assert report["members"] == {"PROVIDER_IP_NOT_WHITELISTED": 1} and len(provider.created) == 1
+    out = cashouts(db)[0]
+    assert (out.status, out.failure_code) == ("cancelled", "PROVIDER_IP_NOT_WHITELISTED")
+    assert _deliveries(db, "payout-failed:") == []
+
+
 def test_completed_payout_records_hash_explorer_link_and_emails_once(ledger, engine_on):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
