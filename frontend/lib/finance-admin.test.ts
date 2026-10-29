@@ -28,7 +28,7 @@ const field = (name: string, kind: SettingField['kind'], value: SettingField['va
 describe('finance admin helpers', () => {
   it('has exactly the eight sections, in order', () => {
     expect(FINANCE_SECTIONS.map((s) => s.label)).toEqual([
-      'Payment Providers', 'NOWPayments (discontinued)', 'SoncoPay Configuration', 'Crypto Cashout Settings', 'USD Cashout Settings',
+      'Payment Providers', 'NOWPayments (discontinued)', 'SoncoPay Configuration', 'SoncoPay Payouts', 'Crypto Cashout Settings', 'USD Cashout Settings',
       'Payout Security', 'Cashout Transactions', 'Reconciliation & Audit Logs'])
     expect(isFinanceSection('usd-cashout')).toBe(true)
     expect(isFinanceSection('manual-payout')).toBe(false)

@@ -11,6 +11,7 @@ export const FINANCE_SECTIONS = [
   { slug: 'providers', label: 'Payment Providers' },
   { slug: 'nowpayments', label: 'NOWPayments (discontinued)' },
   { slug: 'soncopay', label: 'SoncoPay Configuration' },
+  { slug: 'soncopay-payouts', label: 'SoncoPay Payouts' },
   { slug: 'crypto-cashout', label: 'Crypto Cashout Settings' },
   { slug: 'usd-cashout', label: 'USD Cashout Settings' },
   { slug: 'payout-security', label: 'Payout Security' },

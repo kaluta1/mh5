@@ -1,4 +1,4 @@
-"""Fail-closed network guard: no test can reach NOWPayments.
+"""Fail-closed network guard: no test can reach NOWPayments or SoncoPay.
 
 Every way this code base (or a library under it) can open a connection is
 intercepted for the provider's hosts, whatever the client:
@@ -29,7 +29,7 @@ from typing import List, Optional
 import httpx
 import pytest
 
-BLOCKED_DOMAINS = ("nowpayments.io",)
+BLOCKED_DOMAINS = ("nowpayments.io", "soncopay.com")
 PROVIDER_CREDENTIAL_SETTINGS = ("NOWPAYMENTS_API_KEY", "NOWPAYMENTS_IPN_SECRET", "NOWPAYMENTS_PAYOUT_API_KEY",
                                 "NOWPAYMENTS_EMAIL", "NOWPAYMENTS_PASSWORD", "NOWPAYMENTS_PAYOUT_TOTP_SECRET")
 

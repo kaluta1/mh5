@@ -26,6 +26,8 @@ type WalletInfo = {
   confirmation_required?: boolean
   confirmation_email_sent?: boolean | null
   hold_hours?: number | null
+  /** SoncoPay: where the approved wallet stands as a payout destination. */
+  payout_destination?: { destination_state: string | null; message: string | null; usable_from: string | null } | null
 }
 
 const CURRENCY_META: Record<string, { label: string; placeholder: string; hint: string }> = {
@@ -208,6 +210,15 @@ export function SettingsWalletTab() {
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                 Security hold: payouts to this wallet start on{' '}
                 {walletInfo.payable_from ? new Date(`${walletInfo.payable_from}Z`).toLocaleDateString() : 'a later date'}.
+              </p>
+            )}
+            {walletInfo?.payout_destination?.message && (
+              <p data-testid="payout-destination-state"
+                className={`text-xs mt-1 ${walletInfo.payout_destination.destination_state === 'READY'
+                  ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}>
+                {walletInfo.payout_destination.message}
+                {walletInfo.payout_destination.usable_from
+                  ? ` Expected from ${new Date(`${walletInfo.payout_destination.usable_from}Z`).toLocaleString()}.` : ''}
               </p>
             )}
           </div>

@@ -184,21 +184,40 @@ def commission_intent_reference(db: Session, commission_id: int) -> str:
     return f"intent:c{int(commission_id)}-a{int(attempts) + 1}"
 
 
+def _soncopay():
+    from app.services import soncopay_payouts
+
+    return soncopay_payouts
+
+
+def payout_provider_ready(db: Session, config=None) -> bool:
+    """The payout provider in use can be asked to pay: SoncoPay (authorized, enabled, Live, key saved)
+    since NOWPayments was discontinued; NOWPayments' payout credentials before."""
+    if payment_config.nowpayments_discontinued():
+        return _soncopay().ready(db)
+    config = config or payment_config.load(db)
+    return payment_config.resolve_credentials(db, config).payout_ready
+
+
 def engine_enabled(db: Session, *, config=None) -> bool:
     config = config or payment_config.load(db)
-    return bool(config.auto_payout_allowed) and payment_config.resolve_credentials(db, config).payout_ready
+    return bool(config.auto_payout_allowed) and payout_provider_ready(db, config)
 
 
 def engine_status(db: Session) -> dict:
     config = payment_config.load(db)
     credentials = payment_config.resolve_credentials(db, config)
-    return {"enabled": bool(config.auto_payout_allowed) and credentials.payout_ready,
+    provider_ready = payout_provider_ready(db, config)
+    return {"enabled": bool(config.auto_payout_allowed) and provider_ready,
+            "payout_provider": payment_config.payout_provider(),
             "server_switch": payment_config.crypto_master_switch(),
             "activation": payment_config.payout_activation_switch(),
             "provider_enabled": bool(config.provider_enabled),
             "crypto_cashout_enabled": bool(config.crypto_cashout_enabled),
             "automatic_payouts": bool(config.crypto_auto_payout_enabled),
-            "provider_credentials_ready": credentials.payout_ready, "missing": credentials.payout_missing,
+            "provider_credentials_ready": provider_ready,
+            "missing": ([b["code"] for b in _soncopay().blockers(db)] if payment_config.nowpayments_discontinued()
+                        else credentials.payout_missing),
             "credential_source": credentials.payout_source}
 
 
@@ -438,14 +457,25 @@ def has_open_payouts(db: Session) -> bool:
             .first()) is not None
 
 
-def reconcile_open(db: Session, provider, *, now: Optional[datetime] = None) -> Counter:
+SONCOPAY_PAYOUT_PREFIX = "po_"
+
+
+def reconcile_open(db: Session, provider, *, now: Optional[datetime] = None, scope: Optional[str] = None) -> Counter:
+    """Apply the provider's result to every open crypto payout. `scope` keeps the two providers apart
+    once NOWPayments is discontinued: "nowpayments" = payouts it holds (an id that is not a SoncoPay
+    po_ id), "soncopay" = everything else (SoncoPay ids, and unknown outcomes it is asked about)."""
     _mark_interrupted(db, now or datetime.utcnow())
-    ids = [row.id for row in db.query(AffiliateCashoutRequest.id)
-           .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
-                   or_(AffiliateCashoutRequest.provider_batch_id.isnot(None),
-                       AffiliateCashoutRequest.status == CashoutStatus.UNKNOWN.value),
-                   AffiliateCashoutRequest.status.in_([CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value]))
-           .order_by(AffiliateCashoutRequest.id).all()]
+    query = (db.query(AffiliateCashoutRequest.id)
+             .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO,
+                     or_(AffiliateCashoutRequest.provider_batch_id.isnot(None),
+                         AffiliateCashoutRequest.status == CashoutStatus.UNKNOWN.value),
+                     AffiliateCashoutRequest.status.in_([CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value])))
+    soncopay_id = AffiliateCashoutRequest.provider_batch_id.like(SONCOPAY_PAYOUT_PREFIX + "%")
+    if scope == "nowpayments":
+        query = query.filter(AffiliateCashoutRequest.provider_batch_id.isnot(None), ~soncopay_id)
+    elif scope == "soncopay":
+        query = query.filter(or_(AffiliateCashoutRequest.provider_batch_id.is_(None), soncopay_id))
+    ids = [row.id for row in query.order_by(AffiliateCashoutRequest.id).all()]
     db.rollback()
     results: Counter = Counter()
     for cashout_id in ids:
@@ -601,6 +631,13 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
             return "ADDRESS_CHECK_UNAVAILABLE"
         if not accepted:
             return "PROVIDER_ADDRESS_INVALID"
+    destination = getattr(provider, "destination_problem", None)
+    if destination is not None:
+        # SoncoPay: only the confirmed destination of THIS approval, after its waiting period. The
+        # commission stays available and is retried every cycle until it is.
+        problem = destination(user_id, target, approval_id, now)
+        if problem is not None:
+            return problem
     user = db.query(User).filter(User.id == user_id).with_for_update().one()
     wallet = cs.wallet_state(user, now, config=config)
     if ((wallet.address, wallet.currency, wallet.approval_id) != (target, target_currency, approval_id)
@@ -689,10 +726,15 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     try:
         result = provider.create_payout(address=address, amount=send, currency=currency,
                                         external_id=intent_ref.split(":", 1)[1])
-    except nowpayments.NowPaymentsError as exc:
+    except (nowpayments.NowPaymentsError, _soncopay().PayoutRefused) as exc:
         code = exc.status_code
         refused = code is not None and 400 <= code < 500 and code not in (408, 429)
-        if refused and getattr(exc, "ip_refused", False):
+        if isinstance(exc, _soncopay().PayoutRefused):
+            refused = True                          # documented: nothing was created
+            platform_fault = exc.platform_fault
+        if refused and platform_fault is not None:
+            pass
+        elif refused and getattr(exc, "ip_refused", False):
             platform_fault = "PROVIDER_IP_NOT_WHITELISTED"
         elif refused and getattr(exc, "stage", None) == "auth":
             platform_fault = "PROVIDER_AUTH_FAILED"
@@ -766,6 +808,32 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
         return {"enabled": False, "reconciled": {}, "members": {}}
     now = now or datetime.utcnow()
     config = payment_config.load(db)
+    if payment_config.nowpayments_discontinued():
+        sp = _soncopay()
+        legacy: dict = {}
+        credentials = payment_config.resolve_credentials(db, config)
+        if credentials.payout_ready and has_open_payouts(db):
+            # Payouts NOWPayments already holds are still followed up, by reading their status only.
+            legacy = dict(reconcile_open(db, StatusOnlyProvider(NowPaymentsPayoutProvider(credentials)),
+                                         now=now, scope="nowpayments"))
+        if not sp.ready(db):
+            # Not authorized / not Live / no key: nothing is registered or sent. Payouts already handed
+            # to SoncoPay (none until it was ready) are followed up by reading only, when a key exists.
+            report = {"enabled": False, "reconciled": legacy, "members": {}, "provider": "soncopay",
+                      "blocked_by": [b["code"] for b in sp.blockers(db)]}
+            db.rollback()
+            return report
+        provider = provider or sp.SoncoPayPayoutProvider(db)
+        api = getattr(provider, "_client", None)
+        try:
+            report_destinations = sp.sync_destinations(db, api()) if api is not None else {}
+        except Exception:  # noqa: BLE001 - the destinations are synchronised again next cycle
+            db.rollback()
+            logger.exception("Cashout cycle: SoncoPay destinations could not be synchronised")
+            report_destinations = {"error": 1}
+        return _pay_cycle(db, provider, config, now, limit, scope="soncopay",
+                          extra={"provider": "soncopay", "destinations": report_destinations,
+                                 "reconciled_nowpayments": legacy})
     credentials = payment_config.resolve_credentials(db, config)
     if not config.provider_enabled:
         # The provider (master gateway switch) is off: no payout is created, retried or sent. Payouts
@@ -781,8 +849,16 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
     if not credentials.payout_ready:
         return {"enabled": False, "reconciled": {}, "members": {}}
     provider = provider or NowPaymentsPayoutProvider(credentials)
+    return _pay_cycle(db, provider, config, now, limit)
+
+
+def _pay_cycle(db: Session, provider, config, now: datetime, limit: Optional[int], *,
+               extra: Optional[dict] = None, scope: Optional[str] = None) -> dict:
+    """Reconcile what the provider holds, then pay eligible members (shared by both providers)."""
+    from app.core.config import settings
+
     report = {"enabled": bool(config.auto_payout_allowed),
-              "reconciled": dict(reconcile_open(db, provider, now=now)), "members": {}}
+              "reconciled": dict(reconcile_open(db, provider, now=now, scope=scope)), "members": {}, **(extra or {})}
     if not report["enabled"]:
         return report
     config = payment_config.load(db)                # reconciliation may have suspended payouts
@@ -820,7 +896,8 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
     db.rollback()
     results: Counter = Counter()
     stop_all = ("PROVIDER_AUTH_FAILED", "PROVIDER_IP_NOT_WHITELISTED", "PAYOUTS_SUSPENDED",
-                "FEE_RECONCILIATION_PENDING", "CONFIGURATION_CHANGED")
+                "FEE_RECONCILIATION_PENDING", "CONFIGURATION_CHANGED", "PROVIDER_RATE_LIMITED",
+                *_soncopay().STOP_CYCLE)
     for user_id in user_ids:
         # Each available commission of the member gets its own payout, one call each.
         for attempt in range(PAYOUTS_PER_MEMBER_PER_CYCLE):
@@ -872,6 +949,9 @@ def verify_payout_asset(provider, currency: str) -> Optional[str]:
     expected = PAYOUT_ASSET.get(str(currency or "").lower())
     if expected is None:
         return "PAYOUT_ASSET_NOT_SUPPORTED"
+    own = getattr(provider, "asset_problem", None)
+    if own is not None:
+        return own(currency)                        # SoncoPay: USDT:BSC payouts open for the account
     read = getattr(provider, "currency_details", None)
     if read is None:
         return None                                 # a test double without the lookup
@@ -1161,9 +1241,11 @@ def crypto_payout_status(db: Session) -> dict:
         block("PAYOUTS_SUSPENDED", "suspension", f"Crypto payouts are suspended: {suspension['message']}",
               "Review the flagged payout, verify its actual network fee, restore the settings below, then "
               "reactivate explicitly in section E.")
-    if payment_config.nowpayments_discontinued():
-        block("NOWPAYMENTS_DISCONTINUED", "provider", payment_config.DISCONTINUED_MESSAGE,
-              "Automatic payouts need a SoncoPay payout path; NOWPayments is never used again.")
+    soncopay = payment_config.nowpayments_discontinued()
+    if soncopay:
+        for item in _soncopay().blockers(db):
+            block(item["code"], "provider", item["message"],
+                  "Payouts are made through SoncoPay only (NOWPayments is discontinued): see SoncoPay Payouts.")
     if not payment_config.crypto_master_switch():
         block("SERVER_SWITCH_OFF", "activation", "The server master switch CRYPTO_AUTO_PAYOUT_ENABLED is off.",
               "It is set on the server by the operator and cannot be changed here.")
@@ -1171,10 +1253,10 @@ def crypto_payout_status(db: Session) -> dict:
         block("NOT_ACTIVATED", "activation", "Automatic payouts are not activated on the server.",
               "The operator activates them with AUTOMATIC_PAYOUT_ACTIVATED=true on the server; switching the "
               "provider on does not.")
-    if not config.provider_enabled:
+    if not soncopay and not config.provider_enabled:
         block("PROVIDER_DISABLED", "provider", "The payment provider is switched off.",
               "Switch it on in NOWPayments Configuration.")
-    if not credentials.payout_ready:
+    if not soncopay and not credentials.payout_ready:
         block("PAYOUT_CREDENTIALS_MISSING", "provider",
               "Payout credentials are incomplete: " + ", ".join(credentials.payout_missing) + ".",
               "Configure them in NOWPayments Configuration and run the connection test.")
@@ -1182,11 +1264,13 @@ def crypto_payout_status(db: Session) -> dict:
         need("network_fee_policy", "provider")
         block("FEE_POLICY_NOT_BENEFICIARY_PAID", "provider", messages["FEE_POLICY_NOT_BENEFICIARY_PAID"],
               "Select MEMBER_PAYS in section A.")
-    if config.provider_fee_mode != payment_config.FEE_MODE_DEDUCTED:
+    if config.provider_fee_mode != payment_config.required_fee_mode():
         need("provider_fee_mode", "provider")
         block("PROVIDER_FEE_MODE_UNVERIFIED", "provider", messages["PROVIDER_FEE_MODE_UNVERIFIED"],
-              "Confirm with the provider that it takes its network fee out of the amount sent. Only then select "
-              "DEDUCTED_BY_PROVIDER in section A and type the confirmation.")
+              ("SoncoPay documents that it adds its network fee to the amount sent: select ADDED_BY_PROVIDER in "
+               "section A and type the confirmation." if soncopay else
+               "Confirm with the provider that it takes its network fee out of the amount sent. Only then select "
+               "DEDUCTED_BY_PROVIDER in section A and type the confirmation."))
     if Decimal(config.member_fee_cap_percent) <= 0 and Decimal(config.member_fee_cap_usd) <= 0:
         need("member_fee_cap_percent", "fee_limits")
         need("member_fee_cap_usd", "fee_limits")
@@ -1221,7 +1305,7 @@ def crypto_payout_status(db: Session) -> dict:
         "missing_settings": missing,
         "provider_semantics": {
             "fee_mode": config.provider_fee_mode,
-            "fee_mode_confirmed": config.provider_fee_mode == payment_config.FEE_MODE_DEDUCTED,
+            "fee_mode_confirmed": config.provider_fee_mode == payment_config.required_fee_mode(),
             # Set on the server once the provider has confirmed them; never assumed.
             "receiver_fee_values_confirmed": bool(receiver),
             "company_fee_values_confirmed": bool(company),
@@ -1239,7 +1323,7 @@ def crypto_payout_status(db: Session) -> dict:
                      "activation": payment_config.payout_activation_switch(), "provider": bool(config.provider_enabled),
                      "crypto_cashout": bool(config.crypto_cashout_enabled),
                      "automatic_payouts": bool(config.crypto_auto_payout_enabled),
-                     "credentials_ready": credentials.payout_ready},
+                     "credentials_ready": payout_provider_ready(db, config)},
     }
 
 

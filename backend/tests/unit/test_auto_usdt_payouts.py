@@ -877,7 +877,7 @@ def test_with_nowpayments_discontinued_nothing_is_paid_even_with_every_switch_on
     db.refresh(row)
     assert cashouts(db, user) == [] and row.status != CommissionStatus.PAID
     codes = [b["code"] for b in engine.crypto_payout_status(db)["blockers"]]
-    assert "NOWPAYMENTS_DISCONTINUED" in codes
+    assert "SONCOPAY_PAYOUTS_NOT_AUTHORIZED" in codes                  # SoncoPay is the payout provider now
     assert engine.engine_status(db)["enabled"] is False
 
 
@@ -896,7 +896,7 @@ def test_the_nowpayments_payout_call_itself_refuses_when_discontinued(engine_on,
 
 
 @pytest.mark.discontinued
-def test_a_payout_handed_over_before_discontinuation_is_still_followed_up(ledger, engine_on):
+def test_a_payout_handed_over_before_discontinuation_is_still_followed_up(ledger, engine_on, monkeypatch):
     db = ledger
     user = member(db, "m1", method="CRYPTO")
     row = commission(db, user, "2.00")
@@ -907,5 +907,6 @@ def test_a_payout_handed_over_before_discontinuation_is_still_followed_up(ledger
     row.payout_reference = f"intent:c{row.id}-a1"
     db.commit()
     provider = FakeProvider(statuses={"batch-9": "FINISHED"})
-    report = run(db, provider)
-    assert report["reconciled"] and provider.created == []
+    monkeypatch.setattr(engine, "NowPaymentsPayoutProvider", lambda _credentials: provider)
+    report = engine.run_cycle(db, now=NOW)
+    assert report["reconciled"] == {"COMPLETED": 1} and provider.created == []

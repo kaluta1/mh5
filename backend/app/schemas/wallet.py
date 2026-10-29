@@ -45,6 +45,8 @@ class UserWalletResponse(BaseModel):
     confirmation_required: bool = False
     confirmation_email_sent: Optional[bool] = None
     hold_hours: Optional[int] = None
+    # SoncoPay: where the approved wallet stands as a payout destination (soncopay_payouts.member_status).
+    payout_destination: Optional[dict] = None
 
     class Config:
         from_attributes = True

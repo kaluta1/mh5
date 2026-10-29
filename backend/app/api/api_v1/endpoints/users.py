@@ -96,7 +96,7 @@ def update_my_privacy(preferences: dict, db: Session = Depends(get_db),
 
 
 def _wallet_response(db: Session, user: UserModel, **extra) -> UserWalletResponse:
-    from app.services import cashout_service, payment_config
+    from app.services import cashout_service, payment_config, soncopay_payouts
 
     config = payment_config.load(db)
     state = cashout_service.wallet_state(user, config=config)
@@ -110,6 +110,8 @@ def _wallet_response(db: Session, user: UserModel, **extra) -> UserWalletRespons
         payable_from=state.payable_from.isoformat() if state.payable_from else None,
         pending_wallet=cashout_service.pending_wallet(db, user.id),
         hold_hours=int(config.wallet_hold_hours),
+        payout_destination=(soncopay_payouts.member_status(db, user) if payment_config.nowpayments_discontinued()
+                            else None),
         **extra,
     )
 

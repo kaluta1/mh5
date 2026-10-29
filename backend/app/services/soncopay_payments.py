@@ -514,8 +514,17 @@ async def handle_webhook(db: Session, raw: bytes, headers: Mapping[str, str], *,
     if _already_processed(db, delivery_id):
         db.rollback()
         return WebhookResult(200, {"ok": True, "duplicate": True})
+    if event.startswith(("payout.", "payout_destination.")):
+        # Only a reason to look: the payout cycle reads every open payout and destination back from
+        # SoncoPay (app.services.soncopay_payouts). Nothing in the body is applied.
+        if _record(db, delivery_id=delivery_id, event=event, environment=environment, payment_id=None,
+                   deposit_id=None, outcome="PAYOUT_SYNC_REQUESTED"):
+            from app.services import cashout_engine
+
+            cashout_engine.request_cycle()
+        return WebhookResult(200, {"ok": True})
     if not event.startswith("payment."):
-        # Payout, refund, destination, invoice and ping events: acknowledged, never acted on.
+        # Refund, invoice and ping events: acknowledged, never acted on.
         _record(db, delivery_id=delivery_id, event=event, environment=environment, payment_id=None,
                 deposit_id=None, outcome="ACKNOWLEDGED")
         return WebhookResult(200, {"ok": True})

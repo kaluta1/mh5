@@ -62,7 +62,7 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import ROUND_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from typing import Iterable, List, Optional
 
 from sqlalchemy import or_
@@ -1002,14 +1002,24 @@ def _provider_number(value, what: str) -> Decimal:
     return number
 
 
-def amount_to_send(mode: Optional[str], gross: Decimal) -> Decimal:
+def amount_to_send(mode: Optional[str], gross: Decimal, fee: Optional[Decimal] = None) -> Decimal:
     """What is handed to the provider for a payout of `gross`. The ONLY place
     that decides it. DEDUCTED_BY_PROVIDER: the whole amount, because the
-    provider takes its fee out of it. Every other behaviour is refused, so a
-    fee is never subtracted here and then taken again by the provider."""
-    if mode != payment_config.FEE_MODE_DEDUCTED:
+    provider takes its fee out of it. ADDED_BY_PROVIDER (SoncoPay): the amount
+    is what the address receives and the provider adds its fee, so the payout
+    LESS the provider's published fee is handed over (exact, never rounded up:
+    the beneficiary bears the fee, MyHigh5 never does). Every other behaviour
+    is refused, so a fee is never subtracted here and then taken again."""
+    if mode != payment_config.required_fee_mode():
         raise CashoutError("PROVIDER_FEE_MODE_UNVERIFIED",
                            "The provider's fee behaviour is not confirmed; no payout is created.")
+    if mode == payment_config.FEE_MODE_ADDED:
+        if fee is None or not Decimal(str(fee)).is_finite() or Decimal(str(fee)) < 0:
+            raise CashoutError("FEE_ESTIMATE_UNAVAILABLE", "The provider's payout fee is not known.")
+        net = (money(gross) - Decimal(str(fee))).quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+        if net <= 0:
+            raise CashoutError("NETWORK_FEE_TOO_HIGH", "The network fee is as large as the payout.")
+        return net
     return money(gross)
 
 
@@ -1085,7 +1095,7 @@ def beneficiary_fee_plan(config: PaymentConfig, consent: CashoutFeeConsent, gros
         return "NETWORK_FEE_ABOVE_MEMBER_LIMIT", plan
     if gross - adjusted < money(config.min_net_payout_usd):
         return "BELOW_MINIMUM_RECEIVED", plan
-    plan["amount_sent"] = amount_to_send(config.provider_fee_mode, gross)
+    plan["amount_sent"] = amount_to_send(config.provider_fee_mode, gross, estimate)
     return None, plan
 
 
@@ -1316,6 +1326,8 @@ def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, de
     unreconciled for an administrator."""
     if not member_fee_applies(cashout):
         return FEE_NOT_APPLICABLE
+    if details.get("provider") == "soncopay":
+        return _record_soncopay_member_fee(db, cashout, details, now)
     reported, payer = details.get("fee"), str(details.get("fee_paid_by") or "").strip().lower()
     try:
         with db.begin_nested():
@@ -1360,6 +1372,45 @@ def record_provider_member_fee(db: Session, cashout: AffiliateCashoutRequest, de
         return exc.code
     except Exception:  # noqa: BLE001
         logger.exception("Cashout %s: the provider's network fee could not be recorded", cashout.id)
+        return "ERROR"
+
+
+def _record_soncopay_member_fee(db: Session, cashout: AffiliateCashoutRequest, details: dict,
+                                now: datetime) -> str:
+    """SoncoPay documents its payout fields: `amount` is what the address received and `fee` the
+    network fee it added and took from the MyHigh5 balance. MyHigh5 handed over the payout less its
+    published fee, so the payout adds up when amount == amount sent and fee == payout - amount sent.
+    Then it is recorded as VERIFIED (the beneficiary bore exactly the fee). Anything else is flagged,
+    which suspends payouts until a person has looked. Savepoint; never raises."""
+    try:
+        with db.begin_nested():
+            sent = Decimal(str(cashout.amount_sent)) if cashout.amount_sent is not None else None
+            try:
+                paid = Decimal(str(details.get("amount")))
+                fee = Decimal(str(details.get("fee")))
+            except Exception:  # noqa: BLE001
+                return "NOT_REPORTED"
+            if not (paid.is_finite() and fee.is_finite()) or sent is None:
+                return "NOT_REPORTED"
+            gross = money(cashout.gross_amount)
+            expected_fee = gross - sent
+            if paid != sent or fee != expected_fee:
+                _flag(db, cashout, FLAG_AMOUNT_MISMATCH if paid != sent else FLAG_MODE_MISMATCH,
+                      amount_sent=_exact(sent), provider_amount=_exact(paid), provider_fee=_exact(fee),
+                      expected_fee=_exact(expected_fee), provider="soncopay")
+                record_member_fee(db, cashout, amount=fee, charged_to=CHARGED_TO_PAYOUT, source=FEE_SOURCE_PROVIDER,
+                                  actor_id=None, now=now, evidence=EVIDENCE_PROVIDER_API, verified=False,
+                                  reference=cashout.provider_batch_id, reported_by="soncopay")
+                return cashout.fee_flag
+            record_member_fee(db, cashout, amount=fee, charged_to=CHARGED_TO_PAYOUT, source=FEE_SOURCE_PROVIDER,
+                              actor_id=None, now=now, evidence=EVIDENCE_PROVIDER_API, verified=True, received=paid,
+                              reference=cashout.provider_batch_id, reported_by="soncopay")
+            return cashout.fee_flag or "RECORDED"
+    except CashoutError as exc:
+        logger.warning("Cashout %s: the SoncoPay network fee was not recorded (%s)", cashout.id, exc.code)
+        return exc.code
+    except Exception:  # noqa: BLE001
+        logger.exception("Cashout %s: the SoncoPay network fee could not be recorded", cashout.id)
         return "ERROR"
 
 

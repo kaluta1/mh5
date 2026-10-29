@@ -106,6 +106,7 @@ SHORT_LINKS = "e3a5c7e9b1d3_short_links_invitation_choice.py"
 MARKET_ACCEPTANCE = "f4b6d8a0c2e4_market_order_buyer_acceptance.py"
 MARKET_LISTINGS = "a7c9e1b3d5f7_marketplace_listings.py"
 ACCOUNT_RETIREMENTS = "b8d0f2a4c6e9_account_retirements.py"
+SONCOPAY_PAYOUTS = "c9e1f3a5b7d0_soncopay_payout_destinations.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -230,6 +231,7 @@ def schema_snapshot(engine) -> dict:
 
 
 def back_to_production_revision(engine) -> None:
+    migrate(engine, SONCOPAY_PAYOUTS, "downgrade")         # references payout_wallet_approvals
     migrate(engine, CHECKOUT_SWITCH, "downgrade")
     migrate(engine, INDIVIDUAL_PAYOUTS, "downgrade")
     migrate(engine, FEE_REVIEW, "downgrade")
@@ -373,12 +375,13 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
             (SHORT_LINKS, "e3a5c7e9b1d3", "d2f4b6c8e0a1", MARKET_ACCEPTANCE),
             (MARKET_ACCEPTANCE, "f4b6d8a0c2e4", "e3a5c7e9b1d3", MARKET_LISTINGS),
             (MARKET_LISTINGS, "a7c9e1b3d5f7", "f4b6d8a0c2e4", ACCOUNT_RETIREMENTS),
-            (ACCOUNT_RETIREMENTS, "b8d0f2a4c6e9", "a7c9e1b3d5f7", None)):
+            (ACCOUNT_RETIREMENTS, "b8d0f2a4c6e9", "a7c9e1b3d5f7", SONCOPAY_PAYOUTS),
+            (SONCOPAY_PAYOUTS, "c9e1f3a5b7d0", "b8d0f2a4c6e9", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # b8d0f2a4c6e9 is the single head
+    # c9e1f3a5b7d0 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

@@ -79,8 +79,13 @@ FEE_COMPANY_PAYS, FEE_MEMBER_PAYS = "COMPANY_PAYS", "MEMBER_PAYS"
 #   CHARGED_TO_BALANCE    the provider takes its fee from the MyHigh5 balance.
 #                         Defined so that it can be told apart; it cannot be
 #                         selected and no payout is created under it.
+#   ADDED_BY_PROVIDER     SoncoPay (documented): the amount is what the address
+#                         receives and the network fee is added and taken from
+#                         the MyHigh5 balance. MyHigh5 hands it the payout LESS
+#                         that fee, so the beneficiary still bears it.
 FEE_MODE_UNVERIFIED, FEE_MODE_DEDUCTED, FEE_MODE_CHARGED = "UNVERIFIED", "DEDUCTED_BY_PROVIDER", "CHARGED_TO_BALANCE"
-PROVIDER_FEE_MODES = (FEE_MODE_UNVERIFIED, FEE_MODE_DEDUCTED, FEE_MODE_CHARGED)
+FEE_MODE_ADDED = "ADDED_BY_PROVIDER"
+PROVIDER_FEE_MODES = (FEE_MODE_UNVERIFIED, FEE_MODE_DEDUCTED, FEE_MODE_CHARGED, FEE_MODE_ADDED)
 # Ledger account for the network fee MyHigh5 pays on a crypto payout
 # (approved by the owner 2026-10-10).
 NETWORK_FEE_EXPENSE_ACCOUNT = "5005"
@@ -146,7 +151,8 @@ LIVE_PAYOUT_FIELDS = ("crypto_payout_currency", "payout_credential_source", "pro
 LIVE_PAYOUT_SWITCHES = ("provider_enabled", "crypto_cashout_enabled")
 FEE_GATE_MESSAGES = {
     "FEE_POLICY_NOT_BENEFICIARY_PAID": "The network fee policy must be MEMBER_PAYS: the beneficiary bears the fee.",
-    "PROVIDER_FEE_MODE_UNVERIFIED": "The provider fee behaviour is not confirmed as DEDUCTED_BY_PROVIDER.",
+    "PROVIDER_FEE_MODE_UNVERIFIED": "The provider fee behaviour is not confirmed for the payout provider in use "
+                                    "(SoncoPay: ADDED_BY_PROVIDER).",
     "FEE_LIMITS_NOT_CONFIGURED": "No member network fee limit is set.",
     "FEE_SAFETY_MARGIN_NOT_SET": "The safety margin on the network fee estimate is not set.",
     "FEE_LIMITS_NOT_APPROVED": "The network fee limits have not been approved.",
@@ -305,7 +311,9 @@ _FIELDS: List[Field] = [
     Field("provider_fee_mode", "crypto", "choice", "Provider fee behaviour",
           "Where the provider takes its network fee from, as CONFIRMED with the provider. UNVERIFIED: no payout "
           "is created. DEDUCTED_BY_PROVIDER: the full amount is handed to the provider, which takes its fee out "
-          "of it. CHARGED_TO_BALANCE cannot be selected.", _const(FEE_MODE_UNVERIFIED), choices=PROVIDER_FEE_MODES),
+          "of it. ADDED_BY_PROVIDER (SoncoPay, documented): the provider adds its fee to the amount, so the "
+          "payout less the fee is handed to it. CHARGED_TO_BALANCE cannot be selected.", _const(FEE_MODE_UNVERIFIED),
+          choices=PROVIDER_FEE_MODES),
     Field("member_fee_cap_percent", "crypto", "percent", "Member network fee limit (share of the payout)",
           "Highest network fee a member accepts, as a share of the payout. 0 = this limit is not set. No payout "
           "is created while neither limit is set.", _const(_D("0")), minimum=_D("0"), maximum=_D("100"), unit="%",
@@ -501,7 +509,7 @@ class PaymentConfig:
         margin on the estimate, and the approval of all of them are required."""
         if self.network_fee_policy != FEE_MEMBER_PAYS:
             return "FEE_POLICY_NOT_BENEFICIARY_PAID"
-        if self.provider_fee_mode != FEE_MODE_DEDUCTED:
+        if self.provider_fee_mode != required_fee_mode():
             return "PROVIDER_FEE_MODE_UNVERIFIED"
         if Decimal(self.member_fee_cap_percent) <= 0 and Decimal(self.member_fee_cap_usd) <= 0:
             return "FEE_LIMITS_NOT_CONFIGURED"
@@ -528,9 +536,11 @@ class PaymentConfig:
     @property
     def auto_payout_allowed(self) -> bool:
         """Every SWITCH that must be on for the engine (credentials are checked separately)."""
-        return bool(crypto_master_switch() and payout_activation_switch() and self.provider_enabled
+        # NOWPayments' master switch (provider_enabled) applies to NOWPayments only; with NOWPayments
+        # discontinued the payout provider is SoncoPay, whose readiness the engine checks itself.
+        return bool(crypto_master_switch() and payout_activation_switch()
                     and self.crypto_cashout_enabled and self.crypto_auto_payout_enabled
-                    and not nowpayments_discontinued())
+                    and (nowpayments_discontinued() or self.provider_enabled))
 
     @property
     def usd_settlement_allowed(self) -> bool:
@@ -566,6 +576,16 @@ DISCONTINUED_MESSAGE = "NOWPayments is discontinued for MyHigh5; SoncoPay is the
 
 def nowpayments_discontinued() -> bool:
     return bool(NOWPAYMENTS_DISCONTINUED)
+
+
+def payout_provider() -> str:
+    """The provider automatic payouts use: SoncoPay since NOWPayments was discontinued."""
+    return "soncopay" if nowpayments_discontinued() else PROVIDER
+
+
+def required_fee_mode() -> str:
+    """The fee behaviour the payout provider in use has (documented for SoncoPay, confirmed for NOWPayments)."""
+    return FEE_MODE_ADDED if nowpayments_discontinued() else FEE_MODE_DEDUCTED
 
 
 def crypto_master_switch() -> bool:
@@ -791,7 +811,7 @@ def activation_required(current: Dict[str, Any], changed: Dict[str, Any]) -> Lis
         out.append(("usd_settlement_enabled", "switch USD settlement on"))
     if changed.get("fee_terms_approved") is True:
         out.append(("fee_terms_approved", "approve the network fee limits"))
-    if changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED:
+    if changed.get("provider_fee_mode") in (FEE_MODE_DEDUCTED, FEE_MODE_ADDED):
         out.append(("provider_fee_mode", "confirm the provider fee behaviour"))
     # Automatic payouts are on and stay on: what the engine sends is being changed.
     if current.get("crypto_auto_payout_enabled") and changed.get("crypto_auto_payout_enabled") is not False:
@@ -1139,7 +1159,10 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
     if changed.get("provider_fee_mode") == FEE_MODE_CHARGED:
         raise refuse("NOT_AVAILABLE", "CHARGED_TO_BALANCE is not available: under it MyHigh5 would bear the "
                                       "network fee.", "provider_fee_mode")
-    if changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED and (confirmation or "").strip() != CONFIRM_FEE_MODE:
+    if changed.get("provider_fee_mode") in (FEE_MODE_DEDUCTED, FEE_MODE_ADDED)             and changed["provider_fee_mode"] != required_fee_mode():
+        raise refuse("NOT_AVAILABLE", f"{changed['provider_fee_mode']} is not the fee behaviour of the payout "
+                                      f"provider in use ({required_fee_mode()}).", "provider_fee_mode")
+    if changed.get("provider_fee_mode") in (FEE_MODE_DEDUCTED, FEE_MODE_ADDED)             and (confirmation or "").strip() != CONFIRM_FEE_MODE:
         raise refuse("CONFIRMATION_REQUIRED",
                      "Select this only after the provider confirmed that it takes its fee out of the amount "
                      f'sent. Type "{CONFIRM_FEE_MODE}" to confirm.', "provider_fee_mode")
@@ -1200,7 +1223,7 @@ def _activates(changed: Dict[str, Any], merged: Optional[Dict[str, Any]] = None)
     the administrator was looking at."""
     return (changed.get("fee_terms_approved") is True or changed.get("crypto_auto_payout_enabled") is True
             or changed.get("usd_settlement_enabled") is True
-            or changed.get("provider_fee_mode") == FEE_MODE_DEDUCTED
+            or changed.get("provider_fee_mode") in (FEE_MODE_DEDUCTED, FEE_MODE_ADDED)
             or (merged is not None and _resumes_payouts(changed, merged)))
 
 
@@ -1796,7 +1819,7 @@ def activation_view(config: PaymentConfig) -> dict:
         "permission": PERMISSION_ACTIVATE,
         # setting -> the value that activates
         "values": {"crypto_auto_payout_enabled": True, "checkout_enabled": True, "usd_settlement_enabled": True,
-                   "fee_terms_approved": True, "provider_fee_mode": FEE_MODE_DEDUCTED},
+                   "fee_terms_approved": True, "provider_fee_mode": required_fee_mode()},
         "automatic_payouts_on": bool(config.crypto_auto_payout_enabled),
         "while_automatic_payouts_on": {"fields": list(LIVE_PAYOUT_FIELDS), "switches": list(LIVE_PAYOUT_SWITCHES),
                                        "credential_group": "payout"},

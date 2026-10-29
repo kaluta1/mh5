@@ -55,7 +55,7 @@ def clean_provider_state(monkeypatch):
 
 def test_the_guard_is_installed_for_the_whole_session_and_local_credentials_are_absent(provider_network):
     assert provider_network is guard and guard.installed
-    assert BLOCKED_DOMAINS == ("nowpayments.io",)
+    assert BLOCKED_DOMAINS == ("nowpayments.io", "soncopay.com")
     assert all(is_blocked_host(h) for h in HOSTS + ("nowpayments.io", "API.NowPayments.IO.", b"api.nowpayments.io"))
     assert not any(is_blocked_host(h) for h in ("localhost", "127.0.0.1", "example.com", "notnowpayments.io",
                                                 "nowpayments.io.example.com", "", None))

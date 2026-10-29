@@ -509,7 +509,7 @@ def test_other_events_unknown_payments_and_a_missing_delivery_id(client, ledger,
     assert post_webhook(client, "payment.paid", {"id": "pay_99999999999999999999", "order_id": "nobody"},
                         delivery="dlv_unknown").status_code == 200
     outcomes = sorted(r.outcome for r in db.query(SoncoPayWebhookEvent).all())
-    assert outcomes == ["ACKNOWLEDGED", "ACKNOWLEDGED", "UNKNOWN_PAYMENT"] and fake.reads() == []
+    assert outcomes == ["ACKNOWLEDGED", "PAYOUT_SYNC_REQUESTED", "UNKNOWN_PAYMENT"] and fake.reads() == []
     raw, headers = signed("payment.paid", {"id": "pay_1"})
     del headers["X-SoncoPay-Delivery-Id"]
     assert client.post(WEBHOOK, content=raw, headers=headers).status_code == 400

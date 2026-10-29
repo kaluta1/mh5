@@ -119,6 +119,104 @@ async def soncopay_connection_test(body: ConnectionTestBody, db: Session = Depen
     return await soncopay_payments.connection_test(db, body.environment)
 
 
+# ---------------------------------------------------------------------------
+# SoncoPay payouts (app.services.soncopay_payouts)
+# ---------------------------------------------------------------------------
+
+def _require_payout_viewer(user: User) -> None:
+    from app.services import payment_config, super_admin
+
+    if not (super_admin.is_super_admin(user) or payment_config.has_permission(user, payment_config.PERMISSION_PROCESS)
+            or soncopay_settings.can_view(user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": "FORBIDDEN", "message": "A Super Admin or a finance permission is required."})
+
+
+@admin_router.get("/payouts")
+def soncopay_payouts_view(provider: bool = False, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_active_user)):
+    """Readiness, the owner's authorization, every member destination (address masked) and, with
+    ?provider=true, SoncoPay's balance, USDT:BSC fee, minimum and destination settings (read-only calls)."""
+    from app.services import soncopay_payouts
+
+    _require_payout_viewer(current_user)
+    if provider and _is_rate_limited(f"soncopay-payouts-read:{current_user.id}", 20, 600):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail={"code": "RATE_LIMITED", "message": "Too many reads. Try again in a few minutes."})
+    return soncopay_payouts.admin_view(db, read_provider=provider)
+
+
+class PayoutAuthorizationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmation: str = Field(default="", max_length=60)
+    note: str = Field(default="", max_length=500)
+    current_password: str = Field(default="", max_length=256)
+
+
+class PasswordBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(default="", max_length=256)
+
+
+def _payout_error(exc: Exception) -> HTTPException:
+    from app.services import payment_config
+
+    if isinstance(exc, PermissionError):
+        return HTTPException(status_code=403, detail={"code": "SUPER_ADMIN_REQUIRED", "message": str(exc)})
+    if isinstance(exc, payment_config.PaymentConfigError):
+        code = 429 if exc.code == "REAUTH_LOCKED" else 403
+        return HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)})
+    return HTTPException(status_code=422, detail={"code": "INVALID_VALUE", "message": str(exc)})
+
+
+@admin_router.post("/payouts/authorization")
+def soncopay_payouts_authorize(body: PayoutAuthorizationBody, db: Session = Depends(get_db),
+                               current_user: User = Depends(get_current_active_user)):
+    """Record that SoncoPay allows member commission payouts from this merchant account. Changes no
+    payout switch: the server activation stays a separate operator step."""
+    from app.services import soncopay_payouts
+
+    try:
+        return soncopay_payouts.authorize(db, current_user, password=body.current_password,
+                                          confirmation=body.confirmation, note=body.note)
+    except Exception as exc:  # noqa: BLE001 - mapped below
+        db.rollback()
+        if not isinstance(exc, (PermissionError, ValueError)) and type(exc).__name__ != "PaymentConfigError":
+            raise
+        raise _payout_error(exc) from None
+
+
+@admin_router.post("/payouts/authorization/revoke")
+def soncopay_payouts_revoke(body: PasswordBody, db: Session = Depends(get_db),
+                            current_user: User = Depends(get_current_active_user)):
+    from app.services import soncopay_payouts
+
+    try:
+        soncopay_payouts.revoke(db, current_user, password=body.current_password)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        if not isinstance(exc, (PermissionError, ValueError)) and type(exc).__name__ != "PaymentConfigError":
+            raise
+        raise _payout_error(exc) from None
+    return {"ok": True}
+
+
+@admin_router.post("/payouts/sync")
+def soncopay_payouts_sync(current_user: User = Depends(get_current_active_user)):
+    """Ask the payout cycle to run now (destinations are read back, open payouts reconciled). It pays
+    only what the cycle would pay anyway."""
+    from app.services import cashout_engine, payment_config, super_admin
+
+    if not (super_admin.is_super_admin(current_user)
+            or payment_config.has_permission(current_user, payment_config.PERMISSION_PROCESS)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={
+            "code": "FORBIDDEN", "message": "A Super Admin or the process_cashouts permission is required."})
+    if _is_rate_limited(f"soncopay-payouts-sync:{current_user.id}", 10, 600):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail={"code": "RATE_LIMITED", "message": "Too many requests. Try again later."})
+    return {"requested": cashout_engine.request_cycle()}
+
+
 # Rejected deliveries per sender address (a correctly signed delivery is never counted).
 BAD_WEBHOOK_LIMIT, BAD_WEBHOOK_WINDOW = 30, 60
 _bad_webhooks: dict = defaultdict(deque)
