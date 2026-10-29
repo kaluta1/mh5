@@ -297,6 +297,14 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
             <dt className="text-gray-500 dark:text-gray-400">Minimum</dt>
             <dd className="font-medium tabular-nums text-gray-900 dark:text-white">{formatUsd(summary.minimum)}</dd>
           </div>
+          {typeof summary.remaining_to_minimum === 'number' && summary.remaining_to_minimum > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500 dark:text-gray-400">Still needed to reach the minimum</dt>
+              <dd className="font-medium tabular-nums text-gray-900 dark:text-white" data-testid="remaining-to-minimum">
+                {formatUsd(summary.remaining_to_minimum)}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between gap-3">
             <dt className="text-gray-500 dark:text-gray-400">Next cashout amount</dt>
             <dd className="font-medium tabular-nums text-gray-900 dark:text-white">

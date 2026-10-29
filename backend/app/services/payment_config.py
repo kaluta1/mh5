@@ -298,9 +298,12 @@ _FIELDS: List[Field] = [
     Field("crypto_auto_payout_enabled", "crypto", "bool", "Automatic payouts",
           "The payout engine sends eligible balances automatically. Also requires the server master switch.",
           _const(False)),
+    # Owner decision 2026-10-30 (Shafi Abeid): $10, as on Kinjy. Commissions below it accumulate per member
+    # until together they reach it; one at or above it is paid on its own (cashout_engine.select_payout).
     Field("crypto_min_usd", "crypto", "money", "Minimum crypto cashout",
-          "Smallest balance that is paid out. The provider's own minimum and the network fee still apply: "
-          "a balance at this minimum is not necessarily payable.", _env_money("CRYPTO_CASHOUT_MIN_USD", "1.00"),
+          "Smallest balance that is paid out, before the network fee the member bears. Smaller commissions "
+          "accumulate until they reach it. The provider's own minimum plus its fee also applies; the higher "
+          "of the two is used.", _env_money("CRYPTO_CASHOUT_MIN_USD", "10.00"),
           minimum=_D("0.01"), maximum=_D("100000"), unit="USD"),
     Field("crypto_payout_currency", "crypto", "choice", "Payout currency and network",
           "Asset and network of crypto payouts.", _const("usdtbsc"), choices=tuple(SUPPORTED_PAYOUT_CURRENCIES)),
@@ -672,7 +675,7 @@ def defaults() -> Dict[str, Any]:
 
 
 _FALLBACK: Dict[str, Any] = {
-    "crypto_min_usd": Decimal("1.00"), "usd_min_usd": Decimal("100.00"), "wallet_hold_hours": 72,
+    "crypto_min_usd": Decimal("10.00"), "usd_min_usd": Decimal("100.00"), "wallet_hold_hours": 72,
     "wallet_max_changes_per_day": 3, "payout_interval_seconds": 900, "retry_backoff_hours": 24,
     "usd_settlement_account": None,
 }
@@ -1289,6 +1292,35 @@ def update_settings(db: Session, actor, changes: Dict[str, Any], *, password: Op
     row.version = int(row.version) + 1
     row.updated_by = actor.id
     _audit(db, row, actor_id=actor.id, action="SETTINGS_UPDATED", old=old, new=audited, ip=ip)
+    db.commit()
+    invalidate_runtime()
+    return load(db)
+
+
+OWNER_CRYPTO_MINIMUM = Decimal("10.00")         # owner decision 2026-10-30
+
+
+def apply_owner_crypto_minimum(db: Session, value, *, decision: str) -> PaymentConfig:
+    """Store the minimum crypto cashout the business owner decided, through the same validation, version
+    and audit as an administrator's change (actor: none; the decision is quoted in the audit record).
+    Changes nothing else: no fee setting, approval or switch. Commits. Idempotent."""
+    decision = " ".join(str(decision or "").split())
+    if len(decision) < 10:
+        raise PaymentConfigError("REASON_REQUIRED", "Quote the owner's decision (at least 10 characters).")
+    value = _coerce(FIELDS["crypto_min_usd"], value)
+    row = _row_for_update(db)
+    old = Decimal(str(row.crypto_min_usd))
+    if old == value:
+        db.rollback()
+        return load(db)
+    if value > Decimal(str(row.max_single_payout_usd)):
+        db.rollback()
+        raise PaymentConfigError("INVALID_VALUE", "The minimum crypto cashout cannot exceed the maximum single "
+                                 "payout.", field="crypto_min_usd")
+    row.crypto_min_usd = value
+    row.version = int(row.version) + 1
+    _audit(db, row, actor_id=None, action="SETTINGS_UPDATED", old={"crypto_min_usd": old},
+           new={"crypto_min_usd": value, "owner_decision": decision[:300]})
     db.commit()
     invalidate_runtime()
     return load(db)

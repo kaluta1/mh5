@@ -107,6 +107,20 @@ def _nowpayments_machinery_under_test(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _crypto_minimum_under_test(request, monkeypatch):
+    """The minimum crypto cashout is $10 (owner decision 2026-10-30). The older payout tests were written
+    for the $1 rule and test other things with small commissions, so they keep it; a test marked
+    `ten_dollar_minimum` sees the production default."""
+    from decimal import Decimal
+
+    from app.core.config import settings
+
+    if request.node.get_closest_marker("ten_dollar_minimum") is None:
+        monkeypatch.setattr(settings, "CRYPTO_CASHOUT_MIN_USD", Decimal("1.00"))
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _no_kyc_admin_values_between_tests():
     """Kaluta settings saved in the Admin Panel reach the shared service object;
     no test may see the values another test saved."""

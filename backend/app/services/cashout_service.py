@@ -2024,6 +2024,8 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
     if threshold is not None and threshold["threshold"] is not None:
         crypto_min = max(crypto_min, Decimal(threshold["threshold"]))
     minimum = crypto_min if method == METHOD_CRYPTO else usd_min if method == METHOD_USD else None
+    # What is still missing before the next payout (0 once the payable balance reaches the minimum).
+    remaining = money(max(Decimal("0.00"), minimum - payable)) if minimum is not None else None
     open_cashout = active_cashout(db, user.id)
     eligibility = fe.evaluate(db, user, fe.FinancialOperation.WITHDRAWAL)
 
@@ -2079,6 +2081,7 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         "wallet_approval": _wallet_approval_view(db, user),
         "payable_amount": float(payable),
         "minimum": float(minimum) if minimum is not None else None,
+        "remaining_to_minimum": float(remaining) if remaining is not None else None,
         "minimums": {"CRYPTO": float(crypto_min), "USD": float(usd_min)},
         "methods": {
             "CRYPTO": {"available": bool(config.crypto_cashout_enabled)},
@@ -2134,17 +2137,19 @@ def crypto_threshold(db: Session, user: User, config: PaymentConfig) -> dict:
 
     published = soncopay_payouts.published_limits(db)
     out = {"threshold": None, "network_fee": None, "provider_minimum": None, "read_at": None,
-           "accumulated": None, "awaiting_threshold": None,
+           "accumulated": None, "awaiting_threshold": None, "business_minimum": f"{crypto_minimum(config=config):.2f}",
            "destination": soncopay_payouts.member_status(db, user)}
-    if published is None:
-        return out
-    threshold = payout_threshold(config, published["minimum"], published["fee"])
+    # Without SoncoPay's figures the business minimum alone is known; its fee and minimum are added once read.
+    threshold = (payout_threshold(config, published["minimum"], published["fee"]) if published is not None
+                 else payout_threshold(config, Decimal("0"), None))
     amounts = [money(a) for (a,) in db.query(AffiliateCommission.commission_amount)
                .filter(AffiliateCommission.user_id == user.id,
                        AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
                        AffiliateCommission.payout_reference.is_(None), payable_clause()).all()]
     small = sum((a for a in amounts if a < threshold), Decimal("0.00"))
-    out.update(threshold=f"{threshold:.2f}", network_fee=str(published["fee"]),
-               provider_minimum=str(published["minimum"]), read_at=published["read_at"].isoformat() + "Z",
-               accumulated=f"{money(small):.2f}", awaiting_threshold=bool(small) and small < threshold)
+    out.update(threshold=f"{threshold:.2f}", accumulated=f"{money(small):.2f}",
+               awaiting_threshold=bool(small) and small < threshold)
+    if published is not None:
+        out.update(network_fee=str(published["fee"]), provider_minimum=str(published["minimum"]),
+                   read_at=published["read_at"].isoformat() + "Z")
     return out

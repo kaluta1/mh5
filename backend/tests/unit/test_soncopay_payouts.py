@@ -891,3 +891,177 @@ def test_the_admin_sees_accumulating_members_and_each_combined_payouts_commissio
     [payout] = view["payouts"]
     assert payout["user_id"] == user.id and payout["commission_ids"] == [r.id for r in rows]
     assert payout["gross_amount"] == "2.40" and LIVE_KEY not in answer.text
+
+
+# ===========================================================================
+# Owner decision 2026-10-30: minimum crypto cashout $10 (as on Kinjy)
+# ===========================================================================
+
+@pytest.mark.ten_dollar_minimum
+def test_the_default_minimum_crypto_cashout_is_ten_dollars(ledger):
+    from app.services import cashout_service as cs
+
+    assert payment_config.default_config().crypto_min_usd == Decimal("10.00")
+    assert cs.crypto_minimum(ledger) == Decimal("10.00")
+
+
+@pytest.mark.ten_dollar_minimum
+@pytest.mark.parametrize("amounts, outcome, sent", [
+    (["1.00"], "ACCUMULATING_BELOW_THRESHOLD", None),
+    (["5.00"], "ACCUMULATING_BELOW_THRESHOLD", None),          # above SoncoPay's 2.23, below $10
+    (["9.99"], "ACCUMULATING_BELOW_THRESHOLD", None),
+    (["10.00"], "SUBMITTED", ["9.77"]),                         # on its own: 10.00 less the 0.23 fee
+    (["15.00"], "SUBMITTED", ["14.77"]),
+    (["4.00", "3.00", "3.00"], "SUBMITTED", ["9.77"]),          # together exactly $10
+    (["4.00", "3.00", "2.99"], "ACCUMULATING_BELOW_THRESHOLD", None),
+])
+def test_commissions_accumulate_until_the_ten_dollar_minimum(payouts_on, fake, amounts, outcome, sent):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=amounts)
+    assert run(db)["members"] == {outcome: 1}
+    assert sorted(Decimal(p["amount"]) for p in fake.payouts.values()) == sorted(Decimal(s) for s in sent or [])
+    if sent:
+        out = cashouts(db, user)[0]
+        assert out.commission_id == (rows[0].id if len(rows) == 1 else None)
+        assert out.gross_amount == sum(Decimal(a) for a in amounts)
+
+
+@pytest.mark.ten_dollar_minimum
+def test_a_ten_dollar_commission_goes_alone_and_smaller_ones_wait_for_ten_together(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["6.00", "12.00", "3.00"])
+    run(db)
+    assert [p["reference"] for p in fake.payouts.values()] == [f"c{rows[1].id}-a1"]   # 6 + 3 = 9 waits
+    commission(db, user, "1.00")
+    run(db)
+    combined = [c for c in cashouts(db, user) if c.commission_id is None]
+    assert len(combined) == 1 and combined[0].gross_amount == Decimal("10.00")
+
+
+@pytest.mark.ten_dollar_minimum
+def test_soncopays_minimum_applies_when_it_is_higher_than_ten_dollars(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    fake.asset_minimum = "12"                                   # threshold 12 + 0.23 = 12.23
+    _user, _rows = payable_member(db, fake, amounts=["10.00"])
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1}
+    fake.payouts.clear()
+    db2 = payouts_on
+    user2, _rows2 = payable_member(db2, fake, "m2", wallet=OTHER_WALLET, amounts=["10.00", "2.50"])
+    report = run(db2)
+    assert report["members"].get("SUBMITTED") == 1
+    assert [Decimal(p["amount"]) for p in fake.payouts.values()] == [Decimal("12.27")]
+
+
+@pytest.mark.ten_dollar_minimum
+@pytest.mark.parametrize("fee, received", [("0.23", "9.77"), ("0.50", "9.50"), ("1.00", "9.00")])
+def test_the_network_fee_is_read_from_soncopay_and_taken_from_the_ten_dollars(payouts_on, fake, fee, received):
+    db = payouts_on
+    real_figures(db, fake)
+    fake.fee = fee
+    _user, _rows = payable_member(db, fake, amounts=["10.00"])
+    assert run(db)["members"] == {"SUBMITTED": 1}
+    [po] = fake.payouts.values()
+    assert Decimal(po["amount"]) == Decimal(received)
+
+
+@pytest.mark.ten_dollar_minimum
+def test_the_production_fee_limits_hold_a_ten_dollar_payout(payouts_on, fake):
+    """Production on 2026-10-30: member limit 5 % / $0.10 and a 25 % margin; SoncoPay charges 0.23."""
+    db = payouts_on
+    real_figures(db, fake, margin="25")
+    configure(db, member_fee_cap_percent=Decimal("5.000"), member_fee_cap_usd=Decimal("0.10"))
+    user, rows = payable_member(db, fake, amounts=["10.00"])
+    assert run(db)["members"] == {"NETWORK_FEE_ABOVE_MEMBER_LIMIT": 1}
+    assert fake.posts("/v1/payouts") == [] and cashouts(db, user) == []
+    db.refresh(rows[0])
+    assert rows[0].payout_reference is None
+
+
+@pytest.mark.ten_dollar_minimum
+def test_a_waiting_wallet_keeps_ten_dollars_unpaid(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake)
+    cooling = member(db, "m1", method="CRYPTO")
+    run(db)
+    fake.confirm(destination(db, cooling).destination_id, usable=False)
+    commission(db, cooling, "10.00")
+    assert run(db)["members"] == {"DESTINATION_WAITING_PERIOD": 1} and fake.posts("/v1/payouts") == []
+
+
+@pytest.mark.ten_dollar_minimum
+def test_cancelled_and_held_commissions_do_not_count_towards_ten_dollars(payouts_on, fake):
+    from app.models.affiliate import CommissionStatus
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["6.00", "5.00"])
+    rows[0].status = CommissionStatus.CANCELLED                  # reversed
+    rows[1].business_model_version = None                       # historical: held for review
+    commission(db, user, "4.00")
+    db.commit()
+    assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1}    # only 4.00 counts
+    assert fake.posts("/v1/payouts") == []
+
+
+@pytest.mark.ten_dollar_minimum
+def test_ten_dollars_is_paid_once_and_posted_once(payouts_on, fake):
+    from app.models.accounting import JournalEntry
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, rows = payable_member(db, fake, amounts=["5.00", "5.00"])
+    run(db)
+    run(db)                                                     # a second worker finds nothing new
+    assert len(fake.posts("/v1/payouts")) == 1
+    [po] = fake.payouts.values()
+    fake.complete(po["id"])
+    run(db)
+    run(db)
+    out = cashouts(db, user)[0]
+    assert out.status == "completed" and Decimal(out.net_received) == Decimal("9.77")
+    assert db.query(JournalEntry).filter(JournalEntry.description == f"Affiliate Cashout #{out.id}").count() == 1
+    _assert_all_journals_balance(db)
+
+
+@pytest.mark.ten_dollar_minimum
+def test_the_member_sees_the_ten_dollar_minimum_and_what_is_missing(payouts_on, fake):
+    from app.services import cashout_service as cs
+
+    db = payouts_on
+    real_figures(db, fake)
+    user, _rows = payable_member(db, fake, amounts=["4.00", "2.50"])
+    run(db)
+    summary = cs.summary(db, user, now=NOW)
+    assert summary["minimum"] == 10.0 and summary["payable_amount"] == 6.5
+    assert summary["remaining_to_minimum"] == 3.5 and summary["status"] == "BELOW_MINIMUM"
+    view = summary["crypto_payout_threshold"]
+    assert (view["threshold"], view["business_minimum"], view["accumulated"], view["network_fee"]) == \
+        ("10.00", "10.00", "6.50", "0.23")
+    commission(db, user, "3.50")
+    assert cs.summary(db, user, now=NOW)["remaining_to_minimum"] == 0.0
+
+
+@pytest.mark.ten_dollar_minimum
+def test_the_owner_minimum_is_stored_through_the_audited_settings(ledger):
+    from app.models.payment_config import PaymentConfigAudit
+
+    db = ledger
+    configure(db, crypto_min_usd=Decimal("1.00"))
+    before = payment_config.load(db).version
+    with pytest.raises(payment_config.PaymentConfigError):
+        payment_config.apply_owner_crypto_minimum(db, "10.00", decision="short")
+    config = payment_config.apply_owner_crypto_minimum(db, "10.00", decision="Shafi Abeid 2026-10-30: $10 as on Kinjy")
+    assert config.crypto_min_usd == Decimal("10.00") and config.version == before + 1
+    audit = db.query(PaymentConfigAudit).order_by(PaymentConfigAudit.id.desc()).first()
+    assert audit.old_values == {"crypto_min_usd": "1.00"} and audit.new_values["crypto_min_usd"] == "10.00"
+    assert "Kinjy" in audit.new_values["owner_decision"] and audit.actor_id is None
+    again = payment_config.apply_owner_crypto_minimum(db, "10.00", decision="Shafi Abeid 2026-10-30: $10 as on Kinjy")
+    assert again.version == config.version                      # idempotent: nothing written twice
+    configure(db, max_single_payout_usd=Decimal("5.00"), crypto_min_usd=Decimal("1.00"))
+    with pytest.raises(payment_config.PaymentConfigError):
+        payment_config.apply_owner_crypto_minimum(db, "10.00", decision="Shafi Abeid 2026-10-30: $10 as on Kinjy")
+    with pytest.raises(payment_config.PaymentConfigError):
+        payment_config._coerce(payment_config.FIELDS["crypto_min_usd"], "10.001")      # cents only

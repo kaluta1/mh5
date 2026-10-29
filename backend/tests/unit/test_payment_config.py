@@ -177,7 +177,7 @@ def test_defaults_keep_the_values_the_deployment_ran_with_and_reject_unsafe_ones
     assert (pc.load(db).crypto_min_usd, pc.load(db).wallet_hold_hours) == (Decimal("2.50"), 48)
     monkeypatch.setattr(settings, "CRYPTO_CASHOUT_MIN_USD", Decimal("-5"))      # a broken environment value
     monkeypatch.setattr(settings, "PAYOUT_WALLET_HOLD_HOURS", 999999)
-    assert (pc.load(db).crypto_min_usd, pc.load(db).wallet_hold_hours) == (Decimal("1.00"), 72)
+    assert (pc.load(db).crypto_min_usd, pc.load(db).wallet_hold_hours) == (Decimal("10.00"), 72)   # the built-in floor: $10 (owner 2026-10-30)
 
 
 def test_the_database_row_is_authoritative_once_it_exists(db, monkeypatch):

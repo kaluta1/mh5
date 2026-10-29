@@ -251,7 +251,7 @@ class Settings(BaseModel):
     # nothing is sent until the operator also sets this to "true" on the server:
     # switching the provider back on can never start payouts by itself.
     AUTOMATIC_PAYOUT_ACTIVATED: bool = os.getenv("AUTOMATIC_PAYOUT_ACTIVATED", "false").strip().lower() == "true"
-    CRYPTO_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("CRYPTO_CASHOUT_MIN_USD", "1.00"))
+    CRYPTO_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("CRYPTO_CASHOUT_MIN_USD", "10.00"))   # owner 2026-10-30
     USD_CASHOUT_MIN_USD: Decimal = Decimal(os.getenv("USD_CASHOUT_MIN_USD", "100.00"))
     # A new or changed payout wallet is not paid to until this many hours have passed.
     PAYOUT_WALLET_HOLD_HOURS: int = int(os.getenv("PAYOUT_WALLET_HOLD_HOURS", "72"))

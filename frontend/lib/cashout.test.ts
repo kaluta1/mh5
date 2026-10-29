@@ -49,7 +49,9 @@ function record(overrides: Partial<CashoutRecord> = {}): CashoutRecord {
 
 describe('cashout status wording', () => {
   it('names the minimum of the chosen method', () => {
-    expect(cashoutStatusText(summary())).toContain('$1.00 minimum for Crypto Cashout')
+    expect(cashoutStatusText(summary())).toContain('The minimum cashout is $1.00')
+    expect(cashoutStatusText(summary({ minimum: 10, payable_amount: 6.5, remaining_to_minimum: 3.5 })))
+      .toContain('$3.50 more is needed')
     expect(cashoutStatusText(summary({ cashout_method: 'USD', minimum: 100 }))).toContain(
       '$100.00 minimum for USD Cashout',
     )

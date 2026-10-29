@@ -223,3 +223,26 @@ describe('CashoutPanel: bank card hold', () => {
     expect(screen.getByTestId('card-hold-note')).toHaveTextContent('14 days')
   })
 })
+
+describe('CashoutPanel: $10 minimum cashout', () => {
+  it('shows the minimum, what is still needed, and that commissions accumulate', async () => {
+    current = summary({
+      status: 'BELOW_MINIMUM', minimum: 10, payable_amount: 6.5, remaining_to_minimum: 3.5,
+      minimums: { CRYPTO: 10, USD: 100 },
+    })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.getByTestId('remaining-to-minimum')).toHaveTextContent('$3.50')
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('The minimum cashout is $10.00')
+    expect(status).toHaveTextContent('added together automatically')
+    expect(status).toHaveTextContent('$3.50 more is needed')
+  })
+
+  it('shows nothing still needed once the minimum is reached', async () => {
+    current = summary({ minimum: 10, payable_amount: 12, remaining_to_minimum: 0 })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.queryByTestId('remaining-to-minimum')).toBeNull()
+  })
+})

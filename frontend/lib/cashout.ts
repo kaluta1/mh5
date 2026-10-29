@@ -110,6 +110,8 @@ export type CashoutSummary = {
   wallet_approval?: WalletApproval | null
   payable_amount: number
   minimum: number | null
+  /** What is still missing before the next payout (0 once the payable balance reaches the minimum). */
+  remaining_to_minimum?: number | null
   minimums: Record<CashoutMethod, number>
   /** Which methods the administrator currently offers, and what a USD request needs. */
   methods?: {
@@ -155,6 +157,8 @@ export type CryptoPayoutThreshold = {
   /** Unpaid commissions each below the threshold, kept until together they reach it. */
   accumulated: string | null
   awaiting_threshold: boolean | null
+  /** The business minimum (Admin > Finance), before SoncoPay's own minimum and fee are added. */
+  business_minimum?: string | null
   destination: { destination_state: string | null; message: string | null; usable_from: string | null } | null
 }
 
@@ -187,6 +191,10 @@ export function cashoutStatusText(summary: CashoutSummary): string {
     case 'FEE_TERMS_REQUIRED':
       return 'Read and accept the network fee terms below to receive automatic crypto payouts. You pay the network fee and receive the remaining amount. Your balance is kept in full until you accept.'
     case 'BELOW_MINIMUM':
+      if (summary.cashout_method === 'CRYPTO') {
+        const missing = formatUsd(summary.remaining_to_minimum ?? Math.max(0, (summary.minimum ?? 0) - summary.payable_amount))
+        return `The minimum cashout is ${minimum}. Your commissions are kept and added together automatically; ${missing} more is needed before a payout can be made.`
+      }
       return `Your balance is below the ${minimum} minimum for ${methodLabel(summary.cashout_method)}.`
     case 'AUTOMATIC_PAYOUT_PENDING':
       return summary.fees.CRYPTO.network_fee_policy === 'MEMBER_PAYS'
