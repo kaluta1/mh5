@@ -85,7 +85,7 @@ def save(db, admin, changes, **kwargs):
 
 
 def approve(db, admin):
-    return save(db, admin, {"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS,
+    return save(db, admin, {"fee_terms_approved": True}, confirmation=None,
                 expected_version=pc.load(db).version)
 
 
@@ -253,19 +253,19 @@ def test_a_change_decided_on_an_older_configuration_is_refused(books):
     shown = pc.settings_view(db)["version"]                        # what the first administrator is looking at
     save(db, second, {"member_fee_cap_usd": "50.00"})              # meanwhile somebody else raises the limit
     with pytest.raises(pc.PaymentConfigError) as error:
-        save(db, first, {"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS, expected_version=shown)
+        save(db, first, {"fee_terms_approved": True}, confirmation=None, expected_version=shown)
     assert error.value.code == "STALE_CONFIGURATION"
     config = pc.load(db)
     assert config.fee_terms_approved is False and config.version == shown + 1      # nothing was stored
     assert db.query(PaymentConfigAudit).filter_by(action="SETTINGS_UPDATED").count() == 1
     # Shown the values in force, the same administrator can approve them.
-    assert save(db, first, {"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS,
+    assert save(db, first, {"fee_terms_approved": True}, confirmation=None,
                 expected_version=pc.settings_view(db)["version"]).fee_terms_approved is True
 
 
 @pytest.mark.parametrize("change, confirmation", [
-    ({"fee_terms_approved": True}, pc.CONFIRM_FEE_LIMITS),
-    ({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, pc.CONFIRM_FEE_MODE),
+    ({"fee_terms_approved": True}, None),
+    ({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, None),
 ])
 def test_an_approval_or_a_confirmation_must_name_the_version_it_was_decided_on(books, change, confirmation):
     db = books

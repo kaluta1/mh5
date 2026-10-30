@@ -151,9 +151,9 @@ def prepare(db, key, admin, monkeypatch):
         return {"usd_settlement_enabled": True, "usd_settlement_account": "1010"}, pc.CONFIRM_USD_SETTLEMENT
     if key == "fee_terms_approved":
         configure(db, **{**FEE_RULES, "fee_terms_approved": False})
-        return {"fee_terms_approved": True}, pc.CONFIRM_FEE_LIMITS
+        return {"fee_terms_approved": True}, None
     configure(db, usd_min_usd=Decimal("100.00"))                    # the row exists; the fee mode is UNVERIFIED
-    return {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, pc.CONFIRM_FEE_MODE
+    return {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, None
 
 
 ACTIVATIONS = ("crypto_auto_payout_enabled", "usd_settlement_enabled", "fee_terms_approved", "provider_fee_mode")
@@ -183,7 +183,8 @@ def test_an_activation_needs_both_permissions(client, ledger, admins, monkeypatc
     assert stored(db) == before
 
     # D: both permissions. The existing gates still apply to them ...
-    assert code(lambda: update(db, admins["both"], changes)) == "CONFIRMATION_REQUIRED"
+    if phrase is not None:     # the fee behaviour and the fee approval have no typed phrase (2026-10-30)
+        assert code(lambda: update(db, admins["both"], changes)) == "CONFIRMATION_REQUIRED"
     assert code(lambda: pc.update_settings(db, admins["both"], changes, password=PASSWORD, confirmation=phrase,
                                            now=NOW)) == "VERSION_REQUIRED"
     assert stored(db) == before
@@ -232,8 +233,8 @@ def test_switching_off_needs_only_manage(ledger, admins):
     # Off is one way for them: switching any of it back on is an activation again.
     for changes, phrase in (({"crypto_auto_payout_enabled": True}, pc.CONFIRM_AUTO_PAYOUT),
                             ({"usd_settlement_enabled": True}, pc.CONFIRM_USD_SETTLEMENT),
-                            ({"fee_terms_approved": True}, pc.CONFIRM_FEE_LIMITS),
-                            ({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, pc.CONFIRM_FEE_MODE)):
+                            ({"fee_terms_approved": True}, None),
+                            ({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, None)):
         assert code(lambda: update(db, manager, changes, phrase)) == REFUSED, changes
 
 
@@ -373,7 +374,7 @@ def test_payout_settings_are_an_activation_while_automatic_payouts_are_on(ledger
     # A fee setting withdraws the approval: payouts stop, so no activation is involved.
     tightened = update(db, manager, {"member_fee_cap_usd": "0.50"})
     assert tightened.fee_terms_approved is False and tightened.fee_gate() == "FEE_LIMITS_NOT_APPROVED"
-    assert code(lambda: update(db, manager, {"fee_terms_approved": True}, pc.CONFIRM_FEE_LIMITS)) == REFUSED
+    assert code(lambda: update(db, manager, {"fee_terms_approved": True}, None)) == REFUSED
 
     # Both permissions: the same changes are accepted.
     changed = update(db, both, {"max_single_payout_usd": "500", "max_daily_payout_count": 5})

@@ -1140,15 +1140,13 @@ def test_the_simple_summary_without_soncopay_figures_has_no_preview(ledger):
     assert summary["preview"] is None and summary["minimum_usd"]
 
 
-def test_confirming_added_by_provider_explains_added_not_deducted(ledger, monkeypatch):
+def test_the_soncopay_fee_behaviour_is_saved_with_the_password_and_no_typed_phrase(ledger, monkeypatch):
     monkeypatch.setattr(payment_config, "required_fee_mode", lambda: payment_config.FEE_MODE_ADDED)
     boss = superadmin(ledger, "feeboss")
-    with pytest.raises(payment_config.PaymentConfigError) as refused:
+    with pytest.raises(payment_config.PaymentConfigError):                  # the password is still checked
         payment_config.update_settings(ledger, boss, {"provider_fee_mode": payment_config.FEE_MODE_ADDED},
-                                       password=ADMIN_PASSWORD, expected_version=payment_config.load(ledger).version)
-    assert refused.value.code == "CONFIRMATION_REQUIRED"
-    assert "adds its fee on top" in str(refused.value) and "takes its fee out" not in str(refused.value)
-    saved = payment_config.update_settings(ledger, boss, {"provider_fee_mode": payment_config.FEE_MODE_ADDED},
-                                           password=ADMIN_PASSWORD, confirmation=payment_config.CONFIRM_FEE_MODE,
-                                           expected_version=payment_config.load(ledger).version)
+                                       password="wrong-password", expected_version=payment_config.load(ledger).version)
+    saved = payment_config.update_settings(ledger, boss, {"provider_fee_mode": payment_config.FEE_MODE_ADDED,
+                                                          "member_fee_cap_usd": "0.50"},
+                                           password=ADMIN_PASSWORD, expected_version=payment_config.load(ledger).version)
     assert saved.provider_fee_mode == payment_config.FEE_MODE_ADDED and saved.fee_terms_approved is False

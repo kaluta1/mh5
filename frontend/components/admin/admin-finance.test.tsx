@@ -44,8 +44,7 @@ const settings = (over: Record<string, unknown> = {}) => ({
   effective: { automatic_crypto_payouts: false, usd_settlement: false },
   usd_fee_rule: '1% of the amount, minimum $20, maximum $1,000',
   supported_payout_currencies: [{ code: 'usdtbsc', currency: 'USDT', network: 'BSC (BEP20)' }],
-  confirmations: { crypto_auto_payout_enabled: 'ENABLE AUTOMATIC PAYOUTS', usd_settlement_enabled: 'ENABLE USD SETTLEMENT',
-    provider_fee_mode: 'PROVIDER FEE BEHAVIOUR VERIFIED', fee_terms_approved: 'APPROVE NETWORK FEE LIMITS' },
+  confirmations: { crypto_auto_payout_enabled: 'ENABLE AUTOMATIC PAYOUTS', usd_settlement_enabled: 'ENABLE USD SETTLEMENT' },
   ...over,
 })
 
@@ -560,41 +559,25 @@ describe('AdminFinance', () => {
       changes: expect.objectContaining({ crypto_auto_payout_enabled: true }), confirmation: 'ENABLE AUTOMATIC PAYOUTS' })))
   })
 
-  it('asks for a phrase before the provider fee behaviour is declared confirmed, and before the limits are approved', async () => {
-    setup()
-    render(<AdminFinance section="crypto-cashout" />)
-    const save = await screen.findByRole('button', { name: 'Save changes' })
-    fireEvent.change(screen.getByLabelText('Provider fee behaviour'), { target: { value: 'DEDUCTED_BY_PROVIDER' } })
-    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
-    const phrase = screen.getByLabelText(/to confirm/)
-    expect(save).toBeDisabled()
-    fireEvent.change(phrase, { target: { value: 'PROVIDER FEE BEHAVIOUR VERIFIED' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-    await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', {
-      changes: { provider_fee_mode: 'DEDUCTED_BY_PROVIDER' }, current_password: PASSWORD,
-      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED', expected_version: 3 }))
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Network fee limits approved' }))
-    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'APPROVE NETWORK FEE LIMITS' } })
-    expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled()
-  })
-
-  it('asks for the phrase when ADDED_BY_PROVIDER (SoncoPay) is selected, so the save can succeed', async () => {
+  it('confirms the provider fee behaviour and approves the limits with the password only, no typed phrase', async () => {
     const fields = settings().fields.map((f: SettingField) => f.name === 'provider_fee_mode'
       ? { ...f, choices: ['UNVERIFIED', 'DEDUCTED_BY_PROVIDER', 'CHARGED_TO_BALANCE', 'ADDED_BY_PROVIDER'] } : f)
     setup({ s: settings({ fields }) })
     render(<AdminFinance section="crypto-cashout" />)
-    await screen.findByRole('button', { name: 'Save changes' })
+    const save = await screen.findByRole('button', { name: 'Save changes' })
     fireEvent.change(screen.getByLabelText('Provider fee behaviour'), { target: { value: 'ADDED_BY_PROVIDER' } })
+    expect(screen.queryByLabelText(/to confirm/)).toBeNull()
+    expect(save).toBeDisabled()                                                             // no password yet
     fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'PROVIDER FEE BEHAVIOUR VERIFIED' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    fireEvent.click(save)
     await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', {
       changes: { provider_fee_mode: 'ADDED_BY_PROVIDER' }, current_password: PASSWORD,
-      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED', expected_version: 3 }))
+      confirmation: undefined, expected_version: 3 }))
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Network fee limits approved' }))
+    expect(screen.queryByLabelText(/to confirm/)).toBeNull()
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled()
   })
 
   it('puts the simple card first and folds the technical sections under Advanced', async () => {

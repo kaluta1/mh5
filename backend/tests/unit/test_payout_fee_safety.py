@@ -105,10 +105,10 @@ def restore_rules(db, admin):
     """Put back what a provider mismatch took away: the confirmed fee behaviour and the approval."""
     pc.update_settings(db, admin, {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, password=PASSWORD, now=NOW,
                        expected_version=pc.load(db).version,
-                       confirmation=pc.CONFIRM_FEE_MODE)
+                       confirmation=None)
     pc.update_settings(db, admin, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
                        expected_version=pc.load(db).version,
-                       confirmation=pc.CONFIRM_FEE_LIMITS)
+                       confirmation=None)
 
 
 # ===========================================================================
@@ -608,7 +608,7 @@ def test_changing_the_margin_or_the_gate_withdraws_the_approval(books, engine_on
     assert set(last.changed_fields) == {*change, "fee_terms_approved"}
     with pytest.raises(pc.PaymentConfigError) as error:            # and both cannot arrive in one change
         pc.update_settings(db, admin, {**{k: "30" if "margin" in k else 4 for k in change}, "fee_terms_approved": True},
-                           password=PASSWORD, now=NOW, confirmation=pc.CONFIRM_FEE_LIMITS)
+                           password=PASSWORD, now=NOW, confirmation=None)
     assert error.value.code == "UNSAFE_ACTIVATION"
 
 

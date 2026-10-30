@@ -107,6 +107,7 @@ MARKET_ACCEPTANCE = "f4b6d8a0c2e4_market_order_buyer_acceptance.py"
 MARKET_LISTINGS = "a7c9e1b3d5f7_marketplace_listings.py"
 ACCOUNT_RETIREMENTS = "b8d0f2a4c6e9_account_retirements.py"
 SONCOPAY_PAYOUTS = "c9e1f3a5b7d0_soncopay_payout_destinations.py"
+FEE_MODE_ADDED = "d1f3a5b7c9e2_fee_mode_added_by_provider.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -376,12 +377,13 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
             (MARKET_ACCEPTANCE, "f4b6d8a0c2e4", "e3a5c7e9b1d3", MARKET_LISTINGS),
             (MARKET_LISTINGS, "a7c9e1b3d5f7", "f4b6d8a0c2e4", ACCOUNT_RETIREMENTS),
             (ACCOUNT_RETIREMENTS, "b8d0f2a4c6e9", "a7c9e1b3d5f7", SONCOPAY_PAYOUTS),
-            (SONCOPAY_PAYOUTS, "c9e1f3a5b7d0", "b8d0f2a4c6e9", None)):
+            (SONCOPAY_PAYOUTS, "c9e1f3a5b7d0", "b8d0f2a4c6e9", FEE_MODE_ADDED),
+            (FEE_MODE_ADDED, "d1f3a5b7c9e2", "c9e1f3a5b7d0", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # c9e1f3a5b7d0 is the single head
+    # d1f3a5b7c9e2 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):
@@ -2041,7 +2043,7 @@ def test_two_administrators_cannot_both_approve_on_the_same_page(pg):
                                        expected_version=7)
                 else:
                     pc.update_settings(db, actor, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
-                                       confirmation=pc.CONFIRM_FEE_LIMITS, expected_version=7)
+                                       confirmation=None, expected_version=7)
                 return "SAVED"
             except pc.PaymentConfigError as exc:
                 return exc.code
@@ -2266,3 +2268,37 @@ def test_the_administrator_security_migration_adds_two_permissions_held_by_nobod
     migrate(engine, ADMIN_SECURITY, "upgrade")
     assert security_permissions(engine) == [("grant_manual_payments", "admin", 0),
                                             ("manage_administrators", "admin", 1)]
+
+
+def test_the_soncopay_fee_behaviour_can_be_stored_after_d1f3a5b7c9e2(pg):
+    """Production 2026-10-30: saving ADDED_BY_PROVIDER failed with a CheckViolation (HTTP 503) because the
+    constraint of c7d8e9f0a1b2 predates SoncoPay. The migration widens it; its downgrade refuses while used."""
+    from sqlalchemy.exc import IntegrityError
+    engine, Session = pg
+    with Session() as db:
+        db.add(PaymentSettings(id=1, version=1, **pc.defaults()))
+        db.commit()
+    with engine.begin() as c:                                       # the constraint as production has it
+        c.execute(text("ALTER TABLE payment_settings DROP CONSTRAINT IF EXISTS ck_payment_settings_fee_mode"))
+        c.execute(text("ALTER TABLE payment_settings ADD CONSTRAINT ck_payment_settings_fee_mode CHECK "
+                       "(provider_fee_mode IN ('UNVERIFIED', 'DEDUCTED_BY_PROVIDER', 'CHARGED_TO_BALANCE'))"))
+    added = text("UPDATE payment_settings SET provider_fee_mode = 'ADDED_BY_PROVIDER'")
+    with pytest.raises(IntegrityError):
+        with engine.begin() as c:
+            c.execute(added)
+    migrate(engine, "d1f3a5b7c9e2_fee_mode_added_by_provider.py", "upgrade")
+    migrate(engine, "d1f3a5b7c9e2_fee_mode_added_by_provider.py", "upgrade")      # idempotent
+    with engine.begin() as c:
+        c.execute(added)
+    with pytest.raises(Exception):                                  # not taken back while it is in use
+        migrate(engine, "d1f3a5b7c9e2_fee_mode_added_by_provider.py", "downgrade")
+    with engine.begin() as c:
+        assert c.execute(text("SELECT provider_fee_mode FROM payment_settings")).scalar() == "ADDED_BY_PROVIDER"
+        with pytest.raises(IntegrityError):
+            with c.begin_nested():
+                c.execute(text("UPDATE payment_settings SET provider_fee_mode = 'SOMETHING_ELSE'"))
+        c.execute(text("UPDATE payment_settings SET provider_fee_mode = 'UNVERIFIED'"))
+    migrate(engine, "d1f3a5b7c9e2_fee_mode_added_by_provider.py", "downgrade")
+    with pytest.raises(IntegrityError):
+        with engine.begin() as c:
+            c.execute(added)

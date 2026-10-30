@@ -760,24 +760,29 @@ def test_the_fee_behaviour_and_the_limits_need_a_confirmation_and_a_separate_app
         return error.value.code
 
     assert refused({"provider_fee_mode": "CHARGED_TO_BALANCE"}) == "NOT_AVAILABLE"
-    assert refused({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}) == "CONFIRMATION_REQUIRED"
-    assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"
+    # No typed phrase (owner decision 2026-10-30); the version shown and the password are still required.
+    assert refused({"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}) == "VERSION_REQUIRED"
+    with pytest.raises(pc.PaymentConfigError):
+        pc.update_settings(db, admin, {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, password="wrong-password",
+                           now=NOW, expected_version=pc.load(db).version)
+    assert pc.load(db).provider_fee_mode == "UNVERIFIED"
+    assert refused({"fee_terms_approved": True}, confirmation=None) == "UNSAFE_ACTIVATION"
     pc.update_settings(db, admin, {"provider_fee_mode": "DEDUCTED_BY_PROVIDER"}, password=PASSWORD, now=NOW,
                        expected_version=pc.load(db).version,
-                       confirmation=pc.CONFIRM_FEE_MODE)
-    assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"  # no limit
+                       confirmation=None)
+    assert refused({"fee_terms_approved": True}, confirmation=None) == "UNSAFE_ACTIVATION"  # no limit
     # The limits and their approval cannot arrive in one change.
     assert refused({"member_fee_cap_usd": "1.00", "fee_terms_approved": True},
-                   confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"
+                   confirmation=None) == "UNSAFE_ACTIVATION"
     pc.update_settings(db, admin, {"member_fee_cap_usd": "1.00"}, password=PASSWORD, now=NOW)
     assert pc.load(db).fee_gate() == "FEE_SAFETY_MARGIN_NOT_SET"
-    assert refused({"fee_terms_approved": True}, confirmation=pc.CONFIRM_FEE_LIMITS) == "UNSAFE_ACTIVATION"  # no margin
+    assert refused({"fee_terms_approved": True}, confirmation=None) == "UNSAFE_ACTIVATION"  # no margin
     pc.update_settings(db, admin, {"fee_estimate_margin_percent": "0"}, password=PASSWORD, now=NOW)
     assert pc.load(db).fee_gate() == "FEE_LIMITS_NOT_APPROVED"
-    assert refused({"fee_terms_approved": True}) == "CONFIRMATION_REQUIRED"
+    assert refused({"fee_terms_approved": True}) == "VERSION_REQUIRED"
     config = pc.update_settings(db, admin, {"fee_terms_approved": True}, password=PASSWORD, now=NOW,
                                 expected_version=pc.load(db).version,
-                                confirmation=pc.CONFIRM_FEE_LIMITS)
+                                confirmation=None)
     assert config.fee_gate() is None
     # Any later change to what was approved withdraws the approval.
     config = pc.update_settings(db, admin, {"member_fee_cap_usd": "2.00"}, password=PASSWORD, now=NOW)
@@ -791,7 +796,7 @@ def test_the_settings_screen_states_why_no_payout_can_be_created(client, db):
     admin = member(db, "boss", admin=True)
     view = client.get("/api/v1/admin/finance/settings", headers=auth(admin)).json()
     assert view["network_fee_gate"]["code"] == "PROVIDER_FEE_MODE_UNVERIFIED"
-    assert view["confirmations"]["provider_fee_mode"] == pc.CONFIRM_FEE_MODE
+    assert "provider_fee_mode" not in view["confirmations"] and "fee_terms_approved" not in view["confirmations"]
     fields = {f["name"]: f for f in view["fields"]}
     assert fields["provider_fee_mode"]["value"] == "UNVERIFIED" and fields["fee_terms_approved"]["value"] is False
     assert fields["member_fee_cap_percent"]["approval_note"] and fields["member_fee_cap_usd"]["approval_note"]

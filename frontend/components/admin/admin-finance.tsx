@@ -187,7 +187,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
       {section === 'soncopay' && <AdminSoncoPaySettings />}
       {section === 'soncopay-payouts' && <AdminSoncoPayPayouts />}
       {section === 'crypto-cashout' && settings && summary && (
-        <SimpleCryptoSettings key={summary.version} summary={summary} confirmations={settings.confirmations}
+        <SimpleCryptoSettings key={summary.version} summary={summary}
           canManage={canManage} canActivate={canActivate} busy={busy} change={change} />
       )}
       {section === 'crypto-cashout' && settings && (
@@ -571,10 +571,9 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
   const [refusal, setRefusal] = useState('')
 
   const changes = changedValues(fields, draft)
-  // Switching on something that moves money needs a typed confirmation phrase.
-  // So does declaring that the provider's fee behaviour was confirmed with it.
+  // Switching on something that moves money needs a typed confirmation phrase, when the server names one
+  // (the fee behaviour and the fee approval have none: the password confirms them).
   const needsPhrase = (name: string) => changes[name] === true
-    || (name === 'provider_fee_mode' && ['DEDUCTED_BY_PROVIDER', 'ADDED_BY_PROVIDER'].includes(String(changes[name])))
   const phrase = Object.keys(changes).map((name) => needsPhrase(name) ? settings.confirmations[name] : undefined)
     .find(Boolean)
   const disabled = !canManage || busy
