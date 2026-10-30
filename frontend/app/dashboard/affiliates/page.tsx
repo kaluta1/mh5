@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
-import { getEffectiveAppUrl } from '@/lib/config'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +34,7 @@ import { InviteDialog } from '@/components/dashboard/invite-dialog'
 import { cacheService } from '@/lib/cache-service'
 import api from '@/lib/api'
 import { shortenReferralUrl } from '@/lib/referral-share'
+import { referralShortUrl } from '@/lib/referral-link'
 
 interface Affiliate {
   id: string
@@ -119,11 +119,8 @@ export default function AffiliatesPage() {
     }
   }, [isLoading, isAuthenticated, router])
 
-  const getBaseUrl = () => getEffectiveAppUrl()
-
   const generateReferralLinks = (code: string) => {
-    const baseUrl = getBaseUrl()
-    const shortLink = `${baseUrl}/r/${code}`
+    const shortLink = referralShortUrl(code)
     return {
       register: shortLink,
       home: shortLink,

@@ -28,8 +28,11 @@ import {
   Fingerprint,
   ChevronRight,
   Lock,
-  Wallet
+  Wallet,
+  Copy,
+  Check
 } from 'lucide-react'
+import { copyText, referralShortUrl } from '@/lib/referral-link'
 
 type Tab = 'profile' | 'location' | 'demographics' | 'password' | 'wallet'
 
@@ -106,6 +109,19 @@ export default function SettingsPage() {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth()
   const { t } = useLanguage()
   const { addToast } = useToast()
+  const [referralCopied, setReferralCopied] = useState(false)
+
+  // The full referral short URL is copied, never the code alone; success is shown only when the copy worked.
+  const copyReferralLink = async (code: string) => {
+    const link = referralShortUrl(code)
+    if (await copyText(link)) {
+      setReferralCopied(true)
+      addToast(t('settings.referral_link_copied') || 'Referral link copied!', 'success', 3000)
+      setTimeout(() => setReferralCopied(false), 2000)
+    } else {
+      addToast(`${t('settings.referral_link_copy_failed') || 'Could not copy automatically. Your referral link is'} ${link}`, 'error', 10000)
+    }
+  }
 
   const [currentTab, setCurrentTab] = useState<Tab>('profile')
   const [pageLoading, setPageLoading] = useState(true)
@@ -302,9 +318,21 @@ export default function SettingsPage() {
                     <Share2 className="w-4 h-4 text-myhigh5-primary" />
                     <span className="text-xs text-gray-500 dark:text-gray-400">{t('settings.referral_code_label') || 'Code parrainage'}</span>
                   </div>
-                  <p className="text-myhigh5-primary font-mono font-bold text-sm">
-                    {user.personal_referral_code}
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-myhigh5-primary font-mono font-bold text-sm truncate min-w-0">
+                      {user.personal_referral_code}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void copyReferralLink(user.personal_referral_code!)}
+                      aria-label={t('settings.copy_referral_link') || 'Copy referral link'}
+                      title={t('settings.copy_referral_link') || 'Copy referral link'}
+                      data-testid="copy-referral-link"
+                      className="shrink-0 p-1.5 rounded-md text-myhigh5-primary hover:bg-myhigh5-primary/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-myhigh5-primary transition-colors"
+                    >
+                      {referralCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
