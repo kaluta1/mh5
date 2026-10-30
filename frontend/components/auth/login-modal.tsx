@@ -21,6 +21,7 @@ import { useLanguage } from "@/contexts/language-context"
 import { useAuth } from "@/hooks/use-auth"
 import { SuccessPage } from "./success-page"
 import { isEmailNotVerifiedError, resolveAuthLoginErrorMessage } from "@/lib/auth-login-error-message"
+import { LOGIN_WATCHDOG_MS } from '@/lib/api'
 
 interface LoginModalProps {
   open: boolean
@@ -74,11 +75,11 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onLoginSucc
     setIsLoading(true)
     setError(null)
 
-    // Safeguard: stop loading after 65s if request never settles (e.g. no timeout fired)
+    // Safeguard only: longer than the bounded sign-in (2 x 30s + profile retries), so it never fires while a sign-in can still succeed
     const loadingTimeoutId = window.setTimeout(() => {
       setIsLoading(false)
       setError(t('auth.login.errors.timeout'))
-    }, 65000)
+    }, LOGIN_WATCHDOG_MS)
 
     try {
       await login({

@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/components/ui/toast'
 import { logger } from '@/lib/logger'
 import { isEmailNotVerifiedError, resolveAuthLoginErrorMessage } from '@/lib/auth-login-error-message'
+import { LOGIN_WATCHDOG_MS } from '@/lib/api'
 
 function LoginPageContent() {
   const { t } = useLanguage()
@@ -113,7 +114,7 @@ function LoginPageContent() {
     const loadingTimeoutId = window.setTimeout(() => {
       setIsLoading(false)
       addToast(t('auth.login.errors.timeout'), 'error', 6000)
-    }, 65000)
+    }, LOGIN_WATCHDOG_MS)
 
     try {
       await login({

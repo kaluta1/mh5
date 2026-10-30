@@ -188,6 +188,31 @@ export interface PasswordResetConfirm {
   new_password: string
 }
 
+const LOGIN_ATTEMPT_TIMEOUT_MS = 30000
+// The sign-in screens' safety net: longer than the whole bounded sign-in (2 x 30s, then the profile and
+// permission reads with their retries), so it never reports a timeout while the sign-in can still succeed.
+export const LOGIN_WATCHDOG_MS = 150000
+
+/** The request never got an answer (timeout, dropped connection): safe to repeat a sign-in or a read. */
+export function isTransientNetworkError(err: unknown): boolean {
+  const axiosErr = err as AxiosError | null
+  if (!axiosErr || axiosErr.response) return false
+  return axiosErr.code === 'ECONNABORTED' || axiosErr.code === 'ERR_NETWORK' || axiosErr.code === 'ETIMEDOUT'
+    || !!axiosErr.message?.includes('timeout') || axiosErr.message === 'Network Error'
+}
+
+/** Reads (GET) only: repeats `read` up to `retries` more times while the request gets no answer. */
+export async function withNetworkRetry<T>(read: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await read()
+    } catch (err) {
+      if (attempt >= retries || !isTransientNetworkError(err)) throw err
+      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+    }
+  }
+}
+
 let _currentUserPromise: Promise<LoginResponse['user']> | null = null;
 let _currentUserCacheTime = 0;
 
@@ -235,7 +260,8 @@ export const authService = {
     return _currentUserPromise;
   },
 
-  // Connexion (timeout 60s, 1 retry si timeout ou 503 pour cold start Render)
+  // Sign-in: 30s per attempt and ONE retry when the request was lost on the way (timeout, no answer)
+  // or the server was briefly unavailable. A wrong password (4xx) is never retried.
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const params = new URLSearchParams()
     params.append('username', credentials.email_or_username)
@@ -244,6 +270,7 @@ export const authService = {
     const doLogin = () =>
       authApi.post('/api/v1/auth/login', params.toString(), {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: LOGIN_ATTEMPT_TIMEOUT_MS,
       })
 
     let response
@@ -251,13 +278,10 @@ export const authService = {
       response = await doLogin()
     } catch (err) {
       const axiosErr = err as AxiosError
-      const isTimeout =
-        axiosErr.code === 'ECONNABORTED' ||
-        (err as Error).message?.includes('timeout')
       const is503 = axiosErr.response?.status === 503
-      if (isTimeout) {
-        logger.warn('Login timeout, retrying once...')
-        await new Promise((r) => setTimeout(r, 2000))
+      if (isTransientNetworkError(err)) {
+        logger.warn('Login request lost or timed out, retrying once...')
+        await new Promise((r) => setTimeout(r, 1500))
         response = await doLogin()
       } else if (is503) {
         logger.warn('Backend 503 (service starting), retrying once in 5s...')

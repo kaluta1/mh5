@@ -185,8 +185,8 @@
       "error": "Login error",
       "errors": {
         "invalid_credentials": "Invalid email/username or password",
-        "timeout": "Connection timeout. The server is taking too long to respond. Please try again.",
-        "network_error": "Network error. Please check your connection and try again.",
+        "timeout": "Your connection to MyHigh5 is slow or unstable right now, so sign-in did not finish. Please try again in a moment.",
+        "network_error": "The connection was interrupted before sign-in finished. Please check your internet connection and try again.",
         "required_fields": "Required Fields",
         "service_unavailable": "The server is temporarily unavailable. Please try again in a moment.",
         "email_not_verified": "Please confirm your email address before signing in. Check your inbox for the confirmation link.",

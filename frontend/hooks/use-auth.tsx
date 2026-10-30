@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { AxiosError } from 'axios'
-import { authService } from '@/lib/api'
+import { authService, withNetworkRetry } from '@/lib/api'
 import { API_URL, getEffectiveApiUrl } from '@/lib/config'
 import { cacheService } from '@/lib/cache-service'
 import { closeMediaSession, openMediaSession } from '@/lib/media-session'
@@ -72,21 +72,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .replace(/\/+$/, '')
         .replace(/\/api\/v1$/i, '')
 
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000)
-
-      const fetchPromise = fetch(`${baseUrl}/api/v1/rbac/me/permissions`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: controller.signal
-      }).then(async (response) => {
-        clearTimeout(timeoutId)
-        if (response.ok) {
-          return await response.json()
-        } else if (response.status === 404 || response.status === 403) {
-          return []
-        }
-        throw new Error('Failed to fetch permissions')
-      })
+      // 15s per attempt and one retry: on a lossy connection 5s left administrators without their menus.
+      const attempt = () => {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000)
+        return fetch(`${baseUrl}/api/v1/rbac/me/permissions`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal
+        }).finally(() => clearTimeout(timeoutId))
+      }
+      const fetchPromise = attempt()
+        .catch(() => new Promise<Response>((r) => setTimeout(r, 1000)).then(attempt))
+        .then(async (response) => {
+          if (response.ok) {
+            return await response.json()
+          } else if (response.status === 404 || response.status === 403) {
+            return []
+          }
+          throw new Error('Failed to fetch permissions')
+        })
 
       if (typeof window !== 'undefined') {
         const win = window as any
@@ -233,8 +237,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Login et récupérer les tokens
     await authService.login(credentials)
 
-    // Récupérer les données utilisateur après connexion
-    const userData = await authService.getCurrentUser()
+    // The sign-in has succeeded: a lost profile read is repeated instead of being reported as a failed login.
+    const userData = await withNetworkRetry(() => authService.getCurrentUser())
     setUser({
       ...userData,
       is_admin: (userData as any).is_admin || false,
