@@ -131,6 +131,14 @@ CONFIRM_AUTO_PAYOUT = "ENABLE AUTOMATIC PAYOUTS"
 CONFIRM_USD_SETTLEMENT = "ENABLE USD SETTLEMENT"
 CONFIRM_FEE_MODE = "PROVIDER FEE BEHAVIOUR VERIFIED"
 CONFIRM_FEE_LIMITS = "APPROVE NETWORK FEE LIMITS"
+# What confirming each provider fee behaviour declares. The two are opposites: the text must match the
+# behaviour chosen (a single "takes its fee out of the amount" text contradicted ADDED_BY_PROVIDER).
+FEE_MODE_CONFIRMATION_TEXT = {
+    FEE_MODE_DEDUCTED: "Select this only after the provider confirmed that it takes its fee out of the amount sent.",
+    FEE_MODE_ADDED: "Select this only after the provider confirmed that it adds its fee on top of the amount sent "
+                    "(SoncoPay documents this). MyHigh5 then sends the payout less that fee, so the member still "
+                    "pays it.",
+}
 CONFIRM_REACTIVATION = "REACTIVATE CRYPTO PAYOUTS"
 # Switching the provider back on while automatic payouts are configured on lets payouts resume.
 CONFIRM_PROVIDER_RESUME = "RESUME NOWPAYMENTS PAYOUTS"
@@ -1167,8 +1175,8 @@ def _validate_combination(db: Session, row: PaymentSettings, merged: Dict[str, A
                                       f"provider in use ({required_fee_mode()}).", "provider_fee_mode")
     if changed.get("provider_fee_mode") in (FEE_MODE_DEDUCTED, FEE_MODE_ADDED)             and (confirmation or "").strip() != CONFIRM_FEE_MODE:
         raise refuse("CONFIRMATION_REQUIRED",
-                     "Select this only after the provider confirmed that it takes its fee out of the amount "
-                     f'sent. Type "{CONFIRM_FEE_MODE}" to confirm.', "provider_fee_mode")
+                     f"{FEE_MODE_CONFIRMATION_TEXT[changed['provider_fee_mode']]} "
+                     f'Type "{CONFIRM_FEE_MODE}" to confirm.', "provider_fee_mode")
     if changed.get("fee_terms_approved") is True:
         field = "fee_terms_approved"
         if any(name in changed for name in _FEE_TERMS_FIELDS):

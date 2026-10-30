@@ -1366,6 +1366,58 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
 # Why crypto payouts are (not) being created: one answer for the Admin Panel
 # ---------------------------------------------------------------------------
 
+def crypto_settings_summary(db: Session) -> dict:
+    """The few Crypto Cashout settings the owner decides, in plain terms, and what a payout at the payout
+    minimum would look like with the provider fee behaviour of the provider in use. Read-only: the figures
+    come from the functions the engine itself uses (payout_threshold, adjusted_estimate, amount_to_send) and
+    the last SoncoPay fee read for the dashboards; nothing is stored or sent. The member's own accepted limit
+    also applies to each real payout and is not part of this preview."""
+    config = payment_config.load(db)
+    required = payment_config.required_fee_mode()
+    published = _soncopay().published_limits(db) if payment_config.nowpayments_discontinued() else None
+    fee = published["fee"] if published is not None else None
+    out = {
+        "version": int(config.version),
+        "minimum_usd": f"{cs.crypto_minimum(config=config):.2f}",
+        "member_pays_fee": config.network_fee_policy == payment_config.FEE_MEMBER_PAYS,
+        "fee_mode": config.provider_fee_mode, "required_fee_mode": required,
+        "fee_mode_confirmed": config.provider_fee_mode == required,
+        "fee_cap_usd": f"{money(config.member_fee_cap_usd):.2f}",
+        "fee_cap_percent": str(config.member_fee_cap_percent),
+        "max_network_fee_percent": str(config.max_network_fee_percent),
+        "margin_percent": (str(config.fee_estimate_margin_percent)
+                           if config.fee_estimate_margin_percent is not None else None),
+        "min_net_payout_usd": f"{money(config.min_net_payout_usd):.2f}",
+        "approved": bool(config.fee_terms_approved),
+        "approval_blocked_by": None,
+        "automatic_payouts": {"admin_switch": bool(config.crypto_auto_payout_enabled),
+                              "server_switch": payment_config.crypto_master_switch()},
+        "preview": None,
+    }
+    if not config.fee_terms_approved:
+        from dataclasses import replace
+        gate = replace(config, fee_terms_approved=True).fee_rules_gate()
+        if gate is not None:
+            out["approval_blocked_by"] = {"code": gate, "message": payment_config.FEE_GATE_MESSAGES[gate]}
+    if fee is None:
+        return out
+    gross = payout_threshold(config, published["minimum"], fee)
+    adjusted = (cs.adjusted_estimate(fee, config.fee_estimate_margin_percent)
+                if config.fee_estimate_margin_percent is not None else None)
+    try:
+        sent = cs.amount_to_send(required, gross, fee)
+    except cs.CashoutError:
+        sent = None
+    out["preview"] = {
+        "amount": f"{gross:.2f}", "network_fee": str(fee),
+        "fee_checked": str(adjusted) if adjusted is not None else None,
+        "member_receives": str(sent) if sent is not None else None,
+        "provider_debit": str(sent + Decimal(str(fee))) if sent is not None else None,
+        "provider_minimum": str(published["minimum"]), "read_at": published["read_at"].isoformat() + "Z",
+    }
+    return out
+
+
 def crypto_payout_status(db: Session) -> dict:
     """EVERYTHING that currently stops a crypto payout from being created, each
     with the section of the Crypto Cashout page it belongs to and what an

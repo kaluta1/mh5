@@ -1107,3 +1107,45 @@ def test_the_production_fee_settings_after_the_correction_pay_ten_dollars_as_ver
     fake.fee = "0.41"
     commission(db, user, "10.00")
     assert run(db)["members"] == {"NETWORK_FEE_ABOVE_MEMBER_LIMIT": 1}
+
+
+# ===========================================================================
+# Simple Crypto Cashout settings (Admin): the plain summary and the fee behaviour wording
+# ===========================================================================
+
+@pytest.mark.ten_dollar_minimum
+def test_the_simple_summary_previews_a_ten_dollar_payout_with_the_engines_figures(payouts_on, fake):
+    db = payouts_on
+    real_figures(db, fake, margin="25")
+    configure(db, member_fee_cap_percent=Decimal("5.000"), member_fee_cap_usd=Decimal("0.50"),
+              max_network_fee_percent=Decimal("10.00"), min_net_payout_usd=Decimal("0.50"),
+              crypto_min_usd=Decimal("10.00"))
+    summary = engine.crypto_settings_summary(db)
+    assert summary["minimum_usd"] == "10.00" and summary["member_pays_fee"] is True
+    assert summary["fee_mode_confirmed"] is True and summary["required_fee_mode"] == payment_config.FEE_MODE_ADDED
+    assert summary["fee_cap_usd"] == "0.50"
+    assert summary["automatic_payouts"]["server_switch"] is not None
+    preview = summary["preview"]
+    assert (preview["amount"], Decimal(preview["network_fee"]), Decimal(preview["fee_checked"])) == \
+        ("10.00", Decimal("0.23"), Decimal("0.2875"))
+    assert (Decimal(preview["member_receives"]), Decimal(preview["provider_debit"])) == (Decimal("9.77"), Decimal("10.00"))
+    assert fake.posts("/v1/payouts") == []                          # a preview sends nothing
+
+
+def test_the_simple_summary_without_soncopay_figures_has_no_preview(ledger):
+    summary = engine.crypto_settings_summary(ledger)
+    assert summary["preview"] is None and summary["minimum_usd"]
+
+
+def test_confirming_added_by_provider_explains_added_not_deducted(ledger, monkeypatch):
+    monkeypatch.setattr(payment_config, "required_fee_mode", lambda: payment_config.FEE_MODE_ADDED)
+    boss = superadmin(ledger, "feeboss")
+    with pytest.raises(payment_config.PaymentConfigError) as refused:
+        payment_config.update_settings(ledger, boss, {"provider_fee_mode": payment_config.FEE_MODE_ADDED},
+                                       password=ADMIN_PASSWORD, expected_version=payment_config.load(ledger).version)
+    assert refused.value.code == "CONFIRMATION_REQUIRED"
+    assert "adds its fee on top" in str(refused.value) and "takes its fee out" not in str(refused.value)
+    saved = payment_config.update_settings(ledger, boss, {"provider_fee_mode": payment_config.FEE_MODE_ADDED},
+                                           password=ADMIN_PASSWORD, confirmation=payment_config.CONFIRM_FEE_MODE,
+                                           expected_version=payment_config.load(ledger).version)
+    assert saved.provider_fee_mode == payment_config.FEE_MODE_ADDED and saved.fee_terms_approved is False

@@ -581,6 +581,40 @@ describe('AdminFinance', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled()
   })
 
+  it('asks for the phrase when ADDED_BY_PROVIDER (SoncoPay) is selected, so the save can succeed', async () => {
+    const fields = settings().fields.map((f: SettingField) => f.name === 'provider_fee_mode'
+      ? { ...f, choices: ['UNVERIFIED', 'DEDUCTED_BY_PROVIDER', 'CHARGED_TO_BALANCE', 'ADDED_BY_PROVIDER'] } : f)
+    setup({ s: settings({ fields }) })
+    render(<AdminFinance section="crypto-cashout" />)
+    await screen.findByRole('button', { name: 'Save changes' })
+    fireEvent.change(screen.getByLabelText('Provider fee behaviour'), { target: { value: 'ADDED_BY_PROVIDER' } })
+    fireEvent.change(screen.getByLabelText('Your current password'), { target: { value: PASSWORD } })
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'PROVIDER FEE BEHAVIOUR VERIFIED' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(putMock).toHaveBeenLastCalledWith('/api/v1/admin/finance/settings', {
+      changes: { provider_fee_mode: 'ADDED_BY_PROVIDER' }, current_password: PASSWORD,
+      confirmation: 'PROVIDER FEE BEHAVIOUR VERIFIED', expected_version: 3 }))
+  })
+
+  it('puts the simple card first and folds the technical sections under Advanced', async () => {
+    setup({ s: settings({ crypto_sections: SECTIONS }), status: payoutStatus() })
+    const base = getMock.getMockImplementation()!
+    getMock.mockImplementation((url: string, options?: any) => url.endsWith('/finance/crypto-summary')
+      ? Promise.resolve({ status: 200, data: { version: 3, minimum_usd: '10.00', member_pays_fee: true,
+        fee_mode: 'UNVERIFIED', required_fee_mode: 'ADDED_BY_PROVIDER', fee_mode_confirmed: false, fee_cap_usd: '0.00',
+        fee_cap_percent: '0', max_network_fee_percent: '10', margin_percent: null, min_net_payout_usd: '0.50',
+        approved: false, approval_blocked_by: null, automatic_payouts: { admin_switch: false, server_switch: false },
+        preview: null } })
+      : base(url, options))
+    render(<AdminFinance section="crypto-cashout" />)
+    expect(await screen.findByTestId('crypto-simple')).toHaveTextContent('Minimum cashout')
+    const advanced = screen.getByTestId('crypto-advanced')
+    expect(advanced.tagName).toBe('DETAILS')
+    expect(advanced).not.toHaveAttribute('open')
+    expect(within(advanced).getByTestId('crypto-payout-status')).toBeInTheDocument()
+  })
+
   it('shows a payout suspension and reactivates only with a review note, the phrase and the password', async () => {
     setup({ s: settings({
       network_fee_gate: { code: 'PAYOUTS_SUSPENDED', message: 'Crypto payouts are suspended.' },

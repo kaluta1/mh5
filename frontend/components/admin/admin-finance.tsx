@@ -36,6 +36,7 @@ import { CashoutTransactions, ReconciliationAndAudit } from './admin-finance-cas
 import { CommissionPayouts, PayoutPause, WalletApprovals } from './admin-finance-payouts'
 import { FlaggedPayoutReview } from './admin-finance-review'
 import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
+import SimpleCryptoSettings, { type CryptoSummary } from './admin-crypto-simple'
 import AdminSoncoPayPayouts from './admin-soncopay-payouts'
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 
@@ -76,15 +77,17 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
   const [settings, setSettings] = useState<FinanceSettings | null>(null)
   const [webhook, setWebhook] = useState<WebhookHealth | null>(null)
   const [payoutStatus, setPayoutStatus] = useState<CryptoPayoutStatus | null>(null)
+  const [summary, setSummary] = useState<CryptoSummary | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    const [o, p, s, w, st] = await Promise.all([
+    const [o, p, s, w, st, cs] = await Promise.all([
       api.get(`${FINANCE_BASE}/overview`), api.get(`${FINANCE_BASE}/provider`),
       api.get(`${FINANCE_BASE}/settings`), api.get(`${FINANCE_BASE}/webhook`),
       section === 'crypto-cashout' ? api.get(`${FINANCE_BASE}/payout-status`) : Promise.resolve(null),
+      section === 'crypto-cashout' ? api.get(`${FINANCE_BASE}/crypto-summary`) : Promise.resolve(null),
     ])
     if (o.status === 200) setOverview(o.data)
     else setError(o.status === 403 ? 'You are not allowed to view Finance & Payments.' : 'Finance & Payments could not be loaded.')
@@ -92,6 +95,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
     if (s.status === 200) setSettings(s.data)
     if (w.status === 200) setWebhook(w.data)
     setPayoutStatus(st && st.status === 200 ? st.data : null)
+    setSummary(cs && cs.status === 200 ? cs.data : null)
   }, [section])
 
   useEffect(() => { void load() }, [load])
@@ -182,7 +186,12 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
       )}
       {section === 'soncopay' && <AdminSoncoPaySettings />}
       {section === 'soncopay-payouts' && <AdminSoncoPayPayouts />}
+      {section === 'crypto-cashout' && settings && summary && (
+        <SimpleCryptoSettings key={summary.version} summary={summary} confirmations={settings.confirmations}
+          canManage={canManage} canActivate={canActivate} busy={busy} change={change} />
+      )}
       {section === 'crypto-cashout' && settings && (
+        <Advanced collapsed={!!summary}>
         <div className="space-y-4">
           <SwitchSummary label="Automatic crypto payouts" server={settings.server_switches.crypto_auto_payout}
             effective={settings.effective.automatic_crypto_payouts}
@@ -222,6 +231,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
             </Card>
           )}
         </div>
+        </Advanced>
       )}
       {section === 'usd-cashout' && settings && (
         <div className="space-y-4">
@@ -255,6 +265,19 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** The technical Crypto Cashout sections, folded away under the simple card when the server provides it. */
+function Advanced({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  if (!collapsed) return <>{children}</>
+  return (
+    <details className="rounded-lg border border-gray-200 dark:border-gray-700" data-testid="crypto-advanced">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+        Advanced settings (technical details, for support)
+      </summary>
+      <div className="p-4 pt-0">{children}</div>
+    </details>
   )
 }
 
@@ -551,7 +574,7 @@ export function SettingsForm({ title, note, fields, settings, canManage, activat
   // Switching on something that moves money needs a typed confirmation phrase.
   // So does declaring that the provider's fee behaviour was confirmed with it.
   const needsPhrase = (name: string) => changes[name] === true
-    || (name === 'provider_fee_mode' && changes[name] === 'DEDUCTED_BY_PROVIDER')
+    || (name === 'provider_fee_mode' && ['DEDUCTED_BY_PROVIDER', 'ADDED_BY_PROVIDER'].includes(String(changes[name])))
   const phrase = Object.keys(changes).map((name) => needsPhrase(name) ? settings.confirmations[name] : undefined)
     .find(Boolean)
   const disabled = !canManage || busy

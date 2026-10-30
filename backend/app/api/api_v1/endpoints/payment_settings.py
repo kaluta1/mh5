@@ -162,6 +162,12 @@ def payout_status(db: Session = Depends(get_db)):
     return cashout_engine.crypto_payout_status(db)
 
 
+@router.get("/crypto-summary")
+def crypto_summary(db: Session = Depends(get_db)):
+    """The owner's Crypto Cashout settings in plain terms and a payout preview. Read-only."""
+    return cashout_engine.crypto_settings_summary(db)
+
+
 @router.get("/webhook")
 def webhook(db: Session = Depends(get_db)):
     return config.webhook_health(db)
