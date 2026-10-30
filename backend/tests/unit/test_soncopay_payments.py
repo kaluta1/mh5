@@ -1075,3 +1075,53 @@ def test_a_method_soncopay_withdrew_is_refused_and_earlier_deposits_keep_theirs(
     assert buy_with(client, buyer, "mm:mtn_bj", "k-mtn4").status_code == 409
     row, _shown = status_after(client, db, fake, buyer, dep, status="paid", asset="XOF", network=None)
     assert row.status == DepositStatus.VALIDATED                    # a payment already started keeps working
+
+
+# ===========================================================================
+# 8. The KYC fee through SoncoPay (the two final live checks: USDT on BSC, then a bank card)
+# ===========================================================================
+
+def test_the_kyc_fee_paid_in_usdt_bsc_or_by_card_is_confirmed_once_and_opens_one_attempt(client, ledger, fake, buyer):
+    from app.crud.crud_deposit import deposit as deposits
+    from app.services import commission_payout_hold as hold
+    from app.services import kyc_fee
+
+    db = ledger
+    configure(db)
+    card_row(db)
+    fake.card = True
+    fee, _currency = kyc_fee.member_fee(db)
+    paid_as = {"usdt_bsc": dict(asset="USDT", network="BSC"), "card": dict(method="card", asset="USD", network=None)}
+    second = member(db, "buyer2", sponsor=db.get(type(buyer), buyer.sponsor_id), wallet=None)
+
+    def pay(user, method):
+        return client.post(CREATE, headers={**bearer(user), "Idempotency-Key": f"k-kyc-{user.id}-{method}"},
+                           json={"amount": float(fee), "currency": "usd", "product_code": kyc_fee.PRODUCT_CODE,
+                                 "payment_method": method})
+
+    for user, method in ((buyer, "usdt_bsc"), (second, "card")):
+        created = pay(user, method)
+        assert created.status_code == 200, created.text
+        dep = deposit_of(db, created)
+        sent = fake.payments[dep.external_payment_id]["_body"]
+        assert (sent["amount"], sent["order_id"]) == (f"{fee:.2f}", str(dep.order_id))
+        assert sent["callback_url"] == "https://api.example.test/api/v1/webhooks/soncopay"
+        assert sent["return_url"] == f"https://app.example.test/dashboard/wallet?payment=soncopay&deposit={dep.id}"
+        assert (sent.get("methods") == ["card"]) if method == "card" else (sent["asset"], sent["network"]) == ("USDT", "BSC")
+        assert deposits.count_valid_deposits_for_product(db, user_id=user.id, product_code="kyc") == 0
+
+        row, _shown = status_after(client, db, fake, user, dep, status="pending")
+        assert row.status == DepositStatus.PENDING                         # nothing opens before it is paid
+        row, _shown = status_after(client, db, fake, user, dep, status="paid", **paid_as[method])
+        assert row.status == DepositStatus.VALIDATED
+        once = benefits(db, dep)
+        status_after(client, db, fake, user, dep, status="paid", **paid_as[method])      # read again: no change
+        assert benefits(db, dep) == once
+        assert deposits.count_valid_deposits_for_product(db, user_id=user.id, product_code="kyc") == 1
+        refused = pay(user, "card" if method == "usdt_bsc" else "usdt_bsc")      # an unused paid attempt: no 2nd fee
+        assert refused.status_code == 409 and "KYC_ALREADY_PAID" in refused.text
+
+        earned = db.query(AffiliateCommission).filter(AffiliateCommission.deposit_id == dep.id).all()
+        assert len(earned) <= 1
+        for commission in earned:                                        # a card payment's commission waits 14 days
+            assert hold.is_payable(db, commission) is (method != "card")
