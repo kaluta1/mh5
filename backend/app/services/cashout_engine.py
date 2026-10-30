@@ -1390,8 +1390,11 @@ def crypto_settings_summary(db: Session) -> dict:
         "min_net_payout_usd": f"{money(config.min_net_payout_usd):.2f}",
         "approved": bool(config.fee_terms_approved),
         "approval_blocked_by": None,
+        # "server_switch" is on only when payouts can really run: the server master switch AND the release's
+        # AUTOMATIC_PAYOUT_ACTIVATED guard. Either one off means no automatic payout, whatever the Admin switch.
         "automatic_payouts": {"admin_switch": bool(config.crypto_auto_payout_enabled),
-                              "server_switch": payment_config.crypto_master_switch()},
+                              "server_switch": payment_config.crypto_master_switch()
+                              and payment_config.payout_activation_switch()},
         "preview": None,
     }
     if not config.fee_terms_approved:
@@ -1408,11 +1411,18 @@ def crypto_settings_summary(db: Session) -> dict:
         sent = cs.amount_to_send(required, gross, fee)
     except cs.CashoutError:
         sent = None
+    def shown(value) -> Optional[str]:
+        """Exact, without trailing zeros past the cents (9.77000000 -> 9.77, 0.2875 stays)."""
+        if value is None:
+            return None
+        value = Decimal(str(value))
+        cents = value.quantize(Decimal("0.01"))
+        return f"{cents:f}" if cents == value else f"{value.normalize():f}"
+
     out["preview"] = {
-        "amount": f"{gross:.2f}", "network_fee": str(fee),
-        "fee_checked": str(adjusted) if adjusted is not None else None,
-        "member_receives": str(sent) if sent is not None else None,
-        "provider_debit": str(sent + Decimal(str(fee))) if sent is not None else None,
+        "amount": f"{gross:.2f}", "network_fee": shown(fee), "fee_checked": shown(adjusted),
+        "member_receives": shown(sent),
+        "provider_debit": shown(sent + Decimal(str(fee))) if sent is not None else None,
         "provider_minimum": str(published["minimum"]), "read_at": published["read_at"].isoformat() + "Z",
     }
     return out

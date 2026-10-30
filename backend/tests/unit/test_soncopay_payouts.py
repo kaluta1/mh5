@@ -1114,7 +1114,7 @@ def test_the_production_fee_settings_after_the_correction_pay_ten_dollars_as_ver
 # ===========================================================================
 
 @pytest.mark.ten_dollar_minimum
-def test_the_simple_summary_previews_a_ten_dollar_payout_with_the_engines_figures(payouts_on, fake):
+def test_the_simple_summary_previews_a_ten_dollar_payout_with_the_engines_figures(payouts_on, fake, monkeypatch):
     db = payouts_on
     real_figures(db, fake, margin="25")
     configure(db, member_fee_cap_percent=Decimal("5.000"), member_fee_cap_usd=Decimal("0.50"),
@@ -1128,7 +1128,10 @@ def test_the_simple_summary_previews_a_ten_dollar_payout_with_the_engines_figure
     preview = summary["preview"]
     assert (preview["amount"], Decimal(preview["network_fee"]), Decimal(preview["fee_checked"])) == \
         ("10.00", Decimal("0.23"), Decimal("0.2875"))
-    assert (Decimal(preview["member_receives"]), Decimal(preview["provider_debit"])) == (Decimal("9.77"), Decimal("10.00"))
+    assert (preview["member_receives"], preview["provider_debit"], preview["fee_checked"]) == ("9.77", "10.00", "0.2875")
+    # The release guard keeps automatic payouts off whatever the switches say: the summary must say OFF.
+    monkeypatch.setattr(settings, "AUTOMATIC_PAYOUT_ACTIVATED", False)
+    assert engine.crypto_settings_summary(db)["automatic_payouts"]["server_switch"] is False
     assert fake.posts("/v1/payouts") == []                          # a preview sends nothing
 
 
