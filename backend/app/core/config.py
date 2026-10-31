@@ -164,6 +164,17 @@ class Settings(BaseModel):
     # Private storage for digital listing files (e-books). Never under a public/static path.
     MARKETPLACE_STORAGE_DIR: str = os.getenv("MARKETPLACE_STORAGE_DIR", "").strip() or os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "private_marketplace")
+    # Marketplace seller registration and verification. Sellers may apply while this is off; only when it
+    # is on are publishing and new orders limited to approved sellers. A missing flag means "off".
+    MARKETPLACE_SELLER_VERIFICATION_ENABLED: bool = os.getenv(
+        "MARKETPLACE_SELLER_VERIFICATION_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    # Internal MyHigh5 review triggers for private sellers (NOT statutory registration thresholds).
+    SELLER_PRIVATE_REVIEW_SALES_USD: str = os.getenv("SELLER_PRIVATE_REVIEW_SALES_USD", "1000.00").strip()
+    SELLER_PRIVATE_REVIEW_ORDER_COUNT: int = int(os.getenv("SELLER_PRIVATE_REVIEW_ORDER_COUNT", "20"))
+    # Private, encrypted storage for seller compliance documents. Uploads are refused without the key.
+    SELLER_DOCUMENT_STORAGE_DIR: str = os.getenv("SELLER_DOCUMENT_STORAGE_DIR", "").strip() or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "private_seller_documents")
+    SELLER_DOCUMENT_ENCRYPTION_KEY: str = os.getenv("SELLER_DOCUMENT_ENCRYPTION_KEY", "").strip()
     ANNUALADS_TENANT_ID: str = _first_nonempty_env("ANNUALADS_TENANT_ID", "annualads_tenant_id")
     ANNUALADS_TENANT_API_KEY: str = _first_nonempty_env(
         "ANNUALADS_TENANT_API_KEY",

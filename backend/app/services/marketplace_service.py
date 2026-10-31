@@ -214,9 +214,15 @@ def _require_seller_release(db: Session, order: MarketOrder) -> None:
 def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: int) -> MarketOrder:
     from app.services.financial_eligibility import FinancialOperation
 
+    from app.services import seller_verification
+
     seller_id, seller_base = _resolve_item(db, item_type, item_id)
     if seller_id == int(buyer_user_id):
         raise MarketplaceError("You cannot buy your own item")
+    # Seller sales need an approved seller while seller verification is enforced. The buyer is told only
+    # that the item is unavailable (never the seller's compliance status).
+    if item_type in seller_verification.QUALIFYING_ITEM_TYPES and not seller_verification.can_sell(db, seller_id):
+        raise MarketplaceError("This item is not available")
     # Phase 10: the buyer pays and the seller will receive value off-platform.
     _require_financial(db, buyer_user_id, FinancialOperation.PAYMENT, {"market_item_type": item_type})
     _require_financial(db, seller_id, FinancialOperation.WITHDRAWAL, {"market_item_type": item_type})

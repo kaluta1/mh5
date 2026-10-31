@@ -102,6 +102,16 @@ api_router.include_router(business_model_endpoints.router, tags=["Business model
 from app.api.api_v1.endpoints import marketplace as marketplace_endpoints  # noqa: E402
 
 api_router.include_router(marketplace_endpoints.router, tags=["Marketplace"])
+from app.api.api_v1.endpoints import seller_verification as seller_verification_endpoints  # noqa: E402
+
+api_router.include_router(seller_verification_endpoints.router, tags=["Marketplace seller registration"])
+# Administrator AND the explicit review_seller_verification permission (checked per route).
+api_router.include_router(
+    seller_verification_endpoints.admin_router,
+    prefix="/admin/seller-verification",
+    tags=["Administration - seller verification"],
+    dependencies=[Depends(admin.require_admin)],
+)
 api_router.include_router(
     business_model_endpoints.admin_router,
     prefix="/admin/business-model",

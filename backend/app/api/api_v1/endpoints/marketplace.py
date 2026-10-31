@@ -23,6 +23,7 @@ from app.models.business_model import MarketListing, MarketOrder
 from app.models.user import User
 from app.services import marketplace_listings as ml
 from app.services import marketplace_service
+from app.services import seller_verification
 from app.services.financial_eligibility import FinancialEligibilityHold, http_error
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,18 @@ class ListingPatch(BaseModel):
     insurance_terms: Optional[str] = Field(None, max_length=2000)
 
 
-def _listing_out(listing: MarketListing, *, owner: bool = False) -> dict:
+def _seller_labels(db: Session, listings) -> dict:
+    """Public seller labels (only what MyHigh5 checked; never compliance evidence)."""
+    from app.models.seller_verification import SellerProfile
+
+    ids = {int(l.seller_user_id) for l in listings}
+    if not ids:
+        return {}
+    rows = db.query(SellerProfile).filter(SellerProfile.user_id.in_(ids)).all()
+    return {p.user_id: seller_verification.public_label(p) for p in rows}
+
+
+def _listing_out(listing: MarketListing, *, owner: bool = False, seller_label: Optional[str] = None) -> dict:
     base, markup, total = marketplace_service.price_for_seller_base(listing.price_usd)
     out = {
         "id": listing.id, "kind": listing.kind, "title": listing.title, "description": listing.description,
@@ -75,6 +87,7 @@ def _listing_out(listing: MarketListing, *, owner: bool = False) -> dict:
         "disclosures": ml.disclosures(listing),
         "has_file": bool(listing.file_storage_key),
         "published_at": listing.published_at.isoformat() + "Z" if listing.published_at else None,
+        "seller_label": seller_label,
     }
     if owner:
         out.update({
@@ -99,6 +112,9 @@ def _run(db: Session, fn):
     except FinancialEligibilityHold as exc:  # Phase 10: generic body, no reason codes
         db.rollback()
         raise http_error(exc) from None
+    except seller_verification.SellerNotEligible as exc:
+        db.rollback()
+        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message}) from None
 
 
 @router.get("/marketplace/status")
@@ -117,13 +133,16 @@ def browse_listings(kind: Optional[Literal["PHYSICAL", "SERVICE", "DIGITAL"]] = 
                     db: Session = Depends(get_db)):
     _require_marketplace()
     query = db.query(MarketListing).filter(MarketListing.status == ml.PUBLISHED)
+    if seller_verification.enforcement_on():          # listings of sellers not (or no longer) approved are kept, not shown
+        query = query.filter(seller_verification.eligible_sellers_filter(MarketListing.seller_user_id))
     if kind:
         query = query.filter(MarketListing.kind == kind)
     if q and q.strip():
         like = f"%{q.strip()}%"
         query = query.filter(or_(MarketListing.title.ilike(like), MarketListing.description.ilike(like)))
     rows = query.order_by(MarketListing.published_at.desc(), MarketListing.id.desc()).offset((page - 1) * 24).limit(24).all()
-    return [_listing_out(r) for r in rows]
+    labels = _seller_labels(db, rows)
+    return [_listing_out(r, seller_label=labels.get(r.seller_user_id)) for r in rows]
 
 
 @router.get("/marketplace/my-listings")
@@ -139,9 +158,9 @@ def listing_detail(listing_id: int, db: Session = Depends(get_db)):
     """A published listing (anyone). Sellers see their own drafts through /marketplace/my-listings."""
     _require_marketplace()
     listing = db.query(MarketListing).filter(MarketListing.id == listing_id).first()
-    if listing is None or listing.status != ml.PUBLISHED:
+    if listing is None or listing.status != ml.PUBLISHED or not seller_verification.can_sell(db, listing.seller_user_id):
         raise HTTPException(status_code=404, detail="Listing not found")
-    return _listing_out(listing)
+    return _listing_out(listing, seller_label=_seller_labels(db, [listing]).get(listing.seller_user_id))
 
 
 @router.post("/marketplace/listings", status_code=status.HTTP_201_CREATED)

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/use-auth'
+import { SellerRegistration } from '@/components/dashboard/seller-registration'
 import {
   KIND_LABEL,
   Listing,
@@ -30,7 +31,7 @@ import {
   uploadListingFile,
 } from '@/lib/marketplace'
 
-type Tab = 'browse' | 'purchases' | 'sales' | 'listings'
+type Tab = 'browse' | 'purchases' | 'sales' | 'listings' | 'seller'
 
 export const ACCEPTANCE_TEXT =
   'I confirm that I have received the product or the completed service as described, and I accept it. ' +
@@ -348,7 +349,8 @@ export function MarketplaceDashboard() {
     )
   }
   const mine = (orders || []).filter((o) => (tab === 'purchases' ? o.buyer_user_id : o.seller_user_id) === user?.id)
-  const tabs: [Tab, string][] = [['browse', 'Browse'], ['purchases', 'My purchases'], ['sales', 'My sales'], ['listings', 'My listings']]
+  const tabs: [Tab, string][] = [['browse', 'Browse'], ['purchases', 'My purchases'], ['sales', 'My sales'], ['listings', 'My listings'],
+    ['seller', 'Seller registration']]
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4">
       <h1 className="flex items-center gap-2 text-2xl font-semibold"><Store className="h-6 w-6" aria-hidden /> Marketplace</h1>
@@ -362,6 +364,7 @@ export function MarketplaceDashboard() {
       </div>
       {tab === 'browse' && <BrowseTab status={status} onOrdered={() => setTab('purchases')} />}
       {tab === 'listings' && <ListingsTab />}
+      {tab === 'seller' && <SellerRegistration />}
       {(tab === 'purchases' || tab === 'sales') && (
         <div className="space-y-3">
           <Button size="sm" variant="ghost" onClick={loadOrders}><RefreshCw className="mr-1 h-4 w-4" />Refresh</Button>

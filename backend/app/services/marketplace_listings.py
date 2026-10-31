@@ -121,8 +121,13 @@ def create_listing(db: Session, *, seller_user_id: int, data: dict) -> MarketLis
 
 
 def update_listing(db: Session, listing: MarketListing, *, seller_user_id: int, data: dict) -> MarketListing:
-    """Edits apply to new orders only: every order keeps the snapshot its buyer was shown."""
+    """Edits apply to new orders only: every order keeps the snapshot its buyer was shown. A live listing
+    is edited only by an approved seller (when seller verification is enforced); drafts always."""
+    from app.services import seller_verification
+
     _own(listing, seller_user_id)
+    if listing.status == PUBLISHED:
+        seller_verification.require_can_sell(db, listing.seller_user_id)
     _apply(listing, data)
     db.flush()
     return listing
@@ -132,6 +137,7 @@ def publish(db: Session, listing: MarketListing, *, seller_user_id: int) -> Mark
     from app.models.user import User
     from app.services import content_safety
     from app.services import financial_eligibility as fe
+    from app.services import seller_verification
 
     _own(listing, seller_user_id)
     if listing.kind == DIGITAL and not listing.file_storage_key:
@@ -140,6 +146,8 @@ def publish(db: Session, listing: MarketListing, *, seller_user_id: int) -> Mark
         raise ListingError("Describe how the product or service is handed over before publishing")
     if content_safety.detect_text_harm(f"{listing.title}\n{listing.description}", possibly_minor=False):
         raise ListingError("This listing cannot be published as written. Please contact MyHigh5 support.")
+    # Publishing and relisting need an approved seller while seller verification is enforced.
+    seller_verification.require_can_sell(db, listing.seller_user_id)
     # The seller will receive value: the same eligibility as any seller payout (Phase 10).
     seller = db.query(User).filter(User.id == listing.seller_user_id).first()
     fe.require(db, seller, fe.FinancialOperation.WITHDRAWAL, subject={"market_listing_id": int(listing.id)})

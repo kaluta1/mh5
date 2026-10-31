@@ -133,6 +133,10 @@ export function marketErrorMessage(error: unknown, fallback: string): string {
   if (response?.status === 401) return 'Your session has expired. Please sign in again.'
   const detail = response?.data?.detail
   if (typeof detail === 'string' && detail.length > 0 && detail.length < 300) return detail
+  // e.g. SELLER_NOT_APPROVED: { code, message }
+  if (detail && typeof detail === 'object' && typeof (detail as { message?: unknown }).message === 'string') {
+    return (detail as { message: string }).message
+  }
   return fallback
 }
 

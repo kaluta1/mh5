@@ -99,3 +99,7 @@ __all__ = [
     "Round",
     "ReferralShareLink", "ReferralShareClick", "ReferralShareConversion",
 ]
+from .seller_verification import (  # noqa: F401
+    SellerApplication, SellerApplicationEvent, SellerClassificationReview, SellerDocument, SellerFxRate,
+    SellerJurisdictionRule, SellerProfile, SellerProviderEvent, SellerVerificationCheck,
+)

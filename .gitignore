@@ -64,3 +64,4 @@ Thumbs.db
 backend/private_kyc/
 # Private marketplace files (paid digital products) - never commit
 backend/private_marketplace/
+backend/private_seller_documents/
