@@ -301,7 +301,8 @@ def test_organic_registrations_get_a_unit_weighted_pool_sponsor_once_after_kyc(p
     assert_counters(Session)
 
 
-def test_an_unverified_inviter_creates_no_sponsor_at_registration_or_by_code(pool):
+def test_an_inviter_without_kyc_is_the_sponsor_at_registration_and_by_code(pool):
+    """Owner rule 2026-10-31: any active member's link sets the sponsor; an inactive one does not."""
     Session = pool
     unverified_inviter = member(Session, kyc=False)
     newcomer = member(Session)
@@ -309,15 +310,17 @@ def test_an_unverified_inviter_creates_no_sponsor_at_registration_or_by_code(poo
         u = db.get(User, newcomer)
         u.sponsor_id, u.sponsor_source = None, None
         db.commit()
-        assert assign_at_registration(db, db.get(User, newcomer), db.get(User, unverified_inviter)) == "NONE"
+        assert assign_at_registration(db, db.get(User, newcomer), db.get(User, unverified_inviter)) == "PERSONAL_REFERRAL"
         db.commit()
-        assert db.get(User, newcomer).sponsor_id is None
+        assert db.get(User, newcomer).sponsor_id == unverified_inviter
     late = member(Session)
     with Session() as db:
-        with pytest.raises(AffiliateHierarchyError, match="identity-verified"):
-            validate_sponsor_assignment(db, user_id=late, sponsor_id=unverified_inviter)
+        assert validate_sponsor_assignment(db, user_id=late, sponsor_id=unverified_inviter).id == late
         db.rollback()
-        assert inviter_eligible(db, db.get(User, member(Session))) is True
+        gone = db.get(User, member(Session))
+        gone.is_active = False
+        assert inviter_eligible(db, gone) is False
+        db.rollback()
 
 
 def test_a_historical_invalid_sponsor_is_kept_and_reported_not_replaced(pool):
@@ -325,6 +328,9 @@ def test_a_historical_invalid_sponsor_is_kept_and_reported_not_replaced(pool):
     holder(Session, 2)
     stale_inviter = member(Session, kyc=False)
     user_id, v = unverified(Session, sponsor=stale_inviter)
+    with Session() as db:
+        db.get(User, stale_inviter).is_active = False                       # no longer a valid inviter
+        db.commit()
     approve(Session, v)
     work(Session)
     assert pending_of(Session, user_id) is None                             # SPONSOR_PRESENT: never pooled
@@ -632,29 +638,30 @@ def test_units_weight_the_allocation_1_2_3_of_6_and_a_single_holder_takes_all(po
     assert_counters(Session)
 
 
-def test_a_dsm_member_keeps_the_imported_sponsor_and_is_never_pool_assigned(pool):
+def test_a_dsm_sponsor_is_kept_and_a_dsm_member_without_one_gets_a_pool_sponsor(pool):
     Session = pool
-    holder(Session, 2)
+    h = holder(Session, 2)
     dsm_sponsor = member(Session, kyc=False)
     with_sponsor, without_sponsor = member(Session, kyc=False), member(Session, kyc=False)
     with Session() as db:
         db.execute(text("CREATE SCHEMA IF NOT EXISTS legacy_import"))
-        db.execute(text("CREATE TABLE IF NOT EXISTS legacy_import.dsm_members (dsm_id int, mh5_user_id int)"))
-        db.execute(text("INSERT INTO legacy_import.dsm_members VALUES (1, :a), (2, :b)"),
+        db.execute(text("CREATE TABLE IF NOT EXISTS legacy_import.dsm_members (dsm_id int, mh5_user_id int, "
+                        "dsm_sponsor_dsm_id int)"))
+        db.execute(text("INSERT INTO legacy_import.dsm_members VALUES (1, :a, 77), (2, :b, NULL)"),
                    {"a": with_sponsor, "b": without_sponsor})
         db.get(User, with_sponsor).sponsor_id, db.get(User, with_sponsor).sponsor_source = dsm_sponsor, "DSM_IMPORT"
         db.get(User, without_sponsor).sponsor_id = None
         db.commit()
     for user_id in (with_sponsor, without_sponsor):
         with Session() as db:
-            integration.record_signup(db, db.get(User, user_id))           # even if queued, the pool refuses them
+            integration.record_signup(db, db.get(User, user_id))
             db.commit()
     integration.run_once(Session, now=NOW)
     with Session() as db:
         assert (db.get(User, with_sponsor).sponsor_id, db.get(User, with_sponsor).sponsor_source) == (dsm_sponsor, "DSM_IMPORT")
-        assert db.get(User, without_sponsor).sponsor_id is None              # left for the owner-approved restoration
-        assert db.query(ReferralPoolAssignment).count() == 0
-        assert alloc.enqueue(db, without_sponsor, trigger=alloc.SIGNED_UP, now=NOW) ==             alloc.Result(alloc.NOT_QUEUED, "DSM_IMPORTED")
+        assert (db.get(User, without_sponsor).sponsor_id, db.get(User, without_sponsor).sponsor_source) ==             (h, "REFERRAL_POOL")                                              # no DSM sponsor: the pool (2026-10-31)
+        assert db.query(ReferralPoolAssignment).count() == 1
+        assert alloc.enqueue(db, with_sponsor, trigger=alloc.SIGNED_UP, now=NOW) ==             alloc.Result(alloc.NOT_QUEUED, "DSM_IMPORTED")
         db.rollback()
 
 

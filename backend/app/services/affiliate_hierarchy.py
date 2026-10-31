@@ -89,8 +89,8 @@ def validate_sponsor_assignment(db: Session, *, user_id: int, sponsor_id: int) -
     from app.services.sponsor_assignment import inviter_eligible
 
     if not inviter_eligible(db, sponsor):
-        # The same rule as a code at registration: only a KYC-approved member invites.
-        raise AffiliateHierarchyError("Sponsor is not an identity-verified member")
+        # The same rule as a code at registration (an open duplicate-identity review).
+        raise AffiliateHierarchyError("Sponsor cannot invite members at the moment")
 
     cursor: User | None = sponsor
     visited: set[int] = set()

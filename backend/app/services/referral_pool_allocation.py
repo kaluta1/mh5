@@ -11,7 +11,7 @@ next one opens only when a waiting referral needs a slot, and never empty. Nobod
 while fewer than MIN_ALLOCATION_HOLDERS eligible holders hold MIN_ALLOCATION_UNITS eligible ACTIVE
 units (1 and 1: the pool works from its first eligible unit): referrals keep waiting
 (POOL_BELOW_MINIMUM), an OPEN round included. DSM-imported members are never pool-assigned: their
-sponsor is the one the import resolved, or deliberately none.
+sponsor is the one the import resolved (a DSM member who had no sponsor in DSM may be pool-assigned).
 
 Fairness: every OPEN slot is equally likely; a unit holds one slot per round, so a holder of N
 continuously eligible units receives exactly N referrals per completed round. Slots a referral
@@ -78,7 +78,7 @@ class Result:
 # ---------------------------------------------------------------- who may enter the pool
 
 def valid_personal_inviter(db: Session, user: User) -> bool:
-    """The member already has a personal sponsor who is active, not deleted and KYC-approved."""
+    """The member already has a personal sponsor who is a valid inviter (active, not deleted; no KYC needed)."""
     if user.sponsor_id is None or user.sponsor_source not in _PERSONAL_SOURCES:
         return False
     from app.services.sponsor_assignment import inviter_eligible
@@ -88,18 +88,18 @@ def valid_personal_inviter(db: Session, user: User) -> bool:
 
 
 def dsm_imported(db: Session, user_id: int) -> bool:
-    """The account came from (or was matched by) the DSM member import (legacy_import.dsm_members,
-    written by MH5/reports/dsm-import, not an ORM table: absent outside production)."""
+    """The account came from (or was matched by) the DSM member import AND had a sponsor in DSM
+    (legacy_import.dsm_members, written by MH5/reports/dsm-import, not an ORM table: absent outside
+    production). That DSM sponsor is restored, never replaced by a pool sponsor. Owner rule
+    2026-10-31: a DSM member who had no sponsor in DSM may be pool-assigned like anyone else."""
     if db.get_bind().dialect.name != "postgresql" or db.execute(
             text("SELECT to_regclass('legacy_import.dsm_members')")).scalar() is None:
         return False
-    if db.execute(text("SELECT 1 FROM legacy_import.dsm_members WHERE mh5_user_id = :u LIMIT 1"),
-                  {"u": int(user_id)}).first() is not None:
-        return True
     # A new account registered with the address of a RETIRED DSM account keeps that classification.
-    from app.services.account_retirement import dsm_predecessor
-
-    return dsm_predecessor(db, user_id)
+    return db.execute(text(
+        "SELECT 1 FROM legacy_import.dsm_members m WHERE m.dsm_sponsor_dsm_id IS NOT NULL AND (m.mh5_user_id = :u "
+        "OR m.mh5_user_id IN (SELECT r.user_id FROM account_retirements r WHERE r.successor_user_id = :u)) LIMIT 1"),
+        {"u": int(user_id)}).first() is not None
 
 
 def _entry_refusal(db: Session, user: Optional[User]) -> Optional[str]:
@@ -109,7 +109,7 @@ def _entry_refusal(db: Session, user: Optional[User]) -> Optional[str]:
     if db.query(ReferralPoolAssignment.id).filter(ReferralPoolAssignment.referred_user_id == user.id).first():
         return "ALREADY_POOL_ASSIGNED"
     if dsm_imported(db, user.id):
-        return "DSM_IMPORTED"                                 # the import decided the sponsor (or none)
+        return "DSM_IMPORTED"                                 # had a DSM sponsor: restored, never pool-assigned
     if user.sponsor_id is not None:
         # A sponsor is never replaced, whatever its source: a valid personal invitation takes
         # precedence, and any other existing sponsor relationship is left exactly as it is.

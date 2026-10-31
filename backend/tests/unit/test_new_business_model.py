@@ -401,11 +401,11 @@ def test_personal_referral_sets_direct_sponsor(world):
     new = _register(db, "newbie@t.com", personal.personal_referral_code)
     assert (new.sponsor_id, new.sponsor_source) == (personal.id, "PERSONAL_REFERRAL")
     assert db.query(ReferralPoolAssignment).count() == 0
-    # An inviter without an approved KYC creates no sponsor relationship (P6 rule).
+    # Owner rule 2026-10-31: an active inviter without an approved KYC is still the direct sponsor.
     unverified = _user(db, "unverified@t.com")
     db.commit()
     other = _register(db, "newbie2@t.com", unverified.personal_referral_code)
-    assert (other.sponsor_id, other.sponsor_source) == (None, "NONE")
+    assert (other.sponsor_id, other.sponsor_source) == (unverified.id, "PERSONAL_REFERRAL")
 
 
 def test_organic_and_invalid_code_signups_get_no_sponsor_even_with_active_pool_members(world):

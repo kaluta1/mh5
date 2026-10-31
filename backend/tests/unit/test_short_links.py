@@ -432,9 +432,19 @@ def test_a_neutral_link_keeps_an_earlier_valid_invitation(client, db, ip):
     assert joined.sponsor_id == first.id
 
 
-def test_an_ineligible_inviter_creates_no_sponsor(client, db, ip):
-    _, headers = signed_in(client, db)                                     # not KYC-approved
+def test_an_inviter_without_kyc_is_the_direct_sponsor(client, db, ip):
+    """Owner rule 2026-10-31: any active member's link sets the sponsor; KYC governs only the money."""
+    inviter, headers = signed_in(client, db)                               # not KYC-approved
     link = shorten(client, headers, f"{SITE}/register", invitation=True).json()
+    joined = new_user(db, register_after_visit(client, open_link(client, link["short_url"])))
+    assert (joined.sponsor_id, joined.sponsor_source) == (inviter.id, "PERSONAL_REFERRAL")
+
+
+def test_an_inactive_inviter_creates_no_sponsor(client, db, ip):
+    inviter, headers = signed_in(client, db)
+    link = shorten(client, headers, f"{SITE}/register", invitation=True).json()
+    inviter.is_active = False
+    db.commit()
     joined = new_user(db, register_after_visit(client, open_link(client, link["short_url"])))
     assert joined.sponsor_id is None and joined.sponsor_source == "NONE"
 
@@ -501,22 +511,8 @@ def kyc_row(db, user, status):
 
 
 def test_invitation_status_follows_the_registration_inviter_rule(client, db, ip, monkeypatch):
-    from app.models.kyc import KYCStatus
-
-    user, headers = signed_in(client, db)
-    r = client.get(STATUS, headers=headers).json()
-    assert r["eligible"] is False and r["reason"] == "KYC_NOT_STARTED" and "KYC" in r["message"]
-
-    kyc_row(db, user, KYCStatus.PENDING_PROOF_OF_ADDRESS)
-    assert client.get(STATUS, headers=headers).json()["reason"] == "KYC_IN_PROGRESS"
-
-    from app.models.kyc import KYCVerification
-    db.query(KYCVerification).filter_by(user_id=user.id).update({KYCVerification.status: KYCStatus.REJECTED})
-    db.commit()
-    assert client.get(STATUS, headers=headers).json()["reason"] == "KYC_REJECTED"
-
-    db.query(KYCVerification).filter_by(user_id=user.id).delete()
-    db.commit()
+    user, headers = signed_in(client, db)                                  # no KYC: still a valid inviter
+    assert client.get(STATUS, headers=headers).json() == {"eligible": True, "reason": None, "message": None}
     kyc_approved(db, user)
     assert client.get(STATUS, headers=headers).json() == {"eligible": True, "reason": None, "message": None}
 
@@ -535,8 +531,10 @@ def test_invitation_status_without_a_code_and_without_a_session(client, db, ip):
     assert client.get(STATUS).status_code == 401
 
 
-def test_an_ineligible_member_still_creates_neutral_and_invitation_links(client, db, ip):
-    _, headers = signed_in(client, db)                                     # no KYC
+def test_a_restricted_member_still_creates_neutral_and_invitation_links(client, db, ip, monkeypatch):
+    _, headers = signed_in(client, db)
+    import app.services.referral_pool_risk as risk
+    monkeypatch.setattr(risk, "is_blocked", lambda _db, _uid: True)
     assert client.get(STATUS, headers=headers).json()["eligible"] is False
     assert shorten(client, headers, f"{SITE}/faq").status_code == 201
     assert shorten(client, headers, f"{SITE}/faq", invitation=True).status_code == 201

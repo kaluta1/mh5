@@ -375,12 +375,6 @@ def create_short_link(db: Session, user: User, input_url: str, *, include_invita
 
 INVITATION_MESSAGES = {
     "NO_CODE": "Your account has no personal invitation code yet, so your links cannot carry an invitation.",
-    "KYC_NOT_STARTED": "Your identity verification (KYC) is not complete. Until it is approved, new members who "
-                       "register through your invitation links will not be attributed to you.",
-    "KYC_IN_PROGRESS": "Your identity verification (KYC) is still being reviewed. Until it is approved, new members "
-                       "who register through your invitation links will not be attributed to you.",
-    "KYC_REJECTED": "Your identity verification (KYC) was not approved. Until it is, new members who register "
-                    "through your invitation links will not be attributed to you.",
     "RESTRICTED": "Invitations from your account are currently restricted, so new members who register through "
                   "your invitation links will not be attributed to you. Please contact support.",
 }
@@ -388,24 +382,14 @@ INVITATION_MESSAGES = {
 
 def invitation_status(db: Session, user: User) -> Tuple[bool, Optional[str]]:
     """(eligible, reason) for the caller's own invitations, by the one inviter rule used at
-    registration (sponsor_assignment.inviter_eligible). The reason names only the member's own KYC
-    stage; a restriction is never explained further."""
+    registration (sponsor_assignment.inviter_eligible: any active member, KYC or not, owner rule
+    2026-10-31). A restriction is never explained further."""
     from app.services.sponsor_assignment import inviter_eligible
 
     if not (user.personal_referral_code or "").strip():
         return False, "NO_CODE"
     if inviter_eligible(db, user):
         return True, None
-    from app.crud import crud_kyc
-    from app.models.kyc import KYCStatus
-
-    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=user.id)
-    if verification is None or verification.status == KYCStatus.EXPIRED:
-        return False, "KYC_NOT_STARTED"
-    if verification.status == KYCStatus.REJECTED:
-        return False, "KYC_REJECTED"
-    if verification.status != KYCStatus.APPROVED or not user.identity_verified:
-        return False, "KYC_IN_PROGRESS"
     return False, "RESTRICTED"
 
 

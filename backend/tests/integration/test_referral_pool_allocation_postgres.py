@@ -421,11 +421,12 @@ def test_a_valid_personal_invitation_takes_precedence_and_a_pool_sponsor_is_fina
 def test_an_invalid_personal_sponsor_is_left_alone_and_never_replaced(pool):
     Session = pool
     holder(Session, 1)
-    unverified_inviter = member(Session, kyc=False)
+    unverified_inviter = member(Session, kyc=False)                       # later deactivated: no longer valid
     invited = member(Session)
     with Session() as db:
         u = db.get(User, invited)
         u.sponsor_id, u.sponsor_source = unverified_inviter, "PERSONAL_REFERRAL"
+        db.get(User, unverified_inviter).is_active = False
         db.commit()
         assert alloc.enqueue_after_kyc(db, invited, now=NOW) == alloc.Result(alloc.NOT_QUEUED, "SPONSOR_PRESENT")
         assert not alloc.valid_personal_inviter(db, db.get(User, invited))

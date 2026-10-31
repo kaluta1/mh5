@@ -40,14 +40,16 @@ def nothing_allocated(Session, referred: int, reason: str) -> None:
         assert (p.status, p.last_error) == ("WAITING", reason)
 
 
-def dsm_mapping(Session, *user_ids: int) -> None:
+def dsm_mapping(Session, *user_ids: int, had_dsm_sponsor: bool = True) -> None:
     """The production mapping table's shape, reduced to what the pool reads."""
     with Session() as db:
         db.execute(text("CREATE SCHEMA IF NOT EXISTS legacy_import"))
         db.execute(text("CREATE TABLE IF NOT EXISTS legacy_import.dsm_members (dsm_id integer PRIMARY KEY, "
-                        "mh5_user_id integer, import_status text NOT NULL)"))
-        for i, uid in enumerate(user_ids, start=1):
-            db.execute(text("INSERT INTO legacy_import.dsm_members VALUES (:d, :u, 'CREATED')"), {"d": i, "u": uid})
+                        "mh5_user_id integer, import_status text NOT NULL, dsm_sponsor_dsm_id integer)"))
+        start = int(db.execute(text("SELECT coalesce(max(dsm_id), 0) FROM legacy_import.dsm_members")).scalar()) + 1
+        for i, uid in enumerate(user_ids, start=start):
+            db.execute(text("INSERT INTO legacy_import.dsm_members VALUES (:d, :u, 'CREATED', :s)"),
+                       {"d": i, "u": uid, "s": 999999 if had_dsm_sponsor else None})
         db.commit()
 
 
@@ -113,10 +115,10 @@ def test_an_existing_sponsor_is_never_replaced(pool):
     assert sponsor_of(Session, kept) == (other, "DSM_IMPORT")
 
 
-def test_dsm_imported_members_are_never_pool_assigned(pool):
+def test_dsm_members_who_had_a_dsm_sponsor_are_never_pool_assigned(pool):
     Session = pool
     holder(Session, 1)
-    imported = member(Session)                                 # imported without a resolvable sponsor
+    imported = member(Session)                                 # had a DSM sponsor the import could not resolve
     waiting = referral(Session)                                # queued before it was mapped
     dsm_mapping(Session, imported, waiting)
     with Session() as db:
@@ -128,6 +130,20 @@ def test_dsm_imported_members_are_never_pool_assigned(pool):
     assert sponsor_of(Session, imported)[0] is None and sponsor_of(Session, waiting)[0] is None
     with Session() as db:
         assert db.query(ReferralPoolAssignment).count() == 0
+
+
+def test_a_dsm_member_who_had_no_dsm_sponsor_is_pool_assigned(pool):
+    """Owner rule 2026-10-31: no historical DSM sponsor and no personal referral -> the Referral Pool."""
+    Session = pool
+    h = holder(Session, 1)
+    imported = member(Session, kyc=False)
+    dsm_mapping(Session, imported, had_dsm_sponsor=False)
+    with Session() as db:
+        assert alloc.dsm_imported(db, imported) is False
+        assert alloc.enqueue(db, imported, trigger=alloc.SIGNED_UP, now=NOW).outcome == alloc.WAITING
+        db.commit()
+    assert assign(Session, imported).outcome == alloc.ASSIGNED
+    assert sponsor_of(Session, imported) == (h, "REFERRAL_POOL")
 
 
 def test_allocation_off_assigns_nobody(pool):

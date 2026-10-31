@@ -4,8 +4,8 @@ Priority at registration: valid personal referral -> no sponsor (NONE). An organ
 code, or a code that does not resolve to an eligible member) gets no sponsor here; it is queued
 for the Multi-Unit Referral Pool at once (owner rule 2026-10-31: no e-mail confirmation or KYC
 needed), which assigns one drawn per eligible ACTIVE unit (referral_pool_allocation, sponsor_source
-REFERRAL_POOL). DSM-imported members keep the sponsor
-the import resolved. Assignment is one-time: an existing sponsor is never overwritten (row lock
+REFERRAL_POOL). A valid personal referral is the link of any active member, KYC or not (owner
+rule 2026-10-31). DSM-imported members keep the sponsor the import resolved. Assignment is one-time: an existing sponsor is never overwritten (row lock
 + NULL check, here and in the pool).
 """
 from __future__ import annotations
@@ -24,18 +24,14 @@ NONE = "NONE"
 
 
 def inviter_eligible(db: Session, sponsor: Optional[User]) -> bool:
-    """May this member be a personal inviter now (owner rule 2026-10-23)? Active, not deleted,
-    KYC-approved (latest verification APPROVED, identity verified) and not held by an open or
-    confirmed duplicate-identity review. The same rule for a code at registration and later."""
+    """May this member be a personal inviter now? Owner rule 2026-10-31 (replaces 2026-10-23): any
+    active, not deleted member, KYC or not, unless held by an open or confirmed duplicate-identity
+    review. Sponsor attribution only: KYC still governs the sponsor's commissions, revenue share and
+    cash-out. The same rule for a code at registration and later."""
     if sponsor is None or sponsor.is_active is False or sponsor.is_deleted is True:
         return False
-    from app.crud import crud_kyc
-    from app.models.kyc import KYCStatus
     from app.services.referral_pool_risk import is_blocked
 
-    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=sponsor.id)
-    if verification is None or verification.status != KYCStatus.APPROVED or not sponsor.identity_verified:
-        return False
     return not is_blocked(db, sponsor.id)
 
 

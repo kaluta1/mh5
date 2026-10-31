@@ -225,7 +225,7 @@ class ReferralPoolScheduler:
 
 def invalid_personal_sponsors(db: Session, limit: int = 1000, offset: int = 0) -> list:
     """Members whose PERSONAL/JOIN_CODE sponsor would not be a valid inviter today (not active,
-    deleted, or not KYC-approved). Read-only: such sponsors are kept exactly as they are.
+    deleted, or under a duplicate-identity review). Read-only: such sponsors are kept exactly as they are.
     `limit`/`offset` page over the personally sponsored members checked (in id order)."""
     from app.services.sponsor_assignment import inviter_eligible
 
