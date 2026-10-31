@@ -433,22 +433,34 @@ def test_an_invalid_personal_sponsor_is_left_alone_and_never_replaced(pool):
     assert sponsor_of(Session, invited) == (unverified_inviter, "PERSONAL_REFERRAL")
 
 
-def test_kyc_approval_is_required_to_wait_and_to_be_assigned(pool):
+def test_the_referred_member_needs_neither_kyc_nor_a_confirmed_email(pool):
+    """Owner rule 2026-10-31: the sponsor relationship needs no KYC or e-mail confirmation of the
+    referred member (KYC still governs commissions and cash-out; a unit HOLDER must be eligible)."""
     Session = pool
-    holder(Session, 2)
+    h = holder(Session, 2)
     no_kyc = member(Session, kyc=False)
     with Session() as db:
-        assert alloc.enqueue_after_kyc(db, no_kyc, now=NOW) == alloc.Result(alloc.NOT_QUEUED, "KYC_REQUIRED")
-        db.rollback()
-    queued = referral(Session)
-    set_kyc(Session, queued, approved=False)                                # withdrawn before the draw
-    assert assign(Session, queued) == alloc.Result(alloc.CANCELLED, "KYC_REQUIRED")
-    assert sponsor_of(Session, queued) == (None, None)
-    set_kyc(Session, queued, approved=True)                                 # approved again: waits again
-    with Session() as db:
-        assert alloc.enqueue_after_kyc(db, queued, now=NOW).outcome == alloc.WAITING
+        db.get(User, no_kyc).email_verified = False
+        assert alloc.enqueue(db, no_kyc, trigger=alloc.SIGNED_UP, now=NOW).outcome == alloc.WAITING
         db.commit()
-    assert assign(Session, queued).outcome == alloc.ASSIGNED
+    assert assign(Session, no_kyc).outcome == alloc.ASSIGNED
+    assert sponsor_of(Session, no_kyc) == (h, "REFERRAL_POOL")
+    queued = referral(Session)
+    set_kyc(Session, queued, approved=False)                                # KYC rejected before the draw
+    assert assign(Session, queued).outcome == alloc.ASSIGNED                # the sponsor is still assigned
+    with Session() as db:
+        assert db.query(ReferralPoolPending).filter_by(referred_user_id=no_kyc).one().trigger_event == "SIGNED_UP"
+        assert db.query(ReferralPoolPending).filter_by(referred_user_id=queued).one().trigger_event == "KYC_APPROVED"
+    assert_counters(Session)
+
+
+def test_an_ineligible_holder_receives_nobody(pool):
+    Session = pool
+    h = holder(Session, 1)
+    set_kyc(Session, h, approved=False)                                     # the HOLDER still needs KYC
+    r = referral(Session)
+    assert assign(Session, r).outcome == alloc.WAITING
+    assert sponsor_of(Session, r) == (None, None)
 
 
 def test_no_self_referral_and_no_cycle_through_the_downline(pool):

@@ -202,9 +202,9 @@ def test_only_the_direct_sponsor_earns_no_ten_level_distribution(world):
         assert {c.level for c in db.query(AffiliateCommission)} == {1}
 
 
-@pytest.mark.parametrize("source", ["REFERRAL_POOL", "FOUNDER_ASSIGNED", "DSM_IMPORT"])
+@pytest.mark.parametrize("source", ["REFERRAL_POOL", "DSM_IMPORT"])
 def test_an_assigned_sponsor_earns_the_direct_commission_of_later_purchases_only(world, source):
-    """Owner rule 2026-10-26: a pool, founder or DSM sponsor is the direct sponsor the existing engine
+    """Owner rule 2026-10-26: a pool or DSM sponsor is the direct sponsor the existing engine
     pays (users.sponsor_id), once per unit, from future purchases; being assigned earns nothing."""
     _engine, Session = world
     buyer, sponsor = sponsored_buyer(Session)

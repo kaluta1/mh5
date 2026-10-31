@@ -310,13 +310,13 @@ class ReferralPoolRoundSlot(Base):
 
 
 class ReferralPoolEvent(Base):
-    """Durable outbox (migration c1e3a5b7d9f2): written inside a KYC decision's transaction,
-    processed afterwards by the pool worker in its own transaction. One row per decision."""
+    """Durable outbox (migrations c1e3a5b7d9f2, e2a4c6e8f0b1): written inside a KYC decision's or a
+    sign-up's transaction, processed afterwards by the pool worker in its own transaction."""
 
     __tablename__ = "referral_pool_events"
     __table_args__ = (
         UniqueConstraint("dedupe_key", name="uq_referral_pool_event_dedupe"),
-        CheckConstraint("event_type IN ('KYC_APPROVED','KYC_REJECTED','ACCOUNT_CHANGED','RISK_CLEARED')",
+        CheckConstraint("event_type IN ('KYC_APPROVED','KYC_REJECTED','ACCOUNT_CHANGED','RISK_CLEARED','SIGNED_UP')",
                         name="ck_referral_pool_event_type"),
         CheckConstraint("status IN ('PENDING','DONE','FAILED')", name="ck_referral_pool_event_status"),
         CheckConstraint("attempts >= 0", name="ck_referral_pool_event_attempts"),
@@ -394,14 +394,14 @@ class ReferralPoolRefundRecord(Base):
 
 
 class ReferralPoolPending(Base):
-    """A KYC-approved referral without a valid personal inviter, waiting for a slot. One row per user."""
+    """A member without a sponsor, waiting for a pool slot (queued at sign-up or after KYC approval). One row per user."""
 
     __tablename__ = "referral_pool_pending"
     __table_args__ = (
         UniqueConstraint("referred_user_id", name="uq_referral_pool_pending_user"),
         UniqueConstraint("assignment_id", name="uq_referral_pool_pending_assignment"),
         CheckConstraint("status IN ('WAITING','ASSIGNED','CANCELLED')", name="ck_referral_pool_pending_status"),
-        CheckConstraint("trigger_event IN ('KYC_APPROVED')", name="ck_referral_pool_pending_trigger"),
+        CheckConstraint("trigger_event IN ('KYC_APPROVED','SIGNED_UP')", name="ck_referral_pool_pending_trigger"),
         CheckConstraint("attempts >= 0", name="ck_referral_pool_pending_attempts"),
         CheckConstraint("(status = 'ASSIGNED') = (assignment_id IS NOT NULL)", name="ck_referral_pool_pending_assigned"),
         CheckConstraint("(status = 'WAITING') = (resolved_at IS NULL)", name="ck_referral_pool_pending_resolved"),

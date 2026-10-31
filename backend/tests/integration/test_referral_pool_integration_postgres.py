@@ -21,7 +21,7 @@ from app.crud import crud_kyc
 from app.models.affiliate import AffiliateCashoutRequest, AffiliateCommission
 from app.models.business_model import (
     ReferralPoolAssignment, ReferralPoolEvent, ReferralPoolMembership, ReferralPoolPending, ReferralPoolRiskReview,
-    ReferralPoolRoundSlot, ReferralPoolUnit, RevenueRecognition,
+    ReferralPoolRound, ReferralPoolRoundSlot, ReferralPoolUnit, RevenueRecognition,
 )
 from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
 from app.models.login_log import LoginLog
@@ -543,4 +543,139 @@ def test_the_events_and_reviews_migration_goes_down_and_up_to_the_model_schema(p
     assert not {"referral_pool_events", "referral_pool_risk_reviews"} & tables(engine)
     migrate(engine, name, "upgrade")
     migrate(engine, name, "upgrade")                                      # re-run: a no-op
+    migrate(engine, "e2a4c6e8f0b1_referral_pool_signup_trigger.py", "upgrade")   # SIGNED_UP (2026-10-31)
     assert shape() == model
+
+
+# ---------------------------------------------------------------------------
+# Owner rules 2026-10-31: a sponsorless sign-up is queued at once (no KYC, no e-mail confirmation)
+# ---------------------------------------------------------------------------
+
+def signup(Session, personal_sponsor: int | None = None) -> int:
+    """A brand-new account (no KYC, e-mail NOT confirmed) through the registration sponsor rule."""
+    user_id = member(Session, kyc=False)
+    with Session() as db:
+        u = db.get(User, user_id)
+        u.sponsor_id, u.sponsor_source, u.email_verified = None, None, False
+        db.flush()
+        assign_at_registration(db, u, db.get(User, personal_sponsor) if personal_sponsor else None)
+        db.commit()
+    return user_id
+
+
+def financial_counts(Session) -> tuple:
+    with Session() as db:
+        return tuple(db.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in (
+            "deposits", "affiliate_commissions", "kyc_verifications", "affiliate_cashout_requests",
+            "referral_pool_purchases", "referral_pool_units"))
+
+
+def test_a_sponsorless_signup_gets_a_pool_sponsor_without_kyc_or_email_confirmation(pool):
+    Session = pool
+    h = holder(Session, 1)
+    before = financial_counts(Session)
+    newcomer = signup(Session)
+    assert [e[0] for e in events(Session, newcomer)] == ["SIGNED_UP"]
+    integration.run_once(Session, now=NOW)
+    with Session() as db:
+        u = db.get(User, newcomer)
+        assert (u.sponsor_id, u.sponsor_source, u.email_verified, u.identity_verified) == (h, "REFERRAL_POOL", False, False)
+        assert crud_kyc.kyc_verification.get_by_user(db, user_id=newcomer) is None          # KYC not approved or created
+    assert financial_counts(Session) == before                     # no purchase, commission, payout or KYC row made
+    assert_counters(Session)
+
+
+def test_a_personal_referral_link_keeps_the_direct_sponsor_and_never_enters_the_pool(pool):
+    Session = pool
+    holder(Session, 3)
+    inviter = member(Session)                                               # a valid (KYC-approved) inviter
+    invited = signup(Session, personal_sponsor=inviter)
+    assert events(Session, invited) == []
+    integration.run_once(Session, now=NOW)
+    assert pending_of(Session, invited) is None
+    with Session() as db:
+        assert (db.get(User, invited).sponsor_id, db.get(User, invited).sponsor_source) == (inviter, "PERSONAL_REFERRAL")
+
+
+def test_duplicate_signup_events_and_worker_passes_assign_once(pool):
+    Session = pool
+    holder(Session, 2)
+    newcomer = signup(Session)
+    with Session() as db:
+        integration.record_signup(db, db.get(User, newcomer))                 # a repeated callback: deduplicated
+        db.commit()
+    assert len(events(Session, newcomer)) == 1
+    for _ in range(3):
+        integration.run_once(Session, now=NOW)
+    with Session() as db:
+        assert db.query(ReferralPoolAssignment).filter_by(referred_user_id=newcomer).count() == 1
+        assert alloc.enqueue(db, newcomer, trigger=alloc.SIGNED_UP, now=NOW) ==             alloc.Result(alloc.NOT_QUEUED, "ALREADY_POOL_ASSIGNED")
+        db.rollback()
+    assert_counters(Session)
+
+
+def test_units_weight_the_allocation_1_2_3_of_6_and_a_single_holder_takes_all(pool):
+    Session = pool
+    solo = holder(Session, 1)
+    first = [signup(Session) for _ in range(3)]
+    integration.run_once(Session, now=NOW)
+    assert received(Session, [solo]) == {solo: 3}                           # the only holder receives every one
+    a, b = holder(Session, 2), holder(Session, 3)                           # solo 1 : a 2 : b 3 = 1/6 : 2/6 : 3/6
+    with Session() as db:
+        assert db.query(ReferralPoolRound).filter_by(status="OPEN").count() == 0
+    rest = [signup(Session) for _ in range(12)]                              # two full rounds of 6 slots
+    integration.run_once(Session, now=NOW)
+    got = received(Session, [solo, a, b])
+    assert (got[solo] - 3, got[a], got[b]) == (2, 4, 6)
+    with Session() as db:
+        assert {db.get(User, n).sponsor_source for n in first + rest} == {"REFERRAL_POOL"}
+    assert_counters(Session)
+
+
+def test_a_dsm_member_keeps_the_imported_sponsor_and_is_never_pool_assigned(pool):
+    Session = pool
+    holder(Session, 2)
+    dsm_sponsor = member(Session, kyc=False)
+    with_sponsor, without_sponsor = member(Session, kyc=False), member(Session, kyc=False)
+    with Session() as db:
+        db.execute(text("CREATE SCHEMA IF NOT EXISTS legacy_import"))
+        db.execute(text("CREATE TABLE IF NOT EXISTS legacy_import.dsm_members (dsm_id int, mh5_user_id int)"))
+        db.execute(text("INSERT INTO legacy_import.dsm_members VALUES (1, :a), (2, :b)"),
+                   {"a": with_sponsor, "b": without_sponsor})
+        db.get(User, with_sponsor).sponsor_id, db.get(User, with_sponsor).sponsor_source = dsm_sponsor, "DSM_IMPORT"
+        db.get(User, without_sponsor).sponsor_id = None
+        db.commit()
+    for user_id in (with_sponsor, without_sponsor):
+        with Session() as db:
+            integration.record_signup(db, db.get(User, user_id))           # even if queued, the pool refuses them
+            db.commit()
+    integration.run_once(Session, now=NOW)
+    with Session() as db:
+        assert (db.get(User, with_sponsor).sponsor_id, db.get(User, with_sponsor).sponsor_source) == (dsm_sponsor, "DSM_IMPORT")
+        assert db.get(User, without_sponsor).sponsor_id is None              # left for the owner-approved restoration
+        assert db.query(ReferralPoolAssignment).count() == 0
+        assert alloc.enqueue(db, without_sponsor, trigger=alloc.SIGNED_UP, now=NOW) ==             alloc.Result(alloc.NOT_QUEUED, "DSM_IMPORTED")
+        db.rollback()
+
+
+def test_the_signup_trigger_migration_goes_down_and_up(pg):
+    from tests.integration.test_payments_postgres import load_migration, migrate
+
+    engine, _Session = pg
+    name = "e2a4c6e8f0b1_referral_pool_signup_trigger.py"
+    module = load_migration(name)
+    assert (module.revision, module.down_revision) == ("e2a4c6e8f0b1", "d1f3a5b7c9e2")
+
+    def checks():
+        with engine.connect() as c:
+            return dict(c.execute(text(
+                "select conname, pg_get_constraintdef(oid) from pg_constraint where conname in "
+                "('ck_referral_pool_event_type', 'ck_referral_pool_pending_trigger')")).all())
+
+    model = checks()
+    assert "SIGNED_UP" in model["ck_referral_pool_event_type"] and "SIGNED_UP" in model["ck_referral_pool_pending_trigger"]
+    migrate(engine, name, "downgrade")
+    assert not any("SIGNED_UP" in v for v in checks().values())
+    migrate(engine, name, "upgrade")
+    migrate(engine, name, "upgrade")                                      # re-run: a no-op
+    assert checks() == model

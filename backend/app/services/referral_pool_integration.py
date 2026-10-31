@@ -10,6 +10,7 @@ short transaction, member row first (NO KEY UPDATE, the KYC mode), then the pool
                  (suspended or restored); queued for a pool sponsor when the member has none.
   KYC_REJECTED / ACCOUNT_CHANGED   units brought in line (suspended: open slots VOID).
   RISK_CLEARED   as KYC_APPROVED, without a new scan.
+  SIGNED_UP      a new member without a sponsor is queued for a pool sponsor (no KYC needed).
 
 A failing event is retried up to MAX_ATTEMPTS times, then FAILED (visible, retried on request).
 A sweep also re-checks unit holders whose eligibility changed by any other path (an account
@@ -33,8 +34,8 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 5
-KYC_APPROVED, KYC_REJECTED, ACCOUNT_CHANGED, RISK_CLEARED = (
-    "KYC_APPROVED", "KYC_REJECTED", "ACCOUNT_CHANGED", "RISK_CLEARED")
+KYC_APPROVED, KYC_REJECTED, ACCOUNT_CHANGED, RISK_CLEARED, SIGNED_UP = (
+    "KYC_APPROVED", "KYC_REJECTED", "ACCOUNT_CHANGED", "RISK_CLEARED", "SIGNED_UP")
 
 
 # ---------------------------------------------------------------- the outbox (inside the decision's transaction)
@@ -47,6 +48,12 @@ def record_event(db: Session, *, user_id: int, event_type: str, dedupe_key: str,
         "INSERT INTO referral_pool_events (user_id, event_type, kyc_verification_id, dedupe_key, status, attempts, "
         "created_at, updated_at) VALUES (:u, :e, :k, :d, 'PENDING', 0, :t, :t) ON CONFLICT (dedupe_key) DO NOTHING"),
         {"u": user_id, "e": event_type, "k": kyc_verification_id, "d": dedupe_key[:160], "t": now})
+
+
+def record_signup(db: Session, user: User) -> None:
+    """Called by registration, before its commit, when the new member has no sponsor. One event
+    per member: the worker queues them for a pool sponsor after the sign-up has committed."""
+    record_event(db, user_id=int(user.id), event_type=SIGNED_UP, dedupe_key=f"{SIGNED_UP}:{user.id}")
 
 
 def record_kyc_decision(db: Session, verification, *, approved: bool) -> None:
@@ -75,6 +82,9 @@ def handle_event(db: Session, event: ReferralPoolEvent, *, now: Optional[datetim
         risk.scan_member(db, member.id, now=now)
     suspended, restored = units.sync_member_eligibility(db, member.id, now=now)
     outcome = f"units:-{suspended}/+{restored}"
+    if event.event_type == SIGNED_UP:
+        queued = alloc.enqueue(db, member.id, trigger=alloc.SIGNED_UP, now=now)
+        return f"queue:{queued.outcome}:{queued.reason or ''}"
     if event.event_type in (KYC_APPROVED, RISK_CLEARED):
         queued = alloc.enqueue_after_kyc(db, member.id, kyc_verification_id=event.kyc_verification_id, now=now)
         outcome += f";queue:{queued.outcome}:{queued.reason or ''}"

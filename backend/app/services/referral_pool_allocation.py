@@ -1,8 +1,10 @@
 """Multi-Unit Referral Pool: quota rounds and the random draw (P4). Gated by allocation_enabled.
 
 A round opens with ONE slot per ACTIVE unit whose holder is eligible at that moment (a snapshot:
-units bought or restored later join the next round). A KYC-approved referral without a valid
-personal inviter waits in referral_pool_pending; each assignment takes one OPEN slot chosen
+units bought or restored later join the next round). A member without a sponsor waits in
+referral_pool_pending from sign-up (owner rule 2026-10-31: neither e-mail confirmation nor KYC is
+needed for the sponsor relationship; KYC still governs commissions, revenue share and cash-out,
+and a unit HOLDER must still be eligible); each assignment takes one OPEN slot chosen
 uniformly at random (``secrets``) among the slots it may take, fills it, and makes the slot's
 holder the referral's sponsor, once. A round completes when every slot is FILLED or VOID; the
 next one opens only when a waiting referral needs a slot, and never empty. Nobody is allocated
@@ -20,7 +22,7 @@ choice uniform among eligible slots.
 
 Locking (P3 order): the referred member's row FOR NO KEY UPDATE, then the pool mutex, the OPEN
 round, units, slots, then the queue row. One short transaction per assignment, run AFTER the
-KYC approval has committed; no KYC verification row is locked here. The database enforces one
+sign-up (or KYC approval) has committed; no KYC verification row is locked here. The database enforces one
 OPEN round, one assignment per referral and one assignment per slot.
 """
 from __future__ import annotations
@@ -112,17 +114,21 @@ def _entry_refusal(db: Session, user: Optional[User]) -> Optional[str]:
         # A sponsor is never replaced, whatever its source: a valid personal invitation takes
         # precedence, and any other existing sponsor relationship is left exactly as it is.
         return "PERSONAL_INVITATION" if valid_personal_inviter(db, user) else "SPONSOR_PRESENT"
-    eligibility = units.member_eligibility(db, user)
-    if not eligibility.eligible:
-        return eligibility.reason or "NOT_ELIGIBLE"           # e.g. KYC_REQUIRED: the pool waits for KYC approval
-    return None
+    from app.services.referral_pool_risk import is_blocked
+
+    if is_blocked(db, user.id):
+        return "RISK_REVIEW"                                  # a duplicate verified identity, pending review
+    return None                                               # no e-mail confirmation or KYC needed (2026-10-31)
 
 
-def enqueue_after_kyc(db: Session, user_id: int, *, kyc_verification_id: Optional[int] = None,
-                      now: Optional[datetime] = None) -> Result:
-    """Called in its own transaction after a KYC approval commits. Idempotent: one queue row per
-    member; a row cancelled for a reason that no longer holds waits again. Queuing is allowed
-    while allocation is switched off (nothing is assigned until it is on)."""
+SIGNED_UP, KYC_APPROVED = "SIGNED_UP", "KYC_APPROVED"
+
+
+def enqueue(db: Session, user_id: int, *, trigger: str = KYC_APPROVED, kyc_verification_id: Optional[int] = None,
+            now: Optional[datetime] = None) -> Result:
+    """Called in its own transaction after a sign-up (SIGNED_UP) or a KYC approval commits.
+    Idempotent: one queue row per member; a row cancelled for a reason that no longer holds waits
+    again. Queuing is allowed while allocation is switched off (nothing is assigned until it is on)."""
     now = now or datetime.utcnow()
     user = db.query(User).filter(User.id == user_id).with_for_update(key_share=True).first()
     refusal = _entry_refusal(db, user)
@@ -137,10 +143,15 @@ def enqueue_after_kyc(db: Session, user_id: int, *, kyc_verification_id: Optiona
             db.flush()
         return Result(WAITING if existing.status == "WAITING" else ALREADY_ASSIGNED)
     db.execute(text("INSERT INTO referral_pool_pending (referred_user_id, status, trigger_event, kyc_verification_id, "
-                    "enqueued_at, attempts, created_at, updated_at) VALUES (:u, 'WAITING', 'KYC_APPROVED', :k, :t, 0, "
+                    "enqueued_at, attempts, created_at, updated_at) VALUES (:u, 'WAITING', :g, :k, :t, 0, "
                     ":t, :t) ON CONFLICT (referred_user_id) DO NOTHING"),
-               {"u": user_id, "k": kyc_verification_id, "t": now})
+               {"u": user_id, "g": trigger, "k": kyc_verification_id, "t": now})
     return Result(WAITING)
+
+
+def enqueue_after_kyc(db: Session, user_id: int, *, kyc_verification_id: Optional[int] = None,
+                      now: Optional[datetime] = None) -> Result:
+    return enqueue(db, user_id, trigger=KYC_APPROVED, kyc_verification_id=kyc_verification_id, now=now)
 
 
 # ---------------------------------------------------------------- rounds

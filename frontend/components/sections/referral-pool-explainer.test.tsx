@@ -47,7 +47,7 @@ describe('Referral Pool explanation', () => {
     expect(text[3]).toMatch(/at random, with every remaining eligible slot equally likely/)
     expect(text[4]).toMatch(/not used up/)
     expect(text[5]).toMatch(/while a round is open start taking part from the next round/)
-    expect(text[6]).toMatch(/only after their identity verification \(KYC\) is approved/)
+    expect(text[6]).toMatch(/assigned when they sign up; neither e-mail confirmation nor identity verification \(KYC\) is needed/)
     expect(text[7]).toMatch(/personal invitation always comes first/)
     expect(text[8]).toBe('Referrals are not guaranteed.')
     expect(text[9]).toMatch(/depends on how many eligible new members join/)
@@ -62,7 +62,7 @@ describe('Referral Pool explanation', () => {
     }
     expect(rp.faq_price_a).toMatch(/\$100/)
     expect(rp.faq_unlimited_a).toMatch(/no fixed maximum/i)
-    expect(rp.faq_kyc_a).toMatch(/only after their own KYC is approved/)
+    expect(rp.faq_kyc_a).toMatch(/when they sign up, without waiting for their own KYC/)
     expect(rp.faq_personal_a).toMatch(/always takes precedence/)
     expect(rp.faq_queue_a).toMatch(/waiting queue/)
     expect(rp.faq_guarantee_a).toMatch(/^No\./)

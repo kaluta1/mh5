@@ -108,6 +108,7 @@ MARKET_LISTINGS = "a7c9e1b3d5f7_marketplace_listings.py"
 ACCOUNT_RETIREMENTS = "b8d0f2a4c6e9_account_retirements.py"
 SONCOPAY_PAYOUTS = "c9e1f3a5b7d0_soncopay_payout_destinations.py"
 FEE_MODE_ADDED = "d1f3a5b7c9e2_fee_mode_added_by_provider.py"
+POOL_SIGNUP_TRIGGER = "e2a4c6e8f0b1_referral_pool_signup_trigger.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -378,12 +379,13 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
             (MARKET_LISTINGS, "a7c9e1b3d5f7", "f4b6d8a0c2e4", ACCOUNT_RETIREMENTS),
             (ACCOUNT_RETIREMENTS, "b8d0f2a4c6e9", "a7c9e1b3d5f7", SONCOPAY_PAYOUTS),
             (SONCOPAY_PAYOUTS, "c9e1f3a5b7d0", "b8d0f2a4c6e9", FEE_MODE_ADDED),
-            (FEE_MODE_ADDED, "d1f3a5b7c9e2", "c9e1f3a5b7d0", None)):
+            (FEE_MODE_ADDED, "d1f3a5b7c9e2", "c9e1f3a5b7d0", POOL_SIGNUP_TRIGGER),
+            (POOL_SIGNUP_TRIGGER, "e2a4c6e8f0b1", "d1f3a5b7c9e2", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # d1f3a5b7c9e2 is the single head
+    # e2a4c6e8f0b1 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

@@ -150,7 +150,7 @@
       "question_leaders": "What is MyHigh5 Leaders?",
       "answer_leaders": "Each month, 5% of MyHigh5's eligible monthly revenue is shared among up to 10,000 members with the highest direct commissions that month, in proportion to their direct commission.",
       "question_referral_pool": "What is the MyHigh5 Referral Pool?",
-      "answer_referral_pool": "Verified members can buy Referral Pool units at $100 each. Each eligible unit receives one slot per round in a random allocation of new members who join without a personal invitation, once their KYC is approved. Referrals and earnings are not guaranteed. See the Referral Pool page for details."
+      "answer_referral_pool": "Verified members can buy Referral Pool units at $100 each. Each eligible unit receives one slot per round in a random allocation of new members who join without a personal invitation, as soon as they sign up. Referrals and earnings are not guaranteed. See the Referral Pool page for details."
     },
     "download_app": {
       "badge": "Mobile app",
@@ -2745,7 +2745,7 @@
     "rule_4": "In each round, new referrals are matched at random, with every remaining eligible slot equally likely to be chosen.",
     "rule_5": "Units are not used up when they receive a referral: an eligible unit takes part again in later rounds.",
     "rule_6": "Units bought while a round is open start taking part from the next round.",
-    "rule_7": "A new member is assigned only after their identity verification (KYC) is approved.",
+    "rule_7": "A new member without a personal invitation is assigned when they sign up; neither e-mail confirmation nor identity verification (KYC) is needed for this.",
     "rule_8": "A personal invitation always comes first: a member who joins with a valid invitation keeps the member who invited them.",
     "rule_9": "Referrals are not guaranteed.",
     "rule_10": "How many referrals are allocated depends on how many eligible new members join without a personal invitation.",
@@ -2762,7 +2762,7 @@
     "faq_random_q": "How is the member chosen for a referral?",
     "faq_random_a": "Each referral is matched at random among the slots still open in the current round, with every open slot equally likely. More eligible units give you more slots in a round, never a guaranteed referral. The selection uses a secure random number generator.",
     "faq_kyc_q": "Do I need identity verification (KYC)?",
-    "faq_kyc_a": "Yes. You need an approved identity verification (KYC) to buy units, and your units stay eligible only while it remains approved. New members are assigned to a sponsor only after their own KYC is approved.",
+    "faq_kyc_a": "Yes. You need an approved identity verification (KYC) to buy units, and your units stay eligible only while it remains approved. New members are assigned to a sponsor when they sign up, without waiting for their own KYC; KYC still governs commissions and cash-out.",
     "faq_personal_q": "What if a new member has a personal invitation?",
     "faq_personal_a": "A valid personal invitation always takes precedence. That member keeps the person who invited them and is never allocated through the Referral Pool.",
     "faq_refunds_q": "Can a purchase be refunded?",

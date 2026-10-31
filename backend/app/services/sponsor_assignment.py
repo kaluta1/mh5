@@ -1,9 +1,10 @@
 """The one place that sets ``users.sponsor_id`` under the NEW_V2 model.
 
 Priority at registration: valid personal referral -> no sponsor (NONE). An organic signup (no
-code, or a code that does not resolve to an eligible member) gets no sponsor here; once its own
-KYC is approved, the Multi-Unit Referral Pool assigns one, drawn per eligible ACTIVE unit
-(referral_pool_allocation, sponsor_source REFERRAL_POOL). DSM-imported members keep the sponsor
+code, or a code that does not resolve to an eligible member) gets no sponsor here; it is queued
+for the Multi-Unit Referral Pool at once (owner rule 2026-10-31: no e-mail confirmation or KYC
+needed), which assigns one drawn per eligible ACTIVE unit (referral_pool_allocation, sponsor_source
+REFERRAL_POOL). DSM-imported members keep the sponsor
 the import resolved. Assignment is one-time: an existing sponsor is never overwritten (row lock
 + NULL check, here and in the pool).
 """
@@ -58,6 +59,9 @@ def assign_at_registration(db: Session, user: User, personal_sponsor: Optional[U
     locked.sponsor_source = NONE
     locked.sponsor_assigned_at = now
     db.flush()
+    from app.services.referral_pool_integration import record_signup
+
+    record_signup(db, locked)                     # the pool worker queues them after the commit
     return NONE
 
 

@@ -217,8 +217,10 @@ def test_the_migration_goes_down_and_up_to_exactly_the_model_schema(pg):
     down(engine)                                                 # twice: a no-op
 
     up(engine)
-    assert schema_snapshot(engine) == model
     up(engine)                                                   # re-run: a no-op
+    from tests.integration.test_payments_postgres import migrate
+
+    migrate(engine, "e2a4c6e8f0b1_referral_pool_signup_trigger.py", "upgrade")   # later: SIGNED_UP (2026-10-31)
     assert schema_snapshot(engine) == model
 
 
