@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { VideoPreviewDialog } from '@/components/ui/video-preview-dialog'
+import { AdSlot } from '@/components/ads/ad-slot'
 import { contestService, ContestantWithAuthorAndStats } from '@/services/contest-service'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/contexts/language-context'
@@ -187,6 +188,10 @@ function PublicContestantEntryContent() {
       rank={contestant.rank}
       contestantId={contestantId}
       commentsCount={contestant.comments_count || 0}
+      adSlot={
+        <AdSlot pageType="CONTEST_ENTRY" slotKind="IN_CONTENT" slotKey={`entry:${contestantId}:in_content`}
+          contestantId={Number(contestantId)} />
+      }
     />
   )
 }

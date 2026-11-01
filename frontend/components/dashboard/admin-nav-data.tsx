@@ -47,6 +47,7 @@ export const adminNavSections: DashboardNavSection[] = [
       { name: "admin.nav.referral_pool", label: "Referral Pool", href: "/dashboard/admin/referral-pool", icon: Users },
       { name: "admin.nav.kyc", label: "KYC", href: "/dashboard/admin/kyc", icon: FileCheck },
       { name: "admin.nav.seller_verification", label: "Seller verification", href: "/dashboard/admin/seller-verification", icon: ListChecks },
+      { name: "admin.nav.advertising", label: "Advertising", href: "/dashboard/admin/advertising", icon: ListChecks },
       { name: "admin.nav.content_moderation", label: "Content moderation", href: "/dashboard/admin/content-moderation", icon: ShieldAlert },
       { name: "admin.nav.reports", label: "Reports", href: "/dashboard/admin/reports", icon: Flag },
     ],

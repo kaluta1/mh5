@@ -432,9 +432,13 @@ def test_declared_ratings_follow_phase7_rating_rules(client, db, monkeypatch):
 
     monkeypatch.setattr(settings, "AD_SOURCE_RATINGS", json.dumps(
         {"adsense": "GENERAL", "annualads_rotator": "ADULT_18_PLUS", "annualads_sponsor": "TEEN_16_PLUS"}))
-    assert eligibility(client) == {"adsense": True, "annualads_rotator": False, "annualads_sponsor": False}
-    assert eligibility(client, minor(db, 16)) == {"adsense": True, "annualads_rotator": False, "annualads_sponsor": True}
-    assert eligibility(client, adult(db)) == {"adsense": True, "annualads_rotator": True, "annualads_sponsor": True}
+    # myhigh5_ads is undeclared here, so it is unclassified: confirmed adults only.
+    assert eligibility(client) == {"adsense": True, "annualads_rotator": False, "annualads_sponsor": False,
+                                   "myhigh5_ads": False}
+    assert eligibility(client, minor(db, 16)) == {"adsense": True, "annualads_rotator": False, "annualads_sponsor": True,
+                                                  "myhigh5_ads": False}
+    assert eligibility(client, adult(db)) == {"adsense": True, "annualads_rotator": True, "annualads_sponsor": True,
+                                              "myhigh5_ads": True}
     monkeypatch.setattr(settings, "AD_SOURCE_RATINGS", "{not json")
     assert not any(eligibility(client).values())                                 # invalid config fails closed
     monkeypatch.setattr(settings, "AD_SOURCE_RATINGS", json.dumps({"adsense": "PROHIBITED"}))

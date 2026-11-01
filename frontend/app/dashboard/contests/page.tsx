@@ -1,5 +1,7 @@
 'use client'
 
+import { AdSlot } from "@/components/ads/ad-slot"
+import { interleave } from "@/lib/ads/placement"
 import * as React from "react"
 import { useState, useEffect, useMemo, Suspense, useRef, useCallback } from "react"
 import dynamic from 'next/dynamic'
@@ -1558,7 +1560,15 @@ function ContestsPageContent() {
         ) : visibleContests.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-              {visibleContests.map((contest: any) => {
+              {interleave(visibleContests).map((entry) => {
+                if (entry.kind === 'ad') {
+                  // Same 5-item spacing across infinite-scroll batches; at most 5 per page visit.
+                  return (
+                    <AdSlot key={entry.key} pageType="CONTEST_LISTING" slotKind="IN_FEED"
+                      slotKey={`dashboard-contests:in_feed:${entry.adIndex}`} className="col-span-full" />
+                  )
+                }
+                const contest: any = entry.item
                 const rowMode = normalizeContestMode(contest.contest_mode)
                 const isNominationCard = rowMode === 'nomination'
                 const selectedRoundId = roundIdNav ? String(roundIdNav) : null

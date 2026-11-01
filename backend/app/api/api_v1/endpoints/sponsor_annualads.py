@@ -263,7 +263,13 @@ async def sponsor_payment_webhook(
         .filter(JournalEntry.description == entry_description)
         .first()
     )
+    from app.services import annualads_records
+
     if existing_entry:
+        annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
+                                         data=data_block, raw=raw, gross=gross, fee=platform_fee,
+                                         net=client_revenue, journal_entry_id=existing_entry.id)
+        db.commit()
         return {
             "ok": True,
             "received": True,
@@ -295,6 +301,11 @@ async def sponsor_payment_webhook(
             ],
             commit=False,
         )
+        # Audit record (buyer attribution only from a signed field equal to our SSO subject;
+        # entitlement fields copied verbatim). No sponsor commission: its base is not approved.
+        annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
+                                         data=data_block, raw=raw, gross=gross, fee=platform_fee,
+                                         net=client_revenue, journal_entry_id=je.id)
         db.commit()
     except AccountingError as e:
         logger.error("AnnualAds accounting posting failed for tx=%s: %s", tx_hash, e)

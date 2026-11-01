@@ -40,6 +40,13 @@ NEW_MODEL_ACCOUNTS = [
     ("4008", "Referral Pool entry revenue", "REVENUE", "4000"),
     ("4009", "Other platform service revenue", "REVENUE", "4000"),
     ("5004", "MyHigh5 Leaders program expense", "EXPENSE", "5000"),
+    # Advertising (2026-11-01): three products kept apart; Annual Ads stays on 1030/2310/4010.
+    ("1240", "AdSense publisher earnings receivable (finalized, not yet paid by Google)", "ASSET", "1000"),
+    ("2320", "Advertiser credit - prepaid, not yet delivered (liability)", "LIABILITY", "2000"),
+    ("2322", "Contest-page ad shares held (nominee not linked / sponsor unresolved)", "LIABILITY", "2000"),
+    ("4020", "Ordinary MyHigh5 advertising revenue (validated delivery)", "REVENUE", "4000"),
+    ("4021", "Google AdSense revenue (finalized publisher earnings)", "REVENUE", "4000"),
+    ("5006", "Contest-page advertising revenue share expense (creatives and direct sponsors)", "EXPENSE", "5000"),
 ]
 
 # Policy values confirmed by the client (Shafi Abeid, 2026-09-25). The direct commission base is
@@ -128,6 +135,17 @@ def seed_new_model_reference_data(db: Session) -> None:
             name="MyHigh5 Referral Pool",
             description="One-time $100 entry to the MyHigh5 Referral Pool (max 10,000 members).",
             price=REFERRAL_POOL_PRICE, currency="USD", validity_days=0, is_active=True,
+            is_consumable=False, has_affiliate_commission=False,
+        ))
+    from app.services.ad_campaigns import AD_CREDIT_PRODUCT_CODE
+
+    if not db.query(ProductType).filter(ProductType.code == AD_CREDIT_PRODUCT_CODE).first():
+        # Face value: 1 unit = 1.00 USD of advertiser credit (not an advertising price). Checkout refuses
+        # it until an administrator enables advertiser funding with approved prices.
+        db.add(ProductType(
+            code=AD_CREDIT_PRODUCT_CODE, name="MyHigh5 advertiser credit",
+            description="Prepaid advertiser credit (USD, face value). Spent only on validated, viewable impressions.",
+            price=Decimal("1.00"), currency="USD", validity_days=0, is_active=True,
             is_consumable=False, has_affiliate_commission=False,
         ))
     if not db.query(ReferralPoolConfig).first():

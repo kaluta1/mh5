@@ -418,7 +418,7 @@ def safe_display_name(db: Session, user: Optional[User], fallback: str = "Someon
 # from an operator-declared rating; nothing is guessed.
 # ---------------------------------------------------------------------------
 
-AD_SOURCES = ("adsense", "annualads_rotator", "annualads_sponsor")
+AD_SOURCES = ("adsense", "annualads_rotator", "annualads_sponsor", "myhigh5_ads")
 
 
 def declared_ad_ratings() -> Dict[str, ContentRating]:

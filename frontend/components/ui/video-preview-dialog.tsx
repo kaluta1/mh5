@@ -61,6 +61,8 @@ interface VideoPreviewDialogProps {
   commentsCount?: number
   variant?: 'modal' | 'page'
   onLoginRequired?: () => void
+  /** Optional sponsored unit, shown below the entry details and voting controls (never over the media). */
+  adSlot?: React.ReactNode
 }
 
 export function VideoPreviewDialog({
@@ -81,6 +83,7 @@ export function VideoPreviewDialog({
   contestantId,
   commentsCount: initialCommentsCount = 0,
   variant = 'modal',
+  adSlot,
   onLoginRequired,
 }: VideoPreviewDialogProps) {
   const { t } = useLanguage()
@@ -371,6 +374,8 @@ export function VideoPreviewDialog({
               </p>
             </div>
           )}
+
+          {adSlot ? <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">{adSlot}</div> : null}
 
           {/* Comments Section */}
           {showComments && contestantId && (

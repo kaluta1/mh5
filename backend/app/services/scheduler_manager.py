@@ -16,6 +16,8 @@ from app.services.creative_link_check import CreativeLinkScheduler
 from app.services.email_outbox import EmailOutboxScheduler
 from app.services.cashout_engine import CashoutScheduler
 from app.services.referral_pool_integration import ReferralPoolScheduler
+from app.services.ad_worker import AdDeliveryScheduler
+from app.services.annualads_records import AnnualAdsRecognitionScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,11 @@ _SCHEDULER_CONFIG: Dict[str, tuple[Any, str]] = {
     # Referral Pool worker (events, eligibility sweep, queue): a no-op unless REFERRAL_POOL_WORKER_ENABLED=true;
     # assigning a sponsor additionally needs allocation_enabled in referral_pool_config.
     "referral-pool": (ReferralPoolScheduler(), "_run_pass"),
+    # Advertising: validate impressions, release expired reservations, complete/settle campaigns,
+    # recognize closed days, release claimed nominee shares. Nothing to do while no ad is served.
+    "ad-delivery": (AdDeliveryScheduler(), "_run_pass"),
+    # Annual Ads daily recognition (2310 -> 4010): a no-op unless ANNUALADS_ENABLED=true.
+    "annualads-recognition": (AnnualAdsRecognitionScheduler(), "_run_pass"),
 }
 
 _TASK_ALIASES = {"monthly-round": "monthly-ops"}

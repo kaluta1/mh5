@@ -108,6 +108,15 @@ def _hold_retired_pool_payment(db: Session, deposit: Deposit) -> None:
 def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
     """Post a validated NEW_V2 deposit. Never commits; safe to call repeatedly."""
     product = _product(db, deposit)
+    from app.services.ad_campaigns import AD_CREDIT_PRODUCT_CODE
+
+    if product.code == AD_CREDIT_PRODUCT_CODE:
+        # Advertiser credit: a liability until validated ad delivery (Dr 1001 / Cr 2320). No revenue,
+        # no affiliate commission.
+        from app.services.ad_campaigns import on_credit_deposit_validated
+
+        on_credit_deposit_validated(db, deposit)
+        return
     if product.code == REFERRAL_POOL_PRODUCT_CODE:
         _hold_retired_pool_payment(db, deposit)
         # Multi-Unit pool (P3): the units of a recorded purchase, while sales are switched on.
@@ -189,7 +198,10 @@ def reverse_new_model_deposit(db: Session, deposit: Deposit, *, reason: str) -> 
     if recognition is not None:
         reverse_recognition(db, recognition, journal_entry_id=reversal_entry_id)
     from app.services import referral_pool_service as pool
+    from app.services.ad_campaigns import AD_CREDIT_PRODUCT_CODE, on_credit_deposit_reversed
 
+    if _product(db, deposit).code == AD_CREDIT_PRODUCT_CODE:
+        on_credit_deposit_reversed(db, deposit, reason)
     pool.mark_refunded(db, deposit.id)
     referral_pool_units.on_deposit_refunded(db, deposit)
     db.flush()

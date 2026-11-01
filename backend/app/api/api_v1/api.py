@@ -186,6 +186,14 @@ from app.api.api_v1.endpoints import interactions as interaction_endpoints  # no
 # Phase 9: member interaction controls (blocks, reports, contact check) and ad eligibility.
 api_router.include_router(interaction_endpoints.router, prefix="/interactions", tags=["Interaction safety"])
 api_router.include_router(interaction_endpoints.ads_router, prefix="/ads", tags=["Advertising safety"])
+# Advertising (2026-11-01): slot decisions + beacons, advertiser campaigns, contest-page ad earnings,
+# administration (administrator AND manage_advertising; changes also need the current password).
+from app.api.api_v1.endpoints import ads_delivery as ads_delivery_endpoints  # noqa: E402
+
+api_router.include_router(ads_delivery_endpoints.public_router, prefix="/ads", tags=["Advertising"])
+api_router.include_router(ads_delivery_endpoints.member_router, prefix="/advertising", tags=["Advertising"])
+api_router.include_router(ads_delivery_endpoints.admin_router, prefix="/admin/advertising",
+                          tags=["Admin - Advertising"], dependencies=[Depends(admin.require_admin)])
 
 from app.api.api_v1.endpoints import financial_eligibility as financial_eligibility_endpoints  # noqa: E402
 

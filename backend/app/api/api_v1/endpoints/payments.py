@@ -270,7 +270,18 @@ async def create_payment(
     if is_pool and not pool_units.sales_open(db):
         # Multi-Unit sales are switched off (the default): no deposit, purchase or provider invoice.
         raise HTTPException(status_code=410, detail=POOL_RETIRED_MESSAGE)
-    if not is_pool and request.quantity != 1:
+    from app.services import ad_campaigns
+
+    is_ad_credit = product_code == ad_campaigns.AD_CREDIT_PRODUCT_CODE
+    if is_ad_credit:
+        ad_cfg = ad_campaigns.get_settings(db)
+        if not ad_cfg.funding_enabled or ad_campaigns.pricing_state(ad_cfg) != "CONFIGURED":
+            db.rollback()
+            raise HTTPException(status_code=409, detail={
+                "code": "ADVERTISING_FUNDING_CLOSED",
+                "message": "Advertiser credit cannot be bought yet: advertising prices are pending approval."})
+        db.rollback()
+    if not is_pool and not is_ad_credit and request.quantity != 1:
         raise HTTPException(status_code=400, detail="Only Referral Pool units are bought in quantities.")
 
     if product_code in kyc_fee.RETIRED_KYC_PRODUCT_CODES:
@@ -294,6 +305,13 @@ async def create_payment(
             if request.recipients:
                 raise FinancialIntegrityError("Referral Pool units are bought for the member's own account")
             expected_amount = pool_units.UNIT_PRICE * request.quantity
+        if is_ad_credit:
+            # Face value: quantity x 1.00 USD of credit (the product row must agree).
+            if expected_amount != Decimal("1.00") or expected_currency != "USD":
+                raise FinancialIntegrityError("Advertiser credit is not configured at a face value of 1.00 USD")
+            if request.recipients:
+                raise FinancialIntegrityError("Advertiser credit is bought for the member's own account")
+            expected_amount = Decimal("1.00") * request.quantity
         validate_client_purchase_terms(
             submitted_amount=request.amount,
             submitted_currency=request.currency,

@@ -5,6 +5,9 @@ const { getMock, auth } = vi.hoisted(() => ({ getMock: vi.fn(), auth: { user: nu
 
 vi.mock('@/lib/api', () => ({ default: { get: getMock }, apiService: {} }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => auth }))
+const { nav } = vi.hoisted(() => ({ nav: { pathname: '/contests' as string | null } }))
+// Placement control: ad scripts load only on allowed public content routes.
+vi.mock('next/navigation', () => ({ usePathname: () => nav.pathname }))
 
 import { AdSenseLoader, AdSenseSlot } from './adsense-loader'
 import { fetchAdEligibility, NO_ADS } from '@/hooks/use-ad-eligibility'

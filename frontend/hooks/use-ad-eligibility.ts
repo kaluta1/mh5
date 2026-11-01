@@ -6,10 +6,10 @@ import { useAuth } from '@/hooks/use-auth'
 
 /** Ad sources the backend decides per viewer (Phase 9, s.33 "never serve
  * age-inappropriate advertisements to minors"). Default = nothing (fail closed). */
-export type AdSource = 'adsense' | 'annualads_rotator' | 'annualads_sponsor'
+export type AdSource = 'adsense' | 'annualads_rotator' | 'annualads_sponsor' | 'myhigh5_ads'
 export type AdEligibility = Record<AdSource, boolean>
 
-export const NO_ADS: AdEligibility = { adsense: false, annualads_rotator: false, annualads_sponsor: false }
+export const NO_ADS: AdEligibility = { adsense: false, annualads_rotator: false, annualads_sponsor: false, myhigh5_ads: false }
 
 export async function fetchAdEligibility(): Promise<AdEligibility> {
   try {
@@ -20,6 +20,7 @@ export async function fetchAdEligibility(): Promise<AdEligibility> {
       adsense: sources.adsense === true,
       annualads_rotator: sources.annualads_rotator === true,
       annualads_sponsor: sources.annualads_sponsor === true,
+      myhigh5_ads: sources.myhigh5_ads === true,
     }
   } catch {
     return NO_ADS

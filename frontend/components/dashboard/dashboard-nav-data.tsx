@@ -63,6 +63,8 @@ export const userNavSections: DashboardNavSection[] = [
     items: [
       { name: "dashboard.nav.wallet", label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
       { name: "dashboard.nav.sponsored", label: "MyHigh5 Sponsors", href: "/dashboard/sponsored", icon: Megaphone },
+      { name: "dashboard.nav.advertise", label: "Advertise", href: "/dashboard/advertise", icon: Megaphone },
+      { name: "dashboard.nav.ad_earnings", label: "Ad earnings", href: "/dashboard/ad-earnings", icon: Megaphone },
       { name: "dashboard.nav.affiliates", label: "Affiliates", href: "/dashboard/affiliates", icon: UserPlus },
       { name: "dashboard.nav.short_links", label: "Short Links", href: "/dashboard/short-links", icon: Link2 },
       { name: "dashboard.nav.commissions", label: "Commissions", href: "/dashboard/commissions", icon: DollarSign },

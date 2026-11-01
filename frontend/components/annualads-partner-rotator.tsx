@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 import { ANNUALADS_PARTNER_ID, ANNUALADS_ROTATOR_SCRIPT_URL } from '@/lib/config'
 import { COOKIE_CONSENT_EVENT } from '@/components/ui/cookie-consent'
 import { useAdEligibility } from '@/hooks/use-ad-eligibility'
+import { usePathname } from 'next/navigation'
+import { isAdRoute } from '@/lib/ads/placement'
 
 const COOKIE_CONSENT_KEY = 'myhigh5_cookie_consent'
 
@@ -26,6 +28,8 @@ export function AnnualAdsPartnerRotator() {
   // Phase 9: the backend decides whether this viewer may receive this ad source.
   const { annualads_rotator: eligible } = useAdEligibility()
   const partnerId = ANNUALADS_PARTNER_ID?.trim()
+  // Loaded only on allowed public content routes (never on messages, settings, admin, payments, KYC...).
+  const allowedRoute = isAdRoute(usePathname())
 
   useEffect(() => {
     const refresh = () => setConsented(hasAdvertisingConsent())
@@ -38,7 +42,7 @@ export function AnnualAdsPartnerRotator() {
     }
   }, [])
 
-  if (!eligible || !consented || !partnerId || !ANNUALADS_ROTATOR_SCRIPT_URL) return null
+  if (!allowedRoute || !eligible || !consented || !partnerId || !ANNUALADS_ROTATOR_SCRIPT_URL) return null
 
   return (
     <Script

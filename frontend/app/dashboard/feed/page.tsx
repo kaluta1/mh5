@@ -1,5 +1,7 @@
 'use client'
 
+import { AdSlot } from '@/components/ads/ad-slot'
+import { interleave } from '@/lib/ads/placement'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Loader2, Sparkles } from 'lucide-react'
@@ -215,7 +217,15 @@ export default function FeedPage() {
               </div>
             ) : (
               <div>
-                {posts.map((post) => (
+                {interleave(posts).map((entry) => {
+                  if (entry.kind === 'ad') {
+                    return (
+                      <AdSlot key={entry.key} pageType="FEED" slotKind="IN_FEED"
+                        slotKey={`feed:in_feed:${entry.adIndex}`} className="mx-3 my-3" />
+                    )
+                  }
+                  const post = entry.item
+                  return (
                   <PostCard
                     key={post.id}
                     post={post}
@@ -231,7 +241,8 @@ export default function FeedPage() {
                     }}
                     onDelete={handleDelete}
                   />
-                ))}
+                  )
+                })}
                 {hasMore && (
                   <div className="text-center py-6 px-4 border-t border-gray-100 dark:border-gray-700">
                     <Button

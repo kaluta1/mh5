@@ -3,7 +3,8 @@
 import * as React from "react"
 import { useState, useEffect, useMemo, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AdSenseSlot } from "@/components/ads/adsense-loader"
+import { AdSlot } from "@/components/ads/ad-slot"
+import { interleave } from "@/lib/ads/placement"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/sections/footer"
 import { ContestCard } from "@/components/dashboard/contest-card"
@@ -563,7 +564,16 @@ function ContestsPageContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-              {filteredContests.map((contest, index) => (
+              {interleave(filteredContests).map((entry) => {
+                if (entry.kind === 'ad') {
+                  return (
+                    <AdSlot key={entry.key} pageType="CONTEST_LISTING" slotKind="IN_FEED"
+                      slotKey={`contests:in_feed:${entry.adIndex}`} className="col-span-full" />
+                  )
+                }
+                const contest = entry.item
+                const index = entry.index
+                return (
                 <ContestCard
                   key={contest.id}
                   id={contest.id.toString()}
@@ -604,15 +614,12 @@ function ContestsPageContent() {
                   onParticipate={() => handleParticipateClick(contest.id)}
                   onOpenDetails={() => handleContestClick(contest.id)}
                 />
-              ))}
+                )
+              })}
             </div>
           )}
         </section>
 
-        <section className="container px-4 md:px-6 py-4">
-          {/* Phase 9: rendered (and requested from the provider) only for an eligible viewer. */}
-          <AdSenseSlot slot="8189486989" />
-        </section>
 
         {/* CTA Section */}
         <section className="container px-4 md:px-6 py-12">
