@@ -60,3 +60,15 @@ describe('AdminSoncoPayPayouts: small commissions added together', () => {
     expect(screen.getByTestId('sp-combined-table')).toHaveTextContent('2.30 (sent 2.07)')
   })
 })
+
+describe('SoncoPay compliance states', () => {
+  it('never shows an API-confirmed destination as payable before the recorded dashboard confirmation', () => {
+    const base = { status: 'ACTIVE', usable: true, usable_from: null }
+    expect(destinationText({ ...base, state: 'DESTINATION_AWAITING_DASHBOARD_CONFIRMATION' }))
+      .toBe('Registered; the SoncoPay dashboard confirmation is not recorded')
+    expect(destinationText({ ...base, state: 'DESTINATION_WAITING_PERIOD', payable_from: '2026-11-03T10:00:00' }))
+      .toBe('Confirmed; first payout from 2026-11-03 10:00 UTC')
+    expect(destinationText({ ...base, state: 'DESTINATION_SUSPENDED' })).toBe('Suspended')
+    expect(destinationText({ ...base, state: 'ELIGIBLE' })).toBe('Eligible for payout')
+  })
+})

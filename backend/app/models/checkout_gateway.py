@@ -106,3 +106,14 @@ class SoncoPayPayoutDestination(Base):
     checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    # SoncoPay condition (2026-10-31): the destination must be confirmed in the SoncoPay DASHBOARD by the
+    # account owner. Never inferred from the API registration or from SoncoPay's auto-confirm: an
+    # administrator records the dashboard confirmation time with its evidence, and the ownership check.
+    dashboard_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    dashboard_confirmed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    dashboard_evidence: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    ownership_evidence: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    recorded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suspended_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    suspension_reason: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)

@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict, deque
+from datetime import datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -215,6 +216,67 @@ def soncopay_payouts_sync(current_user: User = Depends(get_current_active_user))
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             detail={"code": "RATE_LIMITED", "message": "Too many requests. Try again later."})
     return {"requested": cashout_engine.request_cycle()}
+
+
+class DashboardConfirmationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_at: datetime
+    evidence: str = Field(default="", max_length=300)
+    ownership_evidence: str = Field(default="", max_length=300)
+    current_password: str = Field(default="", max_length=256)
+
+
+class SuspensionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    suspend: bool
+    reason: str = Field(default="", max_length=300)
+    current_password: str = Field(default="", max_length=256)
+
+
+def _destination_view(row) -> dict:
+    from app.services import soncopay_payouts
+
+    first = soncopay_payouts.payable_from(row)
+    return {"id": row.id, "status": row.status,
+            "dashboard_confirmed_at": row.dashboard_confirmed_at.isoformat() if row.dashboard_confirmed_at else None,
+            "payable_from": first.isoformat() if first else None,
+            "suspended_at": row.suspended_at.isoformat() if row.suspended_at else None}
+
+
+@admin_router.post("/payouts/destinations/{destination_row_id}/dashboard-confirmation")
+def soncopay_destination_dashboard_confirmation(destination_row_id: int, body: DashboardConfirmationBody,
+                                                db: Session = Depends(get_db),
+                                                current_user: User = Depends(get_current_active_user)):
+    """Record that the destination was confirmed in the SoncoPay dashboard (time + evidence) and how the
+    member's wallet ownership was verified. The first payout waits 24 hours after it."""
+    from app.services import soncopay_payouts
+
+    try:
+        row = soncopay_payouts.record_dashboard_confirmation(
+            db, current_user, destination_row_id=destination_row_id, confirmed_at=body.confirmed_at,
+            evidence=body.evidence, ownership_evidence=body.ownership_evidence, password=body.current_password)
+    except Exception as exc:  # noqa: BLE001 - mapped below
+        db.rollback()
+        if not isinstance(exc, (PermissionError, ValueError)) and type(exc).__name__ != "PaymentConfigError":
+            raise
+        raise _payout_error(exc) from None
+    return _destination_view(row)
+
+
+@admin_router.post("/payouts/destinations/{destination_row_id}/suspension")
+def soncopay_destination_suspension(destination_row_id: int, body: SuspensionBody, db: Session = Depends(get_db),
+                                    current_user: User = Depends(get_current_active_user)):
+    from app.services import soncopay_payouts
+
+    try:
+        row = soncopay_payouts.set_suspended(db, current_user, destination_row_id=destination_row_id,
+                                             suspend=body.suspend, reason=body.reason, password=body.current_password)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        if not isinstance(exc, (PermissionError, ValueError)) and type(exc).__name__ != "PaymentConfigError":
+            raise
+        raise _payout_error(exc) from None
+    return _destination_view(row)
 
 
 # Rejected deliveries per sender address (a correctly signed delivery is never counted).

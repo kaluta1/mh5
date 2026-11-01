@@ -384,7 +384,9 @@ def reconcile_cashout(db: Session, cashout_id: int, provider, *, now: Optional[d
     if cashout.status not in (CashoutStatus.PROCESSING.value, CashoutStatus.UNKNOWN.value):
         db.rollback()
         return "SKIPPED"
-    cashout.provider_status = status[:30] or None
+    # SoncoPay manual review (payouts above USD 1,000) keeps the provider's own status, so it is visible
+    # and reconciled; it stays in progress: never completed, never sent again.
+    cashout.provider_status = ((details.get("provider_status") if details.get("manual_review") else status) or "")[:30] or None
     cashout.last_checked_at = now
     if details.get("hash") and not cashout.tx_hash:
         cashout.tx_hash = str(details["hash"]).strip()[:150]     # the blockchain transaction
@@ -580,6 +582,47 @@ def day_usage(db: Session, now: datetime) -> tuple[Decimal, int]:
     return money(total or 0), int(count or 0)
 
 
+def provider_window_usage(db: Session, now: datetime) -> tuple[Decimal, int]:
+    """(amount, count) a provider may count in the ROLLING 24 hours, conservatively: reserved payouts
+    (not yet sent), payouts handed over or of uncertain outcome, completed ones, and failed ones the
+    provider received (they have a provider payout id). Only payouts never sent are left out."""
+    since = now - timedelta(hours=24)
+    counted = (AffiliateCashoutRequest.status.in_((CashoutStatus.REQUESTED.value,) + SENT_STATUSES)
+               | ((AffiliateCashoutRequest.status == CashoutStatus.FAILED.value)
+                  & AffiliateCashoutRequest.provider_batch_id.isnot(None)))
+    total, count = (db.query(func.coalesce(func.sum(AffiliateCashoutRequest.gross_amount), 0),
+                             func.count(AffiliateCashoutRequest.id))
+                    .filter(AffiliateCashoutRequest.cashout_method == cs.METHOD_CRYPTO, counted,
+                            AffiliateCashoutRequest.requested_at > since).one())
+    return money(total or 0), int(count or 0)
+
+
+def provider_window_problem(db: Session, provider, amount: Decimal, now: datetime) -> Optional[str]:
+    """The provider's own rolling 24-hour count and value limits (SoncoPay: 50 payouts, USD 10,000),
+    both at once, including this payout. Decided under the settings lock by the caller."""
+    max_count = getattr(provider, "max_24h_count", None)
+    max_amount = getattr(provider, "max_24h_amount", None)
+    if max_count is None and max_amount is None:
+        return None
+    total, count = provider_window_usage(db, now)
+    if max_count is not None and count + 1 > int(max_count):
+        return "PROVIDER_24H_COUNT_LIMIT"
+    if max_amount is not None and money(total + amount) > money(max_amount):
+        return "PROVIDER_24H_AMOUNT_LIMIT"
+    return None
+
+
+def kyc_problem(db: Session, user: User) -> Optional[str]:
+    """Payouts go to identified, verified members only (SoncoPay condition): approved KYC."""
+    from app.crud import crud_kyc
+    from app.models.kyc import KYCStatus
+
+    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=user.id)
+    if verification is None or verification.status != KYCStatus.APPROVED:
+        return "KYC_NOT_APPROVED"
+    return None
+
+
 def _blocker(db: Session, user: User, now: datetime, config) -> Optional[str]:
     """Why this member cannot be paid right now (None = may be paid)."""
     if not user.is_active or getattr(user, "is_deleted", False):
@@ -591,6 +634,9 @@ def _blocker(db: Session, user: User, now: datetime, config) -> Optional[str]:
         return f"WALLET_{wallet.status}"
     if not fe.evaluate(db, user, fe.FinancialOperation.WITHDRAWAL).allowed:
         return "ELIGIBILITY_HOLD"
+    kyc = kyc_problem(db, user)
+    if kyc is not None:
+        return kyc
     return None
 
 
@@ -734,6 +780,16 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         # cycle starts from the new configuration.
         blocked = "CONFIGURATION_CHANGED"
     blocked = blocked or cs.recording_gate(db, locked_config)
+    # Under the settings lock: one worker at a time decides, so parallel workers cannot together pass
+    # the provider's rolling 24-hour limits, nor MyHigh5's own daily limits (re-counted conservatively,
+    # reserved payouts included).
+    if blocked is None:
+        blocked = provider_window_problem(db, provider, amount, now)
+    if blocked is None:
+        held_total, held_count = provider_window_usage(db, now)
+        if (held_count + 1 > int(locked_config.max_daily_payout_count)
+                or money(held_total + amount) > money(locked_config.max_daily_payout_usd)):
+            blocked = "DAILY_LIMIT_REACHED"
     if blocked is not None:
         return stop(blocked)
     if commission_id is not None:
@@ -811,7 +867,8 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
                .with_for_update().one())
     if result is not None and result.get("batch_id"):
         cashout.provider_batch_id = str(result["batch_id"])[:100]
-        cashout.provider_status = (str(result.get("status") or "")[:30] or None)
+        cashout.provider_status = (str((result.get("provider_status") if result.get("manual_review")
+                                        else result.get("status")) or "")[:30] or None)
         cashout.last_checked_at = now
         if not result.get("verified"):
             cashout.status = CashoutStatus.UNKNOWN.value

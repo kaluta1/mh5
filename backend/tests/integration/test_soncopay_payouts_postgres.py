@@ -20,6 +20,7 @@ from tests.unit.test_soncopay_payouts import FakeSoncoPay, soncopay_live
 pytestmark = [pytest.mark.postgres, pytest.mark.discontinued]
 
 MIGRATION = "c9e1f3a5b7d0_soncopay_payout_destinations.py"
+CONFIRMATION_MIGRATION = "b0d2f4a6c8e1_soncopay_destination_dashboard_confirmation.py"
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +38,8 @@ def test_migration_down_and_up_is_additive_and_downgrade_refuses_with_destinatio
         assert c.execute(text("select to_regclass('soncopay_payout_destinations')")).scalar() is None
     migrate(engine, MIGRATION, "upgrade")
     migrate(engine, MIGRATION, "upgrade")                               # re-running is a no-op
+    migrate(engine, CONFIRMATION_MIGRATION, "upgrade")                  # the dashboard confirmation columns
+    migrate(engine, CONFIRMATION_MIGRATION, "upgrade")                  # idempotent
     with Session() as db:
         seed_ledger(db)
         user = member(db, "m1", method="CRYPTO")
@@ -53,8 +56,20 @@ def test_migration_down_and_up_is_additive_and_downgrade_refuses_with_destinatio
         migrate(engine, MIGRATION, "downgrade")
 
 
+def _dashboard_confirm_all(db):
+    """Test set-up: every destination confirmed in the SoncoPay dashboard long enough ago (recorded)."""
+    from datetime import timedelta
+
+    engine_service.run_cycle(db, now=NOW)                            # SoncoPay's confirmation read back
+    for row in db.query(SoncoPayPayoutDestination).all():
+        row.dashboard_confirmed_at = NOW - timedelta(days=3)
+        row.dashboard_evidence = row.ownership_evidence = "synthetic"
+    db.commit()
+
+
 def test_workers_racing_pay_each_commission_exactly_once(pg, engine_on, monkeypatch):
     _engine, Session = pg
+    monkeypatch.setattr(spo, "PROVIDER_MIN_PAYOUT_USD", __import__("decimal").Decimal("0"))  # USD 2-3 amounts
     fake, lock = FakeSoncoPay(), threading.Lock()
 
     def handler(request):
@@ -74,6 +89,7 @@ def test_workers_racing_pay_each_commission_exactly_once(pg, engine_on, monkeypa
         engine_service.run_cycle(db, now=NOW)                            # registers the three wallets
         for pid in list(fake.destinations):
             fake.confirm(pid, usable=True)
+        _dashboard_confirm_all(db)
 
     def cycle(_i):
         with Session() as db:
@@ -88,3 +104,63 @@ def test_workers_racing_pay_each_commission_exactly_once(pg, engine_on, monkeypa
                      .filter(AffiliateCashoutRequest.status == "processing").all())
         assert ids == sorted(c.id for c in db.query(AffiliateCommission).filter(
             AffiliateCommission.user_id.in_(user_ids)).all())
+
+
+def test_workers_racing_never_pass_the_providers_rolling_24_hour_limit(pg, engine_on, monkeypatch):
+    """Six payable members, four parallel workers, SoncoPay count limit lowered to 2: exactly two sent."""
+    from decimal import Decimal
+
+    _engine, Session = pg
+    monkeypatch.setattr(spo.SoncoPayPayoutProvider, "max_24h_count", 2)
+    fake, lock = FakeSoncoPay(), threading.Lock()
+
+    def handler(request):
+        with lock:
+            return fake.handler(request)
+
+    monkeypatch.setattr(spo, "_transport", lambda: httpx.MockTransport(handler))
+    with Session() as db:
+        seed_ledger(db)
+        configure(db, crypto_auto_payout_enabled=True, **{**FEE_RULES, "provider_fee_mode": payment_config.FEE_MODE_ADDED})
+        soncopay_live(db)
+        users = [member(db, f"r{i}", method="CRYPTO", wallet="0x" + "abcdef"[i] * 40) for i in range(6)]
+        for user in users:
+            commission(db, user, "20.00")
+        engine_service.run_cycle(db, now=NOW)                            # registers the wallets
+        for pid in list(fake.destinations):
+            fake.confirm(pid, usable=True)
+        _dashboard_confirm_all(db)
+    assert len(fake.payouts) <= 2
+
+    def cycle(_i):
+        with Session() as db:
+            return engine_service.run_cycle(db, now=NOW)
+
+    reports = in_threads(4, cycle)
+    assert not any(isinstance(r, Exception) for r in reports), reports
+    assert len(fake.payouts) == 2 and len(fake.posts("/v1/payouts")) == 2
+    with Session() as db:
+        assert engine_service.provider_window_usage(db, NOW)[1] == 2
+        assert sum(Decimal(str(r.gross_amount)) for r in db.query(AffiliateCashoutRequest).all()) == Decimal("40.00")
+
+
+def test_the_confirmation_migration_downgrade_refuses_once_a_confirmation_is_recorded(pg):
+    from datetime import datetime
+
+    engine, Session = pg
+    with Session() as db:
+        seed_ledger(db)
+        user = member(db, "mc", method="CRYPTO")
+        approval = db.execute(text("select id from payout_wallet_approvals where user_id = :u"), {"u": user.id}).scalar()
+        db.add(SoncoPayPayoutDestination(user_id=user.id, wallet_approval_id=approval, address=user.usdt_wallet_address,
+                                         environment="live", status="ACTIVE", dashboard_confirmed_at=datetime(2026, 11, 1)))
+        db.commit()
+    with pytest.raises(Exception, match="Recorded SoncoPay confirmations"):
+        migrate(engine, CONFIRMATION_MIGRATION, "downgrade")
+    with engine.begin() as c:
+        c.execute(text("update soncopay_payout_destinations set dashboard_confirmed_at = null"))
+    migrate(engine, CONFIRMATION_MIGRATION, "downgrade")
+    with engine.connect() as c:
+        assert c.execute(text("select count(*) from information_schema.columns where table_name = "
+                              "'soncopay_payout_destinations' and column_name = 'dashboard_confirmed_at'")).scalar() == 0
+    migrate(engine, CONFIRMATION_MIGRATION, "upgrade")

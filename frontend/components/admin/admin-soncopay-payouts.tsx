@@ -20,6 +20,14 @@ type Blocker = { code: string; message: string }
 type Destination = {
   id: number; user_id: number; username: string; address: string | null; status: string; usable: boolean
   usable_from: string | null; confirmed_at: string | null; destination_id: string | null; last_error: string | null
+  registered_at?: string | null; dashboard_confirmed_at?: string | null; dashboard_evidence?: string | null
+  ownership_evidence?: string | null; payable_from?: string | null; suspended_at?: string | null
+  suspension_reason?: string | null; state?: string
+}
+type ProviderLimits = {
+  window_hours: number; count: number; count_limit: number; amount: string; amount_limit: string
+  minimum_payout_usd: string; manual_review_above_usd: string
+  in_manual_review: { cashout_id: number; amount: string; provider_status: string }[]
 }
 type AccumulatingMember = {
   user_id: number; username: string | null; unpaid: string; commissions: number; accumulating: string
@@ -42,6 +50,7 @@ type PayoutsView = {
   destination_limit: number
   counts: Record<string, number>
   destinations: Destination[]
+  provider_limits?: ProviderLimits
   provider: null | {
     balance?: Record<string, string | null>; fee?: string | null; min_payout_usd?: string | number | null
     open_destinations?: number; settings?: Record<string, unknown>; error?: string; minimum?: string
@@ -57,7 +66,23 @@ const STATUS_TEXT: Record<string, string> = {
   SUPERSEDED: 'Replaced by a newer wallet',
 }
 
-export function destinationText(d: Pick<Destination, 'status' | 'usable' | 'usable_from'>): string {
+const STATE_TEXT: Record<string, string> = {
+  DESTINATION_NOT_REGISTERED: 'Approved; not registered with SoncoPay yet',
+  DESTINATION_AWAITING_CONFIRMATION: 'Registered; awaiting SoncoPay confirmation',
+  DESTINATION_AWAITING_DASHBOARD_CONFIRMATION: 'Registered; the SoncoPay dashboard confirmation is not recorded',
+  DESTINATION_SUSPENDED: 'Suspended',
+  DESTINATION_NOT_USABLE: 'Not usable',
+  ELIGIBLE: 'Eligible for payout',
+}
+
+const utc = (v?: string | null) => (v ? `${v.replace('T', ' ').slice(0, 16)} UTC` : '')
+
+export function destinationText(d: Pick<Destination, 'status' | 'usable' | 'usable_from'> &
+  Partial<Pick<Destination, 'state' | 'payable_from'>>): string {
+  if (d.state === 'DESTINATION_WAITING_PERIOD') {
+    return d.payable_from ? `Confirmed; first payout from ${utc(d.payable_from)}` : 'Confirmed; 24-hour waiting period'
+  }
+  if (d.state && STATE_TEXT[d.state]) return STATE_TEXT[d.state]
   if (d.status === 'ACTIVE' && !d.usable) {
     return d.usable_from ? `Security waiting period until ${d.usable_from.replace('T', ' ').slice(0, 16)} UTC`
       : 'Security waiting period'
@@ -74,6 +99,11 @@ export default function AdminSoncoPayPayouts() {
   const [phrase, setPhrase] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<number | null>(null)
+  const [confirmedAt, setConfirmedAt] = useState('')
+  const [evidence, setEvidence] = useState('')
+  const [ownership, setOwnership] = useState('')
+  const [reason, setReason] = useState('')
 
   const load = useCallback(async (provider = false) => {
     setError(null)
@@ -194,19 +224,69 @@ export default function AdminSoncoPayPayouts() {
           {view.destinations.length === 0
             ? <p className="text-sm text-gray-500">No approved wallet yet.</p>
             : <table className="w-full text-sm" data-testid="sp-destination-table">
-                <thead><tr className="text-left text-gray-500"><th>Member</th><th>Wallet</th><th>State</th><th>Note</th></tr></thead>
+                <thead><tr className="text-left text-gray-500"><th>Member</th><th>Wallet</th><th>State</th>
+                  <th>Dashboard confirmation</th><th>Note</th><th>Actions</th></tr></thead>
                 <tbody>
                   {view.destinations.map((d) => (
-                    <tr key={d.id} className="border-t border-gray-100 dark:border-gray-800">
+                    <tr key={d.id} className="border-t border-gray-100 dark:border-gray-800 align-top">
                       <td>{d.username} (#{d.user_id})</td>
                       <td className="font-mono">{d.address}</td>
                       <td>{destinationText(d)}</td>
-                      <td className="text-xs text-gray-500">{d.last_error ?? ''}</td>
+                      <td className="text-xs">{d.dashboard_confirmed_at
+                        ? `${utc(d.dashboard_confirmed_at)} — ${d.dashboard_evidence ?? ''}; ownership: ${d.ownership_evidence ?? ''}`
+                        : 'Not recorded'}</td>
+                      <td className="text-xs text-gray-500">{d.suspended_at ? `Suspended: ${d.suspension_reason ?? ''}` : (d.last_error ?? '')}</td>
+                      <td className="space-y-1 text-xs">
+                        {!d.dashboard_confirmed_at && d.destination_id && ['ACTIVE', 'PENDING_CONFIRMATION'].includes(d.status) && (
+                          <button type="button" className="underline" onClick={() => setConfirming(d.id)}>
+                            Record dashboard confirmation</button>)}
+                        {['ACTIVE', 'PENDING_CONFIRMATION', 'QUEUED'].includes(d.status) && (
+                          <button type="button" className="block underline" disabled={busy || !password || reason.trim().length < 5}
+                            onClick={() => post(`/destinations/${d.id}/suspension`,
+                              { suspend: !d.suspended_at, reason, current_password: password },
+                              d.suspended_at ? 'Suspension lifted.' : 'Destination suspended.')}>
+                            {d.suspended_at ? 'Lift suspension' : 'Suspend'}</button>)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>}
+          <label className="block text-xs">Reason (for a suspension or lifting it)
+            <input value={reason} onChange={(e) => setReason(e.target.value)}
+              className="mt-1 w-full max-w-md rounded border px-2 py-1 dark:bg-gray-900" /></label>
+          {confirming !== null && (
+            <div className="space-y-2 rounded border border-gray-200 p-3 text-sm dark:border-gray-700" data-testid="sp-confirm-form">
+              <p>Destination #{confirming}: record the confirmation made in the SoncoPay dashboard. It is never inferred from
+                the API registration. The first payout waits 24 hours after it.</p>
+              <label className="block">Confirmed in the SoncoPay dashboard at (UTC)
+                <input type="datetime-local" value={confirmedAt} onChange={(e) => setConfirmedAt(e.target.value)}
+                  className="mt-1 block rounded border px-2 py-1 dark:bg-gray-900" /></label>
+              <label className="block">Evidence of the dashboard confirmation
+                <input value={evidence} onChange={(e) => setEvidence(e.target.value)}
+                  className="mt-1 w-full rounded border px-2 py-1 dark:bg-gray-900" /></label>
+              <label className="block">How the member&apos;s identity and wallet ownership were verified
+                <input value={ownership} onChange={(e) => setOwnership(e.target.value)}
+                  className="mt-1 w-full rounded border px-2 py-1 dark:bg-gray-900" /></label>
+              <button type="button" className="rounded bg-blue-600 px-3 py-1 text-white"
+                disabled={busy || !password || !confirmedAt || evidence.trim().length < 10 || ownership.trim().length < 10}
+                onClick={async () => {
+                  await post(`/destinations/${confirming}/dashboard-confirmation`,
+                    { confirmed_at: `${confirmedAt}:00Z`.replace(/:00:00Z$/, ':00Z'), evidence, ownership_evidence: ownership,
+                      current_password: password }, 'Dashboard confirmation recorded.')
+                  setConfirming(null); setEvidence(''); setOwnership(''); setConfirmedAt('')
+                }}>Record (needs your password above)</button>
+            </div>)}
         </section>
+        {view.provider_limits && (
+          <section className="space-y-1 text-sm" aria-labelledby="sp-limits" data-testid="sp-limits">
+            <h3 id="sp-limits" className="text-sm font-semibold">SoncoPay limits (rolling {view.provider_limits.window_hours} hours)</h3>
+            <p>Payouts: {view.provider_limits.count} of {view.provider_limits.count_limit} · Value: {view.provider_limits.amount} of{' '}
+              {view.provider_limits.amount_limit} USD · Minimum payout {view.provider_limits.minimum_payout_usd} USD · Manual review
+              above {view.provider_limits.manual_review_above_usd} USD</p>
+            {view.provider_limits.in_manual_review.length > 0 && (
+              <p>In SoncoPay manual review: {view.provider_limits.in_manual_review
+                .map((r) => `#${r.cashout_id} (${r.amount} USD, ${r.provider_status})`).join(', ')}</p>)}
+          </section>)}
         {message && <p className="text-sm text-green-700" role="status">{message}</p>}
         {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       </CardContent>

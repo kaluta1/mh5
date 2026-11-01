@@ -178,11 +178,14 @@ def ledger(world):
 
 
 def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponsor=None, admin=False,
-           dob=datetime(1990, 1, 1), terms=True, permissions=FINANCE_PERMISSIONS, approved=True) -> User:
+           dob=datetime(1990, 1, 1), terms=True, permissions=FINANCE_PERMISSIONS, approved=True,
+           kyc=True) -> User:
     """A synthetic member. One who chose Crypto Cashout has accepted the
     network fee terms unless `terms=False`. A verified wallet was approved by an
     administrator unless `approved=False`. An administrator holds the given
-    Finance & Payments permissions (all of them unless told otherwise)."""
+    Finance & Payments permissions (all of them unless told otherwise). A member
+    who chose Crypto Cashout has an APPROVED KYC (payouts go to identified members
+    only, SoncoPay condition 2026-10-31) unless `kyc=False`."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=name.upper(),
@@ -195,7 +198,17 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
         approve_wallet(db, row)
     if method == "CRYPTO" and terms:
         accept_terms(db, row)
+    if method == "CRYPTO" and kyc:
+        approve_kyc(db, row)
     return row
+
+
+def approve_kyc(db, user):
+    from app.models.kyc import KYCStatus, KYCVerification
+
+    db.add(KYCVerification(user_id=user.id, status=KYCStatus.APPROVED, verified_first_name="Synthetic",
+                           verified_last_name=user.username or "Member"))
+    db.commit()
 
 
 def approve_wallet(db, user, *, status="APPROVED"):

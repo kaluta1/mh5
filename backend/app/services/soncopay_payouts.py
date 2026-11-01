@@ -63,6 +63,17 @@ OPEN_PROVIDER_STATUSES = ("pending_confirmation", "active")
 REGISTRATIONS_PER_CYCLE = 10
 ACTIVE_RECHECK = timedelta(hours=1)
 CONFIRM_AUTHORIZATION = "SONCOPAY ALLOWS MEMBER PAYOUTS"
+# SoncoPay Compliance conditions (written confirmation 2026-10-31). Hard limits of the provider: the
+# engine never exceeds them, whatever the MyHigh5 payout settings say.
+PROVIDER_MIN_PAYOUT_USD = Decimal("5.00")                 # minimum provider payout (USD equivalent)
+MANUAL_REVIEW_ABOVE_USD = Decimal("1000.00")              # above: SoncoPay manual review before sending
+PROVIDER_MAX_24H_COUNT = 50                               # payouts per rolling 24 hours
+PROVIDER_MAX_24H_USD = Decimal("10000.00")                # cumulative payout value per rolling 24 hours
+FIRST_PAYOUT_WAIT = timedelta(hours=24)                   # after the dashboard confirmation
+REVIEW_STATUSES = ("pending_review", "in_review", "under_review", "review", "manual_review", "held", "on_hold")
+AUDIT_DASHBOARD_CONFIRMED = "SONCOPAY_DESTINATION_DASHBOARD_CONFIRMED"
+AUDIT_SUSPENDED = "SONCOPAY_DESTINATION_SUSPENDED"
+AUDIT_UNSUSPENDED = "SONCOPAY_DESTINATION_UNSUSPENDED"
 AUDIT_AUTHORIZED = "SONCOPAY_PAYOUTS_AUTHORIZED"
 AUDIT_REVOKED = "SONCOPAY_PAYOUTS_AUTHORIZATION_REVOKED"
 AUDIT_DESTINATION = "SONCOPAY_DESTINATION_CHANGED"
@@ -616,19 +627,116 @@ def destination_for(db: Session, user_id: int, approval_id: Optional[int], addre
                     SoncoPayPayoutDestination.environment == ENVIRONMENT).first())
 
 
+def payable_from(row: Optional[SoncoPayPayoutDestination]) -> Optional[datetime]:
+    """First moment a payout may be sent: 24 hours after the LATER of SoncoPay's own confirmation time and
+    the recorded dashboard confirmation. None while the dashboard confirmation is not recorded."""
+    if row is None or row.dashboard_confirmed_at is None:
+        return None
+    anchor = max(t for t in (row.dashboard_confirmed_at, row.confirmed_at) if t is not None)
+    return anchor + FIRST_PAYOUT_WAIT
+
+
 def destination_problem(row: Optional[SoncoPayPayoutDestination], address: str, now: datetime) -> Optional[str]:
-    """Why this member cannot be paid to their SoncoPay destination now (None = they can)."""
+    """Why this member cannot be paid to their SoncoPay destination now (None = they can).
+    Internal approval -> registered with SoncoPay -> confirmed in the SoncoPay dashboard (recorded with
+    evidence; never inferred from the registration) -> 24 hours -> payable. A suspension stops it."""
     if row is None or row.status == QUEUED:
         return "DESTINATION_NOT_REGISTERED"
+    if row.suspended_at is not None:
+        return "DESTINATION_SUSPENDED"
     if row.status == PENDING:
         return "DESTINATION_AWAITING_CONFIRMATION"
     if row.status != ACTIVE or not row.destination_id:
         return "DESTINATION_NOT_USABLE"
     if not same_address(row.address, address):
         return "DESTINATION_NOT_USABLE"
-    if not row.usable:
+    if row.dashboard_confirmed_at is None:
+        return "DESTINATION_AWAITING_DASHBOARD_CONFIRMATION"
+    if not row.usable or now < payable_from(row):
         return "DESTINATION_WAITING_PERIOD"
     return None
+
+
+def _can_manage(actor) -> bool:
+    from app.services import super_admin
+
+    return bool(super_admin.is_super_admin(actor)
+                or payment_config.has_permission(actor, payment_config.PERMISSION_MANAGE))
+
+
+def record_dashboard_confirmation(db: Session, actor: User, *, destination_row_id: int, confirmed_at: datetime,
+                                  evidence: str, ownership_evidence: str, password: Optional[str],
+                                  now: Optional[datetime] = None) -> SoncoPayPayoutDestination:
+    """An administrator records that the destination was confirmed in the SoncoPay dashboard, when, and
+    how the member's identity and wallet ownership were verified. Super Admin or manage_payment_settings,
+    current password. Once per destination (a wallet change creates a new destination). Commits."""
+    from app.crud import crud_kyc
+    from app.models.kyc import KYCStatus
+
+    now = now or datetime.utcnow()
+    if not _can_manage(actor):
+        raise PermissionError("A Super Admin or the manage_payment_settings permission is required.")
+    payment_config.require_reauth(actor, password)
+    evidence, ownership_evidence = (evidence or "").strip(), (ownership_evidence or "").strip()
+    if len(evidence) < 10:
+        raise ValueError("Describe the SoncoPay dashboard confirmation (at least 10 characters).")
+    if len(ownership_evidence) < 10:
+        raise ValueError("Describe how the member's wallet ownership was verified (at least 10 characters).")
+    if confirmed_at.tzinfo is not None:
+        confirmed_at = confirmed_at.astimezone(timezone.utc).replace(tzinfo=None)
+    row = (db.query(SoncoPayPayoutDestination).filter(SoncoPayPayoutDestination.id == int(destination_row_id))
+           .with_for_update().first())
+    if row is None:
+        raise ValueError("Destination not found.")
+    if row.dashboard_confirmed_at is not None:
+        raise ValueError("The dashboard confirmation of this destination is already recorded.")
+    if row.status not in (PENDING, ACTIVE) or not row.destination_id or row.registered_at is None:
+        raise ValueError("Only a destination registered with SoncoPay can be confirmed.")
+    if confirmed_at > now + timedelta(minutes=5):
+        raise ValueError("The confirmation time cannot be in the future.")
+    if confirmed_at < row.registered_at - timedelta(minutes=5):
+        raise ValueError("The confirmation time cannot be before the registration with SoncoPay.")
+    kyc = crud_kyc.kyc_verification.get_by_user(db, user_id=row.user_id)
+    if kyc is None or kyc.status != KYCStatus.APPROVED:
+        raise ValueError("The member's identity (KYC) is not approved.")
+    row.dashboard_confirmed_at, row.dashboard_confirmed_by = confirmed_at, int(actor.id)
+    row.dashboard_evidence, row.ownership_evidence, row.recorded_at = evidence[:300], ownership_evidence[:300], now
+    db.add(AuditTrail(user_id=actor.id, action=AUDIT_DASHBOARD_CONFIRMED, table_name="soncopay_payout_destinations",
+                      record_id=row.id, new_values={"dashboard_confirmed_at": confirmed_at.isoformat(),
+                                                    "evidence": evidence[:300], "ownership": ownership_evidence[:300],
+                                                    "user_id": row.user_id, "destination_id": row.destination_id}))
+    db.commit()
+    return row
+
+
+def set_suspended(db: Session, actor: User, *, destination_row_id: int, suspend: bool, reason: str,
+                  password: Optional[str]) -> SoncoPayPayoutDestination:
+    """Suspend (or lift the suspension of) one member's payout destination. Nothing is paid to a
+    suspended destination; the member keeps every commission. Commits."""
+    if not _can_manage(actor):
+        raise PermissionError("A Super Admin or the manage_payment_settings permission is required.")
+    payment_config.require_reauth(actor, password)
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValueError("Give a reason (at least 5 characters).")
+    row = (db.query(SoncoPayPayoutDestination).filter(SoncoPayPayoutDestination.id == int(destination_row_id))
+           .with_for_update().first())
+    if row is None:
+        raise ValueError("Destination not found.")
+    old = {"suspended_at": row.suspended_at.isoformat() if row.suspended_at else None,
+           "reason": row.suspension_reason}
+    if suspend:
+        row.suspended_at, row.suspended_by, row.suspension_reason = datetime.utcnow(), int(actor.id), reason[:300]
+    else:
+        if row.suspended_at is None:
+            raise ValueError("This destination is not suspended.")
+        row.suspended_at = row.suspended_by = None
+        row.suspension_reason = None
+    db.add(AuditTrail(user_id=actor.id, action=AUDIT_SUSPENDED if suspend else AUDIT_UNSUSPENDED,
+                      table_name="soncopay_payout_destinations", record_id=row.id, old_values=old,
+                      new_values={"reason": reason[:300], "user_id": row.user_id}))
+    db.commit()
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -638,9 +746,12 @@ def destination_problem(row: Optional[SoncoPayPayoutDestination], address: str, 
 def _amount_fields(payout: dict) -> Dict[str, Any]:
     details = payout.get("destination") if isinstance(payout.get("destination"), dict) else {}
     masked = details.get("details") if isinstance(details.get("details"), dict) else {}
-    out: Dict[str, Any] = {"provider": "soncopay",
-                           "status": STATUS_MAP.get(str(payout.get("status") or "").lower(), "PROCESSING"),
-                           "provider_status": str(payout.get("status") or "")[:30]}
+    raw_status = str(payout.get("status") or "").lower()
+    # Anything that is not a final status (including SoncoPay's manual review of payouts above
+    # USD 1,000) stays in progress: never completed, never sent again.
+    out: Dict[str, Any] = {"provider": "soncopay", "status": STATUS_MAP.get(raw_status, "PROCESSING"),
+                           "provider_status": str(payout.get("status") or "")[:30],
+                           "manual_review": raw_status in REVIEW_STATUSES}
     address = payout.get("address") or masked.get("address")
     if address:
         out["address"] = str(address)
@@ -686,7 +797,8 @@ def published_fee_and_minimum(answer: dict) -> _Facts:
                 if value not in (None, "")]
     if not minimums:
         raise PayoutUnavailable("SoncoPay publishes no minimum payout", stage="read")
-    return _Facts(fee=fee, minimum=max(minimums))
+    # SoncoPay Compliance condition: minimum provider payout USD 5 equivalent, whatever is published.
+    return _Facts(fee=fee, minimum=max(minimums + [PROVIDER_MIN_PAYOUT_USD]))
 
 
 # The last USDT:BSC fee and minimum read from SoncoPay, for the dashboards (the engine reads its own
@@ -724,6 +836,11 @@ class SoncoPayPayoutProvider:
     # Owner decision 2026-10-29 (Option A): commissions too small to clear SoncoPay's minimum plus fee on
     # their own are paid together, per member (cashout_engine.select_payout).
     accumulates_small_commissions = True
+    # SoncoPay Compliance conditions: rolling 24-hour limits, both at once (cashout_engine enforces them
+    # under the settings lock, counting reserved and sent payouts until their final status).
+    max_24h_count = PROVIDER_MAX_24H_COUNT
+    max_24h_amount = PROVIDER_MAX_24H_USD
+    manual_review_above = MANUAL_REVIEW_ABOVE_USD
 
     def __init__(self, db: Session, api: Optional[PayoutClient] = None):
         self._db = db
@@ -808,6 +925,8 @@ class SoncoPayPayoutProvider:
                        SoncoPayPayoutDestination.destination_id.isnot(None)).all())
         matches = [r for r in row if same_address(r.address, address)]
         destination_id = matches[0].destination_id if len(matches) == 1 else None
+        if destination_id is not None and destination_problem(matches[0], address, datetime.utcnow()) is not None:
+            destination_id = None                   # not dashboard-confirmed, waiting, or suspended
         self._db.rollback()
         if destination_id is None:
             raise PayoutRefused("No usable SoncoPay destination for this address", stage="create",
@@ -830,7 +949,8 @@ class SoncoPayPayoutProvider:
             verified = False
         if not verified:
             logger.error("SoncoPay payout %s does not match what was asked for", payout_id[:40])
-        return {"batch_id": payout_id, "status": fields["status"], "verified": verified}
+        return {"batch_id": payout_id, "status": fields["status"], "verified": verified,
+                "provider_status": fields.get("provider_status"), "manual_review": fields.get("manual_review", False)}
 
     def payout_details(self, payout_id: str) -> dict:
         return _amount_fields(self._client().get_payout(payout_id))
@@ -875,13 +995,23 @@ def member_status(db: Session, user: User, now: Optional[datetime] = None) -> di
         None: "Your wallet is ready for automatic payouts.",
         "DESTINATION_NOT_REGISTERED": "Your approved wallet is waiting to be registered with SoncoPay.",
         "DESTINATION_AWAITING_CONFIRMATION": "Your approved wallet is waiting for confirmation by SoncoPay.",
-        "DESTINATION_WAITING_PERIOD": "Your wallet is confirmed and in SoncoPay's security waiting period.",
+        "DESTINATION_AWAITING_DASHBOARD_CONFIRMATION": "Your wallet is registered with SoncoPay and waits for "
+                                                       "confirmation in the SoncoPay dashboard.",
+        "DESTINATION_WAITING_PERIOD": "Your wallet is confirmed. For your security the first payout is sent "
+                                      "24 hours after the confirmation.",
+        "DESTINATION_SUSPENDED": "Payouts to your wallet are suspended. Your earnings are kept; please contact "
+                                 "support.",
         "DESTINATION_NOT_USABLE": "Your wallet cannot receive payouts at the moment; our team has been told.",
     }
+    first_payout = payable_from(row)
     return {"provider": "soncopay", "network": "USDT on BNB Smart Chain (BEP20)",
             "wallet_status": state.status, "destination_state": problem or ("READY" if state.approval_id else None),
             "message": messages.get(problem) if state.approval_id else None,
             "usable_from": row.usable_from.isoformat() if row is not None and row.usable_from and not row.usable else None,
+            "registered_with_soncopay": bool(row is not None and row.destination_id),
+            "soncopay_confirmed": bool(row is not None and row.dashboard_confirmed_at is not None),
+            "first_payout_from": (first_payout.isoformat() + "Z"
+                                  if first_payout is not None and first_payout > now else None),
             "providers_ready": ready(db)}
 
 
@@ -899,8 +1029,17 @@ def admin_view(db: Session, *, read_provider: bool = False) -> dict:
                           "status": r.status, "usable": bool(r.usable),
                           "usable_from": r.usable_from.isoformat() if r.usable_from else None,
                           "confirmed_at": r.confirmed_at.isoformat() if r.confirmed_at else None,
-                          "destination_id": r.destination_id, "last_error": r.last_error}
+                          "destination_id": r.destination_id, "last_error": r.last_error,
+                          "registered_at": r.registered_at.isoformat() if r.registered_at else None,
+                          "dashboard_confirmed_at": (r.dashboard_confirmed_at.isoformat()
+                                                     if r.dashboard_confirmed_at else None),
+                          "dashboard_evidence": r.dashboard_evidence, "ownership_evidence": r.ownership_evidence,
+                          "payable_from": payable_from(r).isoformat() if payable_from(r) else None,
+                          "suspended_at": r.suspended_at.isoformat() if r.suspended_at else None,
+                          "suspension_reason": r.suspension_reason,
+                          "state": destination_problem(r, r.address, datetime.utcnow()) or "ELIGIBLE"}
                          for r, name in rows],
+        "provider_limits": provider_limit_view(db),
         "provider": None,
     }
     if read_provider and ready(db):
@@ -948,3 +1087,18 @@ def accumulation_view(db: Session) -> dict:
             "read_at": published["read_at"].isoformat() + "Z" if published is not None else None,
             "members": engine.accumulation_overview(db, threshold),
             "payouts": engine.accumulated_payouts(db)}
+
+
+def provider_limit_view(db: Session, now: Optional[datetime] = None) -> dict:
+    """SoncoPay's rolling 24-hour limits against what is reserved or sent (conservative)."""
+    from app.models.affiliate import AffiliateCashoutRequest
+    from app.services import cashout_engine as engine
+
+    amount, count = engine.provider_window_usage(db, now or datetime.utcnow())
+    review = (db.query(AffiliateCashoutRequest.id, AffiliateCashoutRequest.gross_amount,
+                       AffiliateCashoutRequest.provider_status)
+              .filter(AffiliateCashoutRequest.provider_status.in_(REVIEW_STATUSES)).limit(50).all())
+    return {"window_hours": 24, "count": count, "count_limit": PROVIDER_MAX_24H_COUNT,
+            "amount": str(amount), "amount_limit": str(PROVIDER_MAX_24H_USD),
+            "minimum_payout_usd": str(PROVIDER_MIN_PAYOUT_USD), "manual_review_above_usd": str(MANUAL_REVIEW_ABOVE_USD),
+            "in_manual_review": [{"cashout_id": i, "amount": str(a), "provider_status": st} for i, a, st in review]}

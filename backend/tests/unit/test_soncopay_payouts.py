@@ -65,8 +65,8 @@ class FakeSoncoPay:
 
     def confirm(self, pid, *, usable=False):
         d = self.destinations[pid]
-        d.update(status="active", usable=usable, confirmed_at="2026-10-29T10:00:00+00:00",
-                 usable_from="2026-10-30T10:00:00+00:00")
+        d.update(status="active", usable=usable, confirmed_at="2026-10-01T10:00:00+00:00",
+                 usable_from="2026-10-02T10:00:00+00:00")
 
     def complete(self, po, *, tx="0x" + "ab" * 32, amount=None, fee=None):
         self.payouts[po].update(status="completed", tx_hash=tx)
@@ -157,6 +157,9 @@ def fake(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def keys(monkeypatch):
+    # These tests predate SoncoPay's USD 5 contractual minimum and use SoncoPay's published 2.00; the USD 5
+    # floor has its own tests (test_soncopay_compliance.py).
+    monkeypatch.setattr(spo, "PROVIDER_MIN_PAYOUT_USD", Decimal("0"))
     monkeypatch.setattr(spo, "_limits", {"facts": None, "read_at": None, "checked": 0.0})
     monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", "synthetic-test-payment-settings-encryption-key")
     monkeypatch.setattr(settings, "BACKEND_PUBLIC_URL", "https://api.example.test")
@@ -186,6 +189,16 @@ def run(db, now=NOW):
     return engine.run_cycle(db, now=now)
 
 
+def dashboard_confirm(db, user, *, at=None):
+    """The administrator records the SoncoPay dashboard confirmation (test set-up: written directly,
+    long enough ago that the 24-hour first-payout wait is over unless `at` says otherwise)."""
+    row = destination(db, user)
+    row.dashboard_confirmed_at = at or (NOW - timedelta(days=3))
+    row.dashboard_evidence, row.ownership_evidence = "synthetic dashboard confirmation", "synthetic ownership check"
+    db.commit()
+    return row
+
+
 def destination(db, user):
     db.expire_all()
     return db.query(SoncoPayPayoutDestination).filter(SoncoPayPayoutDestination.user_id == user.id) \
@@ -199,6 +212,7 @@ def ready_member(db, fake, name="m1", *, amount="2.00"):
     run(db)                                                         # queued and registered
     pid = destination(db, user).destination_id
     fake.confirm(pid, usable=True)
+    dashboard_confirm(db, user)
     run(db)                                                         # read back: usable -> paid in this cycle
     return user, row
 
@@ -279,7 +293,10 @@ def test_a_confirmed_destination_waits_for_the_security_period(payouts_on, fake)
     report = run(db)
     row = destination(db, user)
     assert (row.status, row.usable) == ("ACTIVE", False) and row.usable_from is not None
-    assert report["members"] == {"DESTINATION_WAITING_PERIOD": 1} and fake.posts("/v1/payouts") == []
+    # SoncoPay's confirmation alone is not the dashboard confirmation SoncoPay requires.
+    assert report["members"] == {"DESTINATION_AWAITING_DASHBOARD_CONFIRMATION": 1}
+    dashboard_confirm(db, user)
+    assert run(db)["members"] == {"DESTINATION_WAITING_PERIOD": 1} and fake.posts("/v1/payouts") == []
 
 
 def test_an_unapproved_wallet_is_never_registered(payouts_on, fake):
@@ -327,7 +344,8 @@ def test_automatic_confirmation_still_respects_the_waiting_period(payouts_on, fa
     fake.auto_confirm = True
     user = member(db, "m1", method="CRYPTO")
     commission(db, user, "2.00")
-    assert run(db)["members"] == {"DESTINATION_WAITING_PERIOD": 1}
+    # SoncoPay confirmed it on its own (api_auto_confirm): never taken as the dashboard confirmation.
+    assert run(db)["members"] == {"DESTINATION_AWAITING_DASHBOARD_CONFIRMATION": 1}
     assert destination(db, user).status == "ACTIVE" and fake.posts("/v1/payouts") == []
 
 
@@ -338,6 +356,7 @@ def test_a_destination_whose_address_differs_is_disabled_and_never_paid(payouts_
     run(db)
     pid = destination(db, user).destination_id
     fake.confirm(pid, usable=True)
+    dashboard_confirm(db, user)
     fake.destinations[pid]["address"] = OTHER_WALLET                # SoncoPay reports another address
     run(db)
     row = destination(db, user)
@@ -389,6 +408,7 @@ def test_each_commission_that_clears_the_threshold_gets_its_own_payout(payouts_o
     commission(db, user, "3.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     run(db)
     amounts = sorted(Decimal(p["amount"]) for p in fake.payouts.values())
     assert amounts == [Decimal("1.90"), Decimal("2.90")]
@@ -402,6 +422,7 @@ def test_below_the_minimum_stays_unpaid(payouts_on, fake):
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     # Owner decision 2026-10-29 (Option A): it waits for more commissions instead of being lost.
     assert run(db)["members"] == {"ACCUMULATING_BELOW_THRESHOLD": 1} and fake.posts("/v1/payouts") == []
 
@@ -413,6 +434,7 @@ def test_insufficient_balance_stays_unpaid(payouts_on, fake):
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     assert run(db)["members"] == {"INSUFFICIENT_PROVIDER_BALANCE": 1} and fake.posts("/v1/payouts") == []
 
 
@@ -430,6 +452,7 @@ def test_documented_refusals_release_the_commission_without_blaming_the_member(p
     row = commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     fake.refuse_payout = refusal
     report = run(db)
     assert report["members"] == {outcome: 1}
@@ -448,6 +471,7 @@ def test_a_lost_answer_is_unknown_never_resent_and_found_by_its_reference(payout
     row = commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     fake.drop_payout = True
     assert run(db)["members"] == {"OUTCOME_UNKNOWN": 1}
     fake.drop_payout = False
@@ -493,6 +517,7 @@ def test_without_the_server_activation_nothing_is_sent(payouts_on, fake, monkeyp
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     report = run(db)
     assert report["enabled"] is False and fake.posts("/v1/payouts") == [] and cashouts(db, user) == []
 
@@ -512,6 +537,7 @@ def test_activation_withdrawn_after_reservation_sends_nothing(payouts_on, fake, 
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     real_lock = payment_config.lock_settings
 
     def lock_after_withdrawal(session):
@@ -542,6 +568,7 @@ def test_a_soncopay_outage_pays_nothing(payouts_on, fake, monkeypatch):
     commission(db, user, "2.00")
     run(db)
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     monkeypatch.setattr(spo, "_transport", lambda: httpx.MockTransport(lambda r: httpx.Response(503)))
     report = run(db)
     assert report.get("stopped") in ("PROVIDER_AUTH_FAILED", "PAYOUT_ASSET_UNVERIFIED", "PROVIDER_FACTS_UNAVAILABLE")
@@ -618,6 +645,7 @@ def payable_member(db, fake, name="m1", *, wallet=WALLET, amounts=()):
     db.commit()
     run(db)                                                         # registered at SoncoPay
     fake.confirm(destination(db, user).destination_id, usable=True)
+    dashboard_confirm(db, user)
     return user, [commission(db, user, a, when=NOW - timedelta(days=10 - i)) for i, a in enumerate(amounts)]
 
 
@@ -748,6 +776,7 @@ def test_an_unapproved_wallet_or_a_cooling_destination_keeps_the_accumulated_com
     cooling = member(db, "m2", method="CRYPTO", wallet=OTHER_WALLET)
     run(db)
     fake.confirm(destination(db, cooling).destination_id, usable=False)  # in its 24-hour waiting period
+    dashboard_confirm(db, cooling)
     commission(db, cooling, "1.20")
     commission(db, cooling, "1.20")
     assert run(db)["members"].get("DESTINATION_WAITING_PERIOD") == 1
@@ -987,6 +1016,7 @@ def test_a_waiting_wallet_keeps_ten_dollars_unpaid(payouts_on, fake):
     cooling = member(db, "m1", method="CRYPTO")
     run(db)
     fake.confirm(destination(db, cooling).destination_id, usable=False)
+    dashboard_confirm(db, cooling)
     commission(db, cooling, "10.00")
     assert run(db)["members"] == {"DESTINATION_WAITING_PERIOD": 1} and fake.posts("/v1/payouts") == []
 

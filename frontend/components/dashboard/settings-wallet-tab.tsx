@@ -27,7 +27,8 @@ type WalletInfo = {
   confirmation_email_sent?: boolean | null
   hold_hours?: number | null
   /** SoncoPay: where the approved wallet stands as a payout destination. */
-  payout_destination?: { destination_state: string | null; message: string | null; usable_from: string | null } | null
+  payout_destination?: { destination_state: string | null; message: string | null; usable_from: string | null
+    registered_with_soncopay?: boolean; soncopay_confirmed?: boolean; first_payout_from?: string | null } | null
 }
 
 const CURRENCY_META: Record<string, { label: string; placeholder: string; hint: string }> = {
@@ -217,8 +218,16 @@ export function SettingsWalletTab() {
                 className={`text-xs mt-1 ${walletInfo.payout_destination.destination_state === 'READY'
                   ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}>
                 {walletInfo.payout_destination.message}
-                {walletInfo.payout_destination.usable_from
-                  ? ` Expected from ${new Date(`${walletInfo.payout_destination.usable_from}Z`).toLocaleString()}.` : ''}
+                {walletInfo.payout_destination.first_payout_from
+                  ? ` First payout from ${new Date(walletInfo.payout_destination.first_payout_from).toLocaleString()}.`
+                  : walletInfo.payout_destination.usable_from
+                    ? ` Expected from ${new Date(`${walletInfo.payout_destination.usable_from}Z`).toLocaleString()}.` : ''}
+              </p>
+            )}
+            {walletInfo?.payout_destination && walletInfo.payout_destination.destination_state !== 'READY' && (
+              <p className="text-xs mt-1 text-gray-500" data-testid="payout-destination-steps">
+                Registered with SoncoPay: {walletInfo.payout_destination.registered_with_soncopay ? 'yes' : 'not yet'} ·
+                Confirmed by SoncoPay: {walletInfo.payout_destination.soncopay_confirmed ? 'yes' : 'not yet'}
               </p>
             )}
           </div>
