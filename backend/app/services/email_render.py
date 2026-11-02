@@ -375,6 +375,44 @@ def _payout_status(db, to, user_id, ctx, lang) -> Rendered:
                    button_url=_wallet_page(), subject=f"MyHigh5: {title.lower()}")
 
 
+_ADVERTISING_TEXT = {
+    "SUBMITTED": ("Campaign submitted for review", [
+        "Your campaign \"{campaign}\" was submitted. Its budget is reserved in the campaign at the price fixed "
+        "at submission. An administrator reviews the campaign and its creatives before anything is shown."]),
+    "APPROVED": ("Campaign approved", [
+        "Your campaign \"{campaign}\" was approved. It serves between its start and end dates, and you are "
+        "charged only for valid, viewable impressions."]),
+    "REJECTED": ("Campaign rejected", [
+        "Your campaign \"{campaign}\" was not approved. Reason: {note}",
+        "The unspent budget returns to your advertiser credit."]),
+    "CHANGES_REQUESTED": ("Changes requested for your campaign", [
+        "An administrator asked for changes to your campaign \"{campaign}\": {note}",
+        "Edit the campaign and submit it again. Its budget stays reserved; cancelling returns it to your credit."]),
+    "PAUSED": ("Campaign paused", ["Your campaign \"{campaign}\" was paused by an administrator. {note}"]),
+    "RESUMED": ("Campaign resumed", ["Your campaign \"{campaign}\" is serving again."]),
+    "COMPLETED": ("Campaign completed", [
+        "Your campaign \"{campaign}\" has ended. Any unspent budget returns to your advertiser credit."]),
+    "BUDGET_EXHAUSTED": ("Campaign budget used", [
+        "Your campaign \"{campaign}\" has used its budget and stopped serving."]),
+    "SHARE_RELEASED": ("Advertising revenue share released", [
+        "Your {role_text} advertising revenue share of ${amount} for {period} was finalized and released. "
+        "Payout rules (verified identity, approved payout wallet, minimum amount) apply."]),
+}
+
+
+def _advertising_update(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    kind = str(ctx.get("kind") or "")
+    title, lines = _ADVERTISING_TEXT.get(kind, _ADVERTISING_TEXT["SUBMITTED"])
+    values = {"campaign": ctx.get("campaign") or "", "note": ctx.get("note") or "", "amount": ctx.get("amount") or "",
+              "period": ctx.get("period") or "",
+              "role_text": "direct sponsor" if ctx.get("role") == "SPONSOR" else "creative"}
+    page = "/dashboard/ad-earnings" if kind == "SHARE_RELEASED" else "/dashboard/advertise"
+    return _simple("en", title, [line.format(**values) for line in lines],
+                   button_text="View earnings" if kind == "SHARE_RELEASED" else "View campaigns",
+                   button_url=f"{public_site_base()}{page}", subject=f"MyHigh5: {title.lower()}")
+
+
 def _invitation(db, to, user_id, ctx, lang) -> Rendered:
     code = ctx.get("referral_code", "")
     from urllib.parse import quote
@@ -453,6 +491,7 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.PAYOUT_COMPLETED.value: _payout_completed,
     EmailEvent.PAYOUT_FAILED.value: _payout_failed,
     EmailEvent.PAYOUT_STATUS_UPDATE.value: _payout_status,
+    EmailEvent.BILLING_ADVERTISING_UPDATE.value: _advertising_update,
     EmailEvent.AFFILIATE_COMMISSION_EARNED.value: _commission_wallet_missing,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,
     EmailEvent.ADMIN_CONTACT_MESSAGE.value: _contact_message,

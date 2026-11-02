@@ -7,6 +7,7 @@ import { isAdRoute, type AdPageType, type AdSlotKind } from '@/lib/ads/placement
 import { useAdEligibility } from '@/hooks/use-ad-eligibility'
 import { COOKIE_CONSENT_EVENT } from '@/components/ui/cookie-consent'
 import { hasAdvertisingConsent } from '@/components/ads/adsense-loader'
+import { normalizeMediaUrl } from '@/lib/media-url'
 
 type Decision =
   | { fill: false; reason?: string }
@@ -182,7 +183,7 @@ export function AdSlot({ pageType, slotKind, slotKey, contestantId, className }:
         >
           {filled.creative.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={filled.creative.image_url} alt="" className="h-16 w-16 rounded object-cover flex-shrink-0" />
+            <img src={normalizeMediaUrl(filled.creative.image_url)} alt="" className="h-16 w-16 rounded object-cover flex-shrink-0" />
           ) : null}
           <span>
             <span className="block font-semibold text-gray-900 dark:text-white">{filled.creative.headline}</span>

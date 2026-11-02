@@ -2,7 +2,7 @@
 """Grant (or revoke) Finance & Payments and administrator security permissions
 to ONE administrator.
 
-Six permissions exist, created by migrations and assigned to nobody. None is
+Seven permissions exist, created by migrations and assigned to nobody. None is
 implied by is_admin or by the 'all' wildcard, so somebody has to be given them
 deliberately:
 
@@ -20,6 +20,9 @@ deliberately:
   manage_kyc_settings             the Member KYC Verification Fee, the Kaluta
                                   API key, webhook secret and on/off switch,
                                   and an extra provider session for a member
+  manage_advertising              advertising prices and switches, campaign
+                                  and creative review, entry-origin review,
+                                  monthly ad revenue-share finalization
 
 EVERY permission to grant must be named with --permission. There is no
 default and no "all": nothing is granted that was not asked for by name.
@@ -64,13 +67,16 @@ from app.models.user import Permission, Role, User
 from app.services import admin_security, payment_config
 
 ROLE_PREFIX = "finance_manager"
+PERMISSION_MANAGE_ADVERTISING = "manage_advertising"
 PERMISSIONS = (payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS,
                payment_config.PERMISSION_ACTIVATE, admin_security.PERMISSION_MANAGE_ADMINS,
-               admin_security.PERMISSION_GRANT_PAYMENTS, admin_security.PERMISSION_MANAGE_KYC)
+               admin_security.PERMISSION_GRANT_PAYMENTS, admin_security.PERMISSION_MANAGE_KYC,
+               PERMISSION_MANAGE_ADVERTISING)
 # One letter per permission in the role name, always in this order.
 _TAGS = ((payment_config.PERMISSION_MANAGE, "m"), (payment_config.PERMISSION_ACTIVATE, "a"),
          (payment_config.PERMISSION_PROCESS, "p"), (admin_security.PERMISSION_MANAGE_ADMINS, "r"),
-         (admin_security.PERMISSION_GRANT_PAYMENTS, "g"), (admin_security.PERMISSION_MANAGE_KYC, "k"))
+         (admin_security.PERMISSION_GRANT_PAYMENTS, "g"), (admin_security.PERMISSION_MANAGE_KYC, "k"),
+         (PERMISSION_MANAGE_ADVERTISING, "v"))
 
 
 class GrantError(Exception):

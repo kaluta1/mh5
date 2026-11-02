@@ -447,7 +447,7 @@ def complete_due_campaigns(db: Session, *, now: Optional[datetime] = None) -> in
         elif unit > 0 and remaining < unit and Decimal(str(c.reserved)) == 0:
             camp.complete_campaign(db, c, reason="BUDGET_EXHAUSTED")
             done += 1
-    for c in db.query(AdvCampaign).filter(AdvCampaign.status.in_(("COMPLETED", "REJECTED")),
+    for c in db.query(AdvCampaign).filter(AdvCampaign.status.in_(camp.CLOSED_STATUSES),
                                           AdvCampaign.settled_at.is_(None)).with_for_update().all():
         camp.settle_campaign(db, c, reason=c.completion_reason or c.status)
     db.flush()

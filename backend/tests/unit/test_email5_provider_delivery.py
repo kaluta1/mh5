@@ -654,7 +654,7 @@ def test_admin_views_show_provider_states(client, db, webhook_secret, ip):
 
 
 def test_provider_events_are_not_business_email_events():
-    assert len(EMAIL_EVENTS) == 58                                  # + PAYOUT.STATUS_UPDATE (Prompt 3)
+    assert len(EMAIL_EVENTS) == 59                                  # + PAYOUT.STATUS_UPDATE (Prompt 3) + BILLING.ADVERTISING_UPDATE (Prompt 4)
     assert not any(k.startswith("email.") or "WEBHOOK" in k or "BOUNCE" in k or "COMPLAIN" in k for k in EMAIL_EVENTS)
     wired = {k for k, d in EMAIL_EVENTS.items() if d.trigger_implemented}
-    assert len(wired) == 31
+    assert len(wired) == 32

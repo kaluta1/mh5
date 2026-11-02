@@ -266,6 +266,7 @@ def _post_commission(db: Session, line: AdvAllocation, *, from_held: bool) -> Af
                description=f"Contest-page ad revenue share #{line.id} ({line.role}, entry {line.contestant_id}, "
                            f"{line.period}, {line.source})")
     line.commission_id, line.status, line.released_at = commission.id, "RELEASED", datetime.utcnow()
+    camp.notify_share_released(db, line)
     from app.services.cashout_engine import request_cycle
 
     request_cycle()                       # a no-op while automatic payouts are off

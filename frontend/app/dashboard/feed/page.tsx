@@ -183,9 +183,9 @@ export default function FeedPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-4 md:py-6">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 xl:flex xl:items-start xl:gap-6">
         {/* Main Feed - Standalone, centered */}
-        <main className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <main className="xl:flex-1 xl:min-w-0 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             {/* Create Post Box */}
             <div className="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700">
               <CreatePostBox
@@ -265,6 +265,10 @@ export default function FeedPage() {
               </div>
             )}
         </main>
+        {/* Desktop sidebar: one sponsored unit near the top of the right column (wide screens only, never over content). */}
+        <aside className="hidden xl:block w-72 shrink-0 sticky top-20" aria-label="Sponsored">
+          <AdSlot pageType="FEED" slotKind="SIDEBAR" slotKey="feed:sidebar:0" />
+        </aside>
       </div>
 
       {/* Floating Action Button */}

@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -113,6 +113,17 @@ class CampaignCreate(BaseModel):
     page_types: List[str] = []
 
 
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    budget: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    daily_cap: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    placements: Optional[List[Literal["SIDEBAR", "IN_FEED", "IN_CONTENT"]]] = None
+    countries: Optional[List[str]] = None
+    page_types: Optional[List[str]] = None
+
+
 class CreativeCreate(BaseModel):
     headline: str = Field(min_length=1, max_length=90)
     body: Optional[str] = Field(default=None, max_length=240)
@@ -136,8 +147,9 @@ def advertiser_overview(db: Session = Depends(deps.get_db), user: User = Depends
     reports = [camp.campaign_report(db, c) for c in campaigns]
     in_campaigns = sum((Decimal(r["remaining_budget"]) for r in reports
                         if r["status"] not in ("COMPLETED", "REJECTED")), Decimal("0.00"))
+    packages = camp.packages(db)
     db.rollback()
-    return {"pricing_state": camp.pricing_state(cfg), "currency": "USD",
+    return {"pricing_state": camp.pricing_state(cfg), "currency": "USD", "packages": packages,
             "cpm_rate_usd": str(cfg.cpm_rate_usd) if cfg.cpm_rate_usd is not None else None,
             "min_campaign_budget_usd": str(cfg.min_campaign_budget_usd) if cfg.min_campaign_budget_usd else None,
             "campaigns_enabled": bool(cfg.campaigns_enabled), "funding_enabled": bool(cfg.funding_enabled),
@@ -162,6 +174,77 @@ def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
     return camp.campaign_report(db, c)
 
 
+@member_router.get("/packages")
+def advertising_packages(db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
+    out = camp.packages(db)
+    db.rollback()
+    return {"packages": out}
+
+
+@member_router.get("/estimate")
+def advertising_estimate(budget: Decimal, db: Session = Depends(deps.get_db),
+                         user: User = Depends(deps.get_current_active_user)):
+    """Theoretical allowance only (budget / CPM x 1,000): never a delivery promise."""
+    cfg = camp.get_settings(db)
+    db.rollback()
+    if budget <= 0 or budget > Decimal("1000000"):
+        raise HTTPException(status_code=400, detail="Enter a positive budget")
+    minimum = cfg.min_campaign_budget_usd
+    return {"budget": str(budget.quantize(Decimal("0.01"))), "currency": "USD",
+            "cpm_rate_usd": str(cfg.cpm_rate_usd) if cfg.cpm_rate_usd is not None else None,
+            "estimated_impressions": camp.estimated_impressions(budget, cfg.cpm_rate_usd),
+            "below_minimum": bool(minimum is not None and budget < minimum),
+            "minimum_budget_usd": str(minimum) if minimum is not None else None,
+            "note": "Estimated maximum of billable (valid, viewable) impressions; delivery is not guaranteed."}
+
+
+@member_router.patch("/advertiser/campaigns/{campaign_id}")
+def update_campaign(campaign_id: int, body: CampaignUpdate, db: Session = Depends(deps.get_db),
+                    user: User = Depends(deps.get_current_active_user)):
+    c = _own_campaign(db, user, campaign_id, lock=True)
+    changes = body.model_dump(exclude_unset=True)
+    for key in ("start_at", "end_at"):
+        if changes.get(key) is not None:
+            changes[key] = changes[key].replace(tzinfo=None)
+    try:
+        camp.update_campaign(db, user, c, changes)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return camp.campaign_report(db, c)
+
+
+@member_router.post("/advertiser/campaigns/{campaign_id}/creatives/{creative_id}/image")
+async def upload_creative_image(campaign_id: int, creative_id: int, request: Request, file: UploadFile = File(...),
+                                db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
+    """Upload the creative's image into the existing media storage (signature, MIME, extension and pixel checks,
+    metadata stripped), then the advertising limits (format, 2 MB, 100-4000 px). Owner only."""
+    from app.core.storage import store_media, validate_media_content
+
+    if _is_rate_limited(f"ad-image:{user.id}", 20, 3600):
+        raise HTTPException(status_code=429, detail="Too many uploads; try again later")
+    c = _own_campaign(db, user, campaign_id)
+    if c.status not in ("DRAFT", "CHANGES_REQUESTED", "PENDING_REVIEW", "PAUSED", "ACTIVE"):
+        raise HTTPException(status_code=409, detail={"code": "CAMPAIGN_CLOSED", "message": "The campaign is closed"})
+    cr = db.query(AdvCreative).filter(AdvCreative.id == creative_id, AdvCreative.campaign_id == c.id).first()
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Creative not found")
+    content = await file.read(camp.CREATIVE_IMAGE_MAX_BYTES + 1)
+    try:
+        meta = validate_media_content(file.filename or "", file.content_type or "", content)
+        camp.check_creative_image(meta)
+    except camp.AdError as exc:
+        raise _err(exc) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_IMAGE", "message": str(exc)}) from None
+    await file.seek(0)
+    stored = await store_media(file, user.id)
+    camp.attach_image(db, cr, stored, actor_id=user.id)
+    db.commit()
+    return camp.creative_payload(cr)
+
+
 @member_router.post("/advertiser/campaigns/{campaign_id}/creatives")
 def add_creative(campaign_id: int, body: CreativeCreate, db: Session = Depends(deps.get_db),
                  user: User = Depends(deps.get_current_active_user)):
@@ -177,7 +260,7 @@ def add_creative(campaign_id: int, body: CreativeCreate, db: Session = Depends(d
 
 
 @member_router.post("/advertiser/campaigns/{campaign_id}/{action}")
-def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume", "complete"],
+def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume", "complete", "cancel"],
                     db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
     c = _own_campaign(db, user, campaign_id, lock=True)
     try:
@@ -185,6 +268,8 @@ def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume
             camp.submit_campaign(db, user, c)
         elif action in ("pause", "resume"):
             camp.set_paused(db, user, c, paused=action == "pause")
+        elif action == "cancel":
+            camp.cancel_campaign(db, user, c)
         else:
             camp.complete_campaign(db, c, reason="ADVERTISER_STOPPED", actor_id=user.id)
     except camp.AdError as exc:
@@ -246,6 +331,15 @@ class ReviewBody(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class NoteBody(BaseModel):
+    note: str = Field(min_length=3, max_length=500)
+
+
+class ScanBody(BaseModel):
+    limit: int = Field(default=500, ge=1, le=2000)
+    current_password: str = Field(default="", max_length=256)
+
+
 class OriginBody(BaseModel):
     origin_kind: Literal["PERSONAL_SUBMISSION", "NOMINATION"]
     note: str = Field(min_length=3, max_length=300)
@@ -297,7 +391,11 @@ def admin_overview(db: Session = Depends(deps.get_db), admin: User = Depends(req
                   .group_by(AdvAnnualAdsPayment.buyer_match).all())
     from app.core.config import settings as app_settings
 
-    out = {"settings": camp.settings_payload(cfg), "campaigns": status_counts, "impression_events": events,
+    out = {"settings": camp.settings_payload(cfg), "packages": camp.packages(db),
+           "approved_policy": {"cpm_rate_usd": str(camp.APPROVED_CPM_USD),
+                               "min_campaign_budget_usd": str(camp.APPROVED_MIN_BUDGET_USD)},
+           "origins": ad_attribution.origin_overview(db),
+           "campaigns": status_counts, "impression_events": events,
            "allocations": allocations, "origins_under_review": int(reviews or 0),
            "adsense": {"credentials_missing": sharing.missing_adsense_credentials(),
                        "imports": [{"id": i.id, "status": i.status, "rows": i.rows, "detail": i.detail,
@@ -383,10 +481,69 @@ def admin_pause_campaign(campaign_id: int, db: Session = Depends(deps.get_db), a
     return camp.campaign_report(db, c)
 
 
+@admin_router.post("/campaigns/{campaign_id}/resume")
+def admin_resume_campaign(campaign_id: int, db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    c = db.query(AdvCampaign).filter(AdvCampaign.id == campaign_id).first()
+    if c is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    try:
+        camp.set_paused(db, admin, c, paused=False)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return camp.campaign_report(db, c)
+
+
+@admin_router.post("/campaigns/{campaign_id}/request-changes")
+def admin_request_changes(campaign_id: int, body: NoteBody, db: Session = Depends(deps.get_db),
+                          admin: User = Depends(require_ad_admin)):
+    c = db.query(AdvCampaign).filter(AdvCampaign.id == campaign_id).first()
+    if c is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    try:
+        camp.request_changes(db, admin, c, note=body.note)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return camp.campaign_report(db, c)
+
+
+@admin_router.get("/reconciliation")
+def admin_reconciliation(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    out = camp.reconciliation(db)
+    db.rollback()
+    return out
+
+
+@admin_router.get("/suspicious")
+def admin_suspicious(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    out = camp.suspicious_activity(db)
+    db.rollback()
+    return out
+
+
 @admin_router.get("/origins")
-def admin_origins(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
-    rows = db.query(AdvEntryOrigin).filter(AdvEntryOrigin.status == "REVIEW").order_by(AdvEntryOrigin.id.asc()).limit(500).all()
-    return {"origins": [{"contestant_id": r.contestant_id, "evidence": r.evidence} for r in rows]}
+def admin_origins(skip: int = 0, limit: int = 50, db: Session = Depends(deps.get_db),
+                  admin: User = Depends(require_ad_admin)):
+    out = {"overview": ad_attribution.origin_overview(db),
+           "origins": ad_attribution.review_page(db, skip=skip, limit=limit)}
+    db.rollback()
+    return out
+
+
+@admin_router.post("/origins/scan")
+def admin_scan_origins(body: ScanBody, db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    """Classify active entries from verified evidence; unprovable ones go to review (held). No money moves."""
+    from app.models.accounting import AuditTrail
+
+    _reauth(admin, body.current_password)
+    out = ad_attribution.scan_origins(db, limit=body.limit)
+    db.add(AuditTrail(table_name="adv_entry_origins", record_id=0, action="SCAN", old_values=None, new_values=out,
+                      user_id=admin.id))
+    db.commit()
+    return out
 
 
 @admin_router.post("/origins/{contestant_id}/resolve")

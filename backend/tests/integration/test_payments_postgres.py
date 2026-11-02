@@ -113,6 +113,7 @@ SELLER_VERIFICATION = "f3b5d7e9a1c2_marketplace_seller_verification.py"
 ADVERTISING = "a6c8e0f2b4d6_advertising_placements_campaigns_sharing.py"
 SONCOPAY_CONFIRMATION = "b0d2f4a6c8e1_soncopay_destination_dashboard_confirmation.py"
 MISSED_EARNINGS = "d4f6a8c0e2b5_missed_earnings_kyc_only.py"
+ADVERTISING_COMPLETION = "e5a7c9e1f3b4_advertising_completion.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -388,12 +389,13 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
             (SELLER_VERIFICATION, "f3b5d7e9a1c2", "e2a4c6e8f0b1", ADVERTISING),
             (ADVERTISING, "a6c8e0f2b4d6", "f3b5d7e9a1c2", SONCOPAY_CONFIRMATION),
             (SONCOPAY_CONFIRMATION, "b0d2f4a6c8e1", "a6c8e0f2b4d6", MISSED_EARNINGS),
-            (MISSED_EARNINGS, "d4f6a8c0e2b5", "b0d2f4a6c8e1", None)):
+            (MISSED_EARNINGS, "d4f6a8c0e2b5", "b0d2f4a6c8e1", ADVERTISING_COMPLETION),
+            (ADVERTISING_COMPLETION, "e5a7c9e1f3b4", "d4f6a8c0e2b5", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # d4f6a8c0e2b5 is the single head
+    # e5a7c9e1f3b4 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

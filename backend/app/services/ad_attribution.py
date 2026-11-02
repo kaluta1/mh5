@@ -149,3 +149,64 @@ def creative_rate(origin_kind: Optional[str]):
     if origin_kind == NOMINATION:
         return policy.NOMINATION_OWNER_RATE
     return None
+
+
+# ---------------------------------------------------------------- administrator review of historical origins
+
+def scan_origins(db: Session, *, limit: int = 500) -> dict:
+    """Decide the stored origin of active entries that have none yet, from verified evidence only
+    (same rule as at the first earning event). Entries without proof become REVIEW and stay held until an
+    administrator resolves them. Never guesses, never changes a stored origin, posts no money."""
+    from app.models.contests import Contestant
+
+    rows = (db.query(Contestant)
+            .outerjoin(AdvEntryOrigin, AdvEntryOrigin.contestant_id == Contestant.id)
+            .filter(AdvEntryOrigin.id.is_(None), Contestant.is_active.is_(True), Contestant.is_deleted.is_(False))
+            .order_by(Contestant.id.asc()).limit(max(1, min(int(limit), 2000))).all())
+    counts = {"RESOLVED": 0, "REVIEW": 0}
+    for contestant in rows:
+        counts[origin_for(db, contestant).status] += 1
+    remaining = (db.query(Contestant.id).outerjoin(AdvEntryOrigin, AdvEntryOrigin.contestant_id == Contestant.id)
+                 .filter(AdvEntryOrigin.id.is_(None), Contestant.is_active.is_(True),
+                         Contestant.is_deleted.is_(False)).count())
+    return {"scanned": len(rows), "resolved_from_evidence": counts["RESOLVED"], "sent_to_review": counts["REVIEW"],
+            "remaining_unscanned": int(remaining)}
+
+
+def origin_overview(db: Session) -> dict:
+    from sqlalchemy import func
+
+    from app.models.contests import Contestant
+
+    by_status = dict(db.query(AdvEntryOrigin.status, func.count(AdvEntryOrigin.id)).group_by(AdvEntryOrigin.status).all())
+    by_kind = dict(db.query(AdvEntryOrigin.origin_kind, func.count(AdvEntryOrigin.id))
+                   .filter(AdvEntryOrigin.status == "RESOLVED").group_by(AdvEntryOrigin.origin_kind).all())
+    active = db.query(func.count(Contestant.id)).filter(Contestant.is_active.is_(True),
+                                                         Contestant.is_deleted.is_(False)).scalar()
+    unscanned = (db.query(Contestant.id).outerjoin(AdvEntryOrigin, AdvEntryOrigin.contestant_id == Contestant.id)
+                 .filter(AdvEntryOrigin.id.is_(None), Contestant.is_active.is_(True),
+                         Contestant.is_deleted.is_(False)).count())
+    return {"active_entries": int(active or 0), "unscanned": int(unscanned),
+            "resolved": int(by_status.get("RESOLVED", 0)), "under_review": int(by_status.get("REVIEW", 0)),
+            "resolved_by_kind": {str(k): int(v) for k, v in by_kind.items()}}
+
+
+def review_page(db: Session, *, skip: int = 0, limit: int = 50) -> list:
+    """Entries under review with the facts an administrator needs to decide (no guess is offered)."""
+    from app.models.contest import Contest
+    from app.models.contests import Contestant
+
+    rows = (db.query(AdvEntryOrigin, Contestant)
+            .join(Contestant, Contestant.id == AdvEntryOrigin.contestant_id)
+            .filter(AdvEntryOrigin.status == "REVIEW").order_by(AdvEntryOrigin.id.asc())
+            .offset(max(0, skip)).limit(max(1, min(limit, 200))).all())
+    out = []
+    for origin, c in rows:
+        contest = db.query(Contest).filter(Contest.id == c.contest_id).first() if c.contest_id else None
+        out.append({"contestant_id": c.id, "title": c.title, "owner_user_id": c.user_id, "entry_type": c.entry_type,
+                    "contest_id": c.contest_id, "contest_name": getattr(contest, "name", None) if contest else None,
+                    "contest_mode": getattr(contest, "contest_mode", None) if contest else None,
+                    "nominator_country": getattr(c, "nominator_country", None),
+                    "registration_date": c.registration_date.isoformat() if c.registration_date else None,
+                    "evidence": origin.evidence})
+    return out

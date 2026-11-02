@@ -510,7 +510,7 @@ def test_url_helper_allows_only_safe_schemes(url, ok):
 
 def test_registry_is_exactly_the_53_audited_events_and_the_wallet_confirmation():
     # + the three wallet approval events of individual payouts (2026-10-18)
-    assert len(EMAIL_EVENTS) == 58 and "CONTEST.NOMINATION_PUBLISHED" in EMAIL_EVENTS
+    assert len(EMAIL_EVENTS) == 59 and "CONTEST.NOMINATION_PUBLISHED" in EMAIL_EVENTS
     for forbidden in ("CONTEST.NOMINATION_PENDING_REVIEW", "CONTEST.NOMINATION_SUBMITTED",
                       "CONTEST.PARTICIPATION_SUBMITTED", "KYC.PENDING_REVIEW", "AUTH.EMAIL_CHANGED",
                       "PAYOUT.APPROVED", "PAYOUT.REJECTED", "BILLING.INVOICE"):

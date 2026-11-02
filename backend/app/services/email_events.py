@@ -129,6 +129,7 @@ class EmailEvent(str, Enum):
     BILLING_REFUND = "BILLING.REFUND"
     BILLING_MEMBERSHIP_RENEWED = "BILLING.MEMBERSHIP_RENEWED"
     BILLING_MEMBERSHIP_EXPIRING = "BILLING.MEMBERSHIP_EXPIRING"
+    BILLING_ADVERTISING_UPDATE = "BILLING.ADVERTISING_UPDATE"
     # AFFILIATE (direct level 1 only)
     AFFILIATE_INVITATION = "AFFILIATE.INVITATION"
     AFFILIATE_DIRECT_REFERRAL = "AFFILIATE.DIRECT_REFERRAL"
@@ -246,6 +247,9 @@ _DEFINITIONS: List[EmailEventDefinition] = [
     _d(E.BILLING_REFUND, "Refund", _T, "Payer", on=False, phase=_APPROVAL),
     _d(E.BILLING_MEMBERSHIP_RENEWED, "Membership renewed", _T, "Member", on=False, phase=_APPROVAL),
     _d(E.BILLING_MEMBERSHIP_EXPIRING, "Membership expiring", _T, "Member", on=False, phase=_APPROVAL),
+    # Prompt 4 (2026-11-03): advertiser campaign updates and released contest-page ad shares. Queued only
+    # while MyHigh5 campaigns (or contest sharing, for shares) are switched on.
+    _d(E.BILLING_ADVERTISING_UPDATE, "Advertising campaign / ad share update", _T, "Advertiser or member", live=True),
     # ---- AFFILIATE -----------------------------------------------------------
     _d(E.AFFILIATE_INVITATION, "Referral invitation", _M, "Invitee (non-member)", live=True),
     _d(E.AFFILIATE_DIRECT_REFERRAL, "New direct referral", _T, "Sponsor", on=False, phase=_LATER),

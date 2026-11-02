@@ -68,8 +68,8 @@ class AdvCreditMovement(Base):
 class AdvCampaign(Base):
     __tablename__ = "adv_campaigns"
     __table_args__ = (
-        CheckConstraint("status IN ('DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'COMPLETED', 'REJECTED')",
-                        name="ck_adv_campaign_status"),
+        CheckConstraint("status IN ('DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'COMPLETED', 'REJECTED', "
+                        "'CHANGES_REQUESTED', 'CANCELLED')", name="ck_adv_campaign_status"),
         CheckConstraint("pricing_model = 'CPM'", name="ck_adv_campaign_pricing"),
         CheckConstraint("spent >= 0 AND reserved >= 0 AND spent + reserved <= budget_total",
                         name="ck_adv_campaign_budget"),
@@ -125,6 +125,11 @@ class AdvCreative(Base):
     review_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reviewed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Uploaded image (Prompt 4): validated content type, size and pixel dimensions; NULL for an image URL.
+    image_mime: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    image_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    image_width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    image_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class AdvEntryOrigin(Base):
