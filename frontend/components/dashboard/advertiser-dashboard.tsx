@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import api from '@/lib/api'
+import { MissedEarnings } from '@/components/dashboard/missed-earnings'
 
 type Json = Record<string, any>
 
@@ -167,6 +168,12 @@ export function AdEarnings() {
         <dt>Available</dt><dd>{v.available} USD</dd>
         <dt>Paid</dt><dd>{v.paid} USD</dd>
         <dt>Adjusted (superseded)</dt><dd>{v.adjustments_superseded} USD</dd>
+        <dt className="text-amber-700 dark:text-amber-400">Missed — KYC not approved (not payable)</dt>
+        <dd className="text-amber-700 dark:text-amber-400">{v.missed ?? '0.00'} USD</dd>
+        {v.missed_estimated && v.missed_estimated !== '0.00' && (<>
+          <dt className="text-amber-700 dark:text-amber-400">Estimated missed this period (not payable)</dt>
+          <dd className="text-amber-700 dark:text-amber-400">{v.missed_estimated} USD</dd>
+        </>)}
       </dl>
     </div>
   )
@@ -177,6 +184,11 @@ export function AdEarnings() {
         <Card title="As the creative (20% personal submission / 10% nomination)" v={summary.creative} />
         <Card title="As the direct sponsor (1%)" v={summary.sponsor} />
       </div>
+      <MissedEarnings
+        endpoint="/api/v1/advertising/earnings/missed"
+        title="Missed advertising earnings — KYC Verification Required"
+        emptyText="You have no missed advertising earnings."
+      />
       <section className="overflow-x-auto rounded-xl border border-gray-200 p-4 dark:border-gray-700">
         <h2 className="mb-2 font-semibold">Monthly releases</h2>
         {lines.length === 0 ? <p className="text-sm text-gray-500">No released months yet.</p> : (
@@ -191,7 +203,7 @@ export function AdEarnings() {
                   <td className="pr-3">{l.original_submission_type || 'under review'}</td><td className="pr-3">{l.contest_level || '—'}</td>
                   <td className="pr-3">{l.source === 'MYHIGH5' ? 'MyHigh5 ads' : 'Google AdSense'}</td>
                   <td className="pr-3">{l.applied_percentage}</td><td className="pr-3">{l.amount} USD</td>
-                  <td className="pr-3">{l.status}</td><td className="pr-3">{l.payout_status || '—'}</td>
+                  <td className="pr-3">{l.status === 'MISSED_KYC' ? 'Missed (KYC) — not payable' : l.status}</td><td className="pr-3">{l.payout_status || '—'}</td>
                 </tr>
               ))}
             </tbody>

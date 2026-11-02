@@ -203,6 +203,19 @@ def earnings_summary(db: Session = Depends(deps.get_db), user: User = Depends(de
     return out
 
 
+@member_router.get("/earnings/missed")
+def earnings_missed(skip: int = 0, limit: int = 20, db: Session = Depends(deps.get_db),
+                    user: User = Depends(deps.get_current_active_user)):
+    """The member's own missed advertising shares (creative and sponsor). Never payable."""
+    from app.models.missed_earning import CATEGORY_AD_CREATIVE, CATEGORY_AD_SPONSOR
+    from app.services import missed_earnings
+
+    out = missed_earnings.member_page(db, user.id, categories=(CATEGORY_AD_CREATIVE, CATEGORY_AD_SPONSOR),
+                                      skip=max(0, skip), limit=min(max(1, limit), 100))
+    db.rollback()
+    return out
+
+
 @member_router.get("/earnings/lines")
 def earnings_lines(db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
     return {"lines": sharing.member_lines(db, user.id)}

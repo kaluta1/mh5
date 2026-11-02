@@ -171,6 +171,22 @@ def get_commissions(
     return commissions
 
 
+@router.get("/commissions/missed")
+def get_missed_commissions(
+    db: Session = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """The member's own missed referral commissions (KYC not approved at the earning event).
+    Read-only and never payable: they are not part of any balance."""
+    from app.services import missed_earnings
+
+    out = missed_earnings.referral_page(db, current_user.id, skip=skip, limit=limit)
+    db.rollback()
+    return out
+
+
 @router.get("/commissions/summary")
 def get_commissions_summary(
     db: Session = Depends(deps.get_db),

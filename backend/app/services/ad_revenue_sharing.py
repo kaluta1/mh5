@@ -24,6 +24,11 @@ the month's finalized Google earnings). Estimates are never payable.
   HELD_REVIEW   -> original type not provable: no amount until an administrator resolves the origin.
 A sponsor that is missing or ineligible (existing direct-commission rule) gets no line; the creative's
 percentage is never reduced.
+  MISSED_KYC    -> owner rule 2026-11-02: the creative or sponsor's KYC was not APPROVED at the earning
+                   event (snapshot on each impression; when no member was identifiable then, at the moment
+                   one first is: claim, origin resolution, held-sponsor release). No commission, no liability:
+                   the share stays MyHigh5 revenue, classified apart (Dr 4020/4021 / Cr 4030), and a missed
+                   earning is recorded for the member. The other beneficiary's share is unaffected.
 """
 from __future__ import annotations
 
@@ -80,6 +85,8 @@ class _Group:
     sponsor_user_id: Optional[int]
     sponsor_status: str
     rule_version: str
+    creative_kyc: Optional[bool] = None
+    sponsor_kyc: Optional[bool] = None
     base: Decimal = Decimal(0)
     impressions: int = 0
 
@@ -128,19 +135,20 @@ def compute_groups(db: Session, period: str, source: str, *, finalized: bool) ->
                            AdvImpressionEvent.contest_level, AdvImpressionEvent.creative_user_id,
                            AdvImpressionEvent.sponsor_user_id, AdvImpressionEvent.sponsor_status,
                            AdvImpressionEvent.rule_version, AdvImpressionEvent.earning_day,
-                           AdvImpressionEvent.adsense_slot, AdvImpressionEvent.charged_amount).all())
-    for cid, season, level, creative, sponsor, sstatus, rule, day, slot, charged in rows:
+                           AdvImpressionEvent.adsense_slot, AdvImpressionEvent.charged_amount,
+                           AdvImpressionEvent.creative_kyc_approved, AdvImpressionEvent.sponsor_kyc_approved).all())
+    for cid, season, level, creative, sponsor, sstatus, rule, day, slot, charged, ckyc, skyc in rows:
         if source == "ADSENSE":
             amount = rates.get((day, slot))
             if amount is None:
                 continue                 # no Google figure for this bucket (yet): nothing to share
         else:
             amount = Decimal(str(charged or 0))
-        key = (cid, season or 0, creative, sponsor, sstatus)
+        key = (cid, season or 0, creative, sponsor, sstatus, ckyc, skyc)
         g = groups.get(key)
         if g is None:
             g = groups[key] = _Group(cid, season or 0, level, creative, sponsor, sstatus or "UNRESOLVED",
-                                     rule or ad_attribution.RULE_VERSION)
+                                     rule or ad_attribution.RULE_VERSION, ckyc, skyc)
         g.base += amount
         g.impressions += 1
     for g in groups.values():
@@ -150,6 +158,24 @@ def compute_groups(db: Session, period: str, source: str, *, finalized: bool) ->
 
 def _origin(db: Session, contestant_id: int) -> Optional[AdvEntryOrigin]:
     return db.query(AdvEntryOrigin).filter(AdvEntryOrigin.contestant_id == contestant_id).first()
+
+
+def _may_earn(db: Session, user_id: Optional[int], at_event: Optional[bool]) -> bool:
+    """APPROVED KYC at the earning event. An event without a snapshot (recorded before the rule) is
+    decided on the member's KYC when it is allocated."""
+    if at_event is not None:
+        return bool(at_event)
+    from app.services import kyc_eligibility
+
+    return kyc_eligibility.is_approved(db, user_id)
+
+
+def beneficiary_key(spec) -> int:
+    """Allocation key of a line: the member id; negative for the same member's KYC-missed line (so a member
+    whose KYC changed within a month has two distinct lines); 0 = no member yet."""
+    get = spec.get if isinstance(spec, dict) else (lambda k: getattr(spec, k))
+    uid = int(get("beneficiary_user_id") or 0)
+    return -uid if get("status") == "MISSED_KYC" else uid
 
 
 def plan_lines(db: Session, period: str, source: str, *, finalized: bool) -> list[dict]:
@@ -164,7 +190,8 @@ def plan_lines(db: Session, period: str, source: str, *, finalized: bool) -> lis
         elif g.creative_user_id is None:
             status, amount = "HELD_UNCLAIMED", floor2(g.base * rate)
         else:
-            status, amount = "RELEASED", floor2(g.base * rate)
+            status = "RELEASED" if _may_earn(db, g.creative_user_id, g.creative_kyc) else "MISSED_KYC"
+            amount = floor2(g.base * rate)
         common = dict(period=period, contestant_id=g.contestant_id, source=source,
                       product="ORDINARY" if source == "MYHIGH5" else "ADSENSE", origin_kind=kind,
                       contest_level=g.contest_level, season_key=g.season_key, base_amount=g.base,
@@ -178,7 +205,8 @@ def plan_lines(db: Session, period: str, source: str, *, finalized: bool) -> lis
         elif g.sponsor_status == "VALID" and g.sponsor_user_id:
             lines.append(dict(common, role="SPONSOR", beneficiary_user_id=g.sponsor_user_id,
                               rate=CONTEST_PAGE_SPONSOR_RATE, amount=floor2(g.base * CONTEST_PAGE_SPONSOR_RATE),
-                              status="RELEASED" if kind is not None else "HELD_REVIEW"))
+                              # The sponsor's 1% is its own entitlement: decided on the sponsor's KYC only.
+                              status="RELEASED" if _may_earn(db, g.sponsor_user_id, g.sponsor_kyc) else "MISSED_KYC"))
         elif g.sponsor_status == "UNRESOLVED":
             lines.append(dict(common, role="SPONSOR", beneficiary_user_id=None, rate=CONTEST_PAGE_SPONSOR_RATE,
                               amount=floor2(g.base * CONTEST_PAGE_SPONSOR_RATE), status="HELD_SPONSOR"))
@@ -259,12 +287,45 @@ def _post_hold(db: Session, line: AdvAllocation) -> None:
     line.hold_journal_id = entry.id
 
 
+def _post_missed(db: Session, line: AdvAllocation, *, from_held: bool, kyc_status: str = "not_approved") -> None:
+    """The beneficiary's KYC was not approved: no commission, no liability; the share stays MyHigh5
+    revenue (classified apart) and one missed earning is recorded for the member."""
+    from app.models.accounting import JournalEntry
+    from app.models.missed_earning import CATEGORY_AD_CREATIVE, CATEGORY_AD_SPONSOR
+    from app.services import missed_earnings
+    from app.services.new_model_ledger import is_reversed, reverse_entry
+
+    if from_held and line.hold_journal_id:
+        # It had been held (expensed into 2322): undo that hold, the share is not owed to anyone.
+        hold = db.query(JournalEntry).filter(JournalEntry.id == line.hold_journal_id).one()
+        if not is_reversed(db, hold):
+            reverse_entry(db, hold, reason="Share not payable: beneficiary's KYC not approved")
+    line.status, line.released_at = "MISSED_KYC", datetime.utcnow()
+    line.beneficiary_key = beneficiary_key(line)
+    if money(line.amount) <= 0 or not line.beneficiary_user_id:
+        db.flush()
+        return
+    _start, end = period_bounds(line.period)
+    row = missed_earnings.record(
+        db, user_id=line.beneficiary_user_id,
+        category=CATEGORY_AD_CREATIVE if line.role == "CREATIVE" else CATEGORY_AD_SPONSOR,
+        source_type=camp.SOURCE_AD_ALLOCATION, source_id=line.id, amount=line.amount, kyc_status=kyc_status,
+        source_product=line.product, rate=line.rate, base_amount=line.base_amount, contestant_id=line.contestant_id,
+        origin_kind=line.origin_kind,
+        revenue_account=camp.ORDINARY_REVENUE_ACCOUNT if line.source == "MYHIGH5" else camp.ADSENSE_REVENUE_ACCOUNT,
+        event_at=datetime.combine(end - timedelta(days=1), datetime.max.time()).replace(microsecond=0))
+    missed_earnings.post_retained(db, row)
+    db.flush()
+
+
 def _apply(db: Session, line: AdvAllocation) -> None:
     if line.status == "RELEASED":
         if money(line.amount) > 0:
             _post_commission(db, line, from_held=False)
     elif line.status in ("HELD_UNCLAIMED", "HELD_SPONSOR"):
         _post_hold(db, line)
+    elif line.status == "MISSED_KYC":
+        _post_missed(db, line, from_held=False)
 
 
 # ---------------------------------------------------------------- finalize a period
@@ -305,7 +366,7 @@ def finalize_period(db: Session, *, period: str, source: str, actor_id: Optional
         return {"status": "ALREADY_FINALIZED", "lines": _finalized_lines(db, period, source).count()}
     created = []
     for spec in plan_lines(db, period, source, finalized=True):
-        line = AdvAllocation(**spec, beneficiary_key=spec["beneficiary_user_id"] or 0, currency="USD", version=1)
+        line = AdvAllocation(**spec, beneficiary_key=beneficiary_key(spec), currency="USD", version=1)
         db.add(line)
         db.flush()
         _apply(db, line)
@@ -354,7 +415,13 @@ def release_claimed(db: Session) -> int:
         if owner is None:
             continue
         line.beneficiary_user_id, line.beneficiary_key = owner, owner
-        if money(line.amount) > 0:
+        # The nominee is identifiable only now: their KYC is checked at this point, once.
+        from app.services import kyc_eligibility
+
+        status = kyc_eligibility.kyc_status(db, owner)
+        if status != "approved":
+            _post_missed(db, line, from_held=True, kyc_status=status)
+        elif money(line.amount) > 0:
             _post_commission(db, line, from_held=True)
         else:
             line.status, line.released_at = "RELEASED", datetime.utcnow()
@@ -384,7 +451,13 @@ def release_held_sponsor(db: Session, *, line_id: int, actor_id: int, note: str)
         raise camp.AdError("NO_VALID_SPONSOR", "The creative has no valid direct sponsor; the share stays held")
     line.beneficiary_user_id, line.beneficiary_key = sponsor.id, sponsor.id
     line.note = note.strip()[:300]
-    _post_commission(db, line, from_held=True)
+    from app.services import kyc_eligibility
+
+    status = kyc_eligibility.kyc_status(db, sponsor.id)
+    if status != "approved":
+        _post_missed(db, line, from_held=True, kyc_status=status)   # only a KYC-approved sponsor earns
+    else:
+        _post_commission(db, line, from_held=True)
     db.add(AuditTrail(table_name="adv_allocations", record_id=line.id, action="RELEASE_HELD_SPONSOR",
                       old_values=None, new_values={"sponsor": sponsor.id, "note": line.note}, user_id=actor_id))
     db.flush()
@@ -395,6 +468,8 @@ def apply_origin_resolution(db: Session, *, contestant_id: int) -> int:
     """After an administrator resolved an entry's origin: price its HELD_REVIEW lines."""
     from app.models.contests import Contestant
     from app.services import ad_revenue_policy as policy
+
+    from app.services import kyc_eligibility
 
     origin = _origin(db, contestant_id)
     if origin is None or origin.status != "RESOLVED":
@@ -414,6 +489,9 @@ def apply_origin_resolution(db: Session, *, contestant_id: int) -> int:
                 line.status = "HELD_UNCLAIMED"
             else:
                 line.beneficiary_user_id, line.beneficiary_key, line.status = owner, owner, "RELEASED"
+                if not kyc_eligibility.is_approved(db, owner):
+                    line.status = "MISSED_KYC"                  # identifiable only now: decided now
+                    line.beneficiary_key = beneficiary_key(line)
         else:
             # The creative is known only now: its direct sponsor as recorded at resolution.
             sponsor = policy.valid_direct_sponsor(db, owner) if owner is not None else None
@@ -422,6 +500,9 @@ def apply_origin_resolution(db: Session, *, contestant_id: int) -> int:
                 line.status = "HELD_SPONSOR"
             elif sponsor is not None:
                 line.beneficiary_user_id, line.beneficiary_key, line.status = sponsor.id, sponsor.id, "RELEASED"
+                if not kyc_eligibility.is_approved(db, sponsor.id):
+                    line.status = "MISSED_KYC"
+                    line.beneficiary_key = beneficiary_key(line)
             else:
                 # Existing direct-commission rule: no valid sponsor -> no sponsor share (nothing was posted).
                 line.amount, line.status, line.reversed_at = Decimal("0.00"), "REVERSED", datetime.utcnow()
@@ -440,7 +521,12 @@ def _reverse_line(db: Session, line: AdvAllocation, reason: str) -> None:
     from app.services.new_model_ledger import post_entry, reverse_entry
     from app.models.accounting import JournalEntry
 
-    if line.commission_id:
+    if line.status == "MISSED_KYC":
+        from app.services import missed_earnings
+
+        missed_earnings.reverse_for_source(db, source_type=camp.SOURCE_AD_ALLOCATION, source_id=line.id,
+                                           reason=reason)
+    elif line.commission_id:
         commission = (db.query(AffiliateCommission).filter(AffiliateCommission.id == line.commission_id)
                       .with_for_update().one())
         if commission.status == CommissionStatus.APPROVED and str(commission.payout_reference or "").startswith("intent:"):
@@ -481,7 +567,7 @@ def adjust_after_reversal(db: Session, *, period: str, source: str, reason: str,
                for l in _finalized_lines(db, period, source).with_for_update().all()}
     if not current:
         return {"status": "NOT_FINALIZED"}
-    plan = {(s["contestant_id"], s["role"], s["season_key"], s["beneficiary_user_id"] or 0,
+    plan = {(s["contestant_id"], s["role"], s["season_key"], beneficiary_key(s),
              s["status"] if s["status"] != "RELEASED" else "R"): s for s in plan_lines(db, period, source, finalized=True)}
     changed = 0
     for key, line in current.items():
@@ -493,14 +579,14 @@ def adjust_after_reversal(db: Session, *, period: str, source: str, reason: str,
         _reverse_line(db, line, reason)
         changed += 1
         if spec is not None:
-            new = AdvAllocation(**spec, beneficiary_key=spec["beneficiary_user_id"] or 0, currency="USD",
+            new = AdvAllocation(**spec, beneficiary_key=beneficiary_key(spec), currency="USD",
                                 version=version)
             db.add(new)
             db.flush()
             _apply(db, new)
     for key, spec in plan.items():
         if key not in current:
-            new = AdvAllocation(**spec, beneficiary_key=spec["beneficiary_user_id"] or 0, currency="USD", version=1)
+            new = AdvAllocation(**spec, beneficiary_key=beneficiary_key(spec), currency="USD", version=1)
             db.add(new)
             db.flush()
             _apply(db, new)
@@ -659,8 +745,11 @@ def record_adsense_payment(db: Session, *, month_id: int, amount, actor_id: int,
 
 def member_summary(db: Session, user_id: int, *, now: Optional[datetime] = None) -> dict:
     """Creative and sponsor earnings, kept separate. Estimates are never available funds."""
+    from app.services import kyc_eligibility, missed_earnings
+
     now = now or datetime.utcnow()
     out = {}
+    missed_totals = missed_earnings.ad_totals(db, user_id)
     for role, column in (("creative", AdvImpressionEvent.creative_user_id), ("sponsor", AdvImpressionEvent.sponsor_user_id)):
         lines = db.query(AdvAllocation).filter(AdvAllocation.beneficiary_user_id == user_id,
                                                AdvAllocation.role == role.upper()).all()
@@ -673,7 +762,7 @@ def member_summary(db: Session, user_id: int, *, now: Optional[datetime] = None)
                    Decimal("0.00"))
         held = sum((money(l.amount) for l in lines if l.status.startswith("HELD_")), Decimal("0.00"))
         adjustments = sum((money(l.amount) for l in lines if l.status == "SUPERSEDED"), Decimal("0.00"))
-        estimated = Decimal(0)
+        estimated, missed_estimated = Decimal(0), Decimal(0)
         finalized_periods = {(p, s) for p, s in db.query(AdvAllocation.period, AdvAllocation.source).distinct().all()}
         for source in ("MYHIGH5", "ADSENSE"):
             q = (db.query(AdvImpressionEvent).filter(column == user_id, AdvImpressionEvent.source == source,
@@ -684,9 +773,17 @@ def member_summary(db: Session, user_id: int, *, now: Optional[datetime] = None)
             for p in periods - {fp for fp, s in finalized_periods if s == source}:
                 for line in plan_lines(db, p, source, finalized=False):
                     if line["beneficiary_user_id"] == user_id and line["role"] == role.upper():
-                        estimated += Decimal(str(line["amount"]))
+                        if line["status"] == "MISSED_KYC":
+                            missed_estimated += Decimal(str(line["amount"]))
+                        else:
+                            estimated += Decimal(str(line["amount"]))
         out[role] = {"estimated": str(floor2(estimated)), "held": str(held), "available": str(available),
-                     "paid": str(paid), "adjustments_superseded": str(adjustments)}
+                     "paid": str(paid), "adjustments_superseded": str(adjustments),
+                     "missed": missed_totals[role], "missed_estimated": str(floor2(missed_estimated))}
+    out["kyc_status"] = kyc_eligibility.kyc_status(db, user_id)
+    out["missed_note"] = ("Missed amounts are not payable: only KYC-verified members earn advertising revenue shares. "
+                          "They were missed because your verification was not approved when the earning events "
+                          "occurred. Complete KYC to become eligible for future earnings.")
     out["note"] = ("Estimates are not withdrawable. Earnings are released monthly after validation and, for AdSense, "
                    "after Google finalizes the month. Released earnings follow the usual wallet and cash-out rules.")
     return out

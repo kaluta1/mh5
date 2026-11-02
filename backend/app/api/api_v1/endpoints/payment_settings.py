@@ -145,6 +145,17 @@ def overview(db: Session = Depends(get_db), current_user: User = Depends(get_cur
     }
 
 
+@router.get("/missed-earnings")
+def missed_earnings_overview(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+                             db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """Earnings retained by MyHigh5 because the earner's KYC was not approved (administrators; read-only)."""
+    from app.services import missed_earnings
+
+    out = missed_earnings.admin_overview(db, skip=skip, limit=limit)
+    db.rollback()
+    return out
+
+
 @router.get("/provider")
 def provider(db: Session = Depends(get_db)):
     return config.provider_view(db)

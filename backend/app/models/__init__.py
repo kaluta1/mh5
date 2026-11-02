@@ -107,3 +107,4 @@ from .advertising_v2 import (  # noqa: F401
     AdvAdsenseBucket, AdvAdsenseImport, AdvAdsenseMonth, AdvAllocation, AdvAnnualAdsPayment, AdvCampaign,
     AdvCampaignDay, AdvCreative, AdvCreditMovement, AdvEntryOrigin, AdvImpressionEvent, AdvServeDecision, AdvSettings,
 )
+from .missed_earning import MissedEarning  # noqa: F401

@@ -402,6 +402,13 @@ def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] =
                 event.creative_user_id, event.sponsor_user_id = att.creative_user_id, att.sponsor_user_id
                 event.sponsor_status, event.contest_level = att.sponsor_status, att.contest_level
                 event.season_id, event.rule_version = att.season_id, att.rule_version
+                # The earning event: whether each beneficiary may earn is decided now, once.
+                from app.services import kyc_eligibility
+
+                event.creative_kyc_approved = (kyc_eligibility.is_approved(db, att.creative_user_id)
+                                               if att.creative_user_id else None)
+                event.sponsor_kyc_approved = (kyc_eligibility.is_approved(db, att.sponsor_user_id)
+                                              if att.sponsor_status == "VALID" and att.sponsor_user_id else None)
         counts["valid"] += 1
     db.flush()
     return counts

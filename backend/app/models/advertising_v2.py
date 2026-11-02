@@ -214,6 +214,10 @@ class AdvImpressionEvent(Base):
     contest_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     season_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rule_version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # KYC of the creative / sponsor AT the earning event (owner rule 2026-11-02: only APPROVED earns).
+    # None = no identifiable member at the event, or an event recorded before the rule.
+    creative_kyc_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    sponsor_kyc_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     # Invalid activity found after charging: credited back once.
     reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reversal_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
@@ -273,7 +277,7 @@ class AdvAllocation(Base):
                          name="uq_adv_allocation_line"),
         CheckConstraint("role IN ('CREATIVE', 'SPONSOR')", name="ck_adv_alloc_role"),
         CheckConstraint("status IN ('ESTIMATED', 'HELD_UNCLAIMED', 'HELD_SPONSOR', 'HELD_REVIEW', 'RELEASED', "
-                        "'REVERSED', 'SUPERSEDED')", name="ck_adv_alloc_status"),
+                        "'REVERSED', 'SUPERSEDED', 'MISSED_KYC')", name="ck_adv_alloc_status"),
         CheckConstraint("amount >= 0 AND amount <= base_amount", name="ck_adv_alloc_amount"),
         CheckConstraint("rate >= 0 AND rate <= 0.20", name="ck_adv_alloc_rate"),
         Index("ix_adv_alloc_beneficiary", "beneficiary_user_id", "status"),

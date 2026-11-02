@@ -200,14 +200,20 @@ def accrue_direct_commission(
 
     The commission is available at once (APPROVED, unreserved): no time hold.
     With `deferred_cost` its cost is booked to DEFERRED_COMMISSION_COST_ACCOUNT
-    (the revenue it belongs to is still deferred) instead of the expense account."""
+    (the revenue it belongs to is still deferred) instead of the expense account.
+
+    Owner rule 2026-11-02: only a sponsor whose KYC is APPROVED at this accrual event earns. Otherwise no
+    commission and no liability: the amount stays MyHigh5 revenue and one missed-earning record is kept
+    (missed_earnings). The decision is taken once per source event: a retry returns what was decided,
+    whatever the sponsor's KYC is by then. Returns None for a missed commission."""
     amount = breakdown.direct_commission
     if amount <= 0:
         return None
     payer = db.query(User).filter(User.id == payer_user_id).first()
     if payer is None or not payer.sponsor_id or int(payer.sponsor_id) == int(payer_user_id):
         return None
-    sponsor = db.query(User).filter(User.id == payer.sponsor_id).first()
+    # Locked: accruals for the same sponsor are decided one at a time (commission XOR missed record).
+    sponsor = db.query(User).filter(User.id == payer.sponsor_id).with_for_update().first()
     # Direct-only: an ineligible direct sponsor means no commission (no roll-up to anyone else).
     if sponsor is None or sponsor.is_active is False or sponsor.is_deleted is True:
         return None
@@ -222,6 +228,24 @@ def accrue_direct_commission(
     )
     if existing:
         return existing
+    from app.models.missed_earning import CATEGORY_REFERRAL
+    from app.services import kyc_eligibility, missed_earnings
+
+    missed = missed_earnings.find(db, user_id=sponsor.id, category=CATEGORY_REFERRAL, source_type=source_type,
+                                  source_id=source_id)
+    if missed is None:
+        status = kyc_eligibility.kyc_status(db, sponsor.id)
+        if status != "approved":
+            missed = missed_earnings.record(
+                db, user_id=sponsor.id, category=CATEGORY_REFERRAL, source_type=source_type, source_id=source_id,
+                amount=amount, kyc_status=status, source_product=breakdown.revenue_category,
+                source_user_id=payer_user_id, rate=breakdown.commission_rate, base_amount=breakdown.commission_base,
+                revenue_account=breakdown.policy.revenue_account_code)
+    if missed is not None:
+        # The revenue is recognized now (not still deferred): classify the retained amount apart, once.
+        if not deferred_cost:
+            missed_earnings.post_retained(db, missed, breakdown.policy.revenue_account_code)
+        return None
     commission = AffiliateCommission(
         user_id=sponsor.id,
         source_user_id=payer_user_id,
@@ -321,6 +345,10 @@ def reverse_direct_commissions(db: Session, *, source_type: str, source_id: int,
         .with_for_update()
         .all()
     )
+    # A commission that was missed (sponsor's KYC not approved): its retained revenue is reversed with it.
+    from app.services import missed_earnings
+
+    missed_earnings.reverse_for_source(db, source_type=source_type, source_id=source_id, reason=reason)
     for commission in rows:
         if commission.status == CommissionStatus.CANCELLED:
             continue

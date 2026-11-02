@@ -1859,13 +1859,9 @@ KYC_REQUIRED_MESSAGE = "Identity verification (KYC) must be approved before a ca
 def kyc_problem(db: Session, user: User) -> Optional[str]:
     """Every cashout, crypto or USD, goes to identified, verified members only: approved KYC (pending,
     in progress, rejected, expired or under review are not). The one rule both paths use."""
-    from app.crud import crud_kyc
-    from app.models.kyc import KYCStatus
+    from app.services import kyc_eligibility
 
-    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=user.id)
-    if verification is None or verification.status != KYCStatus.APPROVED:
-        return "KYC_NOT_APPROVED"
-    return None
+    return None if kyc_eligibility.is_approved(db, user.id) else "KYC_NOT_APPROVED"
 
 
 def usd_settlement_available(db: Optional[Session] = None, config: Optional[PaymentConfig] = None) -> bool:

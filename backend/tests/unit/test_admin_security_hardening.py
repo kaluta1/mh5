@@ -878,6 +878,10 @@ def test_an_administrator_cannot_record_a_payment_for_their_own_referral_line(cl
     db.add(AffiliateTree(user_id=by_tree.id, sponsor_id=cashier.id, level=1))
     other_sponsor = person(db, "othersponsor", usdt_wallet_address="0x" + "3" * 40)
     unrelated = person(db, "unrelated", sponsor_id=other_sponsor.id)
+    from tests.unit.test_new_business_model import _kyc_approve
+
+    for earner in (cashier, other_sponsor):         # only KYC-approved sponsors earn (2026-11-02)
+        _kyc_approve(db, earner)
     db.commit()
 
     def recorded():

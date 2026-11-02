@@ -294,6 +294,10 @@ def recorded_request(Session, maker_id) -> tuple[int, int, int]:
     with Session() as db:
         seed_ledger(db)
         sponsor = user(db, "sponsor")
+        from app.models.kyc import KYCStatus, KYCVerification
+
+        db.add(KYCVerification(user_id=sponsor, status=KYCStatus.APPROVED))   # only KYC-approved sponsors earn
+        db.commit()
         member = user(db, "member", sponsor)
         out = mps.record(db, db.get(User, maker_id), member, product_code="annual_membership",
                          reason="Bank ref 2026-10-16/91", password=PASSWORD)

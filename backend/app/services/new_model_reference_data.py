@@ -47,6 +47,8 @@ NEW_MODEL_ACCOUNTS = [
     ("4020", "Ordinary MyHigh5 advertising revenue (validated delivery)", "REVENUE", "4000"),
     ("4021", "Google AdSense revenue (finalized publisher earnings)", "REVENUE", "4000"),
     ("5006", "Contest-page advertising revenue share expense (creatives and direct sponsors)", "EXPENSE", "5000"),
+    # Owner rule 2026-11-02: earnings of members whose KYC was not approved stay with MyHigh5 (reclassified).
+    ("4030", "Revenue retained - earnings not payable (earner's KYC not approved)", "REVENUE", "4000"),
 ]
 
 # Policy values confirmed by the client (Shafi Abeid, 2026-09-25). The direct commission base is

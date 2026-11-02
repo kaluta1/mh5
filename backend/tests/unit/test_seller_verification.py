@@ -65,12 +65,13 @@ def providers():
 
 
 def kyc(db, user, first="Amina", last="Juma", status=KYCStatus.APPROVED):
+    db.query(KYCVerification).filter(KYCVerification.user_id == user.id).delete()   # one per member
     db.add(KYCVerification(user_id=user.id, status=status, verified_first_name=first, verified_last_name=last))
     db.flush()
 
 
 def seller(db, email, *, approved_kyc=True, wallet=True):
-    user = _user(db, email)
+    user = _user(db, email, kyc=False)
     if wallet:
         user.payout_wallet_verified_at = datetime.utcnow()
     if approved_kyc:
@@ -557,7 +558,7 @@ def test_changes_after_approval_and_expiry_trigger_reassessment(world, providers
 
 def test_migration_preview_is_read_only(world):
     db = world
-    user, buyer = _user(db, "mp@t.com"), _user(db, "mpb@t.com")
+    user, buyer = _user(db, "mp@t.com", kyc=False), _user(db, "mpb@t.com")
     ml.publish(db, ml.create_listing(db, seller_user_id=user.id, data=_physical()), seller_user_id=user.id)
     _sale(db, user, buyer, "10", state="FUNDS_HELD")
     counts = (db.query(SellerApplication).count(), db.query(SellerClassificationReview).count())

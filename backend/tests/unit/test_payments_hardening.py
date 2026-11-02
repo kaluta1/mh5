@@ -350,7 +350,7 @@ def test_a_payment_id_another_deposit_already_holds_is_never_attached_twice(clie
     pc.invalidate_runtime()
     first, _sponsor = pending_deposit(db, tag="first")
     first.external_payment_id = DOC_PAYMENT["payment_id"]
-    buyer = _user(db, "buyer-dup@t.com")
+    buyer = _user(db, "buyer-dup@t.com", kyc=False)               # pays the KYC fee: not verified yet
     db.commit()
     provider.routes[("POST", "/v1/payment")] = (201, DOC_PAYMENT)                         # the same id again
     answer = client.post("/api/v1/payments/create", headers=auth(buyer),

@@ -99,6 +99,11 @@ def _pay_kyc(db, payer, *, code="kyc", tag=""):
 
 
 def _kyc_commission(db, sponsor, name="payer"):
+    from app.services import kyc_eligibility
+    from tests.unit.test_dual_cashout import approve_kyc
+
+    if not kyc_eligibility.is_approved(db, sponsor.id):
+        approve_kyc(db, sponsor)                    # only a KYC-approved sponsor earns (2026-11-02)
     payer = member(db, name, sponsor=sponsor, wallet=None)
     _pay_kyc(db, payer, tag=name)
     return db.query(AffiliateCommission).filter(AffiliateCommission.source_user_id == payer.id).one()

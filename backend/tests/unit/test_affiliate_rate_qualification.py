@@ -27,7 +27,7 @@ DEADLINE = datetime(2026, 7, 31, 10, 0, 0)         # + 6 calendar months, same t
 
 
 def _sponsor(db, email="sponsor@t.com", joined=JOINED) -> User:
-    u = _user(db, email)
+    u = _user(db, email, kyc=False)                 # KYC set explicitly where a test needs it
     u.created_at = joined
     db.flush()
     return u
@@ -35,7 +35,7 @@ def _sponsor(db, email="sponsor@t.com", joined=JOINED) -> User:
 
 def _referral(db, sponsor, tag, *, kyc_at=DEADLINE - timedelta(days=1), status=KYCStatus.APPROVED,
               source="PERSONAL_REFERRAL", attached_at=None, pool=False) -> User:
-    r = _user(db, f"{tag}@r.com", sponsor=sponsor)
+    r = _user(db, f"{tag}@r.com", sponsor=sponsor, kyc=False)   # its KYC is set below, as each test needs
     r.created_at = JOINED + timedelta(days=1)
     r.sponsor_source = source
     r.sponsor_assigned_at = attached_at or JOINED + timedelta(days=1)

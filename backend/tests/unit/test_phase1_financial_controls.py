@@ -573,6 +573,9 @@ def test_the_manual_payment_queue_is_visible_only_with_the_payment_permission(cl
 
     db = world
     sponsor = person(db, "q_sponsor")
+    from tests.unit.test_new_business_model import _kyc_approve
+
+    _kyc_approve(db, sponsor)                       # only a KYC-approved sponsor earns (2026-11-02)
     member = person(db, "q_member", sponsor_id=sponsor.id)
     plain = person(db, "q_plain", admin=True)
     wildcard = person(db, "q_wild", admin=True, permissions=("all",))

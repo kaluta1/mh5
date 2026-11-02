@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
+import { MissedEarnings } from '@/components/dashboard/missed-earnings'
 import { dedupeCommissionRows } from '@/lib/dedupe-commissions'
 import { formatCommissionRate } from '@/lib/commission-rate'
 import { COMMISSIONS_ENDPOINT, loadAllCommissions } from '@/lib/commissions-loader'
@@ -529,6 +530,13 @@ export default function CommissionsPage() {
       </div>
 
     
+
+      {/* Missed commissions: KYC not approved at the earning event (never payable) */}
+      <MissedEarnings
+        endpoint="/api/v1/affiliates/commissions/missed"
+        title="Missed Commissions — KYC Verification Required"
+        emptyText="You have no missed commissions."
+      />
 
       {/* Commissions List */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">

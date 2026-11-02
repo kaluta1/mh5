@@ -1295,7 +1295,7 @@ def test_a_member_never_sees_the_providers_own_error_text(client, world, provide
     monkeypatch.setattr(settings, "NOWPAYMENTS_API_KEY", "synthetic-payin-key")
     monkeypatch.setattr(settings, "NOWPAYMENTS_IPN_SECRET", IPN_SECRET)     # checkout ready: key + IPN secret
     pc.invalidate_runtime()
-    buyer = _user(db, "buyer-create@t.com")
+    buyer = _user(db, "buyer-create@t.com", kyc=False)             # pays the KYC fee: not verified yet
     db.commit()
     provider.routes[("POST", "/v1/payment")] = answer
     response = client.post("/api/v1/payments/create", headers=auth(buyer),

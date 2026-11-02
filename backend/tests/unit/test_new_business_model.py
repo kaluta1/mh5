@@ -79,7 +79,9 @@ def world(db):
     return db
 
 
-def _user(db, email, *, sponsor=None, wallet=True, active=True) -> User:
+def _user(db, email, *, sponsor=None, wallet=True, active=True, kyc=True) -> User:
+    """A synthetic member. KYC APPROVED unless `kyc=False`: since 2026-11-02 only a KYC-approved sponsor
+    earns (tests of the unverified case pass kyc=False)."""
     row = User(email=email, hashed_password="x", username=email.split("@")[0], is_active=active, is_deleted=False,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=email.split("@")[0].upper(),
                usdt_wallet_address=("0x" + "1" * 40) if wallet else None,
@@ -87,6 +89,12 @@ def _user(db, email, *, sponsor=None, wallet=True, active=True) -> User:
                date_of_birth=datetime(1990, 1, 1))
     db.add(row)
     db.flush()
+    if kyc:
+        from app.models.kyc import KYCStatus, KYCVerification
+
+        db.add(KYCVerification(user_id=row.id, status=KYCStatus.APPROVED, submitted_at=datetime.utcnow(),
+                               processed_at=datetime.utcnow()))
+        db.flush()
     return row
 
 
@@ -377,6 +385,7 @@ def _kyc_approve(db, user: User) -> User:
     """A KYC-approved member: since P6 only such a member can be a personal inviter."""
     from app.models.kyc import KYCStatus, KYCVerification, VerificationProvider
 
+    db.query(KYCVerification).filter(KYCVerification.user_id == user.id).delete()   # one per member
     db.add(KYCVerification(user_id=user.id, status=KYCStatus.APPROVED, provider=VerificationProvider.KALUTA,
                            reference_id=f"kyc-test-{user.id}", attempts_count=1, submitted_at=datetime.utcnow(),
                            processed_at=datetime.utcnow(), identity_verified=True, address_verified=True))
