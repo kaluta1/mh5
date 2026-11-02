@@ -1785,6 +1785,9 @@ def request_usd_cashout(db: Session, user: User, *, idempotency_key: Optional[st
     if not decision.allowed:
         fe.record_decision(db, decision, user_id=locked.id, commit=True)
         raise fe.FinancialEligibilityHold(decision)
+    if kyc_problem(db, locked) is not None:
+        db.rollback()
+        raise CashoutError("KYC_NOT_APPROVED", KYC_REQUIRED_MESSAGE)
     if active_cashout(db, locked.id) is not None:
         db.rollback()
         raise CashoutError("CASHOUT_IN_PROGRESS", "You already have a cashout in progress.")
@@ -1850,6 +1853,21 @@ def cancel_request(db: Session, cashout: AffiliateCashoutRequest, *, actor: User
     return locked
 
 
+KYC_REQUIRED_MESSAGE = "Identity verification (KYC) must be approved before a cashout can be paid."
+
+
+def kyc_problem(db: Session, user: User) -> Optional[str]:
+    """Every cashout, crypto or USD, goes to identified, verified members only: approved KYC (pending,
+    in progress, rejected, expired or under review are not). The one rule both paths use."""
+    from app.crud import crud_kyc
+    from app.models.kyc import KYCStatus
+
+    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=user.id)
+    if verification is None or verification.status != KYCStatus.APPROVED:
+        return "KYC_NOT_APPROVED"
+    return None
+
+
 def usd_settlement_available(db: Optional[Session] = None, config: Optional[PaymentConfig] = None) -> bool:
     return _config(db, config).usd_settlement_allowed
 
@@ -1886,6 +1904,13 @@ def settle_usd_cashout(db: Session, cashout: AffiliateCashoutRequest, *, admin: 
         fe.record_decision(db, decision, user_id=member.id, actor_id=admin.id,
                            subject={"cashout_id": int(locked.id)}, commit=True)
         raise fe.FinancialEligibilityHold(decision)
+    if kyc_problem(db, member) is not None:
+        # Re-checked at settlement: approval may have been withdrawn since the request, and no
+        # administrator can record a payment to a member without approved KYC. Nothing is posted;
+        # the request stays open (an administrator may cancel it, which returns the balance).
+        db.rollback()
+        raise CashoutError("KYC_NOT_APPROVED", "The member's identity verification (KYC) is not approved: "
+                           "this cashout cannot be settled.")
     complete(db, locked, settlement_reference=reference, cash_account=config.usd_settlement_account.strip(),
              actor_id=admin.id, now=now)
     locked.reviewed_by = admin.id

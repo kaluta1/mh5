@@ -239,6 +239,22 @@ def select_payout(available: list, threshold: Decimal, ceiling: Decimal, *, accu
     return chosen, None
 
 
+def provider_review_threshold(provider) -> Optional[Decimal]:
+    """The provider's own manual-review threshold (SoncoPay: an individual payout ABOVE USD 1,000 needs
+    SoncoPay's manual review first). It is the provider's rule, not a MyHigh5 setting: no change to the
+    configurable single-payout limit can lift it. None = the provider has no such threshold."""
+    value = getattr(provider, "manual_review_above", None)
+    return money(value) if value is not None else None
+
+
+def automatic_ceiling(config, provider) -> Decimal:
+    """The largest amount one automatic payout may carry: the configurable single-payout limit, never
+    above the provider's manual-review threshold."""
+    ceiling = money(config.max_single_payout_usd)
+    review = provider_review_threshold(provider)
+    return min(ceiling, review) if review is not None else ceiling
+
+
 def _soncopay():
     from app.services import soncopay_payouts
 
@@ -614,13 +630,7 @@ def provider_window_problem(db: Session, provider, amount: Decimal, now: datetim
 
 def kyc_problem(db: Session, user: User) -> Optional[str]:
     """Payouts go to identified, verified members only (SoncoPay condition): approved KYC."""
-    from app.crud import crud_kyc
-    from app.models.kyc import KYCStatus
-
-    verification = crud_kyc.kyc_verification.get_by_user(db, user_id=user.id)
-    if verification is None or verification.status != KYCStatus.APPROVED:
-        return "KYC_NOT_APPROVED"
-    return None
+    return cs.kyc_problem(db, user)
 
 
 def _blocker(db: Session, user: User, now: datetime, config) -> Optional[str]:
@@ -681,8 +691,14 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     fee = facts.get("fee") if accumulate else None
     threshold = payout_threshold(config, Decimal(str(facts.get("minimum") or 0)),
                                  Decimal(str(fee)) if fee is not None else None)
-    rows, why_not = select_payout(available, threshold, money(config.max_single_payout_usd),
+    review = provider_review_threshold(provider)
+    rows, why_not = select_payout(available, threshold, automatic_ceiling(config, provider),
                                   accumulate=accumulate and fee is not None, own_minimum=own_minimum)
+    if (why_not == "EXCEEDS_SINGLE_LIMIT" and review is not None
+            and any(review < money(r.commission_amount) <= money(config.max_single_payout_usd) for r in available)):
+        # Within MyHigh5's own limit but above the provider's review threshold: it stays available and
+        # unpaid, never sent (nor retried) as an ordinary payout, until SoncoPay has reviewed it.
+        why_not = "PROVIDER_REVIEW_REQUIRED"
     if why_not is not None:
         db.commit()
         return why_not
@@ -708,6 +724,8 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
         return stop("BELOW_MINIMUM")
     if amount > money(config.max_single_payout_usd):
         return stop("EXCEEDS_SINGLE_LIMIT")
+    if review is not None and amount > review:
+        return stop("PROVIDER_REVIEW_REQUIRED")     # the provider's rule; independent of the setting above
     if (facts["day_count"] >= int(config.max_daily_payout_count)
             or money(facts["day_total"] + amount) > money(config.max_daily_payout_usd)):
         return stop("DAILY_LIMIT_REACHED")

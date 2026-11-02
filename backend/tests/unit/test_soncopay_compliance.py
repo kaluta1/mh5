@@ -223,17 +223,74 @@ def test_reserved_and_sent_payouts_count_in_the_window_failed_unsent_do_not(payo
     assert engine.provider_window_usage(db, NOW) == (Decimal("50.00"), 5)
 
 
-def test_manual_review_above_1000_is_never_completed_nor_resent(payouts_on, fake):
-    from app.services import payment_config
+def _large_limits(db, fake, single="5000.00"):
     from tests.unit.test_dual_cashout import configure
 
-    db = payouts_on
     real_figures(db, fake)
-    configure(db, max_single_payout_usd=Decimal("2000.00"), max_daily_payout_usd=Decimal("5000.00"))
-    fake.balance = "5000"
+    configure(db, max_single_payout_usd=Decimal(single), max_daily_payout_usd=Decimal("9000.00"))
+    fake.balance = "9000"
+
+
+@pytest.mark.parametrize("amount", ["999.00", "1000.00"])
+def test_up_to_1000_follows_the_configured_limits(payouts_on, fake, amount):
+    db = payouts_on
+    _large_limits(db, fake)
+    user = registered(db, fake, amount="20.00")
+    dashboard_confirm(db, user)
+    run(db)                                                         # the $20 commission
+    commission(db, user, amount)
+    assert run(db, now=NOW + timedelta(days=2))["members"] == {"SUBMITTED": 1}
+    assert len(fake.posts("/v1/payouts")) == 2
+
+
+@pytest.mark.parametrize("single", ["2000.00", "100000.00"])
+def test_above_1000_is_never_sent_as_an_ordinary_payout_whatever_the_single_limit(payouts_on, fake, single):
+    db = payouts_on
+    _large_limits(db, fake, single)                                 # an administrator raised the setting
+    user = registered(db, fake, amount="20.00")
+    dashboard_confirm(db, user)
+    run(db)                                                         # the $20 commission is paid
+    row = commission(db, user, "1000.01")
+    for hours in (0, 48, 96):                                       # every later cycle: still not sent
+        assert run(db, now=NOW + timedelta(days=2, hours=hours))["members"] == {"PROVIDER_REVIEW_REQUIRED": 1}
+    assert len(fake.posts("/v1/payouts")) == 1                      # only the $20 one
+    db.refresh(row)
+    assert row.status.value == "APPROVED" and row.payout_reference is None   # stays available, unpaid
+    assert [c.gross_amount for c in cashouts(db, user)] == [Decimal("20.00")]  # nothing reserved for it
+
+
+def test_the_review_threshold_is_the_providers_not_a_setting(payouts_on):
+    from types import SimpleNamespace
+
+    provider = spo.SoncoPayPayoutProvider(payouts_on)
+    assert engine.provider_review_threshold(provider) == Decimal("1000.00")
+    raised = SimpleNamespace(max_single_payout_usd=Decimal("50000.00"))     # an administrator raised it
+    assert engine.automatic_ceiling(raised, provider) == Decimal("1000.00")
+    production = SimpleNamespace(max_single_payout_usd=Decimal("100.00"))   # the production value stays in force
+    assert engine.automatic_ceiling(production, provider) == Decimal("100.00")
+
+
+def test_the_provider_layer_refuses_above_1000_even_if_called_directly(payouts_on, fake):
+    db = payouts_on
+    _large_limits(db, fake)
     user = registered(db, fake)
     dashboard_confirm(db, user)
-    row = commission(db, user, "1500.00")
+    address = destination(db, user).address
+    with pytest.raises(spo.PayoutRefused) as refused:
+        spo.SoncoPayPayoutProvider(db).create_payout(address=address, amount=Decimal("1000.01"),
+                                                     currency="usdtbsc", external_id="direct-call")
+    assert refused.value.platform_fault == "PROVIDER_REVIEW_REQUIRED"
+    assert fake.posts("/v1/payouts") == []                          # nothing created
+
+
+def test_a_payout_soncopay_holds_for_review_is_never_completed_nor_resent(payouts_on, fake):
+    from app.services import payment_config
+
+    db = payouts_on
+    _large_limits(db, fake)
+    user = registered(db, fake)
+    dashboard_confirm(db, user)
+    row = commission(db, user, "900.00")
     assert run(db)["members"] == {"SUBMITTED": 1}
     [po] = fake.payouts.values()
     po["status"] = "pending_review"                                 # SoncoPay holds it for manual review

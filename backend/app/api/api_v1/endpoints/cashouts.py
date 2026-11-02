@@ -37,7 +37,7 @@ _UNPROCESSABLE = ("INVALID_OUTCOME", "REFERENCE_REQUIRED", "INVALID_FEE", "CHARG
 
 
 def _error(exc: service.CashoutError) -> HTTPException:
-    code = (status.HTTP_403_FORBIDDEN if exc.code in ("FORBIDDEN", "REAUTH_REQUIRED")
+    code = (status.HTTP_403_FORBIDDEN if exc.code in ("FORBIDDEN", "REAUTH_REQUIRED", "KYC_NOT_APPROVED")
             else status.HTTP_422_UNPROCESSABLE_ENTITY if exc.code in _UNPROCESSABLE
             else status.HTTP_409_CONFLICT)
     return HTTPException(status_code=code, detail={"code": exc.code, "message": str(exc)})

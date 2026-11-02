@@ -184,8 +184,8 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
     network fee terms unless `terms=False`. A verified wallet was approved by an
     administrator unless `approved=False`. An administrator holds the given
     Finance & Payments permissions (all of them unless told otherwise). A member
-    who chose Crypto Cashout has an APPROVED KYC (payouts go to identified members
-    only, SoncoPay condition 2026-10-31) unless `kyc=False`."""
+    who chose Crypto or USD Cashout has an APPROVED KYC (payouts go to identified
+    members only, SoncoPay condition 2026-10-31) unless `kyc=False`."""
     row = User(email=f"{name}@example.com", username=name, hashed_password=get_password_hash(PASSWORD),
                is_active=True, is_deleted=False, is_admin=admin, date_of_birth=dob,
                sponsor_id=sponsor.id if sponsor else None, personal_referral_code=name.upper(),
@@ -198,8 +198,8 @@ def member(db, name, *, method=None, wallet=WALLET, verified_at=LONG_AGO, sponso
         approve_wallet(db, row)
     if method == "CRYPTO" and terms:
         accept_terms(db, row)
-    if method == "CRYPTO" and kyc:
-        approve_kyc(db, row)
+    if method in ("CRYPTO", "USD") and kyc:
+        approve_kyc(db, row)                        # every cashout needs approved KYC (USD too, 2026-11-02)
     return row
 
 
@@ -696,6 +696,7 @@ def test_usd_cashout_keeps_the_existing_fee_rule(ledger, gross, fee):
 def test_usd_request_is_idempotent_single_and_must_be_chosen_explicitly(client, ledger):
     db = ledger
     user = member(db, "m1", wallet=None)                               # no method chosen
+    approve_kyc(db, user)
     commission(db, user, "150.00")
     headers = {**auth(user), "Idempotency-Key": "same-key"}
     resp = client.post("/api/v1/wallet/cashout/usd", headers=headers, json={})
@@ -772,6 +773,7 @@ def test_cancelling_a_usd_request_returns_the_balance_once(client, ledger):
 def test_switching_the_cashout_method_moves_no_money_and_duplicates_nothing(client, ledger, engine_on):
     db = ledger
     user = member(db, "m1")
+    approve_kyc(db, user)
     commission(db, user, "150.00")
     before = cs.summary(db, user, now=NOW)["balances"]
     assert cs.summary(db, user, now=NOW)["status"] == "METHOD_REQUIRED"

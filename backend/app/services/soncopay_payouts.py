@@ -934,6 +934,11 @@ class SoncoPayPayoutProvider:
         amount = Decimal(str(amount))
         if not amount.is_finite() or amount <= 0:
             raise PayoutRefused("Invalid payout amount", stage="create")
+        if amount > MANUAL_REVIEW_ABOVE_USD:
+            # SoncoPay Compliance: above USD 1,000 a payout needs SoncoPay's manual review first. Never
+            # sent as an ordinary payout, whatever the MyHigh5 settings allow; nothing is created.
+            raise PayoutRefused("Payouts above USD 1,000 need SoncoPay manual review first", stage="create",
+                                platform_fault="PROVIDER_REVIEW_REQUIRED")
         payout = self._client().create_payout(destination_id=destination_id, amount=amount, reference=external_id)
         payout_id = str(payout.get("id") or "")
         if not payout_id.startswith("po_"):

@@ -337,7 +337,8 @@ def preview_withdrawal(
 
 def _cashout_http_error(exc) -> HTTPException:
     unprocessable = status.HTTP_422_UNPROCESSABLE_ENTITY
-    codes = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "INVALID_METHOD": unprocessable,
+    codes = {"FORBIDDEN": status.HTTP_403_FORBIDDEN, "KYC_NOT_APPROVED": status.HTTP_403_FORBIDDEN,
+             "INVALID_METHOD": unprocessable,
              "INVALID_OUTCOME": unprocessable, "REFERENCE_REQUIRED": unprocessable,
              "DESTINATION_REQUIRED": unprocessable, "DESTINATION_TOO_LONG": unprocessable,
              "LINK_INVALID": status.HTTP_400_BAD_REQUEST}

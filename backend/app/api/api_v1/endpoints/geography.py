@@ -52,7 +52,7 @@ def create_continent(
     *,
     db: Session = Depends(deps.get_db),
     continent_in: ContinentCreate,
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)  # reference data: administrators only
 ):
     """
     Créer un nouveau continent.
@@ -98,7 +98,7 @@ def create_region(
     *,
     db: Session = Depends(deps.get_db),
     region_in: RegionCreate,
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)  # reference data: administrators only
 ):
     """
     Créer une nouvelle région.
@@ -161,7 +161,7 @@ def create_country(
     *,
     db: Session = Depends(deps.get_db),
     country_in: CountryCreate,
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)  # reference data: administrators only
 ):
     """
     Créer un nouveau pays.
@@ -207,7 +207,7 @@ def create_city(
     *,
     db: Session = Depends(deps.get_db),
     city_in: CityCreate,
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)  # reference data: administrators only
 ):
     """
     Créer une nouvelle ville.
@@ -261,7 +261,7 @@ def get_geography_hierarchy(
 @router.post("/initialize", status_code=status.HTTP_201_CREATED)
 def initialize_geography_data(
     db: Session = Depends(deps.get_db),
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)  # reference data: administrators only
 ):
     """
     Initialiser les données géographiques de base.
