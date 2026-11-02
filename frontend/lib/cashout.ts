@@ -106,6 +106,8 @@ export type CashoutSummary = {
     processing?: number
     /** From a bank card payment still in its 14-day chargeback period; paid automatically afterwards. */
     card_hold?: number
+    /** Missed while KYC was not approved: shown for information only, never payable. */
+    missed?: number
   }
   wallet_approval?: WalletApproval | null
   payable_amount: number

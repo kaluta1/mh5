@@ -969,9 +969,18 @@ def run_cycle(db: Session, *, provider=None, now: Optional[datetime] = None, lim
             db.rollback()
             logger.exception("Cashout cycle: SoncoPay destinations could not be synchronised")
             report_destinations = {"error": 1}
-        return _pay_cycle(db, provider, config, now, limit, scope="soncopay",
-                          extra={"provider": "soncopay", "destinations": report_destinations,
-                                 "reconciled_nowpayments": legacy})
+        from app.services import payout_notifications
+
+        # Members hear once when their destination waits for SoncoPay, is in its 24-hour wait or is suspended.
+        notices = payout_notifications.destination_sweep(db, now=now)
+        report = _pay_cycle(db, provider, config, now, limit, scope="soncopay",
+                            extra={"provider": "soncopay", "destinations": report_destinations,
+                                   "reconciled_nowpayments": legacy})
+        if report.get("enabled") and payment_config.payout_activation_switch() and not report.get("stopped"):
+            # Only while payouts are really active: blocked (KYC) or still-waiting eligible members, once each.
+            notices += payout_notifications.eligibility_sweep(db, now=now)
+        report["notices"] = notices
+        return report
     credentials = payment_config.resolve_credentials(db, config)
     if not config.provider_enabled:
         # The provider (master gateway switch) is off: no payout is created, retried or sent. Payouts
@@ -1347,7 +1356,17 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
     balance: Optional[Decimal] = None
     provider_state = "NOT_VERIFIED"
     credentials = payment_config.resolve_credentials(db, config)
-    if read_provider and credentials.get("PAYOUT_API_KEY"):
+    if read_provider and payment_config.nowpayments_discontinued():
+        # The provider that pays is SoncoPay: its USDT BSC `available` balance (GET /v1/balances, read-only),
+        # never the retired NOWPayments account. Only once SoncoPay payouts are ready (authorized, Live, key).
+        if provider is not None or _soncopay().ready(db):
+            try:
+                balance = Decimal((provider or _soncopay().SoncoPayPayoutProvider(db))
+                                  .balance(config.crypto_payout_currency))
+                provider_state = "READ"
+            except Exception:  # noqa: BLE001
+                provider_state = "UNAVAILABLE"
+    elif read_provider and credentials.get("PAYOUT_API_KEY"):
         try:
             balance = Decimal((provider or NowPaymentsPayoutProvider(credentials))
                               .balance(config.crypto_payout_currency))

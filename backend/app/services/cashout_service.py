@@ -2098,6 +2098,9 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
             "available_unpaid": float(unpaid),
             "awaiting_wallet_approval": float(unpaid) if wallet.status == WALLET_PENDING_APPROVAL else 0.0,
             "processing": float(balance.reserved),
+            # Prompt 2/3: earnings missed while KYC was not approved. Shown for information; never payable,
+            # never part of any other figure here.
+            "missed": float(_missed_total(db, user.id)),
         },
         "wallet_approval": _wallet_approval_view(db, user),
         "payable_amount": float(payable),
@@ -2144,6 +2147,15 @@ def summary(db: Session, user: User, *, now: Optional[datetime] = None) -> dict:
         "active_cashout": cashout_dict(open_cashout) if open_cashout is not None else None,
         "crypto_payout_threshold": threshold,
     }
+
+
+def _missed_total(db: Session, user_id: int) -> Decimal:
+    """All of the member's recorded (not reversed) missed earnings. Read-only."""
+    from app.services import missed_earnings
+
+    cats = (missed_earnings.CATEGORY_REFERRAL, missed_earnings.CATEGORY_AD_CREATIVE,
+            missed_earnings.CATEGORY_AD_SPONSOR)
+    return money(sum((Decimal(v) for v in missed_earnings.totals(db, user_id, cats).values()), Decimal("0.00")))
 
 
 def crypto_threshold(db: Session, user: User, config: PaymentConfig) -> dict:

@@ -38,6 +38,7 @@ import { FlaggedPayoutReview } from './admin-finance-review'
 import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
 import SimpleCryptoSettings, { type CryptoSummary } from './admin-crypto-simple'
 import AdminSoncoPayPayouts from './admin-soncopay-payouts'
+import AdminSoncoPayReadiness from './admin-soncopay-readiness'
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 
 /**
@@ -185,6 +186,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         </div>
       )}
       {section === 'soncopay' && <AdminSoncoPaySettings />}
+      {section === 'soncopay-payouts' && <AdminSoncoPayReadiness />}
       {section === 'soncopay-payouts' && <AdminSoncoPayPayouts />}
       {section === 'crypto-cashout' && settings && summary && (
         <SimpleCryptoSettings key={summary.version} summary={summary}

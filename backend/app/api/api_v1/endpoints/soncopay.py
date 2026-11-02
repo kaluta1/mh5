@@ -147,6 +147,33 @@ def soncopay_payouts_view(provider: bool = False, db: Session = Depends(get_db),
     return soncopay_payouts.admin_view(db, read_provider=provider)
 
 
+@admin_router.get("/readiness")
+async def soncopay_readiness_view(provider: bool = False, db: Session = Depends(get_db),
+                                  current_user: User = Depends(get_current_active_user)):
+    """Payment and payout readiness, item by item (READY | BLOCKED | NOT_VERIFIED | NOT_APPLICABLE), with the
+    SoncoPay payment reconciliation. Read-only; with ?provider=true SoncoPay is asked through its read-only
+    calls (methods, balance) by an administrator who may manage payments. Never activates anything."""
+    from app.services import payment_config, soncopay_readiness
+
+    _require_payout_viewer(current_user)
+    if provider and not payment_config.has_permission(current_user, payment_config.PERMISSION_MANAGE):
+        provider = False
+    if provider and _is_rate_limited(f"soncopay-readiness-read:{current_user.id}", 20, 600):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail={"code": "RATE_LIMITED", "message": "Too many reads. Try again in a few minutes."})
+    return await soncopay_readiness.readiness(db, read_provider=provider)
+
+
+@admin_router.get("/payments/reconciliation")
+def soncopay_payment_reconciliation(db: Session = Depends(get_db),
+                                    current_user: User = Depends(get_current_active_user)):
+    """Local SoncoPay deposits next to the signed deliveries recorded for them. Read-only."""
+    from app.services import soncopay_readiness
+
+    _require_payout_viewer(current_user)
+    return soncopay_readiness.payment_reconciliation(db)
+
+
 class PayoutAuthorizationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmation: str = Field(default="", max_length=60)

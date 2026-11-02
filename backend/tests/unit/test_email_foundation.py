@@ -81,11 +81,12 @@ def stored_text(db) -> str:
 
 def test_registry_matches_the_audited_inventory():
     # 53 + PAYOUT.WALLET_CONFIRMATION + the three wallet approval events (individual payouts, 2026-10-18)
-    assert len(EMAIL_EVENTS) == 57 == len(all_events()) == len(EmailEvent)
-    assert len({d.key for d in all_events()}) == 57                       # unique keys
+    # + PAYOUT.STATUS_UPDATE (SoncoPay payout readiness, Prompt 3, 2026-11-02)
+    assert len(EMAIL_EVENTS) == 58 == len(all_events()) == len(EmailEvent)
+    assert len({d.key for d in all_events()}) == 58                       # unique keys
     per_category = {c.value: sum(1 for d in all_events() if d.category == c) for c in EmailCategory}
     assert per_category == {"AUTH": 6, "GUARDIAN": 2, "KYC": 5, "CONTEST": 17, "BILLING": 7, "AFFILIATE": 4,
-                            "PAYOUT": 7, "ADMIN": 7, "SUPPORT": 2}
+                            "PAYOUT": 8, "ADMIN": 7, "SUPPORT": 2}
     by_phase = {}
     for d in all_events():
         by_phase[d.phase.value] = by_phase.get(d.phase.value, 0) + 1
@@ -93,7 +94,8 @@ def test_registry_matches_the_audited_inventory():
     # ... and the dual cashout added PAYOUT.WALLET_CONFIRMATION (dual cashout): 27 / 14 / 13.
     # ... and individual payouts (owner rule 2026-10-18) added three wallet approval events and
     # approved AFFILIATE.COMMISSION_EARNED, PAYOUT.COMPLETED, PAYOUT.FAILED: 33 / 14 / 10.
-    assert by_phase == {"IMPLEMENT_NOW": 33, "LATER": 14, "REQUIRES_BUSINESS_APPROVAL": 10}
+    # ... and Prompt 3 added PAYOUT.STATUS_UPDATE: 34 / 14 / 10.
+    assert by_phase == {"IMPLEMENT_NOW": 34, "LATER": 14, "REQUIRES_BUSINESS_APPROVAL": 10}
     for d in all_events():
         assert d.key == d.key.upper() and d.key.split(".")[0] == d.category.value and d.label
 
@@ -124,7 +126,8 @@ def test_registry_defaults_and_critical_events():
             assert not d.trigger_implemented                              # future events are never emitted
     # defaults exactly as audited (25 on, 28 off) + PAYOUT.WALLET_CONFIRMATION (dual cashout), on
     # ... + the six individual payout events (2026-10-18), on
-    assert sum(1 for d in all_events() if d.default_enabled) == 32
+    # ... + PAYOUT.STATUS_UPDATE (Prompt 3), on
+    assert sum(1 for d in all_events() if d.default_enabled) == 33
     assert {d.key for d in all_events() if d.default_enabled and d.phase.value != "IMPLEMENT_NOW"} == set()
     assert {d.key for d in all_events() if not d.default_enabled and d.phase.value == "IMPLEMENT_NOW"} == {
         "ADMIN.KYC_REVIEW_REQUIRED"}
@@ -132,7 +135,8 @@ def test_registry_defaults_and_critical_events():
     live = {d.key for d in all_events() if d.trigger_implemented}
     # 13 (EMAIL-1) + AUTH.WELCOME (EMAIL-2) + KYC.ACTION_REQUIRED and 8 contest entry events (EMAIL-3)
     # ... + PAYOUT.WALLET_CONFIRMATION (dual cashout) + the six individual payout events (2026-10-18)
-    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 30
+    # ... + PAYOUT.STATUS_UPDATE (Prompt 3)
+    assert live == set(RENDERERS) - {TEST_EMAIL_KEY} and len(live) == 31
 
 
 def test_nomination_and_participation_events_stay_separate():
@@ -376,7 +380,7 @@ def test_manager_changes_are_applied_and_audited_without_secrets(client, db, enc
     assert client.put(f"{BASE}/events/CONTEST.NOMINATION_PENDING_REVIEW", headers=h,
                       json={"enabled": True}).status_code == 404
     listed = {e["key"]: e for e in client.get(f"{BASE}/events", headers=h).json()["events"]}
-    assert len(listed) == 57 and listed["AUTH.PASSWORD_RESET"]["enabled"] is False
+    assert len(listed) == 58 and listed["AUTH.PASSWORD_RESET"]["enabled"] is False
     assert listed["CONTEST.NOMINATION_PUBLISHED"]["trigger_implemented"] is True      # wired in EMAIL-3
     assert listed["CONTEST.WINNER"]["trigger_implemented"] is False
     assert "CRITICAL_EVENT_DISABLED" in {w["code"] for w in client.get(f"{BASE}/overview", headers=h).json()["warnings"]}

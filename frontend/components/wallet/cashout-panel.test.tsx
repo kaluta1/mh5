@@ -162,6 +162,16 @@ describe('CashoutPanel: network fee terms', () => {
     expect(screen.getByRole('status')).toHaveTextContent('waiting for approval by MyHigh5')
   })
 
+  it('shows missed earnings apart, never as available', async () => {
+    current = summary({ balances: { total_earned: 5, pending: 0, available: 5, reserved: 0, paid: 0, missed: 2.5,
+      available_unpaid: 5 } })
+    render(<CashoutPanel onRequestUsd={() => undefined} />)
+    await screen.findByTestId('cashout-panel')
+    expect(screen.getByTestId('balance-missed')).toHaveTextContent('$2.50')
+    expect(screen.getByTestId('balance-available')).toHaveTextContent('$5.00')
+    expect(screen.getByTestId('missed-note')).toHaveTextContent('never paid or withdrawable')
+  })
+
   it('shows the reason of a rejected wallet', async () => {
     current = summary({
       status: 'WALLET_REJECTED',

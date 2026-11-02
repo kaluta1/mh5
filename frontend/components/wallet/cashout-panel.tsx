@@ -161,6 +161,7 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
     ['Historical held', b.held ?? 0, 'balance-held'],
   ]
   if ((b.card_hold ?? 0) > 0) tiles.push(['Card payment hold', b.card_hold ?? 0, 'balance-card-hold'])
+  if ((b.missed ?? 0) > 0) tiles.push(['Missed (not payable)', b.missed ?? 0, 'balance-missed'])
   const approval = summary.wallet_approval
   const method = summary.cashout_method
   const feeTerms = summary.fees.CRYPTO.terms
@@ -192,6 +193,12 @@ export function CashoutPanel({ onRequestUsd, refreshKey = 0 }: Props) {
       {(b.held ?? 0) > 0 && (
         <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="held-note">
           Historical held commissions are under review. They are not available and are not paid automatically.
+        </p>
+      )}
+      {(b.missed ?? 0) > 0 && (
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="missed-note">
+          Missed earnings were not earned because identity verification (KYC) was not approved at the time.
+          They are shown for information only and are never paid or withdrawable.
         </p>
       )}
       {(b.card_hold ?? 0) > 0 && (

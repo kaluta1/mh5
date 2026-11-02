@@ -142,6 +142,7 @@ class EmailEvent(str, Enum):
     PAYOUT_WALLET_SUBMITTED = "PAYOUT.WALLET_SUBMITTED"
     PAYOUT_WALLET_APPROVED = "PAYOUT.WALLET_APPROVED"
     PAYOUT_WALLET_REJECTED = "PAYOUT.WALLET_REJECTED"
+    PAYOUT_STATUS_UPDATE = "PAYOUT.STATUS_UPDATE"
     # ADMIN
     ADMIN_CONTENT_REPORT = "ADMIN.CONTENT_REPORT"
     ADMIN_CONTACT_MESSAGE = "ADMIN.CONTACT_MESSAGE"
@@ -258,6 +259,8 @@ _DEFINITIONS: List[EmailEventDefinition] = [
     _d(E.PAYOUT_WALLET_SUBMITTED, "Payout wallet submitted for approval", _S, "Member", live=True),
     _d(E.PAYOUT_WALLET_APPROVED, "Payout wallet approved", _S, "Member", live=True),
     _d(E.PAYOUT_WALLET_REJECTED, "Payout wallet rejected", _S, "Member", live=True),
+    # Prompt 3 (2026-11-02): SoncoPay destination confirmation / 24h wait, payout blocked or awaiting.
+    _d(E.PAYOUT_STATUS_UPDATE, "Payout status update", _T, "Member", live=True),
     _d(E.PAYOUT_WALLET_CONFIRMATION, "Payout wallet confirmation", _S, "Member", live=True, critical=True,
        warning="Members will not receive the link that confirms a new or changed payout wallet, so no "
                "payout wallet can be set or changed while wallet email verification is required."),

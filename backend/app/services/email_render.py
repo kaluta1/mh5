@@ -283,6 +283,9 @@ def _wallet_submitted(db, to, user_id, ctx, lang) -> Rendered:
     _recipient_account(db, to, user_id)
     return _simple("en", "Payout wallet submitted", [
         f"Your payout wallet {ctx.get('wallet', '')} on {ctx.get('network', '')} was submitted for approval.",
+        ("This replaces your previous payout wallet. Automatic payouts are paused until the new wallet is "
+         "approved, confirmed with SoncoPay and its 24-hour waiting period is over. Your commissions are kept."
+         if ctx.get("changed") else ""),
         "MyHigh5 reviews every new wallet and every change before anything is paid to it. You will receive "
         "an email with the decision.",
         "If you did not make this change, change your account password now and contact support.",
@@ -334,6 +337,42 @@ def _payout_failed(db, to, user_id, ctx, lang) -> Rendered:
         "Nothing was paid. The commission stays available in your account and is paid again automatically "
         "once the issue is resolved. Check that your payout wallet is correct.",
     ], button_text="View payouts", button_url=_wallet_page(), subject="Your MyHigh5 payout was not completed")
+
+
+_STATUS_TEXT = {
+    # SoncoPay destination (owner payout policy): registration -> SoncoPay confirmation -> 24 hours.
+    "DESTINATION_AWAITING_CONFIRMATION": ("Payout wallet waiting for SoncoPay confirmation", [
+        "Your approved payout wallet {wallet} was registered with our payout provider SoncoPay and is waiting "
+        "for its confirmation.",
+        "Nothing is paid before the confirmation and the 24-hour security waiting period that follows it. "
+        "Your commissions are kept."]),
+    "DESTINATION_WAITING_PERIOD": ("Payout wallet confirmed: 24-hour waiting period", [
+        "Your payout wallet {wallet} is confirmed. For your security, the first payout to it is possible from "
+        "{payable_from} (UTC).",
+        "Eligible commissions are paid automatically after that time."]),
+    "DESTINATION_SUSPENDED": ("Payouts to your wallet are suspended", [
+        "Payouts to your wallet {wallet} are suspended. Your earnings are kept and nothing is lost.",
+        "Please contact support."]),
+    "KYC_NOT_APPROVED": ("Identity verification needed for payouts", [
+        "You have ${amount} in commissions ready for payout, but payouts are made only to members whose identity "
+        "verification (KYC) is approved.",
+        "Complete your verification from your account; your commissions are kept."]),
+    "PROVIDER_REVIEW_REQUIRED": ("Payout waiting for review", [
+        "Your payout of ${amount} is above the amount our payout provider sends automatically and needs a "
+        "manual review first. You will receive an email when it is completed."]),
+    "AWAITING_PAYOUT": ("Commission waiting for payout", [
+        "You have ${amount} in commissions that reached the payout minimum and is waiting to be paid "
+        "automatically to your approved wallet. Nothing is required from you."]),
+}
+
+
+def _payout_status(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    title, lines = _STATUS_TEXT.get(str(ctx.get("kind") or ""), _STATUS_TEXT["AWAITING_PAYOUT"])
+    values = {"wallet": ctx.get("wallet") or "", "payable_from": ctx.get("payable_from") or "",
+              "amount": ctx.get("amount") or ""}
+    return _simple("en", title, [line.format(**values) for line in lines], button_text="View payouts",
+                   button_url=_wallet_page(), subject=f"MyHigh5: {title.lower()}")
 
 
 def _invitation(db, to, user_id, ctx, lang) -> Rendered:
@@ -413,6 +452,7 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.PAYOUT_WALLET_REJECTED.value: _wallet_rejected,
     EmailEvent.PAYOUT_COMPLETED.value: _payout_completed,
     EmailEvent.PAYOUT_FAILED.value: _payout_failed,
+    EmailEvent.PAYOUT_STATUS_UPDATE.value: _payout_status,
     EmailEvent.AFFILIATE_COMMISSION_EARNED.value: _commission_wallet_missing,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,
     EmailEvent.ADMIN_CONTACT_MESSAGE.value: _contact_message,

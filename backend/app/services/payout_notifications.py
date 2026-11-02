@@ -6,6 +6,8 @@
   PAYOUT.WALLET_REJECTED        wallet rejected (with the reason)
   PAYOUT.COMPLETED              payout finished at the provider (only then)
   PAYOUT.FAILED                 payout failed (not paid) or delayed (outcome open)
+  PAYOUT.STATUS_UPDATE          (Prompt 3) SoncoPay destination waiting for confirmation / in its 24-hour
+                                wait / suspended; eligible payout blocked (KYC, provider review) or awaiting
 
 Every email goes through the email outbox (queued, retried, idempotent by key)
 and is queued only AFTER the financial change it describes is committed. Every
@@ -58,8 +60,12 @@ def wallet_submitted(db: Session, user: User, approval_id: int) -> bool:
     row = db.query(PayoutWalletApproval).filter(PayoutWalletApproval.id == approval_id).first()
     if row is None:
         return False
+    changed = (db.query(PayoutWalletApproval.id)
+               .filter(PayoutWalletApproval.user_id == row.user_id, PayoutWalletApproval.id < row.id).first()
+               is not None)
     return _enqueue(db, EmailEvent.PAYOUT_WALLET_SUBMITTED, user, f"payout-wallet-submitted:{row.id}",
-                    {"wallet": mask_address(row.address), "network": network_label(row.currency)})
+                    {"wallet": mask_address(row.address), "network": network_label(row.currency),
+                     "changed": changed})
 
 
 def wallet_decided(db: Session, approval_id: int) -> bool:
@@ -149,4 +155,92 @@ def sweep(db: Session, *, now: Optional[datetime] = None, limit: int = 500) -> i
          .update({AffiliateCommission.wallet_notice_at: now}, synchronize_session=False))
         db.commit()
         queued += 1
+    return queued
+
+
+# ---------------------------------------------------------------------------
+# Prompt 3: payout status emails (each state announced once)
+# ---------------------------------------------------------------------------
+
+DESTINATION_NOTICES = ("DESTINATION_AWAITING_CONFIRMATION", "DESTINATION_WAITING_PERIOD", "DESTINATION_SUSPENDED")
+BLOCKED_NOTICES = ("KYC_NOT_APPROVED",)
+
+
+def destination_sweep(db: Session, *, now: Optional[datetime] = None, limit: int = 500) -> int:
+    """One email per SoncoPay destination and state: waiting for SoncoPay's confirmation, confirmed and in its
+    24-hour wait (with the time), suspended. Idempotent by key (destination id + state + confirmation time),
+    so a cycle repeating every minute sends nothing new. Never raises. Returns emails queued."""
+    from app.models.checkout_gateway import SoncoPayPayoutDestination
+    from app.services import soncopay_payouts as sp
+    from app.services.cashout_service import mask_address
+    from app.services.email_events import EmailEvent
+
+    now = now or datetime.utcnow()
+    queued = 0
+    try:
+        rows = (db.query(SoncoPayPayoutDestination).order_by(SoncoPayPayoutDestination.id.desc()).limit(limit).all())
+        todo = []
+        for row in rows:
+            state = sp.destination_problem(row, row.address, now)
+            if state not in DESTINATION_NOTICES:
+                continue
+            payable = sp.payable_from(row)
+            stamp = (row.suspended_at or row.dashboard_confirmed_at or row.registered_at or row.created_at)
+            todo.append((int(row.user_id), int(row.id), state, mask_address(row.address),
+                         payable.strftime("%Y-%m-%d %H:%M") if payable is not None else None,
+                         stamp.strftime("%Y%m%d%H%M%S") if stamp is not None else "0"))
+        db.rollback()
+        for user_id, row_id, state, wallet, payable, stamp in todo:
+            user = db.query(User).filter(User.id == user_id).first()
+            if _enqueue(db, EmailEvent.PAYOUT_STATUS_UPDATE, user, f"payout-destination:{row_id}:{state}:{stamp}",
+                        {"kind": state, "wallet": wallet, "payable_from": payable}):
+                queued += 1
+            db.commit()
+    except Exception:  # noqa: BLE001 - an email never stops the payout cycle
+        db.rollback()
+        logger.exception("Payout destination emails could not be queued")
+    return queued
+
+
+def eligibility_sweep(db: Session, *, now: Optional[datetime] = None) -> int:
+    """Only while automatic payouts are ACTIVE (the caller checks): a member whose unpaid commissions reached
+    the payout threshold but who is blocked by a compliance condition (KYC) or whose payout still waits after
+    the cycle's payments (interval, limits, retry delay) gets one email for that situation. Idempotent per member, reason and the
+    newest unpaid commission, so the same situation is never announced twice. Never raises."""
+    from app.services import cashout_engine, soncopay_payouts
+    from app.services.commission_payout_hold import payable_clause
+    from app.services.email_events import EmailEvent
+    from sqlalchemy import func
+
+    now = now or datetime.utcnow()
+    queued = 0
+    try:
+        threshold = soncopay_payouts.accumulation_view(db).get("threshold")
+        if threshold is None:
+            db.rollback()
+            return 0
+        from decimal import Decimal
+
+        limit_value = Decimal(threshold)
+        members = cashout_engine.accumulation_overview(db, limit_value, now=now)
+        for m in members:
+            reason = m.get("blocked_by")
+            # Run after the cycle's payments: an unblocked member still unpaid waits for a limit, the payout
+            # interval or a retry delay.
+            kind = reason if reason in BLOCKED_NOTICES else "AWAITING_PAYOUT" if reason is None else None
+            if kind is None or Decimal(m["unpaid"]) < limit_value:
+                continue
+            newest = (db.query(func.max(AffiliateCommission.id))
+                      .filter(AffiliateCommission.user_id == m["user_id"],
+                              AffiliateCommission.status.in_((CommissionStatus.APPROVED, CommissionStatus.PENDING)),
+                              AffiliateCommission.payout_reference.is_(None), payable_clause()).scalar())
+            user = db.query(User).filter(User.id == m["user_id"]).first()
+            db.rollback()
+            if _enqueue(db, EmailEvent.PAYOUT_STATUS_UPDATE, user, f"payout-{kind.lower()}:{m['user_id']}:{newest}",
+                        {"kind": kind, "amount": m["unpaid"]}):
+                queued += 1
+            db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("Payout eligibility emails could not be queued")
     return queued
