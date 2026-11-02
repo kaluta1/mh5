@@ -354,6 +354,11 @@ def reverse_direct_commissions(db: Session, *, source_type: str, source_id: int,
             continue
         if commission.status == CommissionStatus.APPROVED and str(commission.payout_reference or "").startswith("intent:"):
             raise FinancialIntegrityError("Refund cannot race an unresolved payout intent; reconcile the payout first")
+        if commission.status == CommissionStatus.APPROVED and commission.payout_reference == "iwp-rem":
+            # Part of it already paid a purchase with earnings (internal wallet): cancelling the whole row
+            # would erase money the member spent. Refused (nothing written) for a manual review.
+            raise FinancialIntegrityError("Refund cannot cancel a commission partly spent with the internal wallet; "
+                                          "review it by hand")
         accrual = _commission_entry(db, commission, PostingType.COMMISSION_ACCRUAL)
         if commission.status == CommissionStatus.PAID:
             # Already paid out: the cost is reversed against a receivable from the member

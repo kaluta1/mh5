@@ -552,8 +552,10 @@ def run_cycle(session_factory) -> dict:
         try:
             result[name] = fn(db)
             db.commit()
+            camp.send_pending(db)          # campaign emails (completed / budget used), after the commit only
         except Exception as exc:  # noqa: BLE001 - one failing step must not stop the others
             db.rollback()
+            camp.discard_pending(db)
             logger.error("Ad delivery step %s failed: %s", name, type(exc).__name__)
             result[name] = "ERROR"
         finally:

@@ -72,6 +72,7 @@ def decide(body: DecideRequest, request: Request, response: Response, db: Sessio
                                 contestant_id=body.contestant_id, viewer=_viewer(request, current_user),
                                 country=country, allowed_sources=allowed)
     db.commit()
+    camp.send_pending(db)
     return result
 
 
@@ -87,6 +88,7 @@ def events(body: EventRequest, request: Request, response: Response, db: Session
                                       user_agent=request.headers.get("user-agent"),
                                       viewer=_viewer(request, current_user))
     db.commit()
+    camp.send_pending(db)
     return {"status": status}
 
 
@@ -96,6 +98,7 @@ def public_config(response: Response, db: Session = Depends(deps.get_db)):
     response.headers["Cache-Control"] = "public, max-age=60"
     cfg = camp.get_settings(db)
     db.rollback()
+    camp.discard_pending(db)
     return {"in_feed_every": 5, "max_in_feed_per_page": 5, "sponsored_label": "Sponsored",
             "campaigns_live": bool(cfg.campaigns_enabled and camp.pricing_state(cfg) == "CONFIGURED")}
 
@@ -149,6 +152,7 @@ def advertiser_overview(db: Session = Depends(deps.get_db), user: User = Depends
                         if r["status"] not in ("COMPLETED", "REJECTED")), Decimal("0.00"))
     packages = camp.packages(db)
     db.rollback()
+    camp.discard_pending(db)
     return {"pricing_state": camp.pricing_state(cfg), "currency": "USD", "packages": packages,
             "cpm_rate_usd": str(cfg.cpm_rate_usd) if cfg.cpm_rate_usd is not None else None,
             "min_campaign_budget_usd": str(cfg.min_campaign_budget_usd) if cfg.min_campaign_budget_usd else None,
@@ -169,8 +173,10 @@ def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
                                  targeting={"countries": body.countries, "page_types": body.page_types})
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -178,6 +184,7 @@ def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
 def advertising_packages(db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
     out = camp.packages(db)
     db.rollback()
+    camp.discard_pending(db)
     return {"packages": out}
 
 
@@ -187,6 +194,7 @@ def advertising_estimate(budget: Decimal, db: Session = Depends(deps.get_db),
     """Theoretical allowance only (budget / CPM x 1,000): never a delivery promise."""
     cfg = camp.get_settings(db)
     db.rollback()
+    camp.discard_pending(db)
     if budget <= 0 or budget > Decimal("1000000"):
         raise HTTPException(status_code=400, detail="Enter a positive budget")
     minimum = cfg.min_campaign_budget_usd
@@ -210,8 +218,10 @@ def update_campaign(campaign_id: int, body: CampaignUpdate, db: Session = Depend
         camp.update_campaign(db, user, c, changes)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -242,6 +252,7 @@ async def upload_creative_image(campaign_id: int, creative_id: int, request: Req
     stored = await store_media(file, user.id)
     camp.attach_image(db, cr, stored, actor_id=user.id)
     db.commit()
+    camp.send_pending(db)
     return camp.creative_payload(cr)
 
 
@@ -254,8 +265,10 @@ def add_creative(campaign_id: int, body: CreativeCreate, db: Session = Depends(d
                                destination_url=body.destination_url)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return {"id": cr.id, "review_status": cr.review_status}
 
 
@@ -274,8 +287,10 @@ def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume
             camp.complete_campaign(db, c, reason="ADVERTISER_STOPPED", actor_id=user.id)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -285,6 +300,7 @@ def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume
 def earnings_summary(db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
     out = sharing.member_summary(db, user.id)
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -298,6 +314,7 @@ def earnings_missed(skip: int = 0, limit: int = 20, db: Session = Depends(deps.g
     out = missed_earnings.member_page(db, user.id, categories=(CATEGORY_AD_CREATIVE, CATEGORY_AD_SPONSOR),
                                       skip=max(0, skip), limit=min(max(1, limit), 100))
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -408,6 +425,7 @@ def admin_overview(db: Session = Depends(deps.get_db), admin: User = Depends(req
                           "payments_by_buyer_match": annual,
                           "sponsor_commission": "PENDING_POLICY (gross vs net base not approved)"}}
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -418,8 +436,10 @@ def admin_settings(body: SettingsChange, db: Session = Depends(deps.get_db), adm
         row = camp.update_settings(db, admin, body.changes)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.settings_payload(row)
 
 
@@ -447,8 +467,10 @@ def admin_review_creative(creative_id: int, body: ReviewBody, db: Session = Depe
         camp.review_creative(db, admin, cr, approve=body.approve, note=body.note)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return {"id": cr.id, "review_status": cr.review_status}
 
 
@@ -462,8 +484,10 @@ def admin_review_campaign(campaign_id: int, body: ReviewBody, db: Session = Depe
         camp.review_campaign(db, admin, c, approve=body.approve, note=body.note)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -476,8 +500,10 @@ def admin_pause_campaign(campaign_id: int, db: Session = Depends(deps.get_db), a
         camp.set_paused(db, admin, c, paused=True)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -490,8 +516,10 @@ def admin_resume_campaign(campaign_id: int, db: Session = Depends(deps.get_db), 
         camp.set_paused(db, admin, c, paused=False)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -505,8 +533,10 @@ def admin_request_changes(campaign_id: int, body: NoteBody, db: Session = Depend
         camp.request_changes(db, admin, c, note=body.note)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return camp.campaign_report(db, c)
 
 
@@ -514,6 +544,7 @@ def admin_request_changes(campaign_id: int, body: NoteBody, db: Session = Depend
 def admin_reconciliation(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
     out = camp.reconciliation(db)
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -521,6 +552,7 @@ def admin_reconciliation(db: Session = Depends(deps.get_db), admin: User = Depen
 def admin_suspicious(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
     out = camp.suspicious_activity(db)
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -530,6 +562,7 @@ def admin_origins(skip: int = 0, limit: int = 50, db: Session = Depends(deps.get
     out = {"overview": ad_attribution.origin_overview(db),
            "origins": ad_attribution.review_page(db, skip=skip, limit=limit)}
     db.rollback()
+    camp.discard_pending(db)
     return out
 
 
@@ -543,6 +576,7 @@ def admin_scan_origins(body: ScanBody, db: Session = Depends(deps.get_db), admin
     db.add(AuditTrail(table_name="adv_entry_origins", record_id=0, action="SCAN", old_values=None, new_values=out,
                       user_id=admin.id))
     db.commit()
+    camp.send_pending(db)
     return out
 
 
@@ -558,11 +592,13 @@ def admin_resolve_origin(contestant_id: int, body: OriginBody, db: Session = Dep
         priced = sharing.apply_origin_resolution(db, contestant_id=contestant_id)
     except ValueError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise HTTPException(status_code=409, detail=str(exc)) from None
     db.add(AuditTrail(table_name="adv_entry_origins", record_id=row.id, action="RESOLVE", old_values={"status": "REVIEW"},
                       new_values={"origin_kind": body.origin_kind, "note": body.note, "lines_priced": priced},
                       user_id=admin.id))
     db.commit()
+    camp.send_pending(db)
     return {"contestant_id": contestant_id, "origin_kind": row.origin_kind, "lines_priced": priced}
 
 
@@ -595,11 +631,14 @@ def admin_finalize(body: FinalizeBody, db: Session = Depends(deps.get_db), admin
         out = sharing.finalize_period(db, period=body.period, source=body.source, actor_id=admin.id)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     except FinancialIntegrityError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise HTTPException(status_code=409, detail=str(exc)) from None
     db.commit()
+    camp.send_pending(db)
     return out
 
 
@@ -611,8 +650,10 @@ def admin_release_held_sponsor(line_id: int, body: HeldSponsorBody, db: Session 
         line = sharing.release_held_sponsor(db, line_id=line_id, actor_id=admin.id, note=body.note)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return {"id": line.id, "status": line.status, "beneficiary_user_id": line.beneficiary_user_id}
 
 
@@ -622,6 +663,7 @@ def admin_adsense_import(body: ImportBody, db: Session = Depends(deps.get_db), a
         raise HTTPException(status_code=400, detail="Choose a range of at most 62 days")
     run = sharing.import_adsense(db, start=body.start, end=body.end, actor_id=admin.id)
     db.commit()
+    camp.send_pending(db)
     return {"id": run.id, "status": run.status, "rows": run.rows, "detail": run.detail}
 
 
@@ -634,8 +676,10 @@ def admin_adsense_month(body: AdsenseMonthBody, db: Session = Depends(deps.get_d
                                                actor_id=admin.id, evidence_note=body.evidence_note)
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
+    camp.send_pending(db)
     return {"id": month.id, "period": month.period, "finalized_total": str(month.finalized_total),
             "estimated_total": str(month.estimated_total)}
 
@@ -664,9 +708,12 @@ def admin_reverse_invalid(body: ReverseBody, db: Session = Depends(deps.get_db),
         out["allocations"] = adjusted
     except camp.AdError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise _err(exc) from None
     except FinancialIntegrityError as exc:
         db.rollback()
+        camp.discard_pending(db)
         raise HTTPException(status_code=409, detail=str(exc)) from None
     db.commit()
+    camp.send_pending(db)
     return out

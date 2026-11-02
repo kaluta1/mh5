@@ -123,6 +123,8 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                             (
                                 (AffiliateCommission.status == CommissionStatus.APPROVED)
                                 & AffiliateCommission.payout_reference.is_not(None)
+                                # a remainder kept for internal wallet payments is not a payout reservation
+                                & (AffiliateCommission.payout_reference != "iwp-rem")
                             ),
                             AffiliateCommission.commission_amount,
                         ),

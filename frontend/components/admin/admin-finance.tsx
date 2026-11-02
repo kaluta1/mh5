@@ -39,6 +39,7 @@ import { Row, StatusPill, TonePill, inputClass } from './admin-finance-ui'
 import SimpleCryptoSettings, { type CryptoSummary } from './admin-crypto-simple'
 import AdminSoncoPayPayouts from './admin-soncopay-payouts'
 import AdminSoncoPayReadiness from './admin-soncopay-readiness'
+import AdminInternalWallet from './admin-internal-wallet'
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 
 /**
@@ -258,6 +259,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
           <WalletApprovals canProcess={canProcess} />
           <CashoutTransactions canProcess={canProcess} />
           <CommissionPayouts />
+          <AdminInternalWallet />
         </div>
       )}
       {section === 'reconciliation' && overview && (

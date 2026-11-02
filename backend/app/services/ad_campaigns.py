@@ -167,11 +167,14 @@ def _lock_advertiser(db: Session, advertiser_id: int) -> None:
 def on_credit_deposit_validated(db: Session, deposit) -> None:
     """A validated advertising_credit deposit: cash in, liability to the advertiser. Idempotent."""
     from app.services.new_model_ledger import Line, PostingType, SourceType, post_entry
+    from app.services.new_model_payments import funding_account
 
     amount = money(deposit.amount)
     entry = post_entry(
         db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
-        lines=[Line("1001", debit=amount, description="Cash received - advertiser credit"),
+        lines=[Line(funding_account(deposit), debit=amount,
+                    description=("Cash received" if funding_account(deposit) == "1001" else "Paid with commission earnings")
+                    + " - advertiser credit"),
                Line(CREDIT_ACCOUNT, credit=amount,
                     description=f"Advertiser credit (unearned) - User #{deposit.user_id}")],
         description=f"NEW_V2 advertiser credit deposit {deposit.id} - user {deposit.user_id}",
@@ -640,29 +643,23 @@ def attach_image(db: Session, creative: AdvCreative, stored: dict, *, actor_id: 
 
 # ---------------------------------------------------------------- notifications
 
-def notify(db: Session, campaign: AdvCampaign, kind: str) -> bool:
-    """One email to the advertiser per campaign transition (idempotent by campaign, kind and audit position).
-    Nothing is sent while MyHigh5 campaigns are switched off. Never raises."""
-    try:
-        cfg = get_settings(db)
-        if not cfg.campaigns_enabled:
-            return False
-        from app.models.user import User
-        from app.services.email import email_service
-        from app.services.email_events import EmailEvent
+_PENDING = "adv_pending_emails"
 
-        user = db.query(User).filter(User.id == campaign.advertiser_user_id).first()
-        if user is None or not user.email or not user.is_active:
+
+def notify(db: Session, campaign: AdvCampaign, kind: str) -> bool:
+    """Queue one email to the advertiser for this campaign transition. Nothing is written here: the email
+    service commits on its own, so emails are recorded only by send_pending() AFTER the caller committed
+    (an email can never commit half of a campaign action). Nothing while campaigns are switched off."""
+    try:
+        if not get_settings(db).campaigns_enabled:
             return False
         n = db.query(func.count(AuditTrail.id)).filter(AuditTrail.table_name == "adv_campaigns",
                                                        AuditTrail.record_id == campaign.id).scalar()
-        with db.begin_nested():
-            delivery = email_service.enqueue(
-                db, event=EmailEvent.BILLING_ADVERTISING_UPDATE, recipient=user.email,
-                idempotency_key=f"adv-campaign:{campaign.id}:{kind}:{int(n or 0)}", user_id=user.id,
-                context={"kind": kind, "campaign": campaign.name[:80], "campaign_id": campaign.id,
-                         "note": (campaign.review_note or "")[:300]})
-        return delivery is not None
+        db.info.setdefault(_PENDING, []).append(
+            (campaign.advertiser_user_id, f"adv-campaign:{campaign.id}:{kind}:{int(n or 0)}",
+             {"kind": kind, "campaign": campaign.name[:80], "campaign_id": campaign.id,
+              "note": (campaign.review_note or "")[:300]}))
+        return True
     except Exception:  # noqa: BLE001 - an email never blocks a campaign action
         import logging
 
@@ -671,30 +668,50 @@ def notify(db: Session, campaign: AdvCampaign, kind: str) -> bool:
 
 
 def notify_share_released(db: Session, line) -> bool:
-    """Member: a contest-page ad share was finalized and released (only happens while sharing is switched on)."""
+    """Queue (see notify) the member's email for a released contest-page ad share (sharing switched on)."""
     try:
-        cfg = get_settings(db)
-        if not cfg.contest_sharing_enabled or not line.beneficiary_user_id:
+        if not get_settings(db).contest_sharing_enabled or not line.beneficiary_user_id:
             return False
-        from app.models.user import User
-        from app.services.email import email_service
-        from app.services.email_events import EmailEvent
-
-        user = db.query(User).filter(User.id == line.beneficiary_user_id).first()
-        if user is None or not user.email or not user.is_active:
-            return False
-        with db.begin_nested():
-            delivery = email_service.enqueue(
-                db, event=EmailEvent.BILLING_ADVERTISING_UPDATE, recipient=user.email,
-                idempotency_key=f"adv-share:{line.id}", user_id=user.id,
-                context={"kind": "SHARE_RELEASED", "amount": str(money(line.amount)), "period": line.period,
-                         "role": line.role})
-        return delivery is not None
+        db.info.setdefault(_PENDING, []).append(
+            (int(line.beneficiary_user_id), f"adv-share:{line.id}",
+             {"kind": "SHARE_RELEASED", "amount": str(money(line.amount)), "period": line.period, "role": line.role}))
+        return True
     except Exception:  # noqa: BLE001
         import logging
 
         logging.getLogger(__name__).exception("Advertising share email for line %s could not be queued", line.id)
         return False
+
+
+def send_pending(db: Session) -> int:
+    """Record the queued advertising emails. Call only AFTER the caller's commit (or rollback: a rolled-back
+    action must call discard_pending instead). Idempotent by key; never raises."""
+    pending = db.info.pop(_PENDING, [])
+    sent = 0
+    if not pending:
+        return 0
+    from app.models.user import User
+    from app.services.email import email_service
+    from app.services.email_events import EmailEvent
+
+    for user_id, key, context in pending:
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user is None or not user.email or not user.is_active:
+                continue
+            if email_service.enqueue(db, event=EmailEvent.BILLING_ADVERTISING_UPDATE, recipient=user.email,
+                                     idempotency_key=key, user_id=user.id, context=context) is not None:
+                sent += 1
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("Advertising email %s could not be recorded", key)
+            db.rollback()
+    return sent
+
+
+def discard_pending(db: Session) -> None:
+    db.info.pop(_PENDING, None)
 
 
 # ---------------------------------------------------------------- reconciliation (read-only)

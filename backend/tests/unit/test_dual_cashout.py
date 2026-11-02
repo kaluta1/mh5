@@ -894,7 +894,7 @@ def test_cashout_endpoints_need_the_owner_or_an_administrator(client, ledger):
     listing = client.get("/api/v1/admin/cashouts?status=requested", headers=auth(admin)).json()
     assert listing["total"] == 1 and listing["items"][0]["user_id"] == user.id
     report = client.get("/api/v1/admin/cashouts/overview", headers=auth(admin)).json()
-    assert report["owed"] == {"pending": 0.0, "available": 0.0, "reserved": 150.0}
+    assert report["owed"] == {"pending": 0.0, "available": 0.0, "reserved": 150.0, "wallet_partly_used": 0.0}
     assert report["provider_balance_state"] == "NOT_VERIFIED" and report["provider_balance"] is None
     assert report["engine"]["enabled"] is False and report["usd_settlement_enabled"] is False
     assert client.post("/api/v1/admin/cashouts/run", headers=auth(admin)).json()["enabled"] is False

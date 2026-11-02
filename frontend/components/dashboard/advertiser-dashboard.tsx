@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import api from '@/lib/api'
 import { normalizeMediaUrl } from '@/lib/media-url'
 import { MissedEarnings } from '@/components/dashboard/missed-earnings'
+import { PayWithEarnings } from '@/components/wallet/pay-with-earnings'
 
 type Json = Record<string, any>
 
@@ -119,6 +120,7 @@ export function AdvertiserDashboard() {
     placements: ['IN_FEED'] as string[], page_types: [] as string[] })
   const [creative, setCreative] = useState<Record<number, Json>>({})
   const [rename, setRename] = useState<Record<number, string>>({})
+  const [creditUnits, setCreditUnits] = useState('10')
 
   const load = useCallback(async () => {
     try {
@@ -181,7 +183,14 @@ export function AdvertiserDashboard() {
         <div className="rounded-xl border p-3 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300">{data.refund_policy}</div>
       </div>
       {data.funding_enabled && !pending ? (
-        <p className="text-sm">Add credit from Payments using the product “MyHigh5 advertiser credit” (1 unit = 1.00 USD).</p>
+        <div className="space-y-2">
+          <p className="text-sm">Add credit from Payments using the product “MyHigh5 advertiser credit” (1 unit = 1.00 USD).</p>
+          <label className="text-sm">Credit to add with earnings (USD)
+            <input value={creditUnits} onChange={(e) => setCreditUnits(e.target.value.replace(/[^0-9]/g, ''))} aria-label="Credit to add with earnings"
+              className="ml-2 w-24 rounded border px-2 py-1 dark:bg-gray-900" />
+          </label>
+          {Number(creditUnits) >= 1 ? <PayWithEarnings productCode="advertising_credit" quantity={Number(creditUnits)} onPaid={load} /> : null}
+        </div>
       ) : null}
 
       <Packages packages={data.packages || []} />

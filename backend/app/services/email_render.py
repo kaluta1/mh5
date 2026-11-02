@@ -413,6 +413,29 @@ def _advertising_update(db, to, user_id, ctx, lang) -> Rendered:
                    button_url=f"{public_site_base()}{page}", subject=f"MyHigh5: {title.lower()}")
 
 
+_WALLET_TEXT = {
+    "COMPLETED": ("Payment with your earnings completed", [
+        "You paid {amount} USD for {product} x{quantity} with your MyHigh5 commission earnings (reference {reference}).",
+        "No card or crypto payment was made; the amount was taken from your available earnings."]),
+    "FAILED": ("Payment with your earnings did not go through", [
+        "Your payment for {product} x{quantity} with your MyHigh5 earnings was not completed ({failure_code}). "
+        "Nothing was taken from your earnings."]),
+    "REFUNDED": ("Payment with your earnings refunded", [
+        "Your payment {reference} of {amount} USD was refunded. The amount is available in your earnings again."]),
+    "REFUND_REVIEW": ("Refund under review", [
+        "The refund of your payment {reference} needs a manual review. We will contact you."]),
+}
+
+
+def _wallet_payment(db, to, user_id, ctx, lang) -> Rendered:
+    _recipient_account(db, to, user_id)
+    title, lines = _WALLET_TEXT.get(str(ctx.get("kind") or ""), _WALLET_TEXT["COMPLETED"])
+    values = {k: ctx.get(k) if ctx.get(k) is not None else "" for k in
+              ("amount", "product", "quantity", "reference", "failure_code")}
+    return _simple("en", title, [line.format(**values) for line in lines], button_text="View your earnings",
+                   button_url=_wallet_page(), subject=f"MyHigh5: {title.lower()}")
+
+
 def _invitation(db, to, user_id, ctx, lang) -> Rendered:
     code = ctx.get("referral_code", "")
     from urllib.parse import quote
@@ -492,6 +515,7 @@ RENDERERS: Dict[str, Callable[..., Rendered]] = {
     EmailEvent.PAYOUT_FAILED.value: _payout_failed,
     EmailEvent.PAYOUT_STATUS_UPDATE.value: _payout_status,
     EmailEvent.BILLING_ADVERTISING_UPDATE.value: _advertising_update,
+    EmailEvent.BILLING_WALLET_PAYMENT_UPDATE.value: _wallet_payment,
     EmailEvent.AFFILIATE_COMMISSION_EARNED.value: _commission_wallet_missing,
     EmailEvent.ADMIN_CONTENT_REPORT.value: _content_report,
     EmailEvent.ADMIN_CONTACT_MESSAGE.value: _contact_message,

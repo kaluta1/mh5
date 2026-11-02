@@ -187,14 +187,27 @@ def test_campaign_emails_only_while_campaigns_are_switched_on(world):
     cfg = camp.get_settings(db)
     cfg.campaigns_enabled = True                                  # submit needs it; then switch off again
     camp.submit_campaign(db, adv, c)
+    assert _keys(db, f"adv-campaign:{c.id}:") == []                # queued only: nothing before the commit
+    db.commit()
+    camp.send_pending(db)
     first = _keys(db, f"adv-campaign:{c.id}:")
     assert first == [f"adv-campaign:{c.id}:SUBMITTED:2"]
     cfg.campaigns_enabled = False
     admin = _user(db, "mail-adm@t.com")
     camp.request_changes(db, admin, c, note="Fix the image")
+    db.commit()
+    assert camp.send_pending(db) == 0
     assert _keys(db, f"adv-campaign:{c.id}:") == first           # off: nothing queued
     cfg.campaigns_enabled = True
     camp.submit_campaign(db, adv, c)
+    camp.discard_pending(db)                                      # a rolled-back action sends nothing
+    db.rollback()
+    cfg = camp.get_settings(db)
+    cfg.campaigns_enabled = True
+    db.commit()
+    camp.submit_campaign(db, adv, db.get(type(c), c.id))
+    db.commit()
+    assert camp.send_pending(db) == 1
     assert len(_keys(db, f"adv-campaign:{c.id}:")) == 2
 
 

@@ -83,6 +83,17 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 api_router.include_router(soncopay_endpoints.webhook_router, prefix="/webhooks", tags=["Webhooks — Payments"])
+# Internal wallet payments (Prompt 5): pay products with available commission earnings (switch
+# INTERNAL_WALLET_PAYMENTS_ENABLED, default off); finance administrators review payments and refunds.
+from app.api.api_v1.endpoints import internal_wallet as internal_wallet_endpoints  # noqa: E402
+api_router.include_router(internal_wallet_endpoints.member_router, prefix="/internal-wallet",
+                          tags=["Internal wallet payments"])
+api_router.include_router(
+    internal_wallet_endpoints.admin_router,
+    prefix="/admin/finance/internal-wallet",
+    tags=["Admin - Finance & Payments"],
+    dependencies=[Depends(admin.require_admin)],
+)
 api_router.include_router(roles.router, prefix="/rbac", tags=["Rôles et Permissions"])
 api_router.include_router(social.router, prefix="/social", tags=["Service Social"])
 # Groups router routes already start with /groups/..., so no extra prefix is needed.

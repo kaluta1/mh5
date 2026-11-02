@@ -48,6 +48,21 @@ logger = logging.getLogger(__name__)
 KYC_REVENUE_CATEGORY = "KYC_VERIFICATION"
 
 
+INTERNAL_WALLET_PROVIDER = "internal_wallet"
+WALLET_CLEARING_ACCOUNT = "1050"
+
+
+def funding_account(deposit: Deposit) -> str:
+    """Where a purchase's money comes from: cash (1001), or, for a purchase paid with commission earnings
+    (Prompt 5), the internal wallet clearing account. The commission liability was settled into that
+    account just before, so the clearing nets to zero and no cash is ever recorded."""
+    return WALLET_CLEARING_ACCOUNT if (deposit.payment_provider or "") == INTERNAL_WALLET_PROVIDER else "1001"
+
+
+def _received(deposit: Deposit) -> str:
+    return "Paid with commission earnings" if funding_account(deposit) != "1001" else "Cash received"
+
+
 def _product(db: Session, deposit: Deposit) -> ProductType:
     return db.query(ProductType).filter(ProductType.id == deposit.product_type_id).one()
 
@@ -58,7 +73,8 @@ def _recognize(db: Session, deposit: Deposit, *, credit_from: str, recognized_at
     breakdown = compute_breakdown(get_policy(db, product.code), deposit.amount)
     policy = breakdown.policy
     lines = [
-        Line(credit_from, debit=breakdown.gross, description="Cash received" if credit_from == "1001" else "Release deferred revenue"),
+        Line(credit_from, debit=breakdown.gross,
+             description=_received(deposit) if credit_from == funding_account(deposit) else "Release deferred revenue"),
         Line(policy.revenue_account_code, credit=breakdown.website_revenue, description=f"Website revenue - {breakdown.revenue_category}"),
     ]
     if breakdown.provider_cost > 0:
@@ -97,7 +113,7 @@ def _hold_retired_pool_payment(db: Session, deposit: Deposit) -> None:
     )
     post_entry(
         db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
-        lines=[Line("1001", debit=money(deposit.amount), description="Cash received"),
+        lines=[Line(funding_account(deposit), debit=money(deposit.amount), description=_received(deposit)),
                Line("2100", credit=money(deposit.amount),
                     description="Referral Pool retired: payment held for manual review (no seat, revenue or commission)")],
         description=f"NEW_V2 retired Referral Pool payment held for review - deposit {deposit.id}",
@@ -131,7 +147,7 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
         # Cash is real but no approved revenue rule exists: hold it for review, recognize nothing.
         post_entry(
             db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
-            lines=[Line("1001", debit=money(deposit.amount), description="Cash received"),
+            lines=[Line(funding_account(deposit), debit=money(deposit.amount), description=_received(deposit)),
                    Line("2100", credit=money(deposit.amount), description="Unclassified receipt pending revenue policy")],
             description=f"NEW_V2 unclassified receipt - {product.code} - deposit {deposit.id}",
         )
@@ -142,7 +158,7 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
         # Service not yet performed (e.g. KYC): cash to deferred revenue; recognized later.
         post_entry(
             db, source_type=SourceType.DEPOSIT, source_id=deposit.id, posting_type=PostingType.RECEIPT,
-            lines=[Line("1001", debit=money(deposit.amount), description="Cash received"),
+            lines=[Line(funding_account(deposit), debit=money(deposit.amount), description=_received(deposit)),
                    Line(policy.deferred_account_code, credit=money(deposit.amount), description="Deferred revenue")],
             description=f"NEW_V2 deferred receipt - {product.code} - deposit {deposit.id} - user {deposit.user_id}",
         )
@@ -157,7 +173,7 @@ def process_new_model_deposit(db: Session, deposit: Deposit) -> None:
                 product_type_id=deposit.product_type_id, deferred_cost=True,
             )
         return
-    _recognize(db, deposit, credit_from="1001")
+    _recognize(db, deposit, credit_from=funding_account(deposit))
 
 
 def recognize_deferred_deposit(db: Session, deposit: Deposit, recognized_at: Optional[datetime] = None) -> bool:

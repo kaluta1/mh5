@@ -21,6 +21,7 @@ import Link from 'next/link'
 import { TransactionTable, Transaction } from '@/components/wallet/transaction-table'
 import { WithdrawDialog } from '@/components/wallet/withdraw-dialog'
 import { CashoutPanel } from '@/components/wallet/cashout-panel'
+import { EarningsPayments } from '@/components/wallet/pay-with-earnings'
 
 const PaymentDialog = dynamic(
   () => import('@/components/dialogs/payment-dialog-v2').then((mod) => mod.PaymentDialog),
@@ -260,6 +261,7 @@ export default function WalletPage() {
       </div>
 
       <CashoutPanel onRequestUsd={() => setShowWithdrawDialog(true)} refreshKey={cashoutRefresh} />
+      <EarningsPayments />
 
       {/* Recent Transactions */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">

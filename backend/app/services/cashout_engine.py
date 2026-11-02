@@ -1309,7 +1309,9 @@ def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 2
     orphans = (db.query(AffiliateCommission.payout_reference, AffiliateCommission.user_id,
                         func.sum(AffiliateCommission.commission_amount))
                .filter(AffiliateCommission.status == CommissionStatus.APPROVED,
-                       AffiliateCommission.payout_reference.isnot(None))
+                       AffiliateCommission.payout_reference.isnot(None),
+                       # an internal wallet remainder (Prompt 5) is not a cashout reservation
+                       AffiliateCommission.payout_reference != "iwp-rem")
                .group_by(AffiliateCommission.payout_reference, AffiliateCommission.user_id).all())
     for reference, user_id, total in orphans:
         if reference not in intents:
@@ -1345,7 +1347,9 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
     owed = {
         "pending": total(AffiliateCommission.status == CommissionStatus.PENDING),
         "available": total(approved, AffiliateCommission.payout_reference.is_(None)),
-        "reserved": total(approved, AffiliateCommission.payout_reference.isnot(None)),
+        "reserved": total(approved, AffiliateCommission.payout_reference.isnot(None),
+                          AffiliateCommission.payout_reference != "iwp-rem"),
+        "wallet_partly_used": total(approved, AffiliateCommission.payout_reference == "iwp-rem"),
     }
     crypto_members = total(approved | (AffiliateCommission.status == CommissionStatus.PENDING),
                            AffiliateCommission.user_id.in_(

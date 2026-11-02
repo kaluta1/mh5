@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import api from '@/lib/api'
 import { useLanguage } from '@/contexts/language-context'
 import { apiErrorText } from '@/lib/financial-eligibility'
+import { PayWithEarnings } from '@/components/wallet/pay-with-earnings'
 
 type Eligibility = {
   sales_enabled: boolean
@@ -215,6 +216,7 @@ export function ReferralPoolUnitsCard({ onChange }: { onChange?: () => void } = 
               {t('business_model.units_change')}
             </button>
           </div>
+          <PayWithEarnings productCode="referral_pool_entry" quantity={quantity} onPaid={() => { setReviewing(false); load(); onChange?.() }} />
         </div>
       )}
       {paymentLink && (
