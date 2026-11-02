@@ -109,3 +109,4 @@ from .advertising_v2 import (  # noqa: F401
 )
 from .missed_earning import MissedEarning  # noqa: F401
 from .internal_wallet import InternalWalletPayment, InternalWalletPaymentLine  # noqa: F401
+from .dsm_restoration import DsmSponsorRestoration  # noqa: F401

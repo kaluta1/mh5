@@ -83,6 +83,12 @@ api_router.include_router(
     dependencies=[Depends(admin.require_admin)],
 )
 api_router.include_router(soncopay_endpoints.webhook_router, prefix="/webhooks", tags=["Webhooks — Payments"])
+# Prompt 6: read-only reconciliation (Annual Ads, Referral Pool, DSM), DSM sponsor restoration (Super Admin),
+# and the member's own Annual Ads history.
+from app.api.api_v1.endpoints import reconciliation_admin as reconciliation_endpoints  # noqa: E402
+api_router.include_router(reconciliation_endpoints.admin_router, prefix="/admin/reconciliation",
+                          tags=["Admin - Reconciliation"], dependencies=[Depends(admin.require_admin)])
+api_router.include_router(reconciliation_endpoints.member_router, prefix="/annual-ads", tags=["Annual Ads"])
 # Internal wallet payments (Prompt 5): pay products with available commission earnings (switch
 # INTERNAL_WALLET_PAYMENTS_ENABLED, default off); finance administrators review payments and refunds.
 from app.api.api_v1.endpoints import internal_wallet as internal_wallet_endpoints  # noqa: E402

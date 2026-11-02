@@ -431,12 +431,14 @@ def test_annualads_webhook_signature_amount_network_and_replay(client, db, monke
     refund_signature = hmac.new(
         b"annual-secret", timestamp.encode() + b"." + refund_raw, hashlib.sha256
     ).hexdigest()
-    unsupported_refund = client.post(
-        "/api/v1/webhooks/sponsor-payment",
-        content=refund_raw,
-        headers={**headers, "x-webhook-signature": refund_signature, "x-webhook-event": "sponsor_payment_refunded"},
-    )
-    assert unsupported_refund.status_code == 409
+    refund_headers = {**headers, "x-webhook-signature": refund_signature, "x-webhook-event": "sponsor_payment_refunded"}
+    # Prompt 6: a signed refund of a recorded payment is handled; without a provable full amount it goes to
+    # finance review (nothing reversed automatically), and a repeat changes nothing.
+    refund = client.post("/api/v1/webhooks/sponsor-payment", content=refund_raw, headers=refund_headers)
+    assert refund.status_code == 200 and refund.json()["status"] == "refund_finance_review", refund.text
+    again = client.post("/api/v1/webhooks/sponsor-payment", content=refund_raw, headers=refund_headers)
+    assert again.status_code == 200 and again.json()["status"] == "already_processed"
+    assert db.query(JournalEntry).count() == 1                       # the cash side is never reversed automatically
 
     wrong_tenant_body = {
         "event": "sponsor_payment_confirmed",

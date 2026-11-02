@@ -40,6 +40,7 @@ import SimpleCryptoSettings, { type CryptoSummary } from './admin-crypto-simple'
 import AdminSoncoPayPayouts from './admin-soncopay-payouts'
 import AdminSoncoPayReadiness from './admin-soncopay-readiness'
 import AdminInternalWallet from './admin-internal-wallet'
+import AdminReconciliation from './admin-reconciliation'
 import AdminSoncoPaySettings from './admin-soncopay-settings'
 
 /**
@@ -266,6 +267,7 @@ export default function AdminFinance({ section }: { section: FinanceSection }) {
         <div className="space-y-4">
           <FlaggedPayoutReview canProcess={canProcess} />
           <ReconciliationAndAudit canManage={canManage} />
+          <AdminReconciliation />
         </div>
       )}
     </div>

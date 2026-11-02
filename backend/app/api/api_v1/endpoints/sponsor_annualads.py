@@ -182,13 +182,9 @@ async def sponsor_payment_webhook(
 
     if not isinstance(effective_event, str) or len(effective_event) > 100:
         raise HTTPException(status_code=400, detail="Invalid webhook event")
-    if effective_event != "sponsor_payment_confirmed":
-        if any(word in effective_event.lower() for word in ("refund", "reverse", "cancel", "chargeback")):
-            # Never acknowledge an unsupported compensating financial event as applied.
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Sponsor reversal events are not configured",
-            )
+    payload_sha = hashlib.sha256(raw or b"").hexdigest()
+    is_reversal = any(word in effective_event.lower() for word in ("refund", "reverse", "cancel", "chargeback"))
+    if effective_event != "sponsor_payment_confirmed" and not is_reversal:
         return {"ok": True, "received": True, "event": effective_event}
 
     data_block = payload.get("data") if isinstance(payload.get("data"), dict) else {}
@@ -214,8 +210,43 @@ async def sponsor_payment_webhook(
         raise HTTPException(status_code=400, detail="Missing payment.tx_hash")
 
     if db.get_bind().dialect.name == "postgresql":
-        # Serialize identical provider events even before a dedicated event table exists.
+        # Serialize every event of the same payment (confirmations, retries, refunds).
         db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:event_key))"), {"event_key": f"annualads:{tx_hash}"})
+
+    from app.models.advertising_v2 import AdvAnnualAdsEvent, AdvAnnualAdsPayment
+    from app.services import annualads_commissions
+
+    seen = (db.query(AdvAnnualAdsEvent).filter(AdvAnnualAdsEvent.event == effective_event,
+                                               AdvAnnualAdsEvent.tx_hash == tx_hash,
+                                               AdvAnnualAdsEvent.payload_sha256 == payload_sha).first())
+    if seen is not None and seen.outcome != "UNKNOWN_PAYMENT":
+        return {"ok": True, "received": True, "event": effective_event,
+                "status": "already_processed" if is_reversal else "already_recorded",
+                "outcome": seen.outcome, "tx_hash": tx_hash}
+
+    def _log(outcome: str, payment_id=None, detail=None):
+        row = seen or AdvAnnualAdsEvent(event=effective_event, tx_hash=tx_hash, payload_sha256=payload_sha,
+                                        outcome=outcome)
+        row.outcome, row.payment_id, row.detail = outcome, payment_id, (detail or "")[:300] or None
+        db.add(row)
+
+    if is_reversal:
+        original = db.query(AdvAnnualAdsPayment).filter(AdvAnnualAdsPayment.tx_hash == tx_hash).with_for_update().first()
+        if original is None:
+            _log("UNKNOWN_PAYMENT", detail="No recorded payment for this refund event")
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown sponsor payment")
+        refund_amount = payment.get("refund_amount") or payment.get("amount") or payment.get("gross_amount")
+        try:
+            refund_amount = money(refund_amount) if refund_amount not in (None, "") else None
+        except Exception:  # noqa: BLE001 - an unreadable amount is a finance-review case, never applied
+            refund_amount = None
+        outcome = annualads_commissions.handle_refund(db, original, event=effective_event, amount=refund_amount,
+                                                      payload_sha256=payload_sha)
+        _log(f"REFUND_{outcome}", payment_id=original.id, detail=original.sponsor_commission_status)
+        db.commit()
+        return {"ok": True, "received": True, "event": effective_event, "status": "refund_" + outcome.lower(),
+                "tx_hash": tx_hash, "commission_status": original.sponsor_commission_status}
 
     # CoA accounts from AnnualAds integration spec:
     # 1030 Crypto Wallet USDT, 2310 Deferred Sponsor Revenue, 4010 Sponsor Revenue Net, 7110 FX loss.
@@ -266,9 +297,11 @@ async def sponsor_payment_webhook(
     from app.services import annualads_records
 
     if existing_entry:
-        annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
-                                         data=data_block, raw=raw, gross=gross, fee=platform_fee,
-                                         net=client_revenue, journal_entry_id=existing_entry.id)
+        recorded = annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
+                                                    data=data_block, raw=raw, gross=gross, fee=platform_fee,
+                                                    net=client_revenue, journal_entry_id=existing_entry.id)
+        annualads_commissions.decide_commission(db, recorded)
+        _log("ALREADY_RECORDED", payment_id=recorded.id, detail=recorded.sponsor_commission_status)
         db.commit()
         return {
             "ok": True,
@@ -302,10 +335,13 @@ async def sponsor_payment_webhook(
             commit=False,
         )
         # Audit record (buyer attribution only from a signed field equal to our SSO subject;
-        # entitlement fields copied verbatim). No sponsor commission: its base is not approved.
-        annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
-                                         data=data_block, raw=raw, gross=gross, fee=platform_fee,
-                                         net=client_revenue, journal_entry_id=je.id)
+        # entitlement fields copied verbatim), then the buyer's direct-sponsor commission (20% / 40% of GROSS,
+        # KYC-approved sponsor only), decided once, in the same transaction as the receipt.
+        recorded = annualads_records.record_payment(db, tx_hash=tx_hash, event=effective_event, payment=payment,
+                                                    data=data_block, raw=raw, gross=gross, fee=platform_fee,
+                                                    net=client_revenue, journal_entry_id=je.id)
+        annualads_commissions.decide_commission(db, recorded)
+        _log("RECORDED", payment_id=recorded.id, detail=recorded.sponsor_commission_status)
         db.commit()
     except AccountingError as e:
         logger.error("AnnualAds accounting posting failed for tx=%s: %s", tx_hash, e)
@@ -323,6 +359,7 @@ async def sponsor_payment_webhook(
         "gross_amount": str(gross),
         "platform_fee": str(platform_fee),
         "client_revenue": str(client_revenue),
+        "sponsor_commission": recorded.sponsor_commission_status,
         "journal_entry_id": je.id,
         "entry_number": je.entry_number,
     }

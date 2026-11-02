@@ -336,3 +336,30 @@ class AdvAnnualAdsPayment(Base):
     sponsor_commission_status: Mapped[str] = mapped_column(String(20), default="PENDING_POLICY", nullable=False)
     raw_payload_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Prompt 6 (2026-11-03): the buyer's direct-sponsor commission (20% / qualified 40% of GROSS), decided once.
+    sponsor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sponsor_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4), nullable=True)
+    sponsor_rule_version: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    sponsor_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sponsor_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    sponsor_decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    sponsor_evidence: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Refund / cancellation reported by a signed Annual Ads event.
+    refund_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    refund_event: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    refund_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    refunded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    refund_payload_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+
+class AdvAnnualAdsEvent(Base):
+    """One processed signed Annual Ads webhook delivery (idempotency and outcome)."""
+    __tablename__ = "adv_annualads_events"
+    __table_args__ = (UniqueConstraint("event", "tx_hash", "payload_sha256", name="uq_adv_annualads_event"),
+                      Index("ix_adv_annualads_events_tx", "tx_hash"))
+    event: Mapped[str] = mapped_column(String(100), nullable=False)
+    tx_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    payment_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("adv_annualads_payments.id"), nullable=True)
+    detail: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
