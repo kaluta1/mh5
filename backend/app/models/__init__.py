@@ -37,6 +37,7 @@ from .business_model import (
     BusinessModelVersion, RevenuePolicy, RevenueRecognition, ReferralPoolConfig, ReferralPoolMembership,
     ReferralPoolAssignment, ReferralPoolMigrationRun, LeadersPeriod, LeadersAllocationLine,
     MarketOrder, MarketOrderEvent, MarketDispute, MarketListing, AffiliateRateQualification,
+    MarketListingEvent, MarketListingImage, MarketOrderRequest,
     ReferralPoolPurchase, ReferralPoolUnit, ReferralPoolRound, ReferralPoolRoundSlot, ReferralPoolPending,
     ReferralPoolEvent, ReferralPoolRiskReview, ReferralPoolRefundRecord,
 )

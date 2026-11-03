@@ -527,6 +527,10 @@ class MarketOrder(Base):
     listing_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Digital listing: the buyer's first COMPLETE download (server-observed). It finalises the purchase.
     digital_delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Checkout idempotency (Prompt 7): the buyer's client-generated reference; a repeat returns this order.
+    client_reference: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (UniqueConstraint("buyer_user_id", "client_reference", name="uq_market_orders_buyer_client_ref"),)
 
 
 class MarketOrderEvent(Base):
@@ -567,7 +571,10 @@ class MarketListing(Base):
     __tablename__ = "market_listings"
     __table_args__ = (
         CheckConstraint("kind IN ('PHYSICAL', 'SERVICE', 'DIGITAL')", name="ck_market_listings_kind"),
-        CheckConstraint("status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')", name="ck_market_listings_status"),
+        CheckConstraint("status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED', 'SUSPENDED', 'ARCHIVED')",
+                        name="ck_market_listings_status"),
+        CheckConstraint("item_condition IS NULL OR item_condition IN ('NEW', 'USED', 'REFURBISHED')",
+                        name="ck_market_listings_condition"),
         CheckConstraint("price_usd > 0", name="ck_market_listings_price"),
         CheckConstraint("quantity_available IS NULL OR quantity_available >= 0", name="ck_market_listings_quantity"),
         Index("ix_market_listings_status_published", "status", "published_at"),
@@ -595,6 +602,66 @@ class MarketListing(Base):
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     file_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Prompt 7: the seller-verification product category vocabulary (rules.PRODUCT_CATEGORIES); NULL = none given.
+    category: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Physical goods only: NEW | USED | REFURBISHED.
+    item_condition: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # What the seller is told when an administrator suspends the listing (never internal notes).
+    moderation_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+
+class MarketListingEvent(Base):
+    """Append-only listing history: seller status changes and administrator moderation."""
+
+    __tablename__ = "market_listing_events"
+
+    listing_id: Mapped[int] = mapped_column(Integer, ForeignKey("market_listings.id"), nullable=False, index=True)
+    from_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+
+class MarketListingImage(Base):
+    """A listing photo, re-encoded on upload (metadata stripped) and kept under a random private key."""
+
+    __tablename__ = "market_listing_images"
+
+    listing_id: Mapped[int] = mapped_column(Integer, ForeignKey("market_listings.id"), nullable=False, index=True)
+    storage_key: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class MarketOrderRequest(Base):
+    """A buyer's cancellation or refund request on a paid order, for support review. Nothing moves money
+    here: support decides with the existing support refund (reasons in marketplace_service)."""
+
+    __tablename__ = "market_order_requests"
+    __table_args__ = (
+        CheckConstraint("kind IN ('CANCELLATION', 'REFUND')", name="ck_market_order_request_kind"),
+        CheckConstraint("status IN ('OPEN', 'RESOLVED')", name="ck_market_order_request_status"),
+        CheckConstraint("resolution IS NULL OR resolution IN ('REFUNDED', 'DECLINED', 'WITHDRAWN')",
+                        name="ck_market_order_request_resolution"),
+        Index("uq_market_order_requests_open", "order_id", unique=True, postgresql_where=text("status = 'OPEN'"),
+              sqlite_where=text("status = 'OPEN'")),
+    )
+
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("market_orders.id"), nullable=False, index=True)
+    buyer_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(String(2000), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="OPEN")
+    resolution: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    resolution_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    resolved_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class AffiliateRateQualification(Base):

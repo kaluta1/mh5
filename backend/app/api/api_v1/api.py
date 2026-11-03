@@ -135,6 +135,15 @@ api_router.include_router(
     tags=["Administration - business model"],
     dependencies=[Depends(admin.require_admin)],
 )
+from app.api.api_v1.endpoints import marketplace_admin as marketplace_admin_endpoints  # noqa: E402
+
+# Prompt 7: administrator AND an explicit permission per route (moderate_content / process_cashouts).
+api_router.include_router(
+    marketplace_admin_endpoints.router,
+    prefix="/admin/marketplace",
+    tags=["Administration - marketplace"],
+    dependencies=[Depends(admin.require_admin)],
+)
 
 from app.api.api_v1.endpoints import referral_pool as referral_pool_endpoints  # noqa: E402
 

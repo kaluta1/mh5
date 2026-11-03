@@ -195,7 +195,7 @@ def test_exempt_sole_trader_needs_no_registration_number_and_is_always_reviewed(
                       stream=io.BytesIO(b"%PDF synthetic"))
     app = sv.submit(db, user_id=user.id, declaration_version=sv.DECLARATION_VERSION, accept_declaration=True)
     assert app.status == sv.MANUAL_REVIEW_REQUIRED and "EXEMPTION_CLAIM" in app.review_reasons
-    sv.admin_decide(db, app, admin_user_id=user.id, action="approve", reason="Exemption basis reviewed")
+    sv.admin_decide(db, app, admin_user_id=seller(db, "rev-ex@t.com").id, action="approve", reason="Exemption basis reviewed")
     assert sv.get_profile(db, user.id).public_label == sv.LABEL_EXEMPT
 
 
@@ -537,7 +537,7 @@ def test_changes_after_approval_and_expiry_trigger_reassessment(world, providers
                                                     "expires_on": (date.today() + timedelta(days=10)).isoformat()}]))
     sv.store_document(db, user_id=user.id, doc_type="LICENCE", filename="l.pdf", stream=io.BytesIO(b"%PDF"))
     first = sv.submit(db, user_id=user.id, declaration_version=sv.DECLARATION_VERSION, accept_declaration=True)
-    sv.admin_decide(db, first, admin_user_id=user.id, action="approve", reason="Licence document checked")
+    sv.admin_decide(db, first, admin_user_id=seller(db, "rev-cc@t.com").id, action="approve", reason="Licence document checked")
     assert sv.run_compliance_sweep(db)["reminders"] == 1 and sv.run_compliance_sweep(db)["reminders"] == 0
     # a change after approval is a new application; the approval stands meanwhile
     change = sv.save_draft(db, user_id=user.id, data={"trading_name": "Amina Crafts & Co"})

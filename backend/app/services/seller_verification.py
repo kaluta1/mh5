@@ -138,6 +138,23 @@ def require_can_sell(db: Session, user_id: int) -> None:
         raise SellerNotEligible()
 
 
+class SellerCategoryNotApproved(SellerNotEligible):
+    code = "SELLER_CATEGORY_NOT_APPROVED"
+    message = ("This category needs a seller registration that declares it and was reviewed by MyHigh5. "
+               "Your listing is kept as a draft. Update your seller registration to add the category.")
+
+
+def require_category_allowed(db: Session, user_id: int, category: Optional[str]) -> None:
+    """While enforcement is on, a REGULATED category (rules.REGULATED_CATEGORIES, always reviewed by a person)
+    is sold only by a seller whose approved application declared it. Other categories are not restricted."""
+    if not enforcement_on() or not category or category not in rules.REGULATED_CATEGORIES:
+        return
+    profile = get_profile(db, user_id)
+    app = db.get(SellerApplication, profile.approved_application_id) if profile and profile.approved_application_id else None
+    if app is None or category not in (app.product_categories or []):
+        raise SellerCategoryNotApproved()
+
+
 def eligible_sellers_filter(column):
     """SQL condition on a seller user-id column: True for sellers allowed to sell now."""
     now = datetime.utcnow()
@@ -607,6 +624,8 @@ def admin_decide(db: Session, app: SellerApplication, *, admin_user_id: int, act
     seller_message (required where the seller must act or is refused)."""
     if action not in ADMIN_ACTIONS:
         raise SellerError("Unknown action")
+    if int(admin_user_id) == int(app.user_id):
+        raise SellerError("A reviewer cannot decide their own seller application")
     reason = _clean(reason, "reason", high=2000, required=True)
     if len(reason) < 5:
         raise SellerError("Please record a reason (at least 5 characters)")
@@ -658,6 +677,8 @@ def resolve_classification_review(db: Session, review: SellerClassificationRevie
     incorporation and never an automatic restriction."""
     if review.status != "OPEN":
         raise SellerError("This review is already resolved")
+    if int(admin_user_id) == int(review.user_id):
+        raise SellerError("A reviewer cannot resolve a review of their own seller account")
     if resolution not in ("REMAINS_PRIVATE", "BUSINESS_ONBOARDING_REQUESTED"):
         raise SellerError("Unknown resolution")
     note = _clean(note, "note", high=2000, required=True)

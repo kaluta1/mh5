@@ -33,7 +33,7 @@ from typing import Optional, Protocol
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.business_model import MarketDispute, MarketOrder, MarketOrderEvent
+from app.models.business_model import MarketDispute, MarketOrder, MarketOrderEvent, MarketOrderRequest
 from app.services.financial_integrity import FinancialIntegrityError, money, positive_money
 from app.services.new_model_ledger import (
     Line,
@@ -106,6 +106,15 @@ class CustodianProvider(Protocol):
 
     def request_refund(self, order: MarketOrder) -> None: ...
 
+    # Verifies the provider's signature on a webhook delivery and returns its events as dicts:
+    # {"event_type", "event_id", "order_id" or "custodian_reference", optional "amount", "currency"}.
+    # Raises CustodianSignatureInvalid when the delivery is not authentic. (Prompt 7)
+    def parse_webhook(self, headers: dict, body: bytes) -> list: ...
+
+
+class CustodianSignatureInvalid(MarketplaceError):
+    pass
+
 
 class UnconfiguredCustodian:
     """Placeholder until an authorised custodian is contracted. It never moves money."""
@@ -115,7 +124,7 @@ class UnconfiguredCustodian:
     def _refuse(self, *_a, **_k):
         raise CustodianNotConfigured("No authorised custodian is configured; marketplace funds cannot be handled yet")
 
-    create_hold = request_release = request_refund = _refuse
+    create_hold = request_release = request_refund = parse_webhook = _refuse
 
 
 _PROVIDERS: dict[str, CustodianProvider] = {}
@@ -211,12 +220,34 @@ def _require_seller_release(db: Session, order: MarketOrder) -> None:
     _require_financial(db, order.seller_user_id, FinancialOperation.WITHDRAWAL, {"market_order_id": int(order.id)})
 
 
-def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: int) -> MarketOrder:
+def _existing_for_reference(db: Session, buyer_user_id: int, client_reference: Optional[str], item_type: str,
+                            item_id: int) -> Optional[MarketOrder]:
+    if not client_reference:
+        return None
+    order = (db.query(MarketOrder)
+             .filter(MarketOrder.buyer_user_id == buyer_user_id, MarketOrder.client_reference == client_reference).first())
+    if order is not None and (order.item_type != item_type or int(order.item_id) != int(item_id)):
+        raise MarketplaceError("This checkout reference was already used for another item")
+    return order
+
+
+def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: int,
+                 client_reference: Optional[str] = None) -> MarketOrder:
+    """One order per (buyer, client_reference): a repeated checkout (double click, retry) returns the
+    first order and reserves nothing more. Prices come from server records only."""
     from app.services.financial_eligibility import FinancialOperation
 
     from app.services import seller_verification
 
+    client_reference = (client_reference or "").strip()[:64] or None
+    existing = _existing_for_reference(db, buyer_user_id, client_reference, item_type, item_id)
+    if existing is not None:
+        return existing
     seller_id, seller_base = _resolve_item(db, item_type, item_id)
+    # The listing row is locked now: a concurrent duplicate that waited here sees the committed order.
+    existing = _existing_for_reference(db, buyer_user_id, client_reference, item_type, item_id)
+    if existing is not None:
+        return existing
     if seller_id == int(buyer_user_id):
         raise MarketplaceError("You cannot buy your own item")
     # Seller sales need an approved seller while seller verification is enforced. The buyer is told only
@@ -231,6 +262,7 @@ def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: in
         buyer_user_id=buyer_user_id, seller_user_id=seller_id, item_type=item_type, item_id=item_id, currency="USD",
         seller_base_amount=base, markup_rate=MARKETPLACE_MARKUP_RATE, markup_amount=markup, buyer_total_amount=total,
         state=PAYMENT_PENDING, custodian_provider=get_custodian().name, business_model_version=NEW_MODEL_VERSION,
+        client_reference=client_reference,
     )
     if item_type == "listing":
         from app.services import marketplace_listings as ml
@@ -244,7 +276,23 @@ def create_order(db: Session, *, buyer_user_id: int, item_type: str, item_id: in
     db.add(MarketOrderEvent(order_id=order.id, from_state=None, to_state=PAYMENT_PENDING, actor_user_id=buyer_user_id,
                             actor_role="BUYER", note="Order created"))
     db.flush()
+    _notify(db, seller_id, "New marketplace order",
+            f"Order #{order.id} was placed for {_title(order)}. It is not paid yet: do not hand anything over.")
     return order
+
+
+def _title(order: MarketOrder) -> str:
+    title = (order.listing_snapshot or {}).get("title")
+    return f'"{title}"' if title else f"{order.item_type} #{order.item_id}"
+
+
+def _notify(db: Session, user_id: int, title: str, message: str) -> None:
+    """In-app notification (no amounts beyond what the member already sees, no other member's details).
+    Called inside a state change, so a retried or duplicate event never notifies twice."""
+    from app.models.notification import Notification, NotificationType
+
+    db.add(Notification(user_id=user_id, type=NotificationType.SYSTEM, title=title[:255], message=message[:2000]))
+    db.flush()
 
 
 def cancel_unpaid(db: Session, order: MarketOrder, *, actor_user_id: int) -> None:
@@ -252,6 +300,8 @@ def cancel_unpaid(db: Session, order: MarketOrder, *, actor_user_id: int) -> Non
         raise MarketplaceError("Only the buyer can cancel an unpaid order")
     _transition(db, order, CANCELLED, actor_user_id=actor_user_id, actor_role="BUYER")
     _restock(db, order)
+    _notify(db, order.seller_user_id, "Marketplace order cancelled",
+            f"Order #{order.id} for {_title(order)} was cancelled by the buyer before payment.")
 
 
 def initiate_payment(db: Session, order: MarketOrder, *, buyer_user_id: int) -> dict:
@@ -296,7 +346,11 @@ def confirm_receipt(db: Session, order: MarketOrder, *, buyer_user_id: int,
     _transition(db, order, BUYER_CONFIRMED, actor_user_id=buyer_user_id, actor_role="BUYER",
                 note=f"Buyer acceptance {order.acceptance_reference} ({policy_version})")
     _transition(db, order, RELEASE_PENDING, actor_user_id=None, actor_role="SYSTEM", note="Settlement requested")
+    _close_requests(db, order, resolution="WITHDRAWN", note="The buyer accepted the order", actor_user_id=buyer_user_id)
     request_settlement(db, order)
+    _notify(db, order.seller_user_id, "Buyer accepted the order",
+            f"The buyer accepted order #{order.id} ({order.acceptance_reference}). Verify it on your dashboard, "
+            "then hand over.")
     return order.acceptance_reference
 
 
@@ -415,19 +469,38 @@ def support_refund(db: Session, order: MarketOrder, *, admin_user_id: int, reaso
         dispute.resolved_at = datetime.utcnow()
     order.support_reason = reason
     _transition(db, order, REFUND_PENDING, actor_user_id=admin_user_id, actor_role="ADMIN", note=f"{reason}: {note}"[:500])
+    _close_requests(db, order, resolution="REFUNDED", note=f"Refund started by support ({reason})",
+                    actor_user_id=admin_user_id)
     get_custodian().request_refund(order)
 
 
 # ---------------------------------------------------------------- custodian confirmations (money moves here)
 
+FAILED_PAYMENT_EVENTS = ("PAYMENT_FAILED", "PAYMENT_EXPIRED")
+
+
 def apply_custodian_event(db: Session, order: MarketOrder, *, event_type: str, external_event_id: str,
-                          custodian_reference: Optional[str] = None) -> bool:
-    """Apply a custodian-confirmed event once. Returns False when the event was already applied."""
+                          custodian_reference: Optional[str] = None, amount=None, currency: Optional[str] = None) -> bool:
+    """Apply a custodian-confirmed event once. Returns False when the event was already applied.
+    A FUNDED event that states an amount or currency different from the order is refused (nothing booked)."""
     if not (external_event_id or "").strip():
         raise MarketplaceError("Custodian event id is required")
     if db.query(MarketOrderEvent.id).filter(MarketOrderEvent.external_event_id == external_event_id).first():
         return False
     now = datetime.utcnow()
+    if event_type == "FUNDED" and amount is not None and money(amount) != money(order.buyer_total_amount):
+        raise MarketplaceError(f"Custodian amount {money(amount)} does not match order total {money(order.buyer_total_amount)}")
+    if event_type == "FUNDED" and currency is not None and str(currency).upper() != (order.currency or "USD").upper():
+        raise MarketplaceError("Custodian currency does not match the order")
+    if event_type in FAILED_PAYMENT_EVENTS:
+        # The custodian reports that the buyer's payment failed or expired: nothing was held, nothing is booked.
+        _transition(db, order, CANCELLED, actor_user_id=None, actor_role="CUSTODIAN", external_event_id=external_event_id,
+                    note=event_type)
+        _restock(db, order)
+        _notify(db, order.buyer_user_id, "Marketplace payment not completed",
+                f"The payment for order #{order.id} did not complete, so the order was cancelled. You were not charged.")
+        db.flush()
+        return True
     if event_type == "FUNDED":
         _transition(db, order, FUNDS_HELD, actor_user_id=None, actor_role="CUSTODIAN", external_event_id=external_event_id)
         order.funded_at = now
@@ -440,6 +513,11 @@ def apply_custodian_event(db: Session, order: MarketOrder, *, event_type: str, e
                    Line("2114", credit=order.markup_amount, description="Deferred marketplace markup")],
             description=f"Marketplace order {order.id} funded at custodian",
         )
+        _notify(db, order.buyer_user_id, "Marketplace payment received",
+                f"Your payment for order #{order.id} is held by the payment custodian until you accept the order.")
+        _notify(db, order.seller_user_id, "Marketplace order paid",
+                f"Order #{order.id} for {_title(order)} is paid (held by the custodian). Hand over only after the "
+                "buyer's acceptance shows on your dashboard.")
     elif event_type == "RELEASED":
         if _open_dispute(db, order):
             raise MarketplaceError("An open dispute blocks release")
@@ -480,6 +558,9 @@ def apply_custodian_event(db: Session, order: MarketOrder, *, event_type: str, e
         funded = find_entry(db, idempotency_key(SourceType.MARKET_ORDER, order.id, PostingType.CUSTODY_FUNDED))
         if funded is not None:
             reverse_entry(db, funded, reason="Custodian refunded buyer")
+        _notify(db, order.buyer_user_id, "Marketplace refund completed",
+                f"The payment custodian refunded order #{order.id}.")
+        _notify(db, order.seller_user_id, "Marketplace order refunded", f"Order #{order.id} was refunded to the buyer.")
     else:
         raise MarketplaceError("Unknown custodian event type")
     db.flush()
@@ -502,4 +583,144 @@ def reconciliation(db: Session) -> dict:
         "funds_held_at_custodian": money(sum((money(r[2]) for r in held), Decimal("0"))),
         "markup_released_not_yet_remitted": money(unsettled_markup or 0),
         "custodian": get_custodian().name,
+    }
+
+
+# ---------------------------------------------------------------- custodian webhook (Prompt 7)
+
+def handle_custodian_webhook(db: Session, *, provider_name: str, headers: dict, body: bytes) -> dict:
+    """A webhook delivery from the CONFIGURED custodian only. The provider adapter verifies the signature;
+    each event is then applied once (by its event id) inside its own savepoint, so one bad event never
+    blocks the others. Orders are matched by id or by the custodian reference, never by amount."""
+    custodian = get_custodian()
+    if isinstance(custodian, UnconfiguredCustodian) or custodian.name != provider_name:
+        raise CustodianNotConfigured("This payment custodian is not configured")
+    events = custodian.parse_webhook(headers, body)          # raises CustodianSignatureInvalid
+    results = []
+    for ev in events or []:
+        event_id = str(ev.get("event_id") or "").strip()
+        outcome = {"event_id": event_id or None}
+        try:
+            with db.begin_nested():
+                q = db.query(MarketOrder)
+                if ev.get("order_id") is not None:
+                    q = q.filter(MarketOrder.id == int(ev["order_id"]))
+                elif ev.get("custodian_reference"):
+                    q = q.filter(MarketOrder.custodian_reference == str(ev["custodian_reference"]))
+                else:
+                    raise MarketplaceError("The event names no order")
+                order = q.with_for_update().first()
+                if order is None or order.custodian_provider != provider_name:
+                    raise MarketplaceError("Unknown order for this custodian")
+                applied = apply_custodian_event(db, order, event_type=str(ev.get("event_type") or ""),
+                                                external_event_id=event_id, amount=ev.get("amount"),
+                                                currency=ev.get("currency"),
+                                                custodian_reference=ev.get("custodian_reference"))
+                outcome.update({"order_id": order.id, "result": "APPLIED" if applied else "DUPLICATE", "state": order.state})
+        except (MarketplaceError, FinancialIntegrityError, ValueError) as exc:
+            outcome.update({"result": "REJECTED", "detail": str(exc)[:200]})
+        results.append(outcome)
+    return {"events": results}
+
+
+# ---------------------------------------------------------------- buyer support requests (Prompt 7)
+
+REQUEST_KINDS = ("CANCELLATION", "REFUND")
+_REQUESTABLE = (FUNDS_HELD, FULFILLED)
+
+
+def _open_request(db: Session, order: MarketOrder) -> Optional[MarketOrderRequest]:
+    return (db.query(MarketOrderRequest)
+            .filter(MarketOrderRequest.order_id == order.id, MarketOrderRequest.status == "OPEN").first())
+
+
+def open_request(db: Session, order: MarketOrder, *, buyer_user_id: int, kind: str, reason: str) -> MarketOrderRequest:
+    """The buyer asks support to cancel or refund a PAID order that was not accepted. Support decides with
+    the existing support refund (no new refund rule, no automatic refund, no money moves here). An unpaid
+    order is simply cancelled by the buyer. The caller holds the order row lock."""
+    if int(buyer_user_id) != int(order.buyer_user_id):
+        raise MarketplaceError("Only the buyer can ask for this")
+    if kind not in REQUEST_KINDS:
+        raise MarketplaceError(f"kind must be one of {', '.join(REQUEST_KINDS)}")
+    reason = (reason or "").strip()
+    if not (10 <= len(reason) <= 2000):
+        raise MarketplaceError("Please explain in 10 to 2000 characters")
+    if order.state == PAYMENT_PENDING:
+        raise MarketplaceError("This order is not paid: cancel it directly")
+    if order.state not in _REQUESTABLE:
+        raise MarketplaceError("Support can only review a paid order that was not accepted")
+    if _open_request(db, order) is not None:
+        raise MarketplaceError("A request is already open for this order")
+    req = MarketOrderRequest(order_id=order.id, buyer_user_id=buyer_user_id, kind=kind, reason=reason, status="OPEN")
+    db.add(req)
+    db.flush()
+    _event(db, order, order.state, actor_user_id=buyer_user_id, actor_role="BUYER",
+           note=f"{kind.title()} request #{req.id} opened for support review")
+    _notify(db, order.seller_user_id, "Buyer asked support about an order",
+            f"The buyer of order #{order.id} asked MyHigh5 support for a {kind.lower()}. Do not hand over until "
+            "support has reviewed it.")
+    return req
+
+
+def withdraw_request(db: Session, order: MarketOrder, *, buyer_user_id: int) -> MarketOrderRequest:
+    if int(buyer_user_id) != int(order.buyer_user_id):
+        raise MarketplaceError("Only the buyer can withdraw this request")
+    req = _open_request(db, order)
+    if req is None:
+        raise MarketplaceError("No open request for this order")
+    _close_requests(db, order, resolution="WITHDRAWN", note="Withdrawn by the buyer", actor_user_id=buyer_user_id)
+    return req
+
+
+def decline_request(db: Session, order: MarketOrder, *, admin_user_id: int, note: str) -> MarketOrderRequest:
+    """Support declines (the refund itself goes through support_refund, which closes the request)."""
+    note = (note or "").strip()
+    if len(note) < 5:
+        raise MarketplaceError("A note for the buyer is required (at least 5 characters)")
+    req = _open_request(db, order)
+    if req is None:
+        raise MarketplaceError("No open request for this order")
+    _close_requests(db, order, resolution="DECLINED", note=note, actor_user_id=admin_user_id)
+    _notify(db, order.buyer_user_id, "Your request was reviewed",
+            f"MyHigh5 support reviewed your request on order #{order.id}: {note[:500]}")
+    return req
+
+
+def _close_requests(db: Session, order: MarketOrder, *, resolution: str, note: str, actor_user_id: Optional[int]) -> None:
+    req = _open_request(db, order)
+    if req is None:
+        return
+    req.status, req.resolution, req.resolution_note = "RESOLVED", resolution, note[:2000]
+    req.resolved_by_user_id, req.resolved_at = actor_user_id, datetime.utcnow()
+    db.flush()
+
+
+def request_out(req: MarketOrderRequest) -> dict:
+    return {"id": req.id, "order_id": req.order_id, "kind": req.kind, "reason": req.reason, "status": req.status,
+            "resolution": req.resolution, "resolution_note": req.resolution_note,
+            "created_at": req.created_at.isoformat() + "Z" if req.created_at else None,
+            "resolved_at": req.resolved_at.isoformat() + "Z" if req.resolved_at else None}
+
+
+# ---------------------------------------------------------------- seller sales summary (Prompt 7)
+
+_HELD_STATES = (FUNDS_HELD, FULFILLED, BUYER_CONFIRMED, RELEASE_PENDING, DISPUTED, REFUND_PENDING)
+
+
+def seller_summary(db: Session, seller_user_id: int) -> dict:
+    """The seller's sales as recorded. MyHigh5 never holds seller funds: amounts are either held by the
+    payment custodian or were paid out by it. Nothing here is a MyHigh5 balance or available cash."""
+    from sqlalchemy import func
+
+    rows = (db.query(MarketOrder.state, func.count(MarketOrder.id), func.coalesce(func.sum(MarketOrder.seller_base_amount), 0))
+            .filter(MarketOrder.seller_user_id == seller_user_id).group_by(MarketOrder.state).all())
+    by_state = {s: (int(c), money(t)) for s, c, t in rows}
+    held = sum((by_state[s][1] for s in _HELD_STATES if s in by_state), Decimal("0"))
+    return {
+        "orders_by_state": {s: c for s, (c, _t) in by_state.items()},
+        "held_by_custodian_usd": str(money(held)),
+        "paid_by_custodian_usd": str(money(by_state.get(RELEASED, (0, Decimal("0")))[1])),
+        "custodian": get_custodian().name,
+        "note": ("Sale proceeds are held and paid by the payment custodian, not by MyHigh5. They are not part of "
+                 "your MyHigh5 balance and cannot be cashed out from MyHigh5."),
     }

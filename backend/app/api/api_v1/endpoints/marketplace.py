@@ -10,8 +10,8 @@ import logging
 from decimal import Decimal
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.db import session as session_module
-from app.models.business_model import MarketListing, MarketOrder
+from app.models.business_model import MarketListing, MarketListingImage, MarketOrder
 from app.models.user import User
 from app.services import marketplace_listings as ml
 from app.services import marketplace_service
@@ -50,6 +50,8 @@ class ListingIn(BaseModel):
     warranty_terms: Optional[str] = Field(None, max_length=2000)
     insurance_available: bool = False
     insurance_terms: Optional[str] = Field(None, max_length=2000)
+    category: Optional[str] = Field(None, max_length=40)
+    item_condition: Optional[Literal["NEW", "USED", "REFURBISHED"]] = None
 
 
 class ListingPatch(BaseModel):
@@ -63,6 +65,8 @@ class ListingPatch(BaseModel):
     warranty_terms: Optional[str] = Field(None, max_length=2000)
     insurance_available: Optional[bool] = None
     insurance_terms: Optional[str] = Field(None, max_length=2000)
+    category: Optional[str] = Field(None, max_length=40)
+    item_condition: Optional[Literal["NEW", "USED", "REFURBISHED"]] = None
 
 
 def _seller_labels(db: Session, listings) -> dict:
@@ -76,7 +80,14 @@ def _seller_labels(db: Session, listings) -> dict:
     return {p.user_id: seller_verification.public_label(p) for p in rows}
 
 
-def _listing_out(listing: MarketListing, *, owner: bool = False, seller_label: Optional[str] = None) -> dict:
+def _image_urls(db: Session, listing: MarketListing, *, owner: bool) -> list:
+    prefix = f"/api/v1/marketplace/{'my-listings' if owner else 'listings'}/{listing.id}/images"
+    return [{"id": i.id, "url": f"{prefix}/{i.id}", "width": i.width, "height": i.height}
+            for i in ml.images(db, listing)]
+
+
+def _listing_out(listing: MarketListing, *, owner: bool = False, seller_label: Optional[str] = None,
+                 db: Optional[Session] = None) -> dict:
     base, markup, total = marketplace_service.price_for_seller_base(listing.price_usd)
     out = {
         "id": listing.id, "kind": listing.kind, "title": listing.title, "description": listing.description,
@@ -88,12 +99,15 @@ def _listing_out(listing: MarketListing, *, owner: bool = False, seller_label: O
         "has_file": bool(listing.file_storage_key),
         "published_at": listing.published_at.isoformat() + "Z" if listing.published_at else None,
         "seller_label": seller_label,
+        "category": listing.category, "item_condition": listing.item_condition,
+        "images": _image_urls(db, listing, owner=owner) if db is not None else [],
     }
     if owner:
         out.update({
             "status": listing.status, "seller_price_usd": str(base), "markup_usd": str(markup),
             "warranty_terms": listing.warranty_terms, "insurance_terms": listing.insurance_terms,
             "file_name": listing.file_name, "file_size": listing.file_size,
+            "moderation_note": listing.moderation_note,
         })
     return out
 
@@ -127,22 +141,57 @@ def marketplace_status():
             "acceptance_policy_version": marketplace_service.ACCEPTANCE_POLICY_VERSION}
 
 
+PAGE_SIZE = 24
+_SORTS = {
+    "newest": (MarketListing.published_at.desc(), MarketListing.id.desc()),
+    "price_asc": (MarketListing.price_usd.asc(), MarketListing.id.desc()),
+    "price_desc": (MarketListing.price_usd.desc(), MarketListing.id.desc()),
+}
+
+
+def _escape_like(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+@router.get("/marketplace/categories")
+def marketplace_categories():
+    """The product categories (the seller-registration vocabulary; regulated ones need a reviewed seller)."""
+    from app.services.seller_verification_rules import PRODUCT_CATEGORIES, REGULATED_CATEGORIES
+
+    return [{"code": c, "regulated": c in REGULATED_CATEGORIES} for c in PRODUCT_CATEGORIES]
+
+
 @router.get("/marketplace/listings")
-def browse_listings(kind: Optional[Literal["PHYSICAL", "SERVICE", "DIGITAL"]] = None,
+def browse_listings(response: Response, kind: Optional[Literal["PHYSICAL", "SERVICE", "DIGITAL"]] = None,
                     q: Optional[str] = Query(None, max_length=80), page: int = Query(1, ge=1, le=500),
+                    category: Optional[str] = Query(None, max_length=40),
+                    sort: Literal["newest", "price_asc", "price_desc"] = "newest",
+                    min_price: Optional[Decimal] = Query(None, ge=0, le=1000000),
+                    max_price: Optional[Decimal] = Query(None, ge=0, le=1000000),
                     db: Session = Depends(get_db)):
+    """Published listings of sellers allowed to sell. Prices are filtered on the BUYER price (seller base +
+    markup) the buyer sees. X-Total-Count carries the number of matches."""
     _require_marketplace()
     query = db.query(MarketListing).filter(MarketListing.status == ml.PUBLISHED)
     if seller_verification.enforcement_on():          # listings of sellers not (or no longer) approved are kept, not shown
         query = query.filter(seller_verification.eligible_sellers_filter(MarketListing.seller_user_id))
     if kind:
         query = query.filter(MarketListing.kind == kind)
+    if category:
+        query = query.filter(MarketListing.category == category.strip().upper())
+    factor = 1 + marketplace_service.MARKETPLACE_MARKUP_RATE
+    if min_price is not None:
+        query = query.filter(MarketListing.price_usd * factor >= min_price)
+    if max_price is not None:
+        query = query.filter(MarketListing.price_usd * factor <= max_price)
     if q and q.strip():
-        like = f"%{q.strip()}%"
-        query = query.filter(or_(MarketListing.title.ilike(like), MarketListing.description.ilike(like)))
-    rows = query.order_by(MarketListing.published_at.desc(), MarketListing.id.desc()).offset((page - 1) * 24).limit(24).all()
+        like = f"%{_escape_like(q.strip())}%"
+        query = query.filter(or_(MarketListing.title.ilike(like, escape="\\"),
+                                 MarketListing.description.ilike(like, escape="\\")))
+    response.headers["X-Total-Count"] = str(query.count())
+    rows = query.order_by(*_SORTS[sort]).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).all()
     labels = _seller_labels(db, rows)
-    return [_listing_out(r, seller_label=labels.get(r.seller_user_id)) for r in rows]
+    return [_listing_out(r, seller_label=labels.get(r.seller_user_id), db=db) for r in rows]
 
 
 @router.get("/marketplace/my-listings")
@@ -150,7 +199,24 @@ def my_listings(db: Session = Depends(get_db), current_user: User = Depends(get_
     _require_marketplace()
     rows = db.query(MarketListing).filter(MarketListing.seller_user_id == current_user.id) \
         .order_by(MarketListing.id.desc()).limit(200).all()
-    return [_listing_out(r, owner=True) for r in rows]
+    return [_listing_out(r, owner=True, db=db) for r in rows]
+
+
+@router.get("/marketplace/my-listings/{listing_id}/history")
+def my_listing_history(listing_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_marketplace()
+    try:
+        listing = ml.get_own(db, listing_id, current_user.id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Listing not found") from None
+    return ml.history(db, listing)
+
+
+@router.get("/marketplace/seller/summary")
+def seller_sales_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The seller's own sales (custodian-held / custodian-paid). Never a MyHigh5 balance."""
+    _require_marketplace()
+    return marketplace_service.seller_summary(db, current_user.id)
 
 
 @router.get("/marketplace/listings/{listing_id}")
@@ -158,16 +224,16 @@ def listing_detail(listing_id: int, db: Session = Depends(get_db)):
     """A published listing (anyone). Sellers see their own drafts through /marketplace/my-listings."""
     _require_marketplace()
     listing = db.query(MarketListing).filter(MarketListing.id == listing_id).first()
-    if listing is None or listing.status != ml.PUBLISHED or not seller_verification.can_sell(db, listing.seller_user_id):
+    if not ml.publicly_visible(db, listing):
         raise HTTPException(status_code=404, detail="Listing not found")
-    return _listing_out(listing, seller_label=_seller_labels(db, [listing]).get(listing.seller_user_id))
+    return _listing_out(listing, seller_label=_seller_labels(db, [listing]).get(listing.seller_user_id), db=db)
 
 
 @router.post("/marketplace/listings", status_code=status.HTTP_201_CREATED)
 def create_listing(body: ListingIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require_marketplace()
     listing = _run(db, lambda: ml.create_listing(db, seller_user_id=current_user.id, data=body.model_dump()))
-    return _listing_out(listing, owner=True)
+    return _listing_out(listing, owner=True, db=db)
 
 
 @router.patch("/marketplace/listings/{listing_id}")
@@ -177,17 +243,7 @@ def update_listing(listing_id: int, body: ListingPatch, db: Session = Depends(ge
     data = body.model_dump(exclude_unset=True)
     listing = _run(db, lambda: ml.update_listing(db, ml.get_own(db, listing_id, current_user.id, lock=True),
                                                  seller_user_id=current_user.id, data=data))
-    return _listing_out(listing, owner=True)
-
-
-@router.post("/marketplace/listings/{listing_id}/{action}")
-def listing_action(listing_id: int, action: Literal["publish", "unpublish"], db: Session = Depends(get_db),
-                   current_user: User = Depends(get_current_user)):
-    _require_marketplace()
-    fn = ml.publish if action == "publish" else ml.unpublish
-    listing = _run(db, lambda: fn(db, ml.get_own(db, listing_id, current_user.id, lock=True),
-                                  seller_user_id=current_user.id))
-    return _listing_out(listing, owner=True)
+    return _listing_out(listing, owner=True, db=db)
 
 
 @router.put("/marketplace/listings/{listing_id}/file")
@@ -198,7 +254,84 @@ def upload_listing_file(listing_id: int, file: UploadFile = File(...), db: Sessi
     listing = _run(db, lambda: ml.store_file(db, ml.get_own(db, listing_id, current_user.id, lock=True),
                                              seller_user_id=current_user.id, filename=file.filename or "",
                                              stream=file.file))
-    return _listing_out(listing, owner=True)
+    return _listing_out(listing, owner=True, db=db)
+
+
+@router.post("/marketplace/listings/{listing_id}/images", status_code=status.HTTP_201_CREATED)
+def upload_listing_image(listing_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_user)):
+    """A listing photo (JPEG, PNG or WebP, 5 MB at most, 8 per listing). Checked by content and re-encoded."""
+    _require_marketplace()
+    _run(db, lambda: ml.add_image(db, ml.get_own(db, listing_id, current_user.id, lock=True),
+                                  seller_user_id=current_user.id, stream=file.file))
+    return _listing_out(ml.get_own(db, listing_id, current_user.id), owner=True, db=db)
+
+
+@router.delete("/marketplace/listings/{listing_id}/images/{image_id}")
+def delete_listing_image(listing_id: int, image_id: int, db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_user)):
+    _require_marketplace()
+    _run(db, lambda: ml.remove_image(db, ml.get_own(db, listing_id, current_user.id, lock=True),
+                                     seller_user_id=current_user.id, image_id=image_id))
+    return _listing_out(ml.get_own(db, listing_id, current_user.id), owner=True, db=db)
+
+
+def _image_response(db: Session, listing_id: int, image_id: int) -> FileResponse:
+    image = (db.query(MarketListingImage)
+             .filter(MarketListingImage.id == image_id, MarketListingImage.listing_id == listing_id).first())
+    try:
+        path = ml.image_path(image) if image is not None else None
+    except LookupError:
+        path = None
+    if path is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path, media_type=image.content_type, headers={
+        "Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'"})
+
+
+@router.get("/marketplace/listings/{listing_id}/images/{image_id}")
+def public_listing_image(listing_id: int, image_id: int, db: Session = Depends(get_db)):
+    """A photo of a listing a buyer may see (published, seller allowed to sell). Anything else: 404."""
+    _require_marketplace()
+    if not ml.publicly_visible(db, db.query(MarketListing).filter(MarketListing.id == listing_id).first()):
+        raise HTTPException(status_code=404, detail="Image not found")
+    return _image_response(db, listing_id, image_id)
+
+
+@router.get("/marketplace/my-listings/{listing_id}/images/{image_id}")
+def own_listing_image(listing_id: int, image_id: int, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    _require_marketplace()
+    try:
+        ml.get_own(db, listing_id, current_user.id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Image not found") from None
+    response = _image_response(db, listing_id, image_id)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+# ---------------------------------------------------------------- payment custodian webhook (Prompt 7)
+
+@router.post("/marketplace/custodian/webhook/{provider_name}")
+async def custodian_webhook(provider_name: str, request: Request, db: Session = Depends(get_db)):
+    """Signed deliveries from the CONFIGURED payment custodian only (none is configured: 503). The provider
+    adapter verifies the signature; events are applied once each. No body content is logged."""
+    body = await request.body()
+    if len(body) > 256 * 1024:
+        raise HTTPException(status_code=413, detail="Payload too large")
+    try:
+        result = marketplace_service.handle_custodian_webhook(db, provider_name=provider_name,
+                                                              headers=dict(request.headers), body=body)
+        db.commit()
+    except marketplace_service.CustodianSignatureInvalid:
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Invalid signature") from None
+    except marketplace_service.CustodianNotConfigured:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="Payment custodian not configured") from None
+    return result
 
 
 def _file_response(listing: MarketListing, chunks) -> StreamingResponse:
@@ -260,3 +393,14 @@ def buyer_download(order_id: int, db: Session = Depends(get_db), current_user: U
         _finalise_after_complete_download(order_id, user_id)       # reached only after the last chunk
 
     return _file_response(listing, chunks())
+
+
+# Registered last: "{action}" must not capture /images and other fixed sub-paths.
+@router.post("/marketplace/listings/{listing_id}/{action}")
+def listing_action(listing_id: int, action: Literal["publish", "unpublish", "archive"], db: Session = Depends(get_db),
+                   current_user: User = Depends(get_current_user)):
+    _require_marketplace()
+    fn = {"publish": ml.publish, "unpublish": ml.unpublish, "archive": ml.archive}[action]
+    listing = _run(db, lambda: fn(db, ml.get_own(db, listing_id, current_user.id, lock=True),
+                                  seller_user_id=current_user.id))
+    return _listing_out(listing, owner=True, db=db)

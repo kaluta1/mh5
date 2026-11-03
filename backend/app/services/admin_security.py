@@ -43,6 +43,8 @@ PROTECTED_PERMISSIONS = frozenset({
     payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS, payment_config.PERMISSION_ACTIVATE,
     # Advertising prices, money switches and campaign review (Prompt 4): never self-assigned through roles.
     "manage_advertising",
+    # Marketplace seller decisions (Prompt 7): never self-assigned through roles.
+    "review_seller_verification",
 })
 # Roles that make their holder an administrator (admin.check_admin) or open everything.
 ADMIN_ROLE_NAME = "admin"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Prompt 6 read-only reconciliation: Annual Ads (purchases, sponsor commissions, refunds), Referral Pool
-(purchases, units, assignments, slots, unit ledger), DSM (identity and sponsor mapping) and the ledger.
+"""Prompt 6/7 read-only reconciliation: Annual Ads (purchases, sponsor commissions, refunds), Referral Pool
+(purchases, units, assignments, slots, unit ledger), DSM (identity and sponsor mapping), Marketplace (sellers,
+listings, images, orders, custodian references, order ledger) and the ledger.
 
 READ ONLY: the session is opened with a PostgreSQL READ ONLY transaction, so nothing can be written even by
 mistake. Prints JSON (ids and counts only; no e-mails or names). Prints the database host and name first.
@@ -17,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SECTIONS = ("annual_ads", "pool", "dsm", "ledger")
+SECTIONS = ("annual_ads", "pool", "dsm", "marketplace", "ledger")
 
 
 def ledger(db) -> dict:
@@ -66,6 +67,10 @@ def main(argv=None) -> int:
             from app.services import dsm_reconciliation
 
             out["dsm"] = dsm_reconciliation.report(db, sample=10)
+        if "marketplace" in args.only:
+            from app.services import marketplace_reconciliation
+
+            out["marketplace"] = marketplace_reconciliation.report(db)
         if "ledger" in args.only:
             out["ledger"] = ledger(db)
         db.rollback()

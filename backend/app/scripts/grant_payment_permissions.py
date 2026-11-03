@@ -23,6 +23,8 @@ deliberately:
   manage_advertising              advertising prices and switches, campaign
                                   and creative review, entry-origin review,
                                   monthly ad revenue-share finalization
+  review_seller_verification      marketplace seller application decisions
+                                  and seller documents
 
 EVERY permission to grant must be named with --permission. There is no
 default and no "all": nothing is granted that was not asked for by name.
@@ -68,15 +70,17 @@ from app.services import admin_security, payment_config
 
 ROLE_PREFIX = "finance_manager"
 PERMISSION_MANAGE_ADVERTISING = "manage_advertising"
+# Marketplace seller decisions (Prompt 7): protected, granted by name only.
+PERMISSION_REVIEW_SELLERS = "review_seller_verification"
 PERMISSIONS = (payment_config.PERMISSION_MANAGE, payment_config.PERMISSION_PROCESS,
                payment_config.PERMISSION_ACTIVATE, admin_security.PERMISSION_MANAGE_ADMINS,
                admin_security.PERMISSION_GRANT_PAYMENTS, admin_security.PERMISSION_MANAGE_KYC,
-               PERMISSION_MANAGE_ADVERTISING)
+               PERMISSION_MANAGE_ADVERTISING, PERMISSION_REVIEW_SELLERS)
 # One letter per permission in the role name, always in this order.
 _TAGS = ((payment_config.PERMISSION_MANAGE, "m"), (payment_config.PERMISSION_ACTIVATE, "a"),
          (payment_config.PERMISSION_PROCESS, "p"), (admin_security.PERMISSION_MANAGE_ADMINS, "r"),
          (admin_security.PERMISSION_GRANT_PAYMENTS, "g"), (admin_security.PERMISSION_MANAGE_KYC, "k"),
-         (PERMISSION_MANAGE_ADVERTISING, "v"))
+         (PERMISSION_MANAGE_ADVERTISING, "v"), (PERMISSION_REVIEW_SELLERS, "s"))
 
 
 class GrantError(Exception):

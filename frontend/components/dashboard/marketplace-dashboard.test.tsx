@@ -71,3 +71,60 @@ describe('MarketplaceDashboard', () => {
     expect(screen.queryByText('Confirm and accept')).toBeNull()
   })
 })
+
+describe('MarketplaceDashboard (Prompt 7)', () => {
+  it('filters by category and sort and sends them to the server', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(
+      url.endsWith('/status') ? status(true) : url.endsWith('/categories')
+        ? { data: [{ code: 'HOME', regulated: false }, { code: 'FOOD', regulated: true }] }
+        : { data: [{ ...LISTING, category: 'HOME', item_condition: 'USED', images: [{ id: 1, url: '/api/v1/marketplace/listings/3/images/1', width: 1, height: 1 }] }] }))
+    render(<MarketplaceDashboard />)
+    await screen.findByText('Basket')
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'HOME' } })
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'price_asc' } })
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/v1/marketplace/listings',
+      { params: { kind: undefined, q: undefined, category: 'HOME', sort: 'price_asc' } }))
+    fireEvent.click(screen.getByText('View details'))
+    expect(screen.getByText('Used')).toBeTruthy()
+  })
+
+  it('sends a checkout reference with the order', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/status') ? status(true, true)
+      : url.endsWith('/categories') ? { data: [] } : { data: [{ ...LISTING, images: [] }] }))
+    post.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/pay') ? { ...ORDER, payment: {} } : ORDER }))
+    render(<MarketplaceDashboard />)
+    fireEvent.click(await screen.findByText('View details'))
+    fireEvent.click(screen.getByText(/Buy for/))
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+    const orderCalls = post.mock.calls.filter(([u]) => u === '/api/v1/marketplace/orders')
+    expect(orderCalls[0][1]).toMatchObject({ item_type: 'listing', item_id: 3 })
+    expect(orderCalls[0][1].client_reference).toMatch(/^chk-[A-Za-z0-9_-]+$/)
+  })
+
+  it('lets the buyer ask support for a refund, never refunding by itself', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/status') ? status(true) : { data: [ORDER] }))
+    post.mockResolvedValue({ data: ORDER })
+    render(<MarketplaceDashboard />)
+    await screen.findByText('Browse')
+    fireEvent.click(screen.getByRole('tab', { name: 'My purchases' }))
+    fireEvent.click(await screen.findByText('Ask support to cancel or refund'))
+    const send = screen.getByText('Send to support')
+    expect((send as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('What happened'), { target: { value: 'The seller never shipped it.' } })
+    fireEvent.click(send)
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/api/v1/marketplace/orders/11/requests',
+      { kind: 'REFUND', reason: 'The seller never shipped it.' }))
+  })
+
+  it('shows a suspended listing with the MyHigh5 message and no publish button', async () => {
+    get.mockImplementation((url: string) => Promise.resolve(url.endsWith('/status') ? status(true)
+      : url.endsWith('/my-listings') ? { data: [{ ...LISTING, status: 'SUSPENDED', moderation_note: 'Counterfeit report', seller_price_usd: '25.00', images: [] }] }
+        : { data: [] }))
+    render(<MarketplaceDashboard />)
+    await screen.findByText('Browse')
+    fireEvent.click(screen.getByRole('tab', { name: 'My listings' }))
+    expect(await screen.findByText('MyHigh5: Counterfeit report')).toBeTruthy()
+    expect(screen.queryByText('Publish')).toBeNull()
+    expect(screen.queryByText('Archive')).toBeNull()
+  })
+})

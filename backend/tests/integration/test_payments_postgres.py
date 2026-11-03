@@ -116,6 +116,7 @@ MISSED_EARNINGS = "d4f6a8c0e2b5_missed_earnings_kyc_only.py"
 ADVERTISING_COMPLETION = "e5a7c9e1f3b4_advertising_completion.py"
 INTERNAL_WALLET = "f6b8d0a2c4e7_internal_wallet_payments.py"
 PROMPT6 = "a8d0f2b4c6e9_annualads_commission_dsm_restorations.py"
+PROMPT7 = "c2e4a6b8d0f1_marketplace_completion.py"
 PRODUCTION_REVISION = "e2f3a4b5c6d7"
 
 PAYMENT_TABLES = ("payment_settings", "payment_credentials", "payment_config_audit", "payout_wallet_verifications",
@@ -394,12 +395,13 @@ def test_the_migration_chain_is_the_one_the_deployment_plan_assumes():
             (MISSED_EARNINGS, "d4f6a8c0e2b5", "b0d2f4a6c8e1", ADVERTISING_COMPLETION),
             (ADVERTISING_COMPLETION, "e5a7c9e1f3b4", "d4f6a8c0e2b5", INTERNAL_WALLET),
             (INTERNAL_WALLET, "f6b8d0a2c4e7", "e5a7c9e1f3b4", PROMPT6),
-            (PROMPT6, "a8d0f2b4c6e9", "f6b8d0a2c4e7", None)):
+            (PROMPT6, "a8d0f2b4c6e9", "f6b8d0a2c4e7", PROMPT7),
+            (PROMPT7, "c2e4a6b8d0f1", "a8d0f2b4c6e9", None)):
         step = load_migration(filename)
         assert (step.revision, step.down_revision, step.depends_on, step.branch_labels) == (revision, down, None, None)
         heads = [name for name, line in revisions.items() if f'"{revision}"' in line or f"'{revision}'" in line]
         assert heads == ([child] if child else [])                 # one line, no branch
-    # a8d0f2b4c6e9 is the single head
+    # c2e4a6b8d0f1 is the single head
 
 
 def test_upgrade_from_the_production_revision_keeps_every_existing_row(pg):

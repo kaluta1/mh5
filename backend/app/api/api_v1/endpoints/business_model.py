@@ -226,6 +226,13 @@ def posted_leaders_periods(db: Session = Depends(get_db)):
 class OrderCreate(BaseModel):
     item_type: Literal["digital_product", "club_subscription", "listing"]
     item_id: int = Field(gt=0)
+    # Checkout idempotency: the same reference returns the same order (double click, retry).
+    client_reference: Optional[str] = Field(None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class OrderRequestIn(BaseModel):
+    kind: Literal["CANCELLATION", "REFUND"]
+    reason: str = Field(min_length=10, max_length=2000)
 
 
 class AcceptanceRequest(BaseModel):
@@ -257,10 +264,16 @@ def _order_out(db: Session, o: MarketOrder) -> dict:
         "listing": o.listing_snapshot, "digital": marketplace_service.is_digital(o),
         "digital_delivered_at": o.digital_delivered_at.isoformat() + "Z" if o.digital_delivered_at else None,
         "can_download": marketplace_service.can_download(o, o.buyer_user_id),
+        "open_request": _open_request_out(db, o),
         **marketplace_service.handover_status(o),
         "events": [{"from": e.from_state, "to": e.to_state, "by": e.actor_role, "at": e.created_at.isoformat() + "Z", "note": e.note}
                    for e in events],
     }
+
+
+def _open_request_out(db: Session, o: MarketOrder) -> Optional[dict]:
+    req = marketplace_service._open_request(db, o)
+    return marketplace_service.request_out(req) if req is not None else None
 
 
 def _run(db: Session, fn):
@@ -282,8 +295,20 @@ def create_market_order(body: OrderCreate, db: Session = Depends(get_db), curren
     if isinstance(marketplace_service.get_custodian(), marketplace_service.UnconfiguredCustodian):
         # No order (and no reserved unit) while nobody can hold the buyer's payment.
         raise HTTPException(status_code=503, detail="Checkout is not available yet: no payment custodian is configured")
-    order = _run(db, lambda: marketplace_service.create_order(db, buyer_user_id=current_user.id,
-                                                              item_type=body.item_type, item_id=body.item_id))
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        order = _run(db, lambda: marketplace_service.create_order(db, buyer_user_id=current_user.id,
+                                                                  item_type=body.item_type, item_id=body.item_id,
+                                                                  client_reference=body.client_reference))
+    except IntegrityError:
+        # A concurrent checkout with the same reference won: return that order (nothing else was reserved).
+        db.rollback()
+        order = (db.query(MarketOrder).filter(MarketOrder.buyer_user_id == current_user.id,
+                                              MarketOrder.client_reference == body.client_reference).first()
+                 if body.client_reference else None)
+        if order is None:
+            raise HTTPException(status_code=409, detail="The order could not be created; please try again") from None
     return _order_out(db, order)
 
 
@@ -323,6 +348,27 @@ def pay_market_order(order_id: int, db: Session = Depends(get_db), current_user:
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {**_order_out(db, order), "payment": {k: v for k, v in payment.items() if k in ("payment_url", "reference")}}
+
+
+@router.post("/marketplace/orders/{order_id}/requests", status_code=status.HTTP_201_CREATED)
+def open_market_order_request(order_id: int, body: OrderRequestIn, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    """The buyer asks MyHigh5 support to cancel or refund a paid, not accepted order. Support decides;
+    nothing is refunded automatically."""
+    _require_marketplace()
+    order = _order_for(db, order_id, current_user)
+    _run(db, lambda: marketplace_service.open_request(db, order, buyer_user_id=current_user.id, kind=body.kind,
+                                                      reason=body.reason))
+    return _order_out(db, order)
+
+
+@router.post("/marketplace/orders/{order_id}/requests/withdraw")
+def withdraw_market_order_request(order_id: int, db: Session = Depends(get_db),
+                                  current_user: User = Depends(get_current_user)):
+    _require_marketplace()
+    order = _order_for(db, order_id, current_user)
+    _run(db, lambda: marketplace_service.withdraw_request(db, order, buyer_user_id=current_user.id))
+    return _order_out(db, order)
 
 
 @router.post("/marketplace/orders/{order_id}/{action}")
@@ -549,16 +595,38 @@ class SupportRefundRequest(BaseModel):
     reason: Literal["NON_HANDOVER", "PAYMENT_FAILURE", "DUPLICATE_CHARGE", "FRAUD", "SELLER_UNABLE_TO_SUPPLY",
                     "LEGAL_REMEDY"]
     note: str = Field(min_length=5, max_length=2000)
+    current_password: str = Field(default="", max_length=256)
+
+
+class FinanceReauth(BaseModel):
+    current_password: str = Field(default="", max_length=256)
+
+
+def _authorize_market_finance(db: Session, actor: User, order_id: int, password: str, attempted: str) -> MarketOrder:
+    """Marketplace money actions (Prompt 7): an administrator with the explicit process_cashouts permission
+    (or a Super Admin), never on an order they are party to, re-confirmed with the current password."""
+    from app.services import admin_security, payment_config
+
+    order = db.query(MarketOrder).filter(MarketOrder.id == order_id).first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if actor.id in (order.buyer_user_id, order.seller_user_id):
+        raise HTTPException(status_code=403, detail={"code": "SELF_ACTION_FORBIDDEN",
+                                                     "message": "You cannot act on an order you are party to."})
+    try:
+        admin_security.authorize(db, actor, permission=payment_config.PERMISSION_PROCESS, password=password,
+                                 target_id=order.buyer_user_id, attempted=attempted)
+    except admin_security.AdminSecurityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}) from None
+    return db.query(MarketOrder).filter(MarketOrder.id == order_id).with_for_update().first()
 
 
 @admin_router.post("/marketplace/orders/{order_id}/refund")
 def admin_support_refund(order_id: int, body: SupportRefundRequest, db: Session = Depends(get_db),
                          current_user: User = Depends(get_current_user)):
     """Support refund of an order that was not accepted or released. There is no admin release: only
-    the buyer accepts."""
-    order = db.query(MarketOrder).filter(MarketOrder.id == order_id).with_for_update().first()
-    if order is None:
-        raise HTTPException(status_code=404, detail="Order not found")
+    the buyer accepts. process_cashouts + current password; never on one's own order."""
+    order = _authorize_market_finance(db, current_user, order_id, body.current_password, "MARKET_SUPPORT_REFUND")
 
     def go():
         marketplace_service.support_refund(db, order, admin_user_id=current_user.id, reason=body.reason, note=body.note)
@@ -573,12 +641,30 @@ def admin_support_refund(order_id: int, body: SupportRefundRequest, db: Session 
 
 
 @admin_router.post("/marketplace/orders/{order_id}/retry-settlement")
-def admin_retry_settlement(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def admin_retry_settlement(order_id: int, body: FinanceReauth, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_user)):
     """Ask the custodian again for an accepted order whose settlement request failed."""
-    order = db.query(MarketOrder).filter(MarketOrder.id == order_id).with_for_update().first()
-    if order is None:
-        raise HTTPException(status_code=404, detail="Order not found")
+    order = _authorize_market_finance(db, current_user, order_id, body.current_password, "MARKET_RETRY_SETTLEMENT")
     _run(db, lambda: marketplace_service.request_settlement(db, order))
+    return _order_out(db, order)
+
+
+class DeclineRequestIn(BaseModel):
+    note: str = Field(min_length=5, max_length=2000)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.post("/marketplace/orders/{order_id}/requests/decline")
+def admin_decline_order_request(order_id: int, body: DeclineRequestIn, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    """Support declines a buyer's cancellation/refund request (a refund is done with the refund action)."""
+    order = _authorize_market_finance(db, current_user, order_id, body.current_password, "MARKET_REQUEST_DECLINE")
+
+    def go():
+        req = marketplace_service.decline_request(db, order, admin_user_id=current_user.id, note=body.note)
+        _audit(db, actor_id=current_user.id, table="market_order_requests", record_id=req.id,
+               action="MARKET_REQUEST_DECLINED", new={"order_id": order.id, "note": body.note})
+    _run(db, go)
     return _order_out(db, order)
 
 

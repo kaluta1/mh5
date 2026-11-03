@@ -1,8 +1,15 @@
 import api from '@/lib/api'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 export type ListingKind = 'PHYSICAL' | 'SERVICE' | 'DIGITAL'
 
 export type Disclosures = { warranty: string; insurance: string; consumer_rights: string }
+
+export type ListingStatus = 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED' | 'SUSPENDED' | 'ARCHIVED'
+export type ItemCondition = 'NEW' | 'USED' | 'REFURBISHED'
+export type ListingImage = { id: number; url: string; width: number; height: number }
+export type Category = { code: string; regulated: boolean }
+export type SortOrder = 'newest' | 'price_asc' | 'price_desc'
 
 /** A listing as the API returns it; the owner fields are present only on the seller's own listings. */
 export type Listing = {
@@ -20,7 +27,11 @@ export type Listing = {
   disclosures: Disclosures
   has_file: boolean
   published_at: string | null
-  status?: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED'
+  category: string | null
+  item_condition: ItemCondition | null
+  images: ListingImage[]
+  status?: ListingStatus
+  moderation_note?: string | null
   seller_price_usd?: string
   markup_usd?: string
   warranty_terms?: string | null
@@ -40,6 +51,28 @@ export type ListingInput = {
   warranty_terms: string | null
   insurance_available: boolean
   insurance_terms: string | null
+  category: string | null
+  item_condition: ItemCondition | null
+}
+
+export type OrderRequest = {
+  id: number
+  order_id: number
+  kind: 'CANCELLATION' | 'REFUND'
+  reason: string
+  status: 'OPEN' | 'RESOLVED'
+  resolution: 'REFUNDED' | 'DECLINED' | 'WITHDRAWN' | null
+  resolution_note: string | null
+  created_at: string | null
+  resolved_at: string | null
+}
+
+export type SellerSummary = {
+  orders_by_state: Record<string, number>
+  held_by_custodian_usd: string
+  paid_by_custodian_usd: string
+  custodian: string
+  note: string
 }
 
 export type MarketOrder = {
@@ -62,6 +95,7 @@ export type MarketOrder = {
   handover_instruction: string
   fulfilment_status: string
   settlement_status: string
+  open_request?: OrderRequest | null
 }
 
 export type MarketStatus = { enabled: boolean; checkout_available: boolean; acceptance_policy_version: string }
@@ -72,8 +106,56 @@ export async function getMarketStatus(): Promise<MarketStatus> {
   return (await api.get<MarketStatus>(`${M}/status`)).data
 }
 
-export async function browseListings(params: { kind?: ListingKind; q?: string } = {}): Promise<Listing[]> {
+export async function browseListings(params: { kind?: ListingKind; q?: string; category?: string; sort?: SortOrder; page?: number } = {}): Promise<Listing[]> {
   return (await api.get<Listing[]>(`${M}/listings`, { params })).data
+}
+
+export async function getCategories(): Promise<Category[]> {
+  return (await api.get<Category[]>(`${M}/categories`)).data
+}
+
+export async function archiveListing(id: number): Promise<Listing> {
+  return (await api.post<Listing>(`${M}/listings/${id}/archive`)).data
+}
+
+export async function uploadListingImage(id: number, file: File): Promise<Listing> {
+  const form = new FormData()
+  form.append('file', file)
+  return (await api.post<Listing>(`${M}/listings/${id}/images`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data
+}
+
+export async function deleteListingImage(id: number, imageId: number): Promise<Listing> {
+  return (await api.delete<Listing>(`${M}/listings/${id}/images/${imageId}`)).data
+}
+
+export async function sellerSummary(): Promise<SellerSummary> {
+  return (await api.get<SellerSummary>(`${M}/seller/summary`)).data
+}
+
+export async function openOrderRequest(id: number, kind: 'CANCELLATION' | 'REFUND', reason: string): Promise<MarketOrder> {
+  return (await api.post<MarketOrder>(`${M}/orders/${id}/requests`, { kind, reason })).data
+}
+
+export async function withdrawOrderRequest(id: number): Promise<MarketOrder> {
+  return (await api.post<MarketOrder>(`${M}/orders/${id}/requests/withdraw`)).data
+}
+
+/** Public listing photos are served by the API; a relative URL is resolved against the API host. */
+export function imageSrc(url: string): string {
+  const base = getEffectiveApiUrl().replace(/\/+$/, '')
+  return url.startsWith('http') ? url : `${base}${url}`
+}
+
+/** The seller's own photos need the sign-in token, so they are fetched and shown from a local object URL. */
+export async function ownImageUrl(url: string): Promise<string> {
+  const response = await api.get(url, { responseType: 'blob' })
+  return URL.createObjectURL(response.data as Blob)
+}
+
+/** A checkout reference: a repeated click or retry returns the same order instead of a second one. */
+export function newCheckoutReference(): string {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+  return `chk-${random}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64)
 }
 
 export async function myListings(): Promise<Listing[]> {
@@ -99,8 +181,8 @@ export async function myOrders(): Promise<MarketOrder[]> {
   return (await api.get<MarketOrder[]>(`${M}/orders`)).data
 }
 
-export async function placeOrder(listingId: number): Promise<MarketOrder> {
-  return (await api.post<MarketOrder>(`${M}/orders`, { item_type: 'listing', item_id: listingId })).data
+export async function placeOrder(listingId: number, clientReference?: string): Promise<MarketOrder> {
+  return (await api.post<MarketOrder>(`${M}/orders`, { item_type: 'listing', item_id: listingId, client_reference: clientReference })).data
 }
 
 export async function payOrder(id: number): Promise<MarketOrder & { payment?: { payment_url?: string } }> {
@@ -141,3 +223,14 @@ export function marketErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const KIND_LABEL: Record<ListingKind, string> = { PHYSICAL: 'Physical product', SERVICE: 'Service', DIGITAL: 'E-book / digital' }
+
+export const CONDITION_LABEL: Record<ItemCondition, string> = { NEW: 'New', USED: 'Used', REFURBISHED: 'Refurbished' }
+
+export const LISTING_STATUS_LABEL: Record<ListingStatus, string> = {
+  DRAFT: 'Draft', PUBLISHED: 'Published', UNPUBLISHED: 'Unpublished', SUSPENDED: 'Suspended by MyHigh5', ARCHIVED: 'Archived',
+}
+
+export function categoryLabel(code: string | null | undefined): string {
+  if (!code) return 'Uncategorised'
+  return code.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
