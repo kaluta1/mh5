@@ -140,8 +140,9 @@ def test_full_payment_settles_commissions_and_books_no_cash(shop, on):
     assert iw.spendable_balance(db, m.id) == D("5.50")                     # 25.50 - 20.00
     assert iw.remainder_total(db, m.id) == D("5.50")
     bal = get_commission_balance(db, m.id)
-    assert (bal.available, bal.reserved) == (D("0.00"), D("0.00"))         # remainder: wallet-only, not a payout
-    assert cs.available_rows(db, m.id) == []                                # no cashout can take it
+    # 2026-11-04 fix: the remainder is spendable AND cashable (the same 5.50, counted once).
+    assert (bal.available, bal.reserved, bal.paid_lifetime) == (D("5.50"), D("0.00"), D("20.00"))
+    assert cs.available_rows(db, m.id) == [second] and cs.rows_total([second]) == D("5.50")
     dep = db.get(Deposit, payment.deposit_id)
     assert (dep.payment_provider, dep.status.value, dep.external_payment_id) == ("internal_wallet", "validated", None)
     assert db.query(Deposit).filter(Deposit.payment_provider == "soncopay").count() == 0

@@ -114,6 +114,7 @@ from app.services import financial_eligibility as fe
 from app.services import nowpayments_service as nowpayments
 from app.services import payment_config
 from app.services.commission_payout_hold import held_clause
+from app.services.commission_usage import REMAINDER_MARK, open_amount_sql, unreserved_clause, used_subquery, wallet_used
 from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
@@ -218,11 +219,13 @@ def select_payout(available: list, threshold: Decimal, ceiling: Decimal, *, accu
     first: the individual payout rule of 2026-10-18 is unchanged for it. Only when no such row exists,
     and the provider accumulates (owner decision 2026-10-29, Option A), are the rows BELOW the threshold
     combined, oldest first, as long as the total stays within the single-payout limit; they are paid
-    together once that total reaches the threshold. A row above the limit is never paid automatically."""
-    single = [r for r in available if threshold <= money(r.commission_amount) <= ceiling]
+    together once that total reaches the threshold. A row above the limit is never paid automatically.
+    A row is worth its open amount (what the internal wallet did not use of it), never its original amount."""
+    left = cs.open_amounts(available)
+    single = [r for r in available if threshold <= left[int(r.id)] <= ceiling]
     if single:
         return single[:1], None
-    amounts = [money(r.commission_amount) for r in available]
+    amounts = [left[int(r.id)] for r in available]
     if amounts and all(a > ceiling for a in amounts):
         return [], "EXCEEDS_SINGLE_LIMIT"
     if not accumulate:
@@ -230,7 +233,7 @@ def select_payout(available: list, threshold: Decimal, ceiling: Decimal, *, accu
                     else "BELOW_MINIMUM")
     chosen, total = [], Decimal("0.00")
     for row in available:
-        amount = money(row.commission_amount)
+        amount = left[int(row.id)]
         if amount < threshold and money(total + amount) <= ceiling:
             chosen.append(row)
             total = money(total + amount)
@@ -695,7 +698,8 @@ def process_member(db: Session, user_id: int, provider, *, facts: dict, config=N
     rows, why_not = select_payout(available, threshold, automatic_ceiling(config, provider),
                                   accumulate=accumulate and fee is not None, own_minimum=own_minimum)
     if (why_not == "EXCEEDS_SINGLE_LIMIT" and review is not None
-            and any(review < money(r.commission_amount) <= money(config.max_single_payout_usd) for r in available)):
+            and any(review < amount <= money(config.max_single_payout_usd)
+                    for amount in cs.open_amounts(available, db).values())):
         # Within MyHigh5's own limit but above the provider's review threshold: it stays available and
         # unpaid, never sent (nor retried) as an ordinary payout, until SoncoPay has reviewed it.
         why_not = "PROVIDER_REVIEW_REQUIRED"
@@ -929,7 +933,7 @@ def candidate_user_ids(db: Session, limit: int) -> list[int]:
             .join(User, User.id == AffiliateCommission.user_id)
             .filter(User.cashout_method == cs.METHOD_CRYPTO,
                     AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
-                    AffiliateCommission.payout_reference.is_(None),
+                    unreserved_clause(),       # a partly spent row's open amount is payable too
                     payable_clause())
             .group_by(AffiliateCommission.user_id)
             .order_by(func.min(AffiliateCommission.transaction_date).asc(), AffiliateCommission.user_id.asc())
@@ -1163,15 +1167,18 @@ def accumulation_overview(db: Session, threshold: Optional[Decimal], *, now: Opt
 
     now = now or datetime.utcnow()
     config = payment_config.load(db)
-    rows = (db.query(AffiliateCommission.user_id, AffiliateCommission.commission_amount)
+    used = used_subquery()
+    rows = (db.query(AffiliateCommission.user_id, open_amount_sql(used))
             .join(User, User.id == AffiliateCommission.user_id)
+            .outerjoin(used, used.c.commission_id == AffiliateCommission.id)
             .filter(User.cashout_method == cs.METHOD_CRYPTO,
                     AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
-                    AffiliateCommission.payout_reference.is_(None), payable_clause())
+                    unreserved_clause(), payable_clause())
             .order_by(AffiliateCommission.user_id).all())
     by_member: dict = {}
     for user_id, amount in rows:
-        by_member.setdefault(int(user_id), []).append(money(amount))
+        if money(amount) > 0:
+            by_member.setdefault(int(user_id), []).append(money(amount))
     out = []
     for user_id, amounts in list(by_member.items())[:limit]:
         user = db.query(User).filter(User.id == user_id).first()
@@ -1221,6 +1228,8 @@ def commission_payout_reconciliation(db: Session, *, limit: int = 200) -> dict:
     for cashout_id, commission_ids in payout_commission_ids(db, [r.id for r in combined]).items():
         for commission_id in commission_ids:
             combined_of.setdefault(commission_id, set()).add(cashout_id)
+    # A payout of a row partly spent with the internal wallet carries the row's open amount only.
+    wallet_part = wallet_used(db, ids)
     items, problems = [], []
     for c in commissions:
         rows = attempts.get(int(c.id), [])
@@ -1236,7 +1245,8 @@ def commission_payout_reconciliation(db: Session, *, limit: int = 200) -> dict:
             found.append("PAYOUT_NOT_POSTED")
         if len(completed) + len(completed_together) > 1:
             found.append("PAID_MORE_THAN_ONCE")
-        if completed and money(completed[-1].gross_amount) != money(c.commission_amount):
+        open_value = money(money(c.commission_amount) - wallet_part.get(int(c.id), Decimal("0.00")))
+        if completed and money(completed[-1].gross_amount) != open_value:
             found.append("AMOUNT_MISMATCH")
         if any(not r.tx_hash for r in completed[-1:] + completed_together[-1:]):
             found.append("COMPLETED_WITHOUT_HASH")
@@ -1275,7 +1285,9 @@ def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 2
     for cashout in open_rows:
         intent = cs._intent(cashout)
         intents.add(intent)
-        reserved = (db.query(func.coalesce(func.sum(AffiliateCommission.commission_amount), 0))
+        used = used_subquery()
+        reserved = (db.query(func.coalesce(func.sum(open_amount_sql(used)), 0))
+                    .outerjoin(used, used.c.commission_id == AffiliateCommission.id)
                     .filter(AffiliateCommission.user_id == cashout.user_id,
                             AffiliateCommission.payout_reference == intent,
                             AffiliateCommission.status == CommissionStatus.APPROVED).scalar())
@@ -1306,12 +1318,14 @@ def discrepancies(db: Session, *, now: Optional[datetime] = None, limit: int = 2
             add("STALE_PROCESSING", "warning",
                 f"Cashout #{cashout.id} has been processing for more than 24 hours.", cashout_id=cashout.id,
                 user_id=cashout.user_id)
+    used = used_subquery()
     orphans = (db.query(AffiliateCommission.payout_reference, AffiliateCommission.user_id,
-                        func.sum(AffiliateCommission.commission_amount))
+                        func.sum(open_amount_sql(used)))
+               .outerjoin(used, used.c.commission_id == AffiliateCommission.id)
                .filter(AffiliateCommission.status == CommissionStatus.APPROVED,
                        AffiliateCommission.payout_reference.isnot(None),
                        # an internal wallet remainder (Prompt 5) is not a cashout reservation
-                       AffiliateCommission.payout_reference != "iwp-rem")
+                       AffiliateCommission.payout_reference != REMAINDER_MARK)
                .group_by(AffiliateCommission.payout_reference, AffiliateCommission.user_id).all())
     for reference, user_id, total in orphans:
         if reference not in intents:
@@ -1338,18 +1352,24 @@ def reconciliation_report(db: Session, *, provider=None, read_provider: bool = F
     says it holds. The provider is asked only when `read_provider` is true and
     its credentials exist; otherwise its balance is reported as not verified.
     An internal balance is never treated as proof of the provider's funds."""
+    used = used_subquery()
+
     def total(*criteria) -> Decimal:
-        value = db.query(func.coalesce(func.sum(AffiliateCommission.commission_amount), 0)).filter(*criteria).scalar()
+        # What is still owed on each row: its open amount (the internal wallet already settled the rest).
+        value = (db.query(func.coalesce(func.sum(open_amount_sql(used)), 0))
+                 .outerjoin(used, used.c.commission_id == AffiliateCommission.id).filter(*criteria).scalar())
         return money(value or 0)
 
     config = payment_config.load(db)
     approved = AffiliateCommission.status == CommissionStatus.APPROVED
     owed = {
         "pending": total(AffiliateCommission.status == CommissionStatus.PENDING),
-        "available": total(approved, AffiliateCommission.payout_reference.is_(None)),
+        # Unreserved: never used by the wallet, or the open amount of a partly spent row (both cashable).
+        "available": total(approved, unreserved_clause()),
         "reserved": total(approved, AffiliateCommission.payout_reference.isnot(None),
-                          AffiliateCommission.payout_reference != "iwp-rem"),
-        "wallet_partly_used": total(approved, AffiliateCommission.payout_reference == "iwp-rem"),
+                          AffiliateCommission.payout_reference != REMAINDER_MARK),
+        # The part of "available" that comes from partly spent rows (not an extra amount).
+        "wallet_partly_used": total(approved, AffiliateCommission.payout_reference == REMAINDER_MARK),
     }
     crypto_members = total(approved | (AffiliateCommission.status == CommissionStatus.PENDING),
                            AffiliateCommission.user_id.in_(

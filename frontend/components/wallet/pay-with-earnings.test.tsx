@@ -58,7 +58,7 @@ describe('EarningsPayments', () => {
   beforeEach(() => { getMock.mockReset() })
 
   it('shows spendable, spent, refunded, the remainder note and history', async () => {
-    getMock.mockResolvedValue({ status: 200, data: { enabled: true, spendable: '5.50', wallet_only_remainder: '5.50',
+    getMock.mockResolvedValue({ status: 200, data: { enabled: true, spendable: '5.50', partly_spent_remainder: '5.50', wallet_only_remainder: '0.00',
       reserved_for_payouts: '0.00', total_spent: '20.00', total_refunded: '100.00', kyc_approved: true, message: null,
       payments: [{ id: 1, reference: 'IWP-1', product_code: 'advertising_credit', quantity: 20, amount: '20.00',
         status: 'COMPLETED', created_at: '2026-11-03T10:00:00', refunded_at: null, failure_code: null },
@@ -66,7 +66,8 @@ describe('EarningsPayments', () => {
         status: 'REFUNDED', created_at: '2026-11-02T10:00:00', refunded_at: '2026-11-03T09:00:00', failure_code: null }] } })
     render(<EarningsPayments />)
     expect(await screen.findByTestId('earnings-payments')).toHaveTextContent('Spent with earnings20.00 USD')
-    expect(screen.getByTestId('earnings-remainder')).toHaveTextContent('not included in cash-outs')
+    expect(screen.getByTestId('earnings-remainder')).toHaveTextContent('or be cashed out, whichever you do first')
+    expect(screen.getByTestId('earnings-remainder')).not.toHaveTextContent('not included in cash-outs')
     expect(screen.getByText('Refunded', { selector: 'td' })).toBeInTheDocument()
   })
 

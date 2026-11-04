@@ -9,8 +9,9 @@ reserved and held rows are never spendable. USD only; no conversion.
 
 A payment uses whole rows oldest first (remainders first); the last row may be used in part:
   * a row used in full becomes PAID (paid in kind; payout_reference 'iwp:<reference>');
-  * a row used in part stays APPROVED with payout_reference 'iwp-rem': no cashout or payout reserves
-    it (they take only rows with no reference), and only a later wallet payment can use what is left.
+  * a row used in part stays APPROVED with payout_reference 'iwp-rem'. What is left of it (its open
+    amount, commission_usage.open_amount) stays available to BOTH a later wallet payment and a cashout or
+    payout, whichever takes it first (2026-11-04 fix: before, a remainder could only be spent).
 How much of each row a payment used is kept in internal_wallet_payment_lines.
 
 Accounting (existing ledger, no cash): the commission liability is settled into clearing account 1050
@@ -33,7 +34,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -42,12 +43,12 @@ from app.models.affiliate import AffiliateCommission, CommissionStatus
 from app.models.internal_wallet import InternalWalletPayment, InternalWalletPaymentLine
 from app.models.payment import Deposit, DepositStatus, ProductType
 from app.models.user import User
+from app.services.commission_usage import REMAINDER_MARK, unreserved_clause, wallet_used
 from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
 
 PAID_PREFIX = "iwp:"
-REMAINDER_MARK = "iwp-rem"
 SOURCE_TYPE = "INTERNAL_WALLET_PAYMENT"
 POSTING_SETTLEMENT = "SETTLEMENT"
 CLEARING_ACCOUNT = "1050"
@@ -77,19 +78,12 @@ def _spendable_query(db: Session, user_id: int):
     return (db.query(AffiliateCommission)
             .filter(AffiliateCommission.user_id == user_id,
                     AffiliateCommission.status == CommissionStatus.APPROVED,
-                    or_(AffiliateCommission.payout_reference.is_(None),
-                        AffiliateCommission.payout_reference == REMAINDER_MARK),
+                    unreserved_clause(),
                     payable_clause()))
 
 
 def _used(db: Session, commission_ids) -> dict:
-    ids = list(commission_ids)
-    if not ids:
-        return {}
-    rows = (db.query(InternalWalletPaymentLine.commission_id, func.coalesce(func.sum(InternalWalletPaymentLine.amount), 0))
-            .filter(InternalWalletPaymentLine.commission_id.in_(ids), InternalWalletPaymentLine.status == "ACTIVE")
-            .group_by(InternalWalletPaymentLine.commission_id).all())
-    return {int(k): money(v) for k, v in rows}
+    return wallet_used(db, commission_ids)
 
 
 def spendable_rows(db: Session, user_id: int, *, lock: bool = False) -> List[Tuple[AffiliateCommission, Decimal]]:
@@ -112,7 +106,8 @@ def spendable_balance(db: Session, user_id: int) -> Decimal:
 
 
 def remainder_total(db: Session, user_id: int) -> Decimal:
-    """Unused remainders of rows a wallet payment used in part (wallet-only, never cashed out)."""
+    """Open amounts of rows a wallet payment used in part. Spendable AND cashable (whichever comes first);
+    already included in spendable_balance and in the cashout balance, never to be added to either."""
     return money(sum((left for row, left in spendable_rows(db, user_id) if row.payout_reference == REMAINDER_MARK),
                      Decimal("0.00")))
 
@@ -220,7 +215,10 @@ def eligibility(db: Session, user: User) -> dict:
     return {"enabled": enabled(), "kyc_approved": problem is None or problem[0] != "KYC_REQUIRED",
             "allowed": enabled() and problem is None, "reason": None if problem is None else problem[0],
             "message": None if problem is None else problem[1], "currency": "USD",
-            "spendable": str(spendable_balance(db, user.id)), "wallet_only_remainder": str(remainder_total(db, user.id))}
+            "spendable": str(spendable_balance(db, user.id)),
+            # Part of `spendable` (and of the cashout balance): the same money, shown once, usable once.
+            "partly_spent_remainder": str(remainder_total(db, user.id)),
+            "wallet_only_remainder": "0.00"}       # retired meaning (kept for older clients): nothing is wallet-only
 
 
 def preview(db: Session, user: User, product_code: str, quantity: int) -> dict:

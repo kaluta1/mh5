@@ -432,6 +432,7 @@ def sync_destinations(db: Session, api: PayoutClient, *, now: Optional[datetime]
     """One pass of the destination lifecycle. Commits after each change. Never disables a destination
     of another member, never pays anything."""
     from app.services.commission_payout_hold import payable_clause
+    from app.services.commission_usage import unreserved_clause
     from app.models.affiliate import AffiliateCommission, CommissionStatus
 
     now = now or datetime.utcnow()
@@ -518,7 +519,7 @@ def sync_destinations(db: Session, api: PayoutClient, *, now: Optional[datetime]
         return report
     waiting = {int(u) for (u,) in db.query(AffiliateCommission.user_id)
                .filter(AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
-                       AffiliateCommission.payout_reference.is_(None), payable_clause()).distinct().all()}
+                       unreserved_clause(), payable_clause()).distinct().all()}
     queued.sort(key=lambda r: (0 if r.user_id in waiting else 1, r.id))
     db.rollback()
     try:

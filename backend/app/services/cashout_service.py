@@ -15,7 +15,9 @@ Business rules (owner requirement, 2026-10-08)
   app.services.payment_config (Admin > Finance & Payments). The defaults are
   the rules the owner gave: crypto minimum $1, USD minimum $100, USD fee 1%
   (minimum $20, maximum $1,000), wallet hold 72 hours.
-* Commissions are paid as whole rows, oldest first. A balance is never a
+* Commissions are paid as whole rows, oldest first, each at its OPEN amount:
+  the row's amount less what internal wallet payments already used of it
+  (commission_usage.open_amount; a row is never resized). A balance is never a
   stored number: it is always derived from the commission rows
   (financial_balances.get_commission_balance).
 
@@ -23,6 +25,8 @@ Lifecycle of a commission row
 -----------------------------
   PENDING     earned, but the member has no usable payout destination yet
   APPROVED    available                       (payout_reference IS NULL)
+  APPROVED    available, partly spent         (payout_reference = 'iwp-rem': its open amount is
+              with the internal wallet         available to a cashout or the wallet, whichever is first)
   APPROVED    reserved for one cashout        (payout_reference = that cashout's intent)
   PAID        paid by that cashout            (payout_reference = the settlement reference)
   CANCELLED   reversed (refund of the source payment)
@@ -87,6 +91,7 @@ from app.services.accounting_service import accounting_service
 from app.services.commission_payout_service import _find_cashout_by_intent, _intent_reference
 from app.services.financial_balances import CommissionBalance, get_commission_balance
 from app.services.financial_integrity import money, positive_money
+from app.services.commission_usage import REMAINDER_MARK, open_amounts, unreserved_clause, wallet_used
 from app.services.payment_config import PERMISSION_PROCESS, PaymentConfig
 from app.services.wallet_validation import PAYOUT_CURRENCY_OPTIONS, normalize_payout_currency, validate_payout_address
 
@@ -553,22 +558,28 @@ def active_pooled_cashout(db: Session, user_id: int) -> Optional[AffiliateCashou
 
 
 def available_rows(db: Session, user_id: int) -> List[AffiliateCommission]:
-    """Unreserved APPROVED rows that may be paid (never a held historical row), oldest first, locked."""
+    """Unreserved APPROVED rows that may be paid (never a held historical row), oldest first, locked.
+    Includes a row partly spent with the internal wallet ('iwp-rem') while something of it is left; its
+    value is its open amount (open_amounts / rows_total), never its original amount."""
     from app.services.commission_payout_hold import payable_clause
 
-    return (db.query(AffiliateCommission)
+    rows = (db.query(AffiliateCommission)
             .filter(AffiliateCommission.user_id == user_id,
                     AffiliateCommission.status == CommissionStatus.APPROVED,
-                    AffiliateCommission.payout_reference.is_(None),
+                    unreserved_clause(),
                     payable_clause())
             .order_by(AffiliateCommission.transaction_date.asc(), AffiliateCommission.id.asc())
             .with_for_update().all())
+    left = open_amounts(rows, db)
+    return [r for r in rows if left[int(r.id)] > 0]
 
 
 def rows_total(rows: Iterable[AffiliateCommission]) -> Decimal:
+    """What these rows are still worth: the sum of their open amounts (each must be positive)."""
+    rows = list(rows)
     total = Decimal("0.00")
-    for row in rows:
-        total = money(total + positive_money(row.commission_amount))
+    for amount in open_amounts(rows).values():
+        total = money(total + positive_money(amount))
     return total
 
 
@@ -643,9 +654,11 @@ def release_reservation(db: Session, cashout: AffiliateCashoutRequest, *, status
     if status not in (CashoutStatus.FAILED.value, CashoutStatus.CANCELLED.value):
         raise ValueError("release_reservation closes a cashout as failed or cancelled")
     rows = reserved_rows(db, cashout)
+    used = wallet_used(db, [r.id for r in rows])
     for row in rows:
         if row.status == CommissionStatus.APPROVED:
-            row.payout_reference = None
+            # Back to what it was before the reservation: unreserved, or partly spent with the wallet.
+            row.payout_reference = REMAINDER_MARK if used.get(int(row.id)) else None
     old = {"status": cashout.status}
     cashout.status = status
     cashout.failure_code = failure_code
@@ -683,8 +696,13 @@ def _post_journal(db: Session, cashout: AffiliateCashoutRequest, rows: List[Affi
     if inactive:
         raise CashoutError("LEDGER_ACCOUNT_INACTIVE",
                            "Payout accounting cannot post to an inactive account: " + ", ".join(inactive))
-    direct = sum((money(r.commission_amount) for r in rows if r.level == 1), Decimal("0.00"))
-    indirect = sum((money(r.commission_amount) for r in rows if r.level != 1), Decimal("0.00"))
+    # The liability still owed on each row: its open amount (a wallet payment already settled the rest).
+    left = open_amounts(rows, db)
+    direct = sum((left[int(r.id)] for r in rows if r.level == 1), Decimal("0.00"))
+    indirect = sum((left[int(r.id)] for r in rows if r.level != 1), Decimal("0.00"))
+    if money(direct + indirect) != money(cashout.gross_amount):
+        raise CashoutError("RESERVATION_CHANGED",
+                           "The reserved commissions no longer match this cashout; it needs manual reconciliation.")
     lines: list[dict] = []
     if direct:
         lines.append({"account_code": "2001", "debit": direct, "credit": 0, "description": description})
@@ -2175,10 +2193,11 @@ def crypto_threshold(db: Session, user: User, config: PaymentConfig) -> dict:
     # Without SoncoPay's figures the business minimum alone is known; its fee and minimum are added once read.
     threshold = (payout_threshold(config, published["minimum"], published["fee"]) if published is not None
                  else payout_threshold(config, Decimal("0"), None))
-    amounts = [money(a) for (a,) in db.query(AffiliateCommission.commission_amount)
-               .filter(AffiliateCommission.user_id == user.id,
-                       AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
-                       AffiliateCommission.payout_reference.is_(None), payable_clause()).all()]
+    unpaid = (db.query(AffiliateCommission)
+              .filter(AffiliateCommission.user_id == user.id,
+                      AffiliateCommission.status.in_([CommissionStatus.APPROVED, CommissionStatus.PENDING]),
+                      unreserved_clause(), payable_clause()).all())
+    amounts = [a for a in open_amounts(unpaid, db).values() if a > 0]
     small = sum((a for a in amounts if a < threshold), Decimal("0.00"))
     out.update(threshold=f"{threshold:.2f}", accumulated=f"{money(small):.2f}",
                awaiting_threshold=bool(small) and small < threshold)

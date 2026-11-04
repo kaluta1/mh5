@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.affiliate import AffiliateCommission, CommissionStatus
 from app.services.commission_payout_hold import card_hold_clause, held_clause, payable_clause
+from app.services.commission_usage import open_amount_sql, unreserved_clause, used_subquery, wallet_used_sql
 from app.services.financial_integrity import money
 
 
@@ -29,6 +30,11 @@ class CommissionBalance:
 
 
 def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
+    """Every figure is derived from the rows. An APPROVED row partly spent with the internal wallet counts
+    its open amount (amount - ACTIVE wallet lines) as available or reserved, and the part the wallet used as
+    paid (paid in kind), so each cent of a row is in exactly one bucket."""
+    used = used_subquery()
+    open_amount = open_amount_sql(used)
     row = (
         db.query(
             func.coalesce(
@@ -37,10 +43,10 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                         (
                             (
                                 (AffiliateCommission.status == CommissionStatus.APPROVED)
-                                & AffiliateCommission.payout_reference.is_(None)
+                                & unreserved_clause()
                                 & payable_clause()
                             ),
-                            AffiliateCommission.commission_amount,
+                            open_amount,
                         ),
                         else_=0,
                     )
@@ -102,6 +108,7 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                 func.sum(
                     case(
                         (AffiliateCommission.status == CommissionStatus.PAID, AffiliateCommission.commission_amount),
+                        (AffiliateCommission.status == CommissionStatus.APPROVED, wallet_used_sql(used)),
                         else_=0,
                     )
                 ),
@@ -126,7 +133,7 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                                 # a remainder kept for internal wallet payments is not a payout reservation
                                 & (AffiliateCommission.payout_reference != "iwp-rem")
                             ),
-                            AffiliateCommission.commission_amount,
+                            open_amount,
                         ),
                         else_=0,
                     )
@@ -134,6 +141,7 @@ def get_commission_balance(db: Session, user_id: int) -> CommissionBalance:
                 0,
             ).label("reserved"),
         )
+        .outerjoin(used, used.c.commission_id == AffiliateCommission.id)
         .filter(AffiliateCommission.user_id == user_id)
         .one()
     )

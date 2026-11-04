@@ -209,6 +209,7 @@ def eligibility_sweep(db: Session, *, now: Optional[datetime] = None) -> int:
     newest unpaid commission, so the same situation is never announced twice. Never raises."""
     from app.services import cashout_engine, soncopay_payouts
     from app.services.commission_payout_hold import payable_clause
+    from app.services.commission_usage import unreserved_clause
     from app.services.email_events import EmailEvent
     from sqlalchemy import func
 
@@ -233,7 +234,7 @@ def eligibility_sweep(db: Session, *, now: Optional[datetime] = None) -> int:
             newest = (db.query(func.max(AffiliateCommission.id))
                       .filter(AffiliateCommission.user_id == m["user_id"],
                               AffiliateCommission.status.in_((CommissionStatus.APPROVED, CommissionStatus.PENDING)),
-                              AffiliateCommission.payout_reference.is_(None), payable_clause()).scalar())
+                              unreserved_clause(), payable_clause()).scalar())
             user = db.query(User).filter(User.id == m["user_id"]).first()
             db.rollback()
             if _enqueue(db, EmailEvent.PAYOUT_STATUS_UPDATE, user, f"payout-{kind.lower()}:{m['user_id']}:{newest}",

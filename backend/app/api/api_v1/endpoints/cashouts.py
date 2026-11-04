@@ -204,6 +204,9 @@ def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(req
     attempts = (db.query(AffiliateCashoutRequest)
                 .filter(AffiliateCashoutRequest.user_id == cashout.user_id)
                 .order_by(AffiliateCashoutRequest.id.desc()).limit(20).all())
+    from app.services.commission_usage import wallet_used
+
+    spent = wallet_used(db, [c.id for c in commissions])     # part of a row already paid with the internal wallet
     member = db.query(User).filter(User.id == cashout.user_id).first()
     wallet = service.wallet_state(member) if member is not None else None
     return {
@@ -214,6 +217,8 @@ def detail(cashout_id: int, db: Session = Depends(get_db), _: User = Depends(req
                    "wallet": service.mask_address(wallet.address) if wallet else None,
                    "wallet_status": wallet.status if wallet else None},
         "commissions": [{"id": c.id, "amount": float(c.commission_amount), "status": c.status.value,
+                         "spent_with_wallet": float(spent.get(int(c.id), 0)),
+                         "in_this_cashout": float(c.commission_amount - spent.get(int(c.id), 0)),
                          "level": c.level,
                          "transaction_date": c.transaction_date.isoformat() if c.transaction_date else None}
                         for c in commissions],

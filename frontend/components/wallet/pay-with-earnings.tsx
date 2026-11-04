@@ -106,7 +106,8 @@ export function PayWithEarnings({ productCode, quantity, onPaid }: {
 type Summary = {
   enabled: boolean
   spendable: string
-  wallet_only_remainder: string
+  /** Part of `spendable` (the same money): the unused part of commissions already partly spent. */
+  partly_spent_remainder?: string
   reserved_for_payouts: string
   total_spent: string
   total_refunded: string
@@ -136,10 +137,10 @@ export function EarningsPayments() {
         <div><p className="text-xs text-gray-500">Spent with earnings</p><p className="text-lg font-semibold">{data.total_spent} USD</p></div>
         <div><p className="text-xs text-gray-500">Refunded</p><p className="text-lg font-semibold">{data.total_refunded} USD</p></div>
       </div>
-      {Number(data.wallet_only_remainder) > 0 ? (
+      {Number(data.partly_spent_remainder) > 0 ? (
         <p data-testid="earnings-remainder" className="text-xs text-gray-500">
-          {data.wallet_only_remainder} USD is the unused part of commissions already partly spent: it can pay another
-          purchase but is not included in cash-outs.
+          {data.partly_spent_remainder} USD of your spendable earnings is the unused part of commissions already
+          partly spent. It can pay another purchase or be cashed out, whichever you do first: it is never used twice.
         </p>
       ) : null}
       {data.payments.length === 0 ? <p className="text-gray-500">No purchases paid with earnings yet.</p> : (
