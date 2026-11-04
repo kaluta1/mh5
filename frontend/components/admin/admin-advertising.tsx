@@ -58,7 +58,23 @@ const MONEY_SWITCHES: [string, string][] = [
   ['adsense_fallback_enabled', 'AdSense fallback in placements'],
   ['contest_sharing_enabled', 'Contest-entry revenue sharing'],
   ['adsense_sharing_enabled', 'AdSense revenue sharing (policy confirmed)'],
+  ['advertiser_sponsor_commission_enabled', "Advertiser's direct sponsor 20%/40% on recognized charges"],
 ]
+const ISSUE_CATEGORIES: [string, string][] = [['COPY', 'Copy'], ['MEDIA', 'Media'], ['DESTINATION', 'Destination'],
+  ['PLACEMENT', 'Placement']]
+
+function IssuePicker({ id, value, onChange }: { id: string; value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <span className="flex flex-wrap items-center gap-2" data-testid={`issues-${id}`}>
+      {ISSUE_CATEGORIES.map(([code, label]) => (
+        <label key={code} className="flex items-center gap-1">
+          <input type="checkbox" aria-label={`${label} issue for ${id}`} checked={value.includes(code)}
+            onChange={(e) => onChange(e.target.checked ? [...value, code] : value.filter((x) => x !== code))} />{label}
+        </label>
+      ))}
+    </span>
+  )
+}
 
 export default function AdminAdvertising() {
   const [overview, setOverview] = useState<Json | null>(null)
@@ -77,6 +93,9 @@ export default function AdminAdvertising() {
 
   const note = (key: string) => (notes[key] || '').trim()
   const setNote = (key: string, value: string) => setNotes((n) => ({ ...n, [key]: value }))
+  const [issues, setIssues] = useState<Record<string, string[]>>({})
+  const picked = (key: string) => issues[key] || []
+  const issueBody = (key: string) => picked(key).map((category) => ({ category, note: note(key) }))
 
   const load = useCallback(async () => {
     try {
@@ -159,27 +178,37 @@ export default function AdminAdvertising() {
         {campaigns.length === 0 ? <p className="text-sm text-gray-500">No campaigns.</p> : null}
         {campaigns.map((c) => (
           <div key={c.id} data-testid={`adv-campaign-${c.id}`} className="space-y-2 rounded border border-gray-200 p-3 text-sm dark:border-gray-700">
-            <p className="font-medium">#{c.id} {c.name} — {c.status} — advertiser #{c.advertiser_user_id} — budget {c.budget_total} USD,
+            <p className="font-medium">#{c.id} {c.name} — {c.display_status || c.status} — advertiser #{c.advertiser_user_id} — budget {c.budget_total} USD,
               spent {c.spent}, remaining {c.remaining_budget}, CPM {c.cpm_rate_usd ?? '—'}, funding {c.funding}</p>
             <p className="text-xs text-gray-500">Placements {(c.placements || []).join(', ')} · targeting {JSON.stringify(c.targeting || {})} ·
               {' '}{c.start_at} → {c.end_at} · served {c.served_impressions}, valid {c.valid_impressions}, rejected {c.invalid_events}</p>
+            {c.schedule ? <p className="text-xs text-gray-500">Schedule ({c.schedule.timezone}): {c.schedule.starts_after_approval
+              ? 'starts at approval' : c.schedule.start_at_local} → {c.schedule.end_at_local}</p> : null}
             {c.review_note ? <p className="text-xs text-gray-500">Review note: {c.review_note}</p> : null}
-            {(c.creatives || []).map((cr: Json) => (
-              <div key={cr.id} className="flex flex-wrap items-start gap-3">
-                <AdPreview creative={cr} />
-                <div className="space-y-1 text-xs">
-                  <p>Creative #{cr.id}: {cr.review_status}{cr.image ? ` · image ${cr.image.mime} ${cr.image.width}×${cr.image.height}` : ''}</p>
-                  {cr.review_status === 'PENDING' ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button className="rounded bg-green-600 px-2 py-0.5 text-white"
-                        onClick={() => run(() => call('post', `/creatives/${cr.id}/review`, { approve: true, note: 'approved' }), 'Creative approved')}>Approve</button>
-                      <input placeholder="Reason to reject" aria-label={`Reason to reject creative ${cr.id}`} value={notes[`cr${cr.id}`] || ''}
-                        onChange={(e) => setNote(`cr${cr.id}`, e.target.value)} className="rounded border px-2 py-0.5 dark:bg-gray-900" />
-                      <button className="rounded bg-red-600 px-2 py-0.5 text-white disabled:opacity-50" disabled={!note(`cr${cr.id}`)}
-                        onClick={() => run(() => call('post', `/creatives/${cr.id}/review`, { approve: false, note: note(`cr${cr.id}`) }), 'Creative rejected')}>Reject</button>
-                    </div>
-                  ) : null}
-                </div>
+            {(c.review_issues || []).length ? <p className="text-xs text-amber-700">Open issues: {(c.review_issues || [])
+              .map((i: Json) => i.category).join(', ')}</p> : null}
+            {(c.creatives || []).filter((cr: Json) => cr.review_status !== 'ARCHIVED').map((cr: Json) => (
+              <div key={cr.id} className="space-y-1">
+                <p className="text-xs">Creative #{cr.id}: {cr.review_status}
+                  {cr.supersedes_creative_id ? ` · new version of #${cr.supersedes_creative_id} (the approved version keeps serving until this one is approved)` : ''}
+                  {cr.display_name ? ` · advertiser "${cr.display_name}"` : ''}{cr.cta_label ? ` · CTA ${cr.cta_label}` : ''}
+                  {cr.destination_domain ? ` · ${cr.destination_domain}` : ''}
+                  {cr.image ? ` · image ${cr.image.mime} ${cr.image.width}×${cr.image.height}` : ''}
+                  {cr.video ? ` · video ${cr.video.width}×${cr.video.height}, ${Math.round((cr.video.duration_ms || 0) / 1000)} s` : ''}</p>
+                <AdPreview creative={cr} placements={c.placements} />
+                {cr.review_status === 'PENDING' ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button className="rounded bg-green-600 px-2 py-0.5 text-white"
+                      onClick={() => run(() => call('post', `/creatives/${cr.id}/review`, { approve: true, note: 'approved' }), 'Creative approved')}>Approve</button>
+                    <IssuePicker id={`creative ${cr.id}`} value={picked(`cr${cr.id}`)} onChange={(v) => setIssues((x) => ({ ...x, [`cr${cr.id}`]: v }))} />
+                    <input placeholder="Reason to reject" aria-label={`Reason to reject creative ${cr.id}`} value={notes[`cr${cr.id}`] || ''}
+                      onChange={(e) => setNote(`cr${cr.id}`, e.target.value)} className="rounded border px-2 py-0.5 dark:bg-gray-900" />
+                    <button className="rounded bg-red-600 px-2 py-0.5 text-white disabled:opacity-50"
+                      disabled={!note(`cr${cr.id}`) && !picked(`cr${cr.id}`).length}
+                      onClick={() => run(() => call('post', `/creatives/${cr.id}/review`, { approve: false, note: note(`cr${cr.id}`),
+                        issues: issueBody(`cr${cr.id}`) }), 'Creative rejected')}>Reject</button>
+                  </div>
+                ) : null}
               </div>
             ))}
             <div className="flex flex-wrap items-center gap-2">
@@ -189,8 +218,11 @@ export default function AdminAdvertising() {
                     onClick={() => run(() => call('post', `/campaigns/${c.id}/review`, { approve: true, note: 'approved' }), 'Campaign approved')}>Approve campaign</button>
                   <input placeholder="Reason or requested changes" aria-label={`Note for campaign ${c.id}`} value={notes[`c${c.id}`] || ''}
                     onChange={(e) => setNote(`c${c.id}`, e.target.value)} className="rounded border px-2 py-0.5 dark:bg-gray-900" />
-                  <button className="rounded border px-2 py-0.5 disabled:opacity-50" disabled={note(`c${c.id}`).length < 3}
-                    onClick={() => run(() => call('post', `/campaigns/${c.id}/request-changes`, { note: note(`c${c.id}`) }), 'Changes requested')}>Request changes</button>
+                  <IssuePicker id={`campaign ${c.id}`} value={picked(`c${c.id}`)} onChange={(v) => setIssues((x) => ({ ...x, [`c${c.id}`]: v }))} />
+                  <button className="rounded border px-2 py-0.5 disabled:opacity-50"
+                    disabled={note(`c${c.id}`).length < 3 && !picked(`c${c.id}`).length}
+                    onClick={() => run(() => call('post', `/campaigns/${c.id}/request-changes`, { note: note(`c${c.id}`),
+                      issues: issueBody(`c${c.id}`) }), 'Changes requested')}>Request changes</button>
                   <button className="rounded bg-red-600 px-2 py-0.5 text-white disabled:opacity-50" disabled={!note(`c${c.id}`)}
                     onClick={() => run(() => call('post', `/campaigns/${c.id}/review`, { approve: false, note: note(`c${c.id}`) }), 'Campaign rejected')}>Reject campaign</button>
                 </>

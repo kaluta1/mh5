@@ -295,6 +295,8 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
             return {"fill": True, "decision_id": decision_id, "source": "MYHIGH5", "sponsored_label": "Sponsored",
                     "creative": {"headline": creative.headline, "body": creative.body, "image_url": creative.image_url,
                                  "destination_url": creative.destination_url,
+                                 "display_name": creative.display_name, "cta_code": creative.cta_code,
+                                 "image_width": creative.image_width, "image_height": creative.image_height,
                                  # Clicks go through MyHigh5 (counted once, then redirected to the reviewed
                                  # URL), authorised by a signed token bound to this decision (D1).
                                  "click_url": f"/api/v1/ads/click/{decision_id}?t="
@@ -614,6 +616,10 @@ def recognize_closed_days(db: Session, *, now: Optional[datetime] = None) -> int
             entry_date=datetime.combine(day.day, time.max).replace(microsecond=0),
         )
         day.recognized_journal_id, day.recognized_at = entry.id, now
+        # The advertiser's direct sponsor: on the amount just recognized, once, only while switched on.
+        from app.services.ad_workflow import decide_sponsor_commission
+
+        decide_sponsor_commission(db, day, campaign, amount)
         posted += 1
     db.flush()
     return posted
@@ -666,6 +672,11 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
                               Line(camp.CREDIT_ACCOUNT, credit=money(amount),
                                    description=f"Advertiser credited back - User #{campaign.advertiser_user_id}")],
                        description=f"Invalid ad activity credited back - campaign {campaign_id} - {day.isoformat()}")
+        if recognized:
+            from app.services.ad_workflow import after_charge_reversed
+
+            db.flush()
+            after_charge_reversed(db, campaign_id, day, reason=reason)
         credited += amount
     db.flush()                                    # the reversed events must be visible to the recount
     bookings_reversed = reassess_bookings(db, booking_keys, reason=reason, actor_id=actor_id, now=now) \
@@ -806,6 +817,11 @@ def _credit_back(db: Session, campaign: AdvCampaign, day: date, amount: Decimal,
                    description=f"Advertising charge reversed - campaign {campaign.id} - {day.isoformat()} - "
                                f"{journal_suffix}")
     db.flush()
+    if recognized:
+        from app.services.ad_workflow import after_charge_reversed
+
+        after_charge_reversed(db, campaign.id, day, reason=note)
+        db.flush()
 
 
 def reassess_bookings(db: Session, keys: set, *, reason: str, actor_id: Optional[int],

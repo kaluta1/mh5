@@ -46,6 +46,9 @@ class AdvSettings(Base):
     # inventory a city must have shown (trailing 30-day average) before a booking is accepted and the delivery
     # a booked day needs to be earned. NULL = not determined yet: Daily City cannot be switched on.
     daily_city_min_impressions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Advertiser's direct sponsor: 20% / 40% of the advertiser's recognized (earned) charges per closed day
+    # (ad_revenue_policy.ad_slot_split). OFF until the owner enables it.
+    advertiser_sponsor_commission_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
 
@@ -105,6 +108,10 @@ class AdvCampaign(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completion_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Workflow (f1a3c5e7b9d2): the advertiser's IANA time zone (display; times are stored in UTC) and the
+    # reviewer's structured issues [{"category": COPY|MEDIA|DESTINATION|PLACEMENT, "note": ...}].
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    review_issues: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
 
 class AdvCampaignDay(Base):
@@ -118,15 +125,22 @@ class AdvCampaignDay(Base):
     reserved: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
     recognized_journal_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("journal_entries.id"), nullable=True)
     recognized_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)   # day closed
+    # The advertiser's direct-sponsor commission on this day's recognized charge (decided once).
+    sponsor_commission_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    sponsor_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sponsor_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    sponsor_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4), nullable=True)
 
 
 class AdvCreative(Base):
     __tablename__ = "adv_creatives"
     __table_args__ = (
-        CheckConstraint("review_status IN ('PENDING', 'APPROVED', 'REJECTED')", name="ck_adv_creative_review"),
+        CheckConstraint("review_status IN ('DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED')",
+                        name="ck_adv_creative_review"),
+        Index("ix_adv_creative_supersedes", "supersedes_creative_id"),
     )
     campaign_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaigns.id"), nullable=False)
-    headline: Mapped[str] = mapped_column(String(90), nullable=False)
+    headline: Mapped[Optional[str]] = mapped_column(String(90), nullable=True)      # NULL only in a draft
     body: Mapped[Optional[str]] = mapped_column(String(240), nullable=True)
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     destination_url: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -145,6 +159,16 @@ class AdvCreative(Base):
     video_mime: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     video_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     video_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Workflow (f1a3c5e7b9d2)
+    display_name: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    cta_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    video_poster_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    video_width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    video_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    review_issues: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # A revision of an APPROVED creative: the approved one keeps serving until this one is approved.
+    supersedes_creative_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("adv_creatives.id"),
+                                                                   nullable=True)
 
 
 class AdvEntryOrigin(Base):

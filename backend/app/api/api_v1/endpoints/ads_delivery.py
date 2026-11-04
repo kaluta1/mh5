@@ -19,6 +19,7 @@ from app.models.advertising_v2 import (AdvAdsenseBucket, AdvAdsenseImport, AdvAd
                                        AdvImpressionEvent)
 from app.models.user import User
 from app.services import ad_attribution, ad_campaigns as camp, ad_delivery, ad_revenue_sharing as sharing
+from app.services import ad_workflow as wf
 from app.services import payment_config
 from app.services.financial_integrity import FinancialIntegrityError
 
@@ -156,9 +157,13 @@ class CampaignCreate(BaseModel):
     daily_cap: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
-    placements: List[Literal["SIDEBAR", "IN_FEED", "IN_CONTENT"]]
+    timezone: Optional[str] = Field(default=None, max_length=64)
+    # A draft may be saved incomplete; submission checks complete terms.
+    placements: List[Literal["SIDEBAR", "IN_FEED", "IN_CONTENT"]] = []
     countries: List[str] = []
+    countries_mode: Optional[Literal["ALL", "LIST"]] = None
     page_types: List[str] = []
+    page_types_mode: Optional[Literal["ALL", "LIST"]] = None
     package: str = Field(default="cpm", max_length=20)
     unit_rate: Optional[Decimal] = Field(default=None, gt=0, max_digits=18, decimal_places=6)
     city_id: Optional[int] = None
@@ -173,14 +178,49 @@ class CampaignUpdate(BaseModel):
     end_at: Optional[datetime] = None
     placements: Optional[List[Literal["SIDEBAR", "IN_FEED", "IN_CONTENT"]]] = None
     countries: Optional[List[str]] = None
+    countries_mode: Optional[Literal["ALL", "LIST"]] = None
     page_types: Optional[List[str]] = None
+    page_types_mode: Optional[Literal["ALL", "LIST"]] = None
+    timezone: Optional[str] = Field(default=None, max_length=64)
+    start_after_approval: Optional[bool] = None
 
 
 class CreativeCreate(BaseModel):
-    headline: str = Field(min_length=1, max_length=90)
-    body: Optional[str] = Field(default=None, max_length=240)
+    """Limits are enforced by the service (headline 40, description 125, display name 60); the wider field
+    sizes here only keep a too-long value from being cut silently before the clear error."""
+    headline: Optional[str] = Field(default=None, max_length=200)
+    body: Optional[str] = Field(default=None, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=500)
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    cta_code: Optional[str] = Field(default=None, max_length=20)
     image_url: Optional[str] = Field(default=None, max_length=500)
-    destination_url: str = Field(min_length=1, max_length=500)
+    destination_url: Optional[str] = Field(default=None, max_length=500)
+    submit_for_review: bool = False
+
+
+class CreativeUpdate(BaseModel):
+    headline: Optional[str] = Field(default=None, max_length=200)
+    body: Optional[str] = Field(default=None, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=500)
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    cta_code: Optional[str] = Field(default=None, max_length=20)
+    image_url: Optional[str] = Field(default=None, max_length=500)
+    destination_url: Optional[str] = Field(default=None, max_length=500)
+
+
+def _creative_data(body) -> dict:
+    data = body.model_dump(exclude_unset=True)
+    data.pop("submit_for_review", None)
+    if "description" in data:
+        data["body"] = data.pop("description")
+    return data
+
+
+def _times(body_tz: Optional[str], current_tz: Optional[str], value: Optional[datetime]) -> Optional[datetime]:
+    try:
+        return wf.to_utc(value, wf.check_timezone(body_tz) or current_tz)
+    except camp.AdError as exc:
+        raise _err(exc) from None
 
 
 def _own_campaign(db: Session, user: User, campaign_id: int, lock: bool = False) -> AdvCampaign:
@@ -196,7 +236,7 @@ def advertiser_overview(db: Session = Depends(deps.get_db), user: User = Depends
     cfg = camp.get_settings(db)
     campaigns = (db.query(AdvCampaign).filter(AdvCampaign.advertiser_user_id == user.id)
                  .order_by(AdvCampaign.id.desc()).all())
-    reports = [camp.campaign_report(db, c) for c in campaigns]
+    reports = [wf.campaign_view(db, c, cfg) for c in campaigns]
     in_campaigns = sum((Decimal(r["remaining_budget"]) for r in reports
                         if r["status"] not in ("COMPLETED", "REJECTED")), Decimal("0.00"))
     packages = camp.packages(db)
@@ -216,11 +256,16 @@ def advertiser_overview(db: Session = Depends(deps.get_db), user: User = Depends
 def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
                     user: User = Depends(deps.get_current_active_user)):
     try:
+        targeting = {"countries": body.countries, "page_types": body.page_types}
+        if body.countries_mode:
+            targeting["countries_mode"] = body.countries_mode
+        if body.page_types_mode:
+            targeting["page_types_mode"] = body.page_types_mode
         c = camp.create_campaign(db, user, name=body.name, budget=body.budget, daily_cap=body.daily_cap,
-                                 start_at=body.start_at.replace(tzinfo=None) if body.start_at else None,
-                                 end_at=body.end_at.replace(tzinfo=None) if body.end_at else None,
-                                 placements=list(body.placements),
-                                 targeting={"countries": body.countries, "page_types": body.page_types},
+                                 start_at=_times(body.timezone, None, body.start_at),
+                                 end_at=_times(body.timezone, None, body.end_at),
+                                 placements=list(body.placements), timezone=body.timezone, complete=False,
+                                 targeting=targeting,
                                  package=body.package, unit_rate=body.unit_rate,
                                  bookings={"city_id": body.city_id, "days": body.booked_days}
                                  if body.city_id or body.booked_days else None)
@@ -230,7 +275,7 @@ def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
         raise _err(exc) from None
     db.commit()
     camp.send_pending(db)
-    return camp.campaign_report(db, c)
+    return wf.campaign_view(db, c)
 
 
 @member_router.get("/packages")
@@ -266,7 +311,7 @@ def update_campaign(campaign_id: int, body: CampaignUpdate, db: Session = Depend
     changes = body.model_dump(exclude_unset=True)
     for key in ("start_at", "end_at"):
         if changes.get(key) is not None:
-            changes[key] = changes[key].replace(tzinfo=None)
+            changes[key] = _times(changes.get("timezone"), c.timezone, changes[key])
     try:
         camp.update_campaign(db, user, c, changes)
     except camp.AdError as exc:
@@ -275,7 +320,7 @@ def update_campaign(campaign_id: int, body: CampaignUpdate, db: Session = Depend
         raise _err(exc) from None
     db.commit()
     camp.send_pending(db)
-    return camp.campaign_report(db, c)
+    return wf.campaign_view(db, c)
 
 
 @member_router.post("/advertiser/campaigns/{campaign_id}/creatives/{creative_id}/image")
@@ -303,10 +348,141 @@ async def upload_creative_image(campaign_id: int, creative_id: int, request: Req
         raise HTTPException(status_code=400, detail={"code": "INVALID_IMAGE", "message": str(exc)}) from None
     await file.seek(0)
     stored = await store_media(file, user.id)
-    camp.attach_image(db, cr, stored, actor_id=user.id)
+    meta = stored.get("metadata") or {}
+    poster = request.query_params.get("as") == "poster"
+    try:
+        if poster:
+            cr = wf.attach_media(db, c, cr, actor_id=user.id, video_poster_url=stored["url"])
+        else:
+            cr = wf.attach_media(db, c, cr, actor_id=user.id, image_url=stored["url"],
+                                 image_mime=meta.get("content_type"), image_bytes=meta.get("file_size"),
+                                 image_width=meta.get("width"), image_height=meta.get("height"))
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
     db.commit()
     camp.send_pending(db)
-    return camp.creative_payload(cr)
+    return wf.creative_view(db, cr)
+
+
+@member_router.post("/advertiser/campaigns/{campaign_id}/creatives/{creative_id}/video")
+async def upload_creative_video(campaign_id: int, creative_id: int, file: UploadFile = File(...),
+                                db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
+    """MP4 (H.264, AAC when there is audio), 6-30 s, vertical 1080x1920 or square 1080x1080, verified on the
+    server from the file itself. Stored in the existing media store (its 32 MB cap applies). Video packages
+    stay NOT READY: an uploaded video is previewed (muted) but never delivered yet."""
+    from app.core.storage import store_media
+    from app.services import ad_video
+
+    if _is_rate_limited(f"ad-video:{user.id}", 10, 3600):
+        raise HTTPException(status_code=429, detail="Too many uploads; try again later")
+    c = _own_campaign(db, user, campaign_id)
+    cr = db.query(AdvCreative).filter(AdvCreative.id == creative_id, AdvCreative.campaign_id == c.id).first()
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Creative not found")
+    content = await file.read(ad_video.AD_VIDEO_MAX_BYTES + 1)
+    try:
+        info = ad_video.inspect_ad_video(file.content_type or "", content)
+    except ad_video.VideoError as exc:
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": exc.message}) from None
+    await file.seek(0)
+    try:
+        stored = await store_media(file, user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_VIDEO", "message": str(exc)}) from None
+    try:
+        cr = wf.attach_media(db, c, cr, actor_id=user.id, creative_format="VIDEO", video_url=stored["url"],
+                             video_mime=info.mime, video_bytes=info.size, video_duration_ms=info.duration_ms,
+                             video_width=info.width, video_height=info.height)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return wf.creative_view(db, cr)
+
+
+@member_router.patch("/advertiser/campaigns/{campaign_id}/creatives/{creative_id}")
+def edit_creative(campaign_id: int, creative_id: int, body: CreativeUpdate, db: Session = Depends(deps.get_db),
+                  user: User = Depends(deps.get_current_active_user)):
+    """Edit copy, call-to-action or destination. An approved creative gets a revision that needs a fresh
+    approval; the approved version keeps serving until then."""
+    c = _own_campaign(db, user, campaign_id)
+    cr = db.query(AdvCreative).filter(AdvCreative.id == creative_id, AdvCreative.campaign_id == c.id).first()
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Creative not found")
+    try:
+        cr = wf.edit_creative(db, c, cr, _creative_data(body), actor_id=user.id)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return wf.creative_view(db, cr)
+
+
+@member_router.post("/advertiser/campaigns/{campaign_id}/creatives/{creative_id}/submit")
+def submit_creative(campaign_id: int, creative_id: int, db: Session = Depends(deps.get_db),
+                    user: User = Depends(deps.get_current_active_user)):
+    c = _own_campaign(db, user, campaign_id)
+    cr = db.query(AdvCreative).filter(AdvCreative.id == creative_id, AdvCreative.campaign_id == c.id).first()
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Creative not found")
+    try:
+        wf.submit_creative(db, c, cr, actor_id=user.id)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.commit()
+    return wf.creative_view(db, cr)
+
+
+@member_router.get("/advertiser/campaigns/{campaign_id}/daily-report")
+def campaign_daily_report(campaign_id: int, days: int = 31, db: Session = Depends(deps.get_db),
+                          user: User = Depends(deps.get_current_active_user)):
+    c = _own_campaign(db, user, campaign_id)
+    out = wf.daily_report(db, c, days=min(max(1, days), 92))
+    db.rollback()
+    return out
+
+
+@member_router.get("/advertiser/catalog")
+def advertiser_catalog(db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
+    """Everything the campaign form needs: packages (price, unit, billable event, minimum, media,
+    placements, state), call-to-action presets, countries, page types, placements, media specifications."""
+    from app.services import ad_video
+    from app.services.ad_delivery import ALLOWED_SLOTS
+
+    cfg = camp.get_settings(db)
+    out = {"packages": wf.package_catalog(cfg),
+           "cta_presets": [{"code": k, "label": v} for k, v in wf.CTA_PRESETS.items()],
+           "review_categories": list(wf.REVIEW_CATEGORIES),
+           "countries": [{"code": k, "name": v} for k, v in sorted(wf.known_countries(db).items(), key=lambda x: x[1])],
+           "page_types": [{"code": p, "rendered": p in wf.RENDERED_PAGE_TYPES, "placements": list(ALLOWED_SLOTS.get(p, ()))}
+                          for p in camp.PAGE_TYPES],
+           "placements": list(camp.SLOT_KINDS), "image_specs": wf.IMAGE_SPECS,
+           "image_rules": {"types": list(wf.WORKFLOW_IMAGE_TYPES), "max_bytes": wf.WORKFLOW_IMAGE_MAX_BYTES,
+                           "min_side": wf.WORKFLOW_IMAGE_MIN_SIDE},
+           "video_rules": ad_video.rules(),
+           "limits": {"headline": wf.HEADLINE_MAX, "description": wf.DESCRIPTION_MAX,
+                      "display_name": wf.DISPLAY_NAME_MAX},
+           "budget": wf.budget_summary(db, user.id),
+           "launch": "Delivery starts automatically once MyHigh5 approves the campaign (at its start time, or at "
+                     "approval when no start time is set). Times are stored in UTC."}
+    db.rollback()
+    camp.discard_pending(db)
+    return out
+
+
+@member_router.get("/advertiser/estimate")
+def advertiser_package_estimate(package: str, budget: Decimal, rate: Optional[Decimal] = None,
+                                db: Session = Depends(deps.get_db), user: User = Depends(deps.get_current_active_user)):
+    cfg = camp.get_settings(db)
+    try:
+        out = wf.package_estimate(cfg, package, budget, rate)
+    except camp.AdError as exc:
+        db.rollback()
+        raise _err(exc) from None
+    db.rollback()
+    return out
 
 
 @member_router.post("/advertiser/campaigns/{campaign_id}/creatives")
@@ -314,15 +490,14 @@ def add_creative(campaign_id: int, body: CreativeCreate, db: Session = Depends(d
                  user: User = Depends(deps.get_current_active_user)):
     c = _own_campaign(db, user, campaign_id)
     try:
-        cr = camp.add_creative(db, c, headline=body.headline, body=body.body, image_url=body.image_url,
-                               destination_url=body.destination_url)
+        cr = wf.create_creative(db, c, _creative_data(body), actor_id=user.id, draft=not body.submit_for_review)
     except camp.AdError as exc:
         db.rollback()
         camp.discard_pending(db)
         raise _err(exc) from None
     db.commit()
     camp.send_pending(db)
-    return {"id": cr.id, "review_status": cr.review_status}
+    return wf.creative_view(db, cr)
 
 
 @member_router.post("/advertiser/campaigns/{campaign_id}/{action}")
@@ -331,6 +506,8 @@ def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume
     c = _own_campaign(db, user, campaign_id, lock=True)
     try:
         if action == "submit":
+            if c.end_at is not None and c.end_at <= datetime.utcnow():
+                raise camp.AdError("INVALID_SCHEDULE", "The end date has already passed", 400)
             camp.submit_campaign(db, user, c)
         elif action in ("pause", "resume"):
             camp.set_paused(db, user, c, paused=action == "pause")
@@ -344,7 +521,7 @@ def campaign_action(campaign_id: int, action: Literal["submit", "pause", "resume
         raise _err(exc) from None
     db.commit()
     camp.send_pending(db)
-    return camp.campaign_report(db, c)
+    return wf.campaign_view(db, c)
 
 
 # ---------------------------------------------------------------- earnings (member)
@@ -366,6 +543,16 @@ def earnings_missed(skip: int = 0, limit: int = 20, db: Session = Depends(deps.g
 
     out = missed_earnings.member_page(db, user.id, categories=(CATEGORY_AD_CREATIVE, CATEGORY_AD_SPONSOR),
                                       skip=max(0, skip), limit=min(max(1, limit), 100))
+    db.rollback()
+    camp.discard_pending(db)
+    return out
+
+
+@member_router.get("/earnings/daily")
+def earnings_daily(days: int = 31, db: Session = Depends(deps.get_db),
+                   user: User = Depends(deps.get_current_active_user)):
+    """Daily estimates (creative and sponsor roles); never withdrawable."""
+    out = wf.member_daily(db, user.id, days=min(max(1, days), 92))
     db.rollback()
     camp.discard_pending(db)
     return out
@@ -396,13 +583,20 @@ class SettingsChange(BaseModel):
     current_password: str = Field(default="", max_length=256)
 
 
+class IssueBody(BaseModel):
+    category: Literal["COPY", "MEDIA", "DESTINATION", "PLACEMENT"]
+    note: str = Field(default="", max_length=300)
+
+
 class ReviewBody(BaseModel):
     approve: bool
     note: str = Field(default="", max_length=500)
+    issues: List[IssueBody] = []
 
 
 class NoteBody(BaseModel):
-    note: str = Field(min_length=3, max_length=500)
+    note: str = Field(default="", max_length=500)
+    issues: List[IssueBody] = []
 
 
 class ScanBody(BaseModel):
@@ -503,9 +697,11 @@ def admin_campaigns(db: Session = Depends(deps.get_db), admin: User = Depends(re
     for c in rows:
         r = camp.campaign_report(db, c)
         r["advertiser_user_id"] = c.advertiser_user_id
-        r["creatives"] = [{"id": cr.id, "headline": cr.headline, "body": cr.body, "image_url": cr.image_url,
-                           "destination_url": cr.destination_url, "review_status": cr.review_status}
-                          for cr in db.query(AdvCreative).filter(AdvCreative.campaign_id == c.id).all()]
+        r["creatives"] = [wf.creative_view(db, cr) for cr in db.query(AdvCreative)
+                          .filter(AdvCreative.campaign_id == c.id).order_by(AdvCreative.id.asc()).all()]
+        r["display_status"] = wf.display_status(c)
+        r["schedule"] = wf.schedule_view(c)
+        r["review_issues"] = c.review_issues or []
         out.append(r)
     return {"campaigns": out}
 
@@ -517,7 +713,8 @@ def admin_review_creative(creative_id: int, body: ReviewBody, db: Session = Depe
     if cr is None:
         raise HTTPException(status_code=404, detail="Creative not found")
     try:
-        camp.review_creative(db, admin, cr, approve=body.approve, note=body.note)
+        camp.review_creative(db, admin, cr, approve=body.approve, note=body.note,
+                             issues=[i.model_dump() for i in body.issues])
     except camp.AdError as exc:
         db.rollback()
         camp.discard_pending(db)
@@ -583,7 +780,9 @@ def admin_request_changes(campaign_id: int, body: NoteBody, db: Session = Depend
     if c is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
     try:
-        camp.request_changes(db, admin, c, note=body.note)
+        if len((body.note or "").strip()) < 3 and not body.issues:
+            raise camp.AdError("NOTE_REQUIRED", "Describe the changes that are needed", 400)
+        camp.request_changes(db, admin, c, note=body.note, issues=[i.model_dump() for i in body.issues])
     except camp.AdError as exc:
         db.rollback()
         camp.discard_pending(db)
