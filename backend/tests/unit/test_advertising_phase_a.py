@@ -4,6 +4,7 @@ six-decimal precision. Every new package is OFF by default; nothing here creates
 SYNTHETIC data only; real concurrency is in tests/integration/test_advertising_phase_a_postgres.py."""
 from __future__ import annotations
 
+import dataclasses
 import struct
 import uuid
 from datetime import datetime, timedelta
@@ -15,7 +16,7 @@ from app.models.advertising_v2 import (AdvAllocation, AdvBooking, AdvCampaign, A
                                        AdvImpressionEvent, AdvServeDecision)
 from app.models.affiliate import AffiliateCommission
 from app.models.geography import City, Continent, Country, Region
-from app.services import ad_campaigns as camp, ad_delivery as dl, ad_leads, ad_packages as pk, ad_video
+from app.services import ad_campaigns as camp, ad_delivery as dl, ad_geo, ad_leads, ad_packages as pk, ad_video
 from tests.unit.test_advertising_program import UA, T0, _balance, _configure, _fund, _ledger_balanced
 from tests.unit.test_new_business_model import _user, world  # noqa: F401  (fixtures)
 
@@ -30,6 +31,20 @@ def _settings(db, *packages, threshold=None, **kw):
     cfg.daily_city_min_impressions = threshold if threshold is not None else (1 if "daily_city" in packages else None)
     db.flush()
     return cfg
+
+
+def _ready(monkeypatch, *codes):
+    """TEST ONLY: treat NOT READY packages as ready, to exercise their mechanics. Production readiness is
+    code (ad_packages) and stays NOT READY for Daily City and Lead."""
+    for code in codes:
+        ready = dataclasses.replace(pk.PACKAGES[code], not_ready=None)
+        monkeypatch.setitem(pk.PACKAGES, code, ready)
+        monkeypatch.setitem(pk.BY_MODEL, ready.pricing_model, ready)
+
+
+@pytest.fixture
+def city_ready(monkeypatch):
+    _ready(monkeypatch, "daily_city")
 
 
 def _admin(db):
@@ -113,12 +128,13 @@ def test_4_packages_are_off_by_default_and_not_ready_ones_can_never_be_switched_
     db = world
     cfg = _settings(db)                                   # campaigns + funding on, no package switched on
     adv = _user(db, "a4@t.com")
-    for code in ("cpc", "engagement", "daily_city"):
+    for code in ("cpc", "engagement"):
         with pytest.raises(camp.AdError) as e:
             camp.create_campaign(db, adv, name="x", budget="1.00", start_at=T0, end_at=T0 + timedelta(days=1),
                                  placements=["IN_FEED"], package=code)
         assert e.value.code == "PACKAGE_DISABLED"
-    for code in ("cpm_video", "cpv", "lead", "daily_local"):
+    # Review D2: Daily City is NOT READY (the address verification does not establish a structured city).
+    for code in ("cpm_video", "cpv", "lead", "daily_local", "daily_city"):
         with pytest.raises(camp.AdError) as e:
             camp.update_settings(db, _admin(db), {"enabled_packages": [code]})
         assert e.value.code == "NOT_READY"
@@ -128,6 +144,12 @@ def test_4_packages_are_off_by_default_and_not_ready_ones_can_never_be_switched_
     assert len(catalog) == 12 and {c for c, p in catalog.items() if p["purchasable"]} == {
         "MYHIGH5_CPM_CAMPAIGN", "ADVERTISER_CREDIT"}
     assert catalog["cpv"]["state"] == "NOT_READY" and catalog["cpc"]["state"] == "PACKAGE_DISABLED"
+    assert catalog["daily_city"]["state"] == "NOT_READY"
+
+
+def test_4c_daily_city_threshold_gate_when_ready(world, city_ready):
+    db = world
+    _settings(db)
     with pytest.raises(camp.AdError) as e:                 # no minimum delivery threshold determined yet
         camp.update_settings(db, _admin(db), {"enabled_packages": ["cpc", "daily_city"]})
     assert e.value.code == "THRESHOLD_NOT_SET"
@@ -196,7 +218,7 @@ def test_5_6_8_10_cpc_bills_one_valid_click_per_decision_and_rejects_the_rest(wo
     c, _cr = _live(db, adv, "cpc", budget="1.00")
     v = _viewer()
     d = _serve(db, v)
-    assert d["fill"] and d["creative"]["click_url"] == f"/api/v1/ads/click/{d['decision_id']}"
+    assert d["fill"] and d["creative"]["click_url"].startswith(f"/api/v1/ads/click/{d['decision_id']}?t=")
     db.refresh(c)
     assert c.reserved == D("0.050000")                                                   # one click reserved
     assert _event(db, d, v, "CLICK", at=T0 + timedelta(seconds=3)) == "INVALID_TYPE"      # never a beacon
@@ -318,7 +340,7 @@ def test_video_creative_validation_reads_the_duration_server_side(monkeypatch):
     assert ad_video.cpv_threshold_ms(None) is None
 
 
-def test_12_lead_collection_is_closed_and_only_an_accepted_lead_is_billed_once(world):
+def test_12_lead_collection_is_closed_and_only_an_accepted_lead_is_billed_once(world, monkeypatch):
     db = world
     _settings(db)
     adv = _user(db, "l12@t.com")
@@ -341,6 +363,11 @@ def test_12_lead_collection_is_closed_and_only_an_accepted_lead_is_billed_once(w
         ad_leads._record(db, campaign_id=c.id, name="N", contact="x@example.com", consent=False, consent_version="v1",
                          decision_id=None, now=T0)
     assert e.value.code == "CONSENT_REQUIRED"
+    with pytest.raises(ad_leads.LeadError) as e:                                            # D4: Lead is off
+        ad_leads.accept(db, lead.id, actor_id=adv.id, now=T0 + timedelta(days=1))
+    assert e.value.code == "PACKAGE_DISABLED" and lead.status == "SUBMITTED"
+    _ready(monkeypatch, "lead")                                     # TEST ONLY: exercise the charge mechanics
+    _settings(db, "lead")
     ad_leads.accept(db, lead.id, actor_id=adv.id, now=T0 + timedelta(days=1))
     db.refresh(c)
     assert (lead.status, c.spent, lead.charged_amount) == ("ACCEPTED", D("0.250000"), D("0.250000"))
@@ -440,10 +467,12 @@ def _resident(db, city, *, verified=True):
     u = _user(db, f"r-{uuid.uuid4().hex[:6]}@t.com")
     u.city_id, u.address_verified = city.id, verified
     db.flush()
+    if verified:
+        ad_geo.attest_on_address_approval(db, u, None)
     return u
 
 
-def test_17_18_19_booking_rules_daily_city_only_non_exclusive(world):
+def test_17_18_19_booking_rules_daily_city_only_non_exclusive(world, city_ready):
     db = world
     _settings(db, "daily_city")
     city = _city(db)
@@ -475,7 +504,7 @@ def test_17_18_19_booking_rules_daily_city_only_non_exclusive(world):
     assert e.value.code == "BOOKING_FIXED"
 
 
-def test_20_21_22_city_delivery_needs_verified_location_and_settles_once(world):
+def test_20_21_22_city_delivery_needs_verified_location_and_settles_once(world, city_ready):
     db = world
     _settings(db, "daily_city")
     city, elsewhere = _city(db), _city(db, "Mombasa")
@@ -525,7 +554,7 @@ def test_20_21_22_city_delivery_needs_verified_location_and_settles_once(world):
     _ledger_balanced(db)
 
 
-def test_booking_needs_measured_verified_inventory_in_the_city(world):
+def test_booking_needs_measured_verified_inventory_in_the_city(world, city_ready):
     """Owner decision 1: no booking without reliable geographic attribution AND measurable eligible inventory."""
     db = world
     _settings(db, "daily_city", threshold=2)
@@ -565,7 +594,7 @@ def test_every_decision_records_only_a_verified_city(world):
     assert seen == {"verified": city.id, "unverified": None, "anonymous": None}
 
 
-def test_booked_day_below_the_delivery_threshold_is_returned_not_charged(world):
+def test_booked_day_below_the_delivery_threshold_is_returned_not_charged(world, city_ready):
     db = world
     _settings(db, "daily_city", threshold=2)
     city = _city(db)
@@ -595,7 +624,7 @@ def test_booked_day_below_the_delivery_threshold_is_returned_not_charged(world):
     assert c.spent == D("0")
 
 
-def test_cancelled_booking_campaign_returns_everything_and_owes_no_day(world):
+def test_cancelled_booking_campaign_returns_everything_and_owes_no_day(world, city_ready):
     db = world
     _settings(db, "daily_city")
     city = _city(db)
@@ -682,7 +711,8 @@ def test_10b_click_redirect_goes_only_to_the_reviewed_destination(world, client)
     assert client.get("/api/v1/ads/click/not-a-uuid", follow_redirects=False).status_code == 404
     hop = client.get(f"/api/v1/ads/click/{d['decision_id']}?next=https://evil.example/", follow_redirects=False)
     assert hop.status_code == 302 and hop.headers["location"] == "https://example.com/x"    # never the query string
-    assert db.query(AdvImpressionEvent).filter_by(decision_id=d["decision_id"], event_type="CLICK").count() == 1
+    # D1: without the decision's signed click token the redirect still works but nothing is counted.
+    assert db.query(AdvImpressionEvent).filter_by(decision_id=d["decision_id"], event_type="CLICK").count() == 0
     cr.destination_url = "javascript:alert(1)"                                             # tampered row
     db.commit()
     assert client.get(f"/api/v1/ads/click/{d['decision_id']}", follow_redirects=False).status_code == 404
@@ -700,3 +730,110 @@ def test_click_beacons_cannot_be_posted_by_a_client(world, client):
     db.commit()
     body = {"decision_id": str(uuid.uuid4()), "event_id": str(uuid.uuid4()), "event_type": "CLICK"}
     assert client.post("/api/v1/ads/events", json=body).status_code == 422                 # not an accepted type
+
+
+# ---------------------------------------------------------------- review D1: signed click authorisation
+
+def _token(d):
+    return d["creative"]["click_url"].split("?t=", 1)[1]
+
+
+def _click(db, d, at, token=None, ua=UA):
+    return dl.record_click(db, decision_id=d["decision_id"], token=_token(d) if token is None else token,
+                           user_agent=ua, now=at)
+
+
+def test_d1_signed_in_member_click_is_attributed_by_the_decision_token_once(world):
+    db = world
+    _settings(db, "cpc")
+    adv = _user(db, "d1a@t.com")
+    member = _user(db, "d1m@t.com")
+    _fund(db, adv, "10.00")
+    c, _ = _live(db, adv, "cpc", budget="1.00")
+    v = dl.viewer_hash_for_user(member.id)                       # the decision knew the signed-in member
+    d = _serve(db, v, user_id=member.id)
+    _event(db, d, v, "SERVED", at=T0 + timedelta(milliseconds=100))
+    # The click request is anonymous (no bearer header on a navigation): attribution comes from the token.
+    assert _click(db, d, T0 + timedelta(seconds=3)) == "RECORDED"
+    assert _click(db, d, T0 + timedelta(seconds=4)) == "DUPLICATE"                          # replay: once
+    ev = db.query(AdvImpressionEvent).filter_by(decision_id=d["decision_id"], event_type="CLICK").one()
+    assert ev.viewer_hash == v
+    dl.validate_pending(db, now=T0 + timedelta(seconds=6))
+    db.refresh(c)
+    assert (ev.validation_status, ev.charged_amount, c.spent) == ("VALID", D("0.050000"), D("0.050000"))
+    anon = _viewer()                                                                         # anonymous viewer
+    da = _serve(db, anon)
+    _event(db, da, anon, "SERVED", at=T0 + timedelta(milliseconds=100))
+    assert _click(db, da, T0 + timedelta(seconds=3)) == "RECORDED"
+    dl.validate_pending(db, now=T0 + timedelta(seconds=6))
+    db.refresh(c)
+    assert c.spent == D("0.100000")
+
+
+def test_d1_tampered_substituted_missing_and_expired_tokens_count_nothing(world):
+    db = world
+    _settings(db, "cpc")
+    adv, other = _user(db, "d1b@t.com"), _user(db, "d1o@t.com")
+    _fund(db, adv, "10.00")
+    _fund(db, other, "10.00")
+    c1, _ = _live(db, adv, "cpc", budget="1.00")
+    c2, cr2 = _live(db, other, "cpc", budget="1.00")
+    d1, d2 = _serve(db, _viewer()), _serve(db, _viewer())
+    at = T0 + timedelta(seconds=3)
+    # Campaign substitution: a token minted for d1's campaign is refused once d1 is bound to another campaign.
+    row = db.get(AdvServeDecision, d1["decision_id"])
+    original = (row.campaign_id, row.creative_id)
+    row.campaign_id, row.creative_id = (c2.id, cr2.id) if row.campaign_id != c2.id else (c1.id, row.creative_id)
+    db.flush()
+    assert _click(db, d1, at) == "INVALID_TOKEN"
+    row.campaign_id, row.creative_id = original
+    db.flush()
+    exp, sig = _token(d1).split(".")
+    tampered = f"{exp}.{('A' if sig[0] != 'A' else 'B')}{sig[1:]}"
+    longer = f"{int(exp) + 3600}.{sig}"                                                      # extend the expiry
+    for token, why in ((tampered, "INVALID_TOKEN"), (longer, "INVALID_TOKEN"), ("", "INVALID_TOKEN"),
+                       ("garbage", "INVALID_TOKEN"), (_token(d2), "INVALID_TOKEN")):         # d2's token on d1
+        assert _click(db, d1, at, token=token) == why
+    decision = db.get(AdvServeDecision, d1["decision_id"])
+    assert _click(db, d1, decision.expires_at + timedelta(minutes=5)) == "EXPIRED"
+    assert db.query(AdvImpressionEvent).filter_by(event_type="CLICK").count() == 0
+    assert _click(db, {"decision_id": str(uuid.uuid4()), "creative": d1["creative"]}, at) == "UNKNOWN_DECISION"
+
+
+def test_d1_self_clicks_and_bots_are_recorded_but_never_billed(world):
+    db = world
+    _settings(db, "cpc")
+    adv = _user(db, "d1s@t.com")
+    _fund(db, adv, "10.00")
+    c, _ = _live(db, adv, "cpc", budget="1.00")
+    own = dl.viewer_hash_for_user(adv.id)
+    ds = _serve(db, own, user_id=adv.id)
+    _event(db, ds, own, "SERVED", at=T0 + timedelta(milliseconds=100))
+    assert _click(db, ds, T0 + timedelta(seconds=3)) == "RECORDED"
+    bot = _viewer()
+    db_ = _serve(db, bot)
+    _event(db, db_, bot, "SERVED", at=T0 + timedelta(milliseconds=100))
+    assert _click(db, db_, T0 + timedelta(seconds=3), ua="python-requests/2.31") == "RECORDED"
+    dl.validate_pending(db, now=T0 + timedelta(seconds=6))
+    reasons = {e.decision_id: e.invalid_reason for e in db.query(AdvImpressionEvent).filter_by(event_type="CLICK")}
+    assert reasons == {ds["decision_id"]: "SELF_VIEW", db_["decision_id"]: "BOT"}
+    db.refresh(c)
+    assert (c.spent, c.reserved) == (D("0"), D("0"))
+
+
+def test_d1_click_endpoint_counts_once_and_keeps_the_token_out_of_the_destination(world, client):
+    db = world
+    _settings(db, "cpc")
+    adv, member = _user(db, "d1e@t.com"), _user(db, "d1f@t.com")
+    _fund(db, adv, "10.00")
+    _live(db, adv, "cpc", budget="1.00")
+    v = dl.viewer_hash_for_user(member.id)
+    d = dl.decide(db, page_type="FEED", slot_kind="IN_FEED", slot_key="k", contestant_id=None, viewer=v,
+                  now=datetime.utcnow(), allowed_sources={"myhigh5_ads"}, viewer_user_id=member.id)
+    db.commit()
+    for _ in range(2):                                                    # the second request is a replay
+        r = client.get(d["creative"]["click_url"], follow_redirects=False)
+        assert r.status_code == 302 and r.headers["location"] == "https://example.com/x"
+        assert r.headers["referrer-policy"] == "no-referrer" and "t=" not in r.headers["location"]
+    ev = db.query(AdvImpressionEvent).filter_by(decision_id=d["decision_id"], event_type="CLICK").one()
+    assert ev.viewer_hash == v

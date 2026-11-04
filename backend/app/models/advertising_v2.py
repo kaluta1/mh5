@@ -397,7 +397,8 @@ class AdvBooking(Base):
     __table_args__ = (
         UniqueConstraint("campaign_id", "scope", "area_id", "day", name="uq_adv_booking"),
         CheckConstraint("scope IN ('CITY', 'LOCAL')", name="ck_adv_booking_scope"),
-        CheckConstraint("status IN ('BOOKED', 'EARNED', 'RETURNED', 'CANCELLED')", name="ck_adv_booking_status"),
+        CheckConstraint("status IN ('BOOKED', 'EARNED', 'RETURNED', 'CANCELLED', 'REVERSED')",
+                        name="ck_adv_booking_status"),
         CheckConstraint("price > 0", name="ck_adv_booking_price"),
         CheckConstraint("min_impressions >= 1", name="ck_adv_booking_min_impressions"),
         Index("ix_adv_booking_settle", "status", "day"),
@@ -414,6 +415,10 @@ class AdvBooking(Base):
     charged_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
     evidence: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # REVERSED: an EARNED day whose valid impressions fell below min_impressions after invalid activity was
+    # reversed; the fee went back to the advertiser's credit once (movement booking:<id>:reversal).
+    reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reversal_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
 
 class AdvLead(Base):
@@ -424,7 +429,8 @@ class AdvLead(Base):
     __tablename__ = "adv_leads"
     __table_args__ = (
         UniqueConstraint("campaign_id", "contact_hash", name="uq_adv_lead_contact"),
-        CheckConstraint("status IN ('SUBMITTED', 'ACCEPTED', 'REJECTED', 'EXPIRED')", name="ck_adv_lead_status"),
+        CheckConstraint("status IN ('SUBMITTED', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'REVERSED')",
+                        name="ck_adv_lead_status"),
         Index("ix_adv_lead_campaign", "campaign_id", "status"),
     )
     campaign_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaigns.id"), nullable=False)
@@ -439,3 +445,22 @@ class AdvLead(Base):
     rejection_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     charged_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
     charge_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reversal_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    reversed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class AdvGeoAttestation(Base):
+    """The city a member had on the profile when a proof of address was APPROVED (KYC). The address
+    verification checks a free-text address, not a structured city, so this records the declared city at
+    verification time - never more. It is revoked when the profile city changes or the address is no longer
+    verified; a changed city needs a new verification. No attestation exists for verifications made before
+    this table (nothing is backfilled)."""
+    __tablename__ = "adv_geo_attestations"
+    __table_args__ = (Index("ix_adv_geo_attestation_user", "user_id", "revoked_at"),)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    city_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kyc_verification_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    attested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)

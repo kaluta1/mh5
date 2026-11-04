@@ -302,7 +302,7 @@ def test_campaign_report_analytics_and_reconciliation_balance(world):
     report = camp.campaign_report(db, c)
     assert report["valid_impressions"] == 3 and report["estimated_impressions"] == 20000
     assert report["by_placement"] == [{"key": "IN_FEED", "valid_impressions": 3, "spend": "0.00"}]
-    assert report["clicks"] is None and report["funding"] == "FUNDED"
+    assert report["clicks"] == 0 and report["funding"] == "FUNDED"          # clicks are recorded (review D7)
     rec = camp.reconciliation(db)
     assert rec["ok"], rec
     dl.recognize_closed_days(db, now=T0 + timedelta(days=2))

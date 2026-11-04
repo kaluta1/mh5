@@ -74,7 +74,9 @@ PACKAGES = {p.code: p for p in (
             booking="LOCAL",
             not_ready="No verified local-area boundaries exist inside cities (only countries and cities)"),
     Package("daily_city", "DAILY_CITY", "Daily City", Decimal("5.00"), "one booked city day", None,
-            booking="CITY"),
+            booking="CITY",
+            not_ready="Address verification does not establish a structured city: only the profile city declared "
+                      "at verification is attested (ad_geo), and verified-city inventory has no history yet"),
 )}
 
 BY_MODEL = {p.pricing_model: p for p in PACKAGES.values()}
@@ -169,6 +171,19 @@ def availability(cfg, package: Package) -> tuple[bool, Optional[str]]:
         return False, "CAMPAIGNS_DISABLED"
     if not getattr(cfg, "funding_enabled", False):
         return False, "FUNDING_DISABLED"
+    return True, None
+
+
+def deliverable(cfg, package: Package) -> tuple[bool, Optional[str]]:
+    """May this package generate NEW billable activity now (approval, serving, event qualification, lead
+    acceptance)? The global campaigns_enabled switch is checked by each caller and stays authoritative.
+    Standard CPM is always switched on (it follows the existing global switches only)."""
+    if package.not_ready:
+        return False, "NOT_READY"
+    if package.code not in enabled_codes(cfg):
+        return False, "PACKAGE_DISABLED"
+    if threshold_missing(cfg, package):
+        return False, "THRESHOLD_NOT_SET"
     return True, None
 
 

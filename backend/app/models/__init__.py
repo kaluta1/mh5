@@ -106,7 +106,8 @@ from .seller_verification import (  # noqa: F401
 )
 from .advertising_v2 import (  # noqa: F401
     AdvAdsenseBucket, AdvAdsenseImport, AdvAdsenseMonth, AdvAllocation, AdvAnnualAdsPayment, AdvCampaign,
-    AdvBooking, AdvCampaignDay, AdvCreative, AdvCreditMovement, AdvEntryOrigin, AdvImpressionEvent, AdvLead,
+    AdvBooking, AdvCampaignDay, AdvCreative, AdvCreditMovement, AdvEntryOrigin, AdvGeoAttestation,
+    AdvImpressionEvent, AdvLead,
     AdvServeDecision, AdvSettings,
 )
 from .missed_earning import MissedEarning  # noqa: F401

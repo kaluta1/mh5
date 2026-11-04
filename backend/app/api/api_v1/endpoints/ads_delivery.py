@@ -96,12 +96,15 @@ def events(body: EventRequest, request: Request, response: Response, db: Session
 
 
 @public_router.get("/click/{decision_id}")
-def click(decision_id: str, request: Request, db: Session = Depends(deps.get_db),
-          current_user: Optional[User] = Depends(deps.get_current_active_user_optional)):
+def click(decision_id: str, request: Request, t: Optional[str] = None, db: Session = Depends(deps.get_db)):
     """Count a click on a MyHigh5 ad, then send the browser to the creative's REVIEWED destination. The
     target is never taken from the request (no open redirect) and is validated again here. An unknown
     decision, or one that is not a MyHigh5 ad, answers 404 and redirects nowhere. Billing happens later,
-    in validation (one click per decision, not a bot, not the advertiser, not within 1 s of serving)."""
+    in validation (one click per decision, not a bot, not the advertiser, not within 1 s of serving).
+    Attribution comes from the signed click token `t` minted for this decision (the member identified when
+    the ad was served); a missing, tampered, replayed or expired token still redirects but counts nothing.
+    The token is never forwarded to the destination, and Referrer-Policy no-referrer keeps it out of the
+    destination's referrer."""
     import uuid as _uuid
 
     from fastapi.responses import RedirectResponse
@@ -123,13 +126,14 @@ def click(decision_id: str, request: Request, db: Session = Depends(deps.get_db)
     except AdvertisingIntegrityError:
         raise HTTPException(status_code=404, detail="Not found") from None
     if not _is_rate_limited(f"ad-click:{client_ip(request)}", 60, 60):
-        ad_delivery.record_event(db, decision_id=decision_id, event_id=str(_uuid.uuid4()), event_type="CLICK",
-                                 visible_ms=None, visible_ratio=None, page_visible=None,
-                                 user_agent=request.headers.get("user-agent"), viewer=_viewer(request, current_user),
-                                 action="CTA_CLICK", allow_click=True)
-        db.commit()
+        outcome = ad_delivery.record_click(db, decision_id=decision_id, token=t,
+                                           user_agent=request.headers.get("user-agent"))
+        if outcome == "RECORDED":
+            db.commit()
+        else:
+            db.rollback()
     return RedirectResponse(target, status_code=302, headers={"Cache-Control": "private, no-store",
-                                                              "Referrer-Policy": "strict-origin-when-cross-origin"})
+                                                              "Referrer-Policy": "no-referrer"})
 
 
 @public_router.get("/config")
@@ -741,6 +745,28 @@ def admin_adsense_buckets(period: str, db: Session = Depends(deps.get_db), admin
                          "estimated": str(b.estimated_earnings),
                          "finalized": str(b.finalized_earnings) if b.finalized_earnings is not None else None}
                         for b in rows]}
+
+
+class LeadReverseBody(BaseModel):
+    reason: str = Field(min_length=3, max_length=200)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.post("/leads/{lead_id}/reverse")
+def admin_reverse_lead(lead_id: int, body: LeadReverseBody, db: Session = Depends(deps.get_db),
+                       admin: User = Depends(require_ad_admin)):
+    """Finance administrator: reverse an accepted, charged lead (credit back once, audited). Lead collection
+    itself stays closed; this exists so that a charge can never be irreversible."""
+    from app.services import ad_leads
+
+    _reauth(admin, body.current_password)
+    try:
+        lead = ad_leads.reverse(db, lead_id, actor_id=admin.id, reason=body.reason)
+    except ad_leads.LeadError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": exc.message}) from None
+    db.commit()
+    return {"id": lead.id, "status": lead.status, "reversed_amount": str(lead.charged_amount)}
 
 
 @admin_router.post("/invalid-activity")

@@ -191,18 +191,11 @@ class _NoReservation(Exception):
 
 
 def verified_city(db: Session, user_id: Optional[int]) -> Optional[int]:
-    """The viewer's city when it is verified: a signed-in member whose address was verified (KYC proof of
-    address) and whose profile carries a city of the geography table. Never a request header (no geo-IP
-    proxy sits in front of MyHigh5: cf-ipcountry / x-country are client-controlled). None otherwise."""
-    if not user_id:
-        return None
-    from app.models.user import User
+    """The viewer's attested city (ad_geo): signed-in, address-verified, with a current attestation for the
+    unchanged profile city. Never a request header (cf-ipcountry / x-country are client-controlled)."""
+    from app.services.ad_geo import verified_city as _attested
 
-    row = (db.query(User.city_id, User.address_verified, User.is_active)
-           .filter(User.id == int(user_id)).first())
-    if row is None or not row.address_verified or row.is_active is False or not row.city_id:
-        return None
-    return int(row.city_id)
+    return _attested(db, user_id)
 
 
 def _campaign_rate(campaign: AdvCampaign, package) -> Optional[Decimal]:
@@ -257,12 +250,12 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
                       .order_by((AdvCampaign.spent / AdvCampaign.budget_total).asc(), AdvCampaign.id.asc())
                       .limit(50).all())
         today = now.date()
-        for campaign in candidates:
+        for campaign in _fair_order(db, candidates, city_id, today):
             if not _targets(campaign, page_type=page_type, slot_kind=slot_kind, country=country):
                 continue
             package = pk.of_model(campaign.pricing_model)
-            if package.not_ready:
-                continue                          # cannot be delivered or measured: never served
+            if not pk.deliverable(cfg, package)[0]:
+                continue                          # not ready, or switched off: never served
             if package.booking:
                 if not _booked_today(db, campaign, package, city_id, today):
                     continue
@@ -302,8 +295,10 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
             return {"fill": True, "decision_id": decision_id, "source": "MYHIGH5", "sponsored_label": "Sponsored",
                     "creative": {"headline": creative.headline, "body": creative.body, "image_url": creative.image_url,
                                  "destination_url": creative.destination_url,
-                                 # Clicks go through MyHigh5 (counted, then redirected to the reviewed URL).
-                                 "click_url": f"/api/v1/ads/click/{decision_id}"}}
+                                 # Clicks go through MyHigh5 (counted once, then redirected to the reviewed
+                                 # URL), authorised by a signed token bound to this decision (D1).
+                                 "click_url": f"/api/v1/ads/click/{decision_id}?t="
+                                              f"{click_token(decision_id, campaign.id, creative.id, now + ttl)}"}}
     slot = adsense_slot_for(slot_kind) if (cfg.adsense_fallback_enabled and "adsense" in allowed_sources) else None
     if slot:
         db.add(AdvServeDecision(id=decision_id, slot_kind=slot_kind, page_type=page_type, slot_key=slot_key[:80],
@@ -482,7 +477,9 @@ def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] =
         billable = decision.source == "MYHIGH5" and event.event_type == package.billable_event \
             and decision.state != "UNPAID"
         reason = None
-        if billable and decision.state in ("CHARGED", "RELEASED"):
+        if billable and (not cfg.campaigns_enabled or not pk.deliverable(cfg, package)[0]):
+            reason = "PACKAGE_DISABLED"           # switched off: no new billable activity, reservation released
+        elif billable and decision.state in ("CHARGED", "RELEASED"):
             reason = "EXPIRED" if decision.state == "RELEASED" else "DUPLICATE"
         elif event.received_at > decision.expires_at + LATE_EVENT_GRACE:
             reason = "EXPIRED"
@@ -638,8 +635,13 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
                                                   AdvImpressionEvent.reversed_at.is_(None))
               .with_for_update().all())
     per_campaign_day: dict = {}
+    booking_keys: set = set()
     for e in events:
         e.reversed_at, e.reversal_reason = now, reason.strip()[:40]
+        if e.event_type == pk.VIEWABLE and e.package == "daily_city":
+            d = db.query(AdvServeDecision).filter(AdvServeDecision.id == e.decision_id).first()
+            if d is not None and d.campaign_id and d.viewer_city_id and d.reserved_day:
+                booking_keys.add((int(d.campaign_id), int(d.viewer_city_id), d.reserved_day))
         if e.campaign_id and Decimal(str(e.charged_amount)) > 0:
             per_campaign_day.setdefault((e.campaign_id, e.earning_day), Decimal(0))
             per_campaign_day[(e.campaign_id, e.earning_day)] += Decimal(str(e.charged_amount))
@@ -665,12 +667,180 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
                                    description=f"Advertiser credited back - User #{campaign.advertiser_user_id}")],
                        description=f"Invalid ad activity credited back - campaign {campaign_id} - {day.isoformat()}")
         credited += amount
+    db.flush()                                    # the reversed events must be visible to the recount
+    bookings_reversed = reassess_bookings(db, booking_keys, reason=reason, actor_id=actor_id, now=now) \
+        if booking_keys else 0
     db.add(AuditTrail(table_name="adv_impression_events", record_id=0, action="REVERSE_INVALID",
                       old_values=None, new_values={"events": [e.id for e in events], "reason": reason[:200],
-                                                   "credited": str(credited)}, user_id=actor_id))
+                                                   "credited": str(credited),
+                                                   "bookings_reversed": bookings_reversed}, user_id=actor_id))
     db.flush()
-    return {"reversed": len(events), "credited": str(money(credited)),
+    return {"reversed": len(events), "credited": str(money(credited)), "bookings_reversed": bookings_reversed,
             "periods": sorted({e.earning_day.strftime("%Y-%m") for e in events if e.earning_day})}
+
+
+# ---------------------------------------------------------------- click authorisation (review defect D1)
+#
+# Members sign in with a bearer token sent in a header, which a browser navigation cannot carry, so a click
+# must not be attributed by who the click request appears to be. The decision issues a short-lived signed
+# click token bound to (decision, campaign, creative, expiry). The click redirect verifies it, records the
+# CLICK against the DECISION's viewer (the member identified when the ad was served, never a browser-supplied
+# id) and the database's unique (decision, CLICK) makes it single-use: replays and concurrent clicks record
+# nothing more. The token carries no session or credential and is never forwarded to the destination.
+
+def _click_sig(decision_id: str, campaign_id, creative_id, exp: int) -> str:
+    import base64
+
+    msg = f"ad-click:v1:{decision_id}:{int(campaign_id or 0)}:{int(creative_id or 0)}:{int(exp)}".encode()
+    return base64.urlsafe_b64encode(hmac.new(_secret(), msg, hashlib.sha256).digest()).decode().rstrip("=")
+
+
+def click_token(decision_id: str, campaign_id, creative_id, expires_at: datetime) -> str:
+    exp = int((expires_at - datetime(1970, 1, 1)).total_seconds())
+    return f"{exp}.{_click_sig(decision_id, campaign_id, creative_id, exp)}"
+
+
+def check_click_token(decision: AdvServeDecision, token: Optional[str], now: datetime) -> Optional[str]:
+    """None when the token authorises a click on this decision now; otherwise the refusal reason."""
+    try:
+        exp_s, sig = str(token or "").split(".", 1)
+        exp = int(exp_s)
+    except (ValueError, TypeError):
+        return "INVALID_TOKEN"
+    expected = _click_sig(decision.id, decision.campaign_id, decision.creative_id, exp)
+    if not hmac.compare_digest(expected, sig):
+        return "INVALID_TOKEN"                      # tampered, or minted for another decision / campaign
+    if exp != int((decision.expires_at - datetime(1970, 1, 1)).total_seconds()):
+        return "INVALID_TOKEN"
+    if now > decision.expires_at + LATE_EVENT_GRACE:
+        return "EXPIRED"
+    return None
+
+
+def record_click(db: Session, *, decision_id: str, token: Optional[str], user_agent: Optional[str],
+                 now: Optional[datetime] = None) -> str:
+    """Record ONE click for a served MyHigh5 ad, authorised by its click token. Returns RECORDED, DUPLICATE,
+    INVALID_TOKEN, EXPIRED or UNKNOWN_DECISION. Billing happens later, in validation (bot, self-click, 1 s
+    rule, rendered ad, package switched on)."""
+    now = now or datetime.utcnow()
+    try:
+        uuid.UUID(decision_id)
+    except (ValueError, TypeError):
+        return "UNKNOWN_DECISION"
+    decision = db.query(AdvServeDecision).filter(AdvServeDecision.id == decision_id).first()
+    if decision is None or decision.source != "MYHIGH5":
+        return "UNKNOWN_DECISION"
+    problem = check_click_token(decision, token, now)
+    if problem:
+        return problem
+    return record_event(db, decision_id=decision_id, event_id=str(uuid.uuid4()), event_type=pk.CLICK,
+                        visible_ms=None, visible_ratio=None, page_visible=None, user_agent=user_agent,
+                        viewer=decision.viewer_hash, now=now, action="CTA_CLICK", allow_click=True)
+
+
+def _rotation_key(campaign_id: int, today: date, city_id: int) -> int:
+    """Deterministic tie-break that does not favour low campaign ids (changes every day and city)."""
+    return int(hashlib.sha256(f"rotation:{campaign_id}:{today.isoformat()}:{city_id}".encode()).hexdigest()[:12], 16)
+
+
+def _fair_order(db: Session, candidates: list, city_id: Optional[int], today: date) -> list:
+    """Daily City campaigns booked for this viewer's city today come first, least-delivered first relative
+    to their own threshold (decisions served today to verified residents), so non-exclusive bookings share
+    the city fairly; ties are broken by a daily hash, never by campaign id. Other campaigns keep the
+    existing order (lowest spend ratio first)."""
+    from fractions import Fraction
+
+    from app.models.advertising_v2 import AdvBooking
+
+    booking_ids = [c.id for c in candidates if pk.of_model(c.pricing_model).booking]
+    if not city_id or not booking_ids:
+        return candidates
+    served = dict(db.query(AdvServeDecision.campaign_id, func.count(AdvServeDecision.id))
+                  .filter(AdvServeDecision.campaign_id.in_(booking_ids), AdvServeDecision.reserved_day == today,
+                          AdvServeDecision.viewer_city_id == city_id)
+                  .group_by(AdvServeDecision.campaign_id).all())
+    need = dict(db.query(AdvBooking.campaign_id, AdvBooking.min_impressions)
+                .filter(AdvBooking.campaign_id.in_(booking_ids), AdvBooking.scope == "CITY",
+                        AdvBooking.area_id == city_id, AdvBooking.day == today, AdvBooking.status == "BOOKED").all())
+    order = {c.id: i for i, c in enumerate(candidates)}
+
+    def key(c):
+        if c.id in need:
+            return (0, Fraction(int(served.get(c.id, 0)), max(1, int(need[c.id] or 1))),
+                    _rotation_key(c.id, today, city_id), 0)
+        return (1, Fraction(0), 0, order[c.id])
+
+    return sorted(candidates, key=key)
+
+
+def _credit_back(db: Session, campaign: AdvCampaign, day: date, amount: Decimal, *, journal_suffix: str,
+                 movement_key: str, note: str, actor_id: Optional[int], release_budget: bool) -> None:
+    """Undo `amount` already charged to `campaign` on `day` (caller holds the campaign lock, and the
+    reversed item's own row lock guarantees once-only). Ledger: Dr 4020 / Cr 2320 only when the day was
+    already recognized (otherwise recognition simply posts less). Credit: back to the advertiser's free
+    credit when the campaign is settled, or always when release_budget (a booked fee leaves the campaign's
+    budget, as for a zero-delivery day). Idempotency keys come from the reversed item."""
+    from app.services.new_model_ledger import Line, PostingType, post_entry
+
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        return
+    day_row = _day_row(db, campaign.id, day)
+    recognized = day_row.recognized_journal_id is not None
+    if Decimal(str(campaign.spent)) < amount or Decimal(str(day_row.spent)) < amount:
+        raise camp.AdError("REVERSAL_EXCEEDS_CHARGE", "The amount to reverse is larger than what was charged")
+    campaign.spent = Decimal(str(campaign.spent)) - amount
+    day_row.spent = Decimal(str(day_row.spent)) - amount
+    if release_budget and campaign.settled_at is None:
+        campaign.budget_total = Decimal(str(campaign.budget_total)) - amount
+    if campaign.settled_at is not None or release_budget:
+        camp._movement(db, advertiser_id=campaign.advertiser_user_id, kind="RELEASE", amount=money(amount),
+                       key=movement_key, campaign_id=campaign.id, note=note[:300], actor_id=actor_id)
+    if recognized and money(amount) > 0:
+        post_entry(db, source_type=camp.SOURCE_AD_CAMPAIGN, source_id=campaign.id, posting_type=PostingType.REVERSAL,
+                   key_suffix=journal_suffix,
+                   lines=[Line(camp.ORDINARY_REVENUE_ACCOUNT, debit=money(amount),
+                               description="Advertising charge reversed"),
+                          Line(camp.CREDIT_ACCOUNT, credit=money(amount),
+                               description=f"Advertiser credited back - User #{campaign.advertiser_user_id}")],
+                   description=f"Advertising charge reversed - campaign {campaign.id} - {day.isoformat()} - "
+                               f"{journal_suffix}")
+    db.flush()
+
+
+def reassess_bookings(db: Session, keys: set, *, reason: str, actor_id: Optional[int],
+                      now: Optional[datetime] = None) -> int:
+    """After invalid activity was reversed: every EARNED booked day in `keys` ((campaign, city, day)) whose
+    valid, unreversed viewable impressions fell below its booked threshold is REVERSED - the fee returns to
+    the advertiser's credit exactly once (movement booking:<id>:reversal, journal booking-reversal:<id>)."""
+    from app.models.advertising_v2 import AdvBooking
+
+    now = now or datetime.utcnow()
+    reversed_count = 0
+    for campaign_id, city_id, day in sorted(keys):
+        campaign = db.query(AdvCampaign).filter(AdvCampaign.id == campaign_id).with_for_update().one()
+        rows = (db.query(AdvBooking).filter(AdvBooking.campaign_id == campaign_id, AdvBooking.scope == "CITY",
+                                            AdvBooking.area_id == city_id, AdvBooking.day == day,
+                                            AdvBooking.status == "EARNED").with_for_update().all())
+        for booking in rows:
+            valid = (db.query(func.count(AdvImpressionEvent.id))
+                     .join(AdvServeDecision, AdvServeDecision.id == AdvImpressionEvent.decision_id)
+                     .filter(AdvServeDecision.campaign_id == campaign_id, AdvServeDecision.reserved_day == day,
+                             AdvServeDecision.viewer_city_id == city_id, AdvImpressionEvent.event_type == pk.VIEWABLE,
+                             AdvImpressionEvent.validation_status == "VALID", AdvImpressionEvent.reversed_at.is_(None))
+                     .scalar()) or 0
+            if int(valid) >= max(1, int(booking.min_impressions or 1)):
+                booking.valid_impressions = int(valid)
+                continue
+            _credit_back(db, campaign, booking.day, Decimal(str(booking.charged_amount)),
+                         journal_suffix=f"booking-reversal:{booking.id}", movement_key=f"booking:{booking.id}:reversal",
+                         note=f"Booked day {booking.day.isoformat()} fell below its threshold after invalid "
+                              f"activity: fee returned ({reason[:150]})", actor_id=actor_id, release_budget=True)
+            booking.status, booking.valid_impressions = "REVERSED", int(valid)
+            booking.reversed_at, booking.reversal_reason = now, (reason or "")[:200]
+            reversed_count += 1
+    db.flush()
+    return reversed_count
 
 
 def run_cycle(session_factory) -> dict:
