@@ -64,6 +64,10 @@ def update_user_me(
                 return JSONResponse(status_code=status.HTTP_409_CONFLICT,
                                     content={"detail": message, "code": "DOB_CHANGE_PENDING_REVIEW",
                                              "message": message})
+    if "city_id" in data:
+        from app.services.ad_geo import on_profile_city_change
+
+        on_profile_city_change(db, current_user, data["city_id"])  # a changed city needs a new verification
     user = crud_user.update(db, db_obj=current_user, obj_in=data)
     return user
 

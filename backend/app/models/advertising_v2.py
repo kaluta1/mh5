@@ -40,6 +40,12 @@ class AdvSettings(Base):
     reservation_ttl_seconds: Mapped[int] = mapped_column(Integer, default=900, nullable=False)
     frequency_cap_per_day: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     max_viewable_per_viewer_hour: Mapped[int] = mapped_column(Integer, default=120, nullable=False)
+    # Advertising Phase A: package codes switched on besides Standard CPM (ad_packages). NULL/[] = none.
+    enabled_packages: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Daily City: minimum valid viewable impressions from verified residents per booked day. It is both the
+    # inventory a city must have shown (trailing 30-day average) before a booking is accepted and the delivery
+    # a booked day needs to be earned. NULL = not determined yet: Daily City cannot be switched on.
+    daily_city_min_impressions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     updated_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
 
@@ -70,7 +76,8 @@ class AdvCampaign(Base):
     __table_args__ = (
         CheckConstraint("status IN ('DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'PAUSED', 'COMPLETED', 'REJECTED', "
                         "'CHANGES_REQUESTED', 'CANCELLED')", name="ck_adv_campaign_status"),
-        CheckConstraint("pricing_model = 'CPM'", name="ck_adv_campaign_pricing"),
+        CheckConstraint("pricing_model IN ('CPM', 'CPM_VIDEO', 'CPC', 'CPV', 'ENGAGEMENT', 'LEAD', 'DAILY_LOCAL', "
+                        "'DAILY_CITY')", name="ck_adv_campaign_pricing"),
         CheckConstraint("spent >= 0 AND reserved >= 0 AND spent + reserved <= budget_total",
                         name="ck_adv_campaign_budget"),
         Index("ix_adv_campaign_status", "status"),
@@ -81,6 +88,8 @@ class AdvCampaign(Base):
     pricing_model: Mapped[str] = mapped_column(String(10), default="CPM", nullable=False)
     # Price fixed when the campaign is submitted (from adv_settings); later price changes never reprice it.
     cpm_rate_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Phase A: the campaign's own rate for every package other than Standard CPM (>= the package floor).
+    unit_rate_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     budget_total: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
     spent: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
@@ -130,6 +139,12 @@ class AdvCreative(Base):
     image_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     image_width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     image_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Phase A video foundation (no upload path is exposed yet; ad_video validates server-side).
+    creative_format: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)   # NULL/IMAGE | VIDEO
+    video_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    video_mime: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    video_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    video_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class AdvEntryOrigin(Base):
@@ -175,6 +190,11 @@ class AdvServeDecision(Base):
     state: Mapped[str] = mapped_column(String(10), nullable=False)
     viewer_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Phase A: the package served, and the viewer's verified city (signed-in, KYC address verified) when
+    # it is known - the only geographic evidence a daily city booking counts.
+    package: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    viewer_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    viewer_city_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class AdvImpressionEvent(Base):
@@ -184,7 +204,8 @@ class AdvImpressionEvent(Base):
     __table_args__ = (
         UniqueConstraint("event_id", name="uq_adv_event_id"),
         UniqueConstraint("decision_id", "event_type", name="uq_adv_event_decision_type"),
-        CheckConstraint("event_type IN ('SERVED', 'VIEWABLE')", name="ck_adv_event_type"),
+        CheckConstraint("event_type IN ('SERVED', 'VIEWABLE', 'VIDEO_2S', 'VIDEO_VIEW', 'CLICK')",
+                        name="ck_adv_event_type"),
         CheckConstraint("validation_status IN ('PENDING', 'VALID', 'INVALID')", name="ck_adv_event_validation"),
         Index("ix_adv_event_pending", "validation_status", "received_at"),
         Index("ix_adv_event_day", "earning_day", "source"),
@@ -196,6 +217,9 @@ class AdvImpressionEvent(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     visible_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     visible_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 3), nullable=True)
+    played_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)        # video events (client-reported)
+    action: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)        # CLICK: CTA_CLICK
+    package: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)       # snapshot at validation
     page_visible: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     ua_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     viewer_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -363,3 +387,80 @@ class AdvAnnualAdsEvent(Base):
     outcome: Mapped[str] = mapped_column(String(40), nullable=False)
     payment_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("adv_annualads_payments.id"), nullable=True)
     detail: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+
+
+class AdvBooking(Base):
+    """One booked day of a Daily City / Daily Local campaign (Phase A). Settled once after the UTC day:
+    EARNED (at least min_impressions valid viewable impressions in the booked area: the fixed fee is charged)
+    or RETURNED (fewer: the fee goes back to the advertiser's credit, once). Non-exclusive."""
+    __tablename__ = "adv_bookings"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "scope", "area_id", "day", name="uq_adv_booking"),
+        CheckConstraint("scope IN ('CITY', 'LOCAL')", name="ck_adv_booking_scope"),
+        CheckConstraint("status IN ('BOOKED', 'EARNED', 'RETURNED', 'CANCELLED', 'REVERSED')",
+                        name="ck_adv_booking_status"),
+        CheckConstraint("price > 0", name="ck_adv_booking_price"),
+        CheckConstraint("min_impressions >= 1", name="ck_adv_booking_min_impressions"),
+        Index("ix_adv_booking_settle", "status", "day"),
+    )
+    campaign_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaigns.id"), nullable=False)
+    scope: Mapped[str] = mapped_column(String(10), nullable=False)
+    area_id: Mapped[int] = mapped_column(Integer, nullable=False)            # cities.id (CITY)
+    day: Mapped[date] = mapped_column(Date, nullable=False)                  # UTC
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), default="BOOKED", nullable=False)
+    min_impressions: Mapped[int] = mapped_column(Integer, nullable=False)      # threshold in force at booking
+    valid_impressions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    entry_impressions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)   # CONTEST_ENTRY (Phase B input)
+    charged_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
+    evidence: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # REVERSED: an EARNED day whose valid impressions fell below min_impressions after invalid activity was
+    # reversed; the fee went back to the advertiser's credit once (movement booking:<id>:reversal).
+    reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reversal_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+
+class AdvLead(Base):
+    """Phase A lead foundation. Stores NO personal data: only a keyed hash of the normalised contact for
+    duplicate detection, the consent version and the lifecycle. Collection stays closed (lead NOT READY)
+    until a retention period and privacy notice are approved. Only ACCEPTED is billed, once; a lead the
+    advertiser does not answer within 7 days EXPIRES and is never billed (no automatic acceptance)."""
+    __tablename__ = "adv_leads"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "contact_hash", name="uq_adv_lead_contact"),
+        CheckConstraint("status IN ('SUBMITTED', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'REVERSED')",
+                        name="ck_adv_lead_status"),
+        Index("ix_adv_lead_campaign", "campaign_id", "status"),
+    )
+    campaign_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaigns.id"), nullable=False)
+    decision_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("adv_serve_decisions.id"), nullable=True)
+    contact_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    consent_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    consented_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(10), default="SUBMITTED", nullable=False)
+    decision_deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    decided_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    charged_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
+    charge_day: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reversal_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    reversed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class AdvGeoAttestation(Base):
+    """The city a member had on the profile when a proof of address was APPROVED (KYC). The address
+    verification checks a free-text address, not a structured city, so this records the declared city at
+    verification time - never more. It is revoked when the profile city changes or the address is no longer
+    verified; a changed city needs a new verification. No attestation exists for verifications made before
+    this table (nothing is backfilled)."""
+    __tablename__ = "adv_geo_attestations"
+    __table_args__ = (Index("ix_adv_geo_attestation_user", "user_id", "revoked_at"),)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    city_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kyc_verification_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    attested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)

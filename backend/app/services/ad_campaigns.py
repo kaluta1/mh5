@@ -15,7 +15,7 @@ campaign can be submitted or served. A campaign keeps the rate fixed at submissi
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from typing import Iterable, Optional
 
@@ -44,7 +44,10 @@ SETTINGS_FIELDS = {
     "campaigns_enabled": "bool", "funding_enabled": "bool", "adsense_fallback_enabled": "bool",
     "adsense_sharing_enabled": "bool", "contest_sharing_enabled": "bool",
     "reservation_ttl_seconds": "int", "frequency_cap_per_day": "int", "max_viewable_per_viewer_hour": "int",
+    "enabled_packages": "packages", "daily_city_min_impressions": "threshold",
 }
+INVENTORY_WINDOW_DAYS = 30
+MAX_BOOKED_DAYS = 366
 PERMISSION_MANAGE = "manage_advertising"
 # Owner-approved advertising policy (Prompt 4, 2026-11-03), written into adv_settings by migration
 # e5a7c9e1f3b4 where unset. adv_settings stays the authority; these are the reference values only.
@@ -119,12 +122,32 @@ def update_settings(db: Session, actor, changes: dict) -> AdvSettings:
                 parsed = parsed.quantize(Decimal("0.0001") if kind == "money4" else Decimal("0.01"))
         elif kind == "bool":
             parsed = bool(value)
+        elif kind == "packages":
+            from app.services import ad_packages as pk
+
+            try:
+                parsed = pk.check_enable(value if isinstance(value, (list, tuple)) else [])
+            except pk.PackageError as exc:
+                raise AdError(exc.code, exc.message, exc.status) from None
+        elif kind == "threshold":
+            parsed = None if value in (None, "") else int(value)
+            if parsed is not None and (parsed < 1 or parsed > 1_000_000):
+                raise AdError("INVALID_VALUE", f"{key} is out of range", 400)
         else:
             parsed = int(value)
             if parsed < 1 or parsed > 100000:
                 raise AdError("INVALID_VALUE", f"{key} is out of range", 400)
         old[key], new[key] = getattr(row, key), parsed
         setattr(row, key, parsed)
+    if "enabled_packages" in new or "daily_city_min_impressions" in new:
+        # Checked against the settings AFTER this change: a threshold cannot be cleared while Daily City is
+        # on, and Daily City cannot be switched on without one.
+        from app.services import ad_packages as pk
+
+        try:
+            pk.check_enable(row.enabled_packages or [], cfg=row)
+        except pk.PackageError as exc:
+            raise AdError(exc.code, exc.message, exc.status) from None
     if new.get("campaigns_enabled") and pricing_state(row) != "CONFIGURED":
         raise AdError("PRICING_PENDING", "Set an approved CPM price before enabling campaigns")
     if new.get("funding_enabled") and pricing_state(row) != "CONFIGURED":
@@ -143,6 +166,35 @@ def credit_balance(db: Session, advertiser_user_id: int) -> Decimal:
     total = (db.query(func.coalesce(func.sum(AdvCreditMovement.amount), 0))
              .filter(AdvCreditMovement.advertiser_user_id == advertiser_user_id).scalar())
     return money(total or 0)
+
+
+def credit_provenance(db: Session, advertiser_user_id: int) -> dict:
+    """Where an advertiser's credit came from, by funding route (read-only; the Phase C refund contract):
+    deposits (and their reversals) grouped by the deposit's payment_provider - 'soncopay' (cash, refundable
+    after reconciliation through a manual finance process) and 'internal_wallet' (paid with commission
+    earnings: never refundable as external cash, only returned to the earnings it came from). Amounts in
+    campaigns, spent or released are not attributed to a route here; Phase C allocates them first-in
+    first-out per route before any refund."""
+    from app.models.payment import Deposit
+
+    rows = (db.query(Deposit.payment_provider, AdvCreditMovement.movement_type,
+                     func.coalesce(func.sum(AdvCreditMovement.amount), 0))
+            .join(Deposit, Deposit.id == AdvCreditMovement.deposit_id)
+            .filter(AdvCreditMovement.advertiser_user_id == advertiser_user_id,
+                    AdvCreditMovement.movement_type.in_(("DEPOSIT", "DEPOSIT_REVERSAL")))
+            .group_by(Deposit.payment_provider, AdvCreditMovement.movement_type).all())
+    out: dict = {}
+    for provider, kind, total in rows:
+        route = out.setdefault(provider or "unknown", {"deposited": Decimal("0.00"), "reversed": Decimal("0.00")})
+        route["deposited" if kind == "DEPOSIT" else "reversed"] += money(total)
+    for route in out.values():
+        route["net"] = money(route["deposited"] + route["reversed"])
+        route["external_refund_route"] = None
+    if "soncopay" in out:
+        out["soncopay"]["external_refund_route"] = "MANUAL_FINANCE_SONCOPAY"
+    if "internal_wallet" in out:
+        out["internal_wallet"]["external_refund_route"] = "RETURN_TO_EARNINGS_ONLY"
+    return out
 
 
 def _movement(db: Session, *, advertiser_id: int, kind: str, amount: Decimal, key: str, campaign_id=None,
@@ -207,11 +259,19 @@ def _audit(db: Session, actor_id: Optional[int], campaign: AdvCampaign, action: 
 
 
 def _validate_terms(cfg: AdvSettings, *, budget: Decimal, daily_cap: Optional[Decimal], start_at, end_at,
-                    placements: Iterable[str], targeting: Optional[dict]) -> None:
+                    placements: Iterable[str], targeting: Optional[dict], package=None, unit: Decimal = None) -> None:
+    from app.services import ad_packages as pk
+
+    package = package or pk.PACKAGES[pk.LEGACY_CODE]
     if budget <= 0:
         raise AdError("INVALID_BUDGET", "The campaign budget must be greater than zero", 400)
-    if cfg.min_campaign_budget_usd is not None and budget < Decimal(str(cfg.min_campaign_budget_usd)):
-        raise AdError("BUDGET_BELOW_MINIMUM", f"The minimum campaign budget is {cfg.min_campaign_budget_usd} USD", 400)
+    if package.code == pk.LEGACY_CODE:
+        # Standard CPM keeps its approved $10 minimum prepaid budget.
+        if cfg.min_campaign_budget_usd is not None and budget < Decimal(str(cfg.min_campaign_budget_usd)):
+            raise AdError("BUDGET_BELOW_MINIMUM", f"The minimum campaign budget is {cfg.min_campaign_budget_usd} USD",
+                          400)
+    elif unit is not None and unit > 0 and budget < unit:
+        raise AdError("BUDGET_BELOW_UNIT", f"The budget must cover at least one {package.unit}", 400)
     if daily_cap is not None:
         if daily_cap <= 0 or daily_cap > budget:
             raise AdError("INVALID_DAILY_CAP", "The daily limit must be positive and not above the budget", 400)
@@ -230,20 +290,164 @@ def _validate_terms(cfg: AdvSettings, *, budget: Decimal, daily_cap: Optional[De
         raise AdError("INVALID_TARGETING", "Countries must be two-letter codes", 400)
 
 
-def create_campaign(db: Session, advertiser, *, name: str, budget, daily_cap=None, start_at: datetime,
-                    end_at: datetime, placements: list, targeting: Optional[dict] = None) -> AdvCampaign:
+def _package_terms(cfg: AdvSettings, package_code: Optional[str], unit_rate):
+    """(package, rate, unit price) for a new campaign, validated server-side. A client price is never
+    authoritative: Standard CPM takes the approved CPM price at submission; every other package needs a
+    rate of at least its approved floor."""
+    from app.services import ad_packages as pk
+
+    try:
+        package = pk.get(package_code or pk.LEGACY_CODE)
+        pk.require_creatable(cfg, package)
+        if package.code == pk.LEGACY_CODE:
+            return package, None, unit_price(cfg.cpm_rate_usd) if cfg.cpm_rate_usd else None
+        rate = pk.validate_rate(package, unit_rate if unit_rate not in (None, "") else package.floor)
+        return package, rate, pk.unit_charge(package, rate)
+    except pk.PackageError as exc:
+        raise AdError(exc.code, exc.message, exc.status) from None
+
+
+def city_inventory(db: Session, city_id: int, *, now: Optional[datetime] = None,
+                   days: int = INVENTORY_WINDOW_DAYS) -> dict:
+    """Measured eligible inventory of a city: valid, unreversed viewable impressions (any source) served to
+    signed-in viewers whose city is verified, over the last `days` full UTC days. Read-only evidence for
+    accepting a Daily City booking; anonymous viewers are never counted (no geo-IP)."""
+    from app.models.advertising_v2 import AdvImpressionEvent, AdvServeDecision
+
+    today = (now or datetime.utcnow()).date()
+    since = datetime.combine(today - timedelta(days=days), datetime.min.time())
+    until = datetime.combine(today, datetime.min.time())
+    total = (db.query(func.count(AdvImpressionEvent.id))
+             .join(AdvServeDecision, AdvServeDecision.id == AdvImpressionEvent.decision_id)
+             .filter(AdvServeDecision.viewer_city_id == int(city_id), AdvImpressionEvent.event_type == "VIEWABLE",
+                     AdvImpressionEvent.validation_status == "VALID", AdvImpressionEvent.reversed_at.is_(None),
+                     AdvImpressionEvent.received_at >= since, AdvImpressionEvent.received_at < until)
+             .scalar()) or 0
+    return {"city_id": int(city_id), "window_days": days, "valid_impressions": int(total),
+            "daily_average": (Decimal(int(total)) / Decimal(days)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)}
+
+
+# A booking holds capacity once it is submitted (its budget is in the campaign) until it is settled
+# (RETURNED / CANCELLED / REVERSED release it). Drafts hold nothing.
+CAPACITY_CAMPAIGN_STATUSES = ("PENDING_REVIEW", "CHANGES_REQUESTED", "ACTIVE", "PAUSED", "COMPLETED")
+
+
+def _capacity_for(db: Session, cfg, city_id: int, days: list, *, exclude_campaign_id: Optional[int]) -> dict:
+    """Non-exclusive bookings share the city's MEASURED verified inventory: a day can hold k bookings only
+    when the 30-day verified daily average covers (k) x the delivery threshold. Never inventory that was not
+    measured; never more bookings than it can deliver."""
+    from app.models.advertising_v2 import AdvBooking
+
+    threshold = int(cfg.daily_city_min_impressions)        # set: require_creatable refused otherwise
+    inventory = city_inventory(db, city_id)
+    if inventory["daily_average"] < threshold:
+        raise AdError("INSUFFICIENT_INVENTORY",
+                      f"This city does not have enough measured audience for a booked day yet "
+                      f"({inventory['daily_average']} verified impressions per day; {threshold} needed)", 409)
+    slots = int(inventory["daily_average"] // threshold)
+    q = (db.query(AdvBooking.day, func.count(AdvBooking.id))
+         .join(AdvCampaign, AdvCampaign.id == AdvBooking.campaign_id)
+         .filter(AdvBooking.scope == "CITY", AdvBooking.area_id == int(city_id), AdvBooking.day.in_(list(days)),
+                 AdvBooking.status.in_(("BOOKED", "EARNED")), AdvCampaign.status.in_(CAPACITY_CAMPAIGN_STATUSES)))
+    if exclude_campaign_id is not None:
+        q = q.filter(AdvBooking.campaign_id != int(exclude_campaign_id))
+    taken = {d: int(n) for d, n in q.group_by(AdvBooking.day).all()}
+    full = sorted(d for d in days if taken.get(d, 0) + 1 > slots)
+    if full:
+        raise AdError("CITY_FULLY_BOOKED",
+                      f"The measured audience of this city is already booked on {', '.join(d.isoformat() for d in full)}",
+                      409)
+    return {"slots": slots, "taken": taken}
+
+
+def _check_city_capacity(db: Session, cfg, campaign: AdvCampaign, *, lock: bool) -> None:
+    """Submission: the authoritative capacity check, serialised per city (row lock on the city), so two
+    advertisers submitting at the same time can never both take the last slot."""
+    from app.models.advertising_v2 import AdvBooking
+    from app.models.geography import City
+
+    rows = db.query(AdvBooking).filter(AdvBooking.campaign_id == campaign.id, AdvBooking.status == "BOOKED").all()
+    if not rows:
+        raise AdError("INVALID_BOOKING", "This campaign has no booked day", 400)
+    for city_id in sorted({r.area_id for r in rows}):
+        if lock:
+            db.query(City.id).filter(City.id == city_id).with_for_update().first()
+        _capacity_for(db, cfg, city_id, sorted({r.day for r in rows if r.area_id == city_id}),
+                      exclude_campaign_id=campaign.id)
+
+
+def _require_deliverable(cfg, campaign: AdvCampaign) -> None:
+    from app.services import ad_packages as pk
+
+    ok, why = pk.deliverable(cfg, pk.of_model(campaign.pricing_model))
+    if not ok:
+        raise AdError(why or "PACKAGE_DISABLED", "This advertising package is switched off or not ready", 409)
+
+
+def _booking_days(package, bookings: Optional[dict]) -> tuple:
+    """(city id, sorted distinct UTC days) of a Daily City booking. The city must exist in the geography
+    table; at least one day; no day in the past."""
+    from datetime import date as _date
+
+    from app.models.geography import City
+
+    if package.booking != "CITY":
+        raise AdError("NOT_READY", "Only Daily City can be booked (Daily Local has no verified areas yet)", 409)
+    city_id = (bookings or {}).get("city_id")
+    raw_days = (bookings or {}).get("days") or []
+    if not city_id:
+        raise AdError("INVALID_BOOKING", "Choose the city to book", 400)
+    days = sorted({d if isinstance(d, _date) else _date.fromisoformat(str(d)) for d in raw_days})
+    if not days:
+        raise AdError("INVALID_BOOKING", "Book at least one day", 400)
+    if len(days) > MAX_BOOKED_DAYS:
+        raise AdError("INVALID_BOOKING", f"At most {MAX_BOOKED_DAYS} days can be booked", 400)
+    if days[0] < datetime.utcnow().date():
+        raise AdError("INVALID_BOOKING", "A booked day cannot be in the past (days are UTC)", 400)
+    return int(city_id), days, City
+
+
+def create_campaign(db: Session, advertiser, *, name: str, budget=None, daily_cap=None, start_at: datetime = None,
+                    end_at: datetime = None, placements: list = (), targeting: Optional[dict] = None,
+                    package: Optional[str] = None, unit_rate=None, bookings: Optional[dict] = None) -> AdvCampaign:
+    """A draft campaign of one package. Daily City: the budget IS the booked days x the daily rate and the
+    schedule is the booked days (UTC); nothing is charged or reserved here, and no earning is created."""
+    from app.models.advertising_v2 import AdvBooking
+    from app.services import ad_packages as pk
+
     cfg = get_settings(db)
-    budget_d, cap_d = money(budget), (money(daily_cap) if daily_cap not in (None, "") else None)
+    pkg, rate, unit = _package_terms(cfg, package, unit_rate)
+    days, city_id = [], None
+    if pkg.booking:
+        city_id, days, City = _booking_days(pkg, bookings)
+        if db.query(City.id).filter(City.id == city_id).first() is None:
+            raise AdError("UNKNOWN_CITY", "That city is not in the MyHigh5 geography", 400)
+        _capacity_for(db, cfg, city_id, days, exclude_campaign_id=None)
+        booked_total = money(rate * len(days))
+        if budget not in (None, "") and money(budget) != booked_total:
+            raise AdError("BUDGET_MISMATCH", f"The budget of {len(days)} booked day(s) is {booked_total} USD", 400)
+        budget = booked_total
+        start_at = datetime.combine(days[0], datetime.min.time())
+        end_at = datetime.combine(days[-1], datetime.min.time()) + timedelta(days=1)
+        daily_cap = None
+    budget_d, cap_d = money(budget if budget not in (None, "") else 0), (
+        money(daily_cap) if daily_cap not in (None, "") else None)
     _validate_terms(cfg, budget=budget_d, daily_cap=cap_d, start_at=start_at, end_at=end_at,
-                    placements=placements, targeting=targeting)
+                    placements=placements, targeting=targeting, package=pkg, unit=unit)
     campaign = AdvCampaign(advertiser_user_id=advertiser.id, name=(name or "").strip()[:160] or "Campaign",
                            status="DRAFT", budget_total=budget_d, daily_cap=cap_d, start_at=start_at, end_at=end_at,
-                           placements=list(placements),
+                           placements=list(placements), pricing_model=pkg.pricing_model, unit_rate_usd=rate,
                            targeting={"countries": [c.upper() for c in (targeting or {}).get("countries") or []],
                                       "page_types": list((targeting or {}).get("page_types") or [])})
     db.add(campaign)
     db.flush()
-    _audit(db, advertiser.id, campaign, "CREATE", {"budget": budget_d, "daily_cap": cap_d})
+    for day in days:
+        db.add(AdvBooking(campaign_id=campaign.id, scope=pkg.booking, area_id=city_id, day=day,
+                          price=rate, status="BOOKED", min_impressions=int(cfg.daily_city_min_impressions)))
+    db.flush()
+    _audit(db, advertiser.id, campaign, "CREATE", {"budget": budget_d, "daily_cap": cap_d, "package": pkg.code,
+                                                   "unit_rate_usd": rate, "booked_days": len(days),
+                                                   "city_id": city_id})
     return campaign
 
 
@@ -292,22 +496,38 @@ def submit_campaign(db: Session, advertiser, campaign: AdvCampaign) -> AdvCampai
         raise AdError("NO_CREATIVE", "Add at least one creative before submitting")
     if campaign.status == "CHANGES_REQUESTED":
         # The budget is already in the campaign (allocated at the first submission) at the price fixed then.
+        _require_deliverable(cfg, campaign)
         campaign.status = "PENDING_REVIEW"
         _audit(db, advertiser.id, campaign, "RESUBMIT", {"status": campaign.status})
         db.flush()
         notify(db, campaign, "SUBMITTED")
         return campaign
+    from app.services import ad_packages as pk
+    from app.services.ad_delivery import campaign_unit
+
+    pkg = pk.of_model(campaign.pricing_model)
+    try:
+        pk.require_available(cfg, pkg)
+        if pkg.code != pk.LEGACY_CODE:
+            pk.validate_rate(pkg, campaign.unit_rate_usd)      # the floor, checked again at purchase
+    except pk.PackageError as exc:
+        raise AdError(exc.code, exc.message, exc.status) from None
     _validate_terms(cfg, budget=money(campaign.budget_total), daily_cap=campaign.daily_cap, start_at=campaign.start_at,
-                    end_at=campaign.end_at, placements=campaign.placements or [], targeting=campaign.targeting)
+                    end_at=campaign.end_at, placements=campaign.placements or [], targeting=campaign.targeting,
+                    package=pkg, unit=campaign_unit(campaign))
+    if pkg.booking:
+        _check_city_capacity(db, cfg, campaign, lock=True)
     _lock_advertiser(db, advertiser.id)
     budget = money(campaign.budget_total)
     if credit_balance(db, advertiser.id) < budget:
         raise AdError("INSUFFICIENT_CREDIT", "Your advertiser credit is lower than the campaign budget")
     _movement(db, advertiser_id=advertiser.id, kind="ALLOCATE", amount=-budget, key=f"campaign:{campaign.id}:allocate",
               campaign_id=campaign.id, note="Budget moved into the campaign", actor_id=advertiser.id)
-    campaign.cpm_rate_usd = Decimal(str(cfg.cpm_rate_usd))
+    if pkg.code == pk.LEGACY_CODE:
+        campaign.cpm_rate_usd = Decimal(str(cfg.cpm_rate_usd))
     campaign.status = "PENDING_REVIEW"
-    _audit(db, advertiser.id, campaign, "SUBMIT", {"cpm_rate_usd": campaign.cpm_rate_usd, "budget": budget})
+    _audit(db, advertiser.id, campaign, "SUBMIT", {"cpm_rate_usd": campaign.cpm_rate_usd, "budget": budget,
+                                                   "package": pkg.code, "unit_rate_usd": campaign.unit_rate_usd})
     db.flush()
     notify(db, campaign, "SUBMITTED")
     return campaign
@@ -332,6 +552,7 @@ def review_campaign(db: Session, actor, campaign: AdvCampaign, *, approve: bool,
         if not db.query(AdvCreative.id).filter(AdvCreative.campaign_id == campaign.id,
                                                AdvCreative.review_status == "APPROVED").first():
             raise AdError("NO_APPROVED_CREATIVE", "Approve at least one creative first")
+        _require_deliverable(get_settings(db), campaign)   # a switched-off package is never approved
         campaign.status = "ACTIVE"
     else:
         if not (note or "").strip():
@@ -370,6 +591,11 @@ def update_campaign(db: Session, advertiser, campaign: AdvCampaign, changes: dic
     changes = {k: v for k, v in (changes or {}).items() if v is not None}
     if campaign.status != "DRAFT" and ("budget" in changes or "daily_cap" in changes):
         raise AdError("BUDGET_LOCKED", "The budget is already in the campaign; cancel it to change the budget")
+    from app.services import ad_packages as pk
+
+    pkg = pk.of_model(campaign.pricing_model)
+    if pkg.booking and any(k in changes for k in ("budget", "daily_cap", "start_at", "end_at")):
+        raise AdError("BOOKING_FIXED", "Booked days fix the budget and dates; cancel the draft to book other days")
     budget = money(changes.get("budget", campaign.budget_total))
     cap = changes.get("daily_cap", campaign.daily_cap)
     cap = money(cap) if cap not in (None, "") else None
@@ -380,8 +606,10 @@ def update_campaign(db: Session, advertiser, campaign: AdvCampaign, changes: dic
         targeting["page_types"] = list(changes["page_types"] or [])
     start_at, end_at = changes.get("start_at", campaign.start_at), changes.get("end_at", campaign.end_at)
     placements = list(changes.get("placements", campaign.placements) or [])
+    from app.services.ad_delivery import campaign_unit
+
     _validate_terms(cfg, budget=budget, daily_cap=cap, start_at=start_at, end_at=end_at, placements=placements,
-                    targeting=targeting)
+                    targeting=targeting, package=pkg, unit=campaign_unit(campaign))
     if "name" in changes:
         campaign.name = str(changes["name"]).strip()[:160] or campaign.name
     campaign.budget_total, campaign.daily_cap = budget, cap
@@ -443,10 +671,19 @@ def settle_campaign(db: Session, campaign: AdvCampaign, *, reason: str) -> Optio
     advertiser is never charged a fraction of a cent."""
     from app.models.advertising_v2 import AdvCampaignDay
 
+    from app.models.advertising_v2 import AdvBooking
+
     if campaign.settled_at is not None or Decimal(str(campaign.reserved or 0)) > 0:
         return None
     if campaign.status not in CLOSED_STATUSES:
         return None
+    open_days = db.query(AdvBooking).filter(AdvBooking.campaign_id == campaign.id, AdvBooking.status == "BOOKED")
+    if campaign.status in ("CANCELLED", "REJECTED"):
+        # Never served: no booked day is owed; the whole unspent budget returns below.
+        for booking in open_days.all():
+            booking.status, booking.settled_at = "CANCELLED", datetime.utcnow()
+    elif open_days.first() is not None:
+        return None                          # a booked day still waits for its settlement (settle_bookings)
     if db.query(AdvCampaignDay.id).filter(AdvCampaignDay.campaign_id == campaign.id, AdvCampaignDay.spent > 0,
                                           AdvCampaignDay.recognized_at.is_(None)).first():
         return None                          # a charged day still waits for its recognition
@@ -462,8 +699,8 @@ def settle_campaign(db: Session, campaign: AdvCampaign, *, reason: str) -> Optio
 
 
 def campaign_report(db: Session, campaign: AdvCampaign, *, detail: bool = True) -> dict:
-    """Advertiser / administrator view. Only tracked metrics: clicks are not recorded (members are never
-    paid for clicks and no click event exists), so they are reported as unavailable, never estimated."""
+    """Advertiser / administrator view. Only tracked metrics, never estimates. Clicks are recorded by the
+    MyHigh5 click redirect (CLICK events); the count is of valid, unreversed clicks."""
     from app.models.advertising_v2 import AdvCampaignDay, AdvImpressionEvent, AdvServeDecision
 
     valid = (db.query(func.count(AdvImpressionEvent.id))
@@ -473,6 +710,10 @@ def campaign_report(db: Session, campaign: AdvCampaign, *, detail: bool = True) 
                .join(AdvServeDecision, AdvServeDecision.id == AdvImpressionEvent.decision_id)
                .filter(AdvServeDecision.campaign_id == campaign.id,
                        AdvImpressionEvent.validation_status == "INVALID").scalar())
+    clicks = (db.query(func.count(AdvImpressionEvent.id))
+              .filter(AdvImpressionEvent.campaign_id == campaign.id, AdvImpressionEvent.event_type == "CLICK",
+                      AdvImpressionEvent.validation_status == "VALID", AdvImpressionEvent.reversed_at.is_(None))
+              .scalar())
     served = (db.query(func.count(AdvImpressionEvent.id))
               .join(AdvServeDecision, AdvServeDecision.id == AdvImpressionEvent.decision_id)
               .filter(AdvServeDecision.campaign_id == campaign.id, AdvImpressionEvent.event_type == "SERVED").scalar())
@@ -496,7 +737,7 @@ def campaign_report(db: Session, campaign: AdvCampaign, *, detail: bool = True) 
         "end_at": campaign.end_at.isoformat() if campaign.end_at else None,
         "placements": campaign.placements or [], "targeting": campaign.targeting or {},
         "served_impressions": int(served or 0), "valid_impressions": int(valid or 0), "invalid_events": int(invalid or 0),
-        "clicks": None, "clicks_note": "Not tracked",
+        "clicks": int(clicks or 0), "clicks_note": "Valid clicks through the MyHigh5 click redirect",
         "funding": _funding_state(db, campaign),
         "completion_reason": campaign.completion_reason, "review_note": campaign.review_note,
         "daily": [{"day": d.day.isoformat(), "spent": str(floor_cents(d.spent)),
@@ -555,14 +796,41 @@ def estimated_impressions(budget, cpm) -> Optional[int]:
 def packages(db: Session) -> list:
     """Every advertising product the application represents, with its real terms and state. Nothing here is
     invented: a product without an approved price is reported as not purchasable with the decision needed."""
-    from app.core.config import settings as app_settings
+    from app.core.config import settings as app_settings  # noqa: F401  (used by _cpm_entry)
 
     cfg = get_settings(db)
     cpm = cfg.cpm_rate_usd
     priced = pricing_state(cfg) == "CONFIGURED"
     min_budget = cfg.min_campaign_budget_usd
+    return [_cpm_entry(cfg, cpm, priced, min_budget, app_settings)[0]] + _phase_a_entries(cfg) + \
+        _cpm_entry(cfg, cpm, priced, min_budget, app_settings)[1:]
+
+
+def _phase_a_entries(cfg) -> list:
+    """The seven Phase A packages: approved minimum rate, billing unit, and whether they can be bought.
+    Never purchasable while not ready, switched off, or campaigns / funding are closed."""
+    from app.services import ad_packages as pk
+
+    out = []
+    for package in pk.PACKAGES.values():
+        if package.code == pk.LEGACY_CODE:
+            continue
+        ok, why = pk.availability(cfg, package)
+        out.append({"code": package.code, "package_code": package.code, "name": package.name,
+                    "type": package.pricing_model, "price": str(package.floor), "minimum_rate": str(package.floor),
+                    "price_unit": f"USD per {package.unit}", "currency": "USD", "minimum_budget": None,
+                    "duration": ("Booked days (UTC), at least one" if package.booking
+                                 else "Chosen by the advertiser (start and end date)"),
+                    "billable_event": package.billable_event, "renewal": "None",
+                    "payment": "Prepaid advertiser credit; charged only for valid, delivered units",
+                    "not_ready_reason": package.not_ready,
+                    "state": "AVAILABLE" if ok else (why or "PACKAGE_DISABLED"), "purchasable": bool(ok)})
+    return out
+
+
+def _cpm_entry(cfg, cpm, priced, min_budget, app_settings) -> list:
     return [
-        {"code": "MYHIGH5_CPM_CAMPAIGN", "name": "MyHigh5 CPM campaign", "type": "CPM",
+        {"code": "MYHIGH5_CPM_CAMPAIGN", "package_code": "cpm", "name": "MyHigh5 CPM campaign", "type": "CPM",
          "price": str(cpm) if cpm is not None else None, "price_unit": "USD per 1,000 valid viewable impressions",
          "currency": "USD", "minimum_budget": str(min_budget) if min_budget is not None else None,
          "estimated_impressions_at_minimum": estimated_impressions(min_budget, cpm) if min_budget else None,

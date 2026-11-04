@@ -68,7 +68,10 @@ def test_minimum_budget_is_enforced_on_the_server(world):
 def test_package_inventory_reports_real_terms_and_never_sells_unpriced_products(world):
     db = world
     pk = {p["code"]: p for p in camp.packages(db)}
-    assert set(pk) == {"MYHIGH5_CPM_CAMPAIGN", "ADVERTISER_CREDIT", "GOOGLE_ADSENSE", "ANNUAL_ADS", "LEGACY_AD_SYSTEM"}
+    # Advertising Phase A (2026-11-04) adds the seven other approved packages, none purchasable by default.
+    phase_a = {"cpm_video", "cpc", "cpv", "engagement", "lead", "daily_local", "daily_city"}
+    assert set(pk) == {"MYHIGH5_CPM_CAMPAIGN", "ADVERTISER_CREDIT", "GOOGLE_ADSENSE", "ANNUAL_ADS",
+                       "LEGACY_AD_SYSTEM"} | phase_a
     assert pk["MYHIGH5_CPM_CAMPAIGN"]["state"] == "PRICE_PENDING_APPROVAL" and not pk["MYHIGH5_CPM_CAMPAIGN"]["purchasable"]
     assert not any(p["purchasable"] for p in pk.values())
     assert pk["LEGACY_AD_SYSTEM"]["state"] == "RETIRED" and pk["ANNUAL_ADS"]["price"] is None
@@ -299,7 +302,7 @@ def test_campaign_report_analytics_and_reconciliation_balance(world):
     report = camp.campaign_report(db, c)
     assert report["valid_impressions"] == 3 and report["estimated_impressions"] == 20000
     assert report["by_placement"] == [{"key": "IN_FEED", "valid_impressions": 3, "spend": "0.00"}]
-    assert report["clicks"] is None and report["funding"] == "FUNDED"
+    assert report["clicks"] == 0 and report["funding"] == "FUNDED"          # clicks are recorded (review D7)
     rec = camp.reconciliation(db)
     assert rec["ok"], rec
     dl.recognize_closed_days(db, now=T0 + timedelta(days=2))
@@ -399,7 +402,7 @@ def test_member_packages_and_estimate(world, client):
     member = _user(db, "pk@t.com")
     db.commit()
     pk = client.get("/api/v1/advertising/packages", headers=bearer(member))
-    assert pk.status_code == 200 and len(pk.json()["packages"]) == 5
+    assert pk.status_code == 200 and len(pk.json()["packages"]) == 12      # 5 products + 7 Phase A packages
     est = client.get("/api/v1/advertising/estimate?budget=10", headers=bearer(member)).json()
     assert est["estimated_impressions"] == 20000 and not est["below_minimum"]
     assert client.get("/api/v1/advertising/estimate?budget=9.5", headers=bearer(member)).json()["below_minimum"]

@@ -191,6 +191,9 @@ class CRUDKYCVerification:
             u.verification_date = datetime.utcnow()
             if u.status == UserStatus.PENDING_VERIFICATION:
                 u.status = UserStatus.ACTIVE
+            from app.services.ad_geo import attest_on_address_approval
+
+            attest_on_address_approval(db, u, verification.id)  # advertising city evidence (never blocks KYC)
 
         db.add(verification)
         try:
@@ -226,6 +229,9 @@ class CRUDKYCVerification:
                 verification.user.verification_date = datetime.utcnow()
                 if verification.user.status == UserStatus.PENDING_VERIFICATION:
                     verification.user.status = UserStatus.ACTIVE
+                from app.services.ad_geo import attest_on_address_approval
+
+                attest_on_address_approval(db, verification.user, verification.id)  # never blocks KYC
 
             db.add(verification)
             try:

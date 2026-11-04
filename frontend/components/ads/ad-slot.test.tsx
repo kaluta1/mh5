@@ -43,6 +43,27 @@ describe('AdSlot', () => {
     ;(globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver = IO
   })
 
+  it('sends a MyHigh5 ad click through the counting redirect when the server offers one', async () => {
+    consent()
+    const withClick = { ...filled, creative: { ...filled.creative, click_url: '/api/v1/ads/click/abc' } }
+    postMock.mockImplementation((url: string) =>
+      Promise.resolve(url.endsWith('/decide') ? { status: 200, data: withClick } : { status: 200, data: { status: 'RECORDED' } }))
+    render(<AdSlot pageType="FEED" slotKind="IN_FEED" slotKey="f" />)
+    await waitFor(() => expect(screen.getByText('Sponsored')).toBeInTheDocument())
+    const href = screen.getByRole('link').getAttribute('href') || ''
+    expect(href.endsWith('/api/v1/ads/click/abc')).toBe(true)          // counted, then redirected server-side
+    expect(href).not.toContain('ex.com')                                // never the destination directly
+  })
+
+  it('links straight to the reviewed destination when no click URL is offered (Standard CPM)', async () => {
+    consent()
+    postMock.mockImplementation((url: string) =>
+      Promise.resolve(url.endsWith('/decide') ? { status: 200, data: filled } : { status: 200, data: { status: 'RECORDED' } }))
+    render(<AdSlot pageType="FEED" slotKind="IN_FEED" slotKey="g" />)
+    await waitFor(() => expect(screen.getByText('Sponsored')).toBeInTheDocument())
+    expect(screen.getByRole('link').getAttribute('href')).toBe('https://ex.com/')
+  })
+
   it('is labelled Sponsored and reports SERVED, then VIEWABLE once after 50% for 1 second', async () => {
     consent()
     postMock.mockImplementation((url: string) =>

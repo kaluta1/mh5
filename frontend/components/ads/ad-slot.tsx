@@ -8,6 +8,7 @@ import { useAdEligibility } from '@/hooks/use-ad-eligibility'
 import { COOKIE_CONSENT_EVENT } from '@/components/ui/cookie-consent'
 import { hasAdvertisingConsent } from '@/components/ads/adsense-loader'
 import { normalizeMediaUrl } from '@/lib/media-url'
+import { getEffectiveApiUrl } from '@/lib/config'
 
 type Decision =
   | { fill: false; reason?: string }
@@ -16,7 +17,8 @@ type Decision =
       decision_id: string
       source: 'MYHIGH5' | 'ADSENSE'
       sponsored_label: string
-      creative?: { headline: string; body?: string | null; image_url?: string | null; destination_url: string }
+      creative?: { headline: string; body?: string | null; image_url?: string | null; destination_url: string
+        click_url?: string | null }
       adsense?: { client: string; slot: string }
     }
 
@@ -176,7 +178,10 @@ export function AdSlot({ pageType, slotKind, slotKey, contestantId, className }:
       </p>
       {filled.source === 'MYHIGH5' && filled.creative ? (
         <a
-          href={filled.creative.destination_url}
+          // Clicks go through MyHigh5 (counted, then redirected to the reviewed destination) when offered.
+          href={filled.creative.click_url
+            ? `${getEffectiveApiUrl().replace(/\/+$/, '')}${filled.creative.click_url}`
+            : filled.creative.destination_url}
           target="_blank"
           rel="sponsored noopener noreferrer"
           className="flex gap-3 items-start"
