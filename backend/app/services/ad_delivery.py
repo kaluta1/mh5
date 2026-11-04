@@ -21,6 +21,16 @@ for proportional attribution of Google earnings.
 
 Recognition (``recognize_closed_days``): one idempotent journal per campaign per closed UTC day,
 Dr 2320 / Cr 4020, cumulative and rounded down to the cent.
+
+Advertising Phase A (ad_packages): the decision reserves ONE unit of the campaign's package (rate/1000 for
+Standard and Video CPM, the rate for CPC / CPV / engagement; nothing for leads and daily bookings) and only
+the package's billable event type charges that reservation. Other event types of the same decision are
+validated as evidence (VALID / INVALID) and never touch money. Daily City bookings are served only to
+signed-in viewers with a verified city (KYC address verified + city on the profile) and settled once per
+booked UTC day (``settle_bookings``): the fixed fee is charged when the day reached the booking's minimum
+delivery threshold of valid viewable impressions, otherwise it returns to the advertiser's credit, once. Every
+decision records the viewer's verified city (signed-in members only): the evidence of a city's inventory. Six decimals throughout; whole cents only
+at recognition (cumulative, rounded down), so no fraction of a cent is charged or lost.
 """
 from __future__ import annotations
 
@@ -42,6 +52,7 @@ from app.models.advertising_v2 import (AdvCampaign, AdvCampaignDay, AdvCreative,
                                        AdvServeDecision)
 from app.services import ad_attribution
 from app.services import ad_campaigns as camp
+from app.services import ad_packages as pk
 from app.services.financial_integrity import money
 
 logger = logging.getLogger(__name__)
@@ -179,9 +190,49 @@ class _NoReservation(Exception):
     pass
 
 
+def verified_city(db: Session, user_id: Optional[int]) -> Optional[int]:
+    """The viewer's city when it is verified: a signed-in member whose address was verified (KYC proof of
+    address) and whose profile carries a city of the geography table. Never a request header (no geo-IP
+    proxy sits in front of MyHigh5: cf-ipcountry / x-country are client-controlled). None otherwise."""
+    if not user_id:
+        return None
+    from app.models.user import User
+
+    row = (db.query(User.city_id, User.address_verified, User.is_active)
+           .filter(User.id == int(user_id)).first())
+    if row is None or not row.address_verified or row.is_active is False or not row.city_id:
+        return None
+    return int(row.city_id)
+
+
+def _campaign_rate(campaign: AdvCampaign, package) -> Optional[Decimal]:
+    if package.code == pk.LEGACY_CODE:
+        return Decimal(str(campaign.cpm_rate_usd)) if campaign.cpm_rate_usd is not None else None
+    return Decimal(str(campaign.unit_rate_usd)) if campaign.unit_rate_usd is not None else None
+
+
+def campaign_unit(campaign: AdvCampaign) -> Decimal:
+    """The price of one billable event of this campaign (0 for leads and daily bookings)."""
+    package = pk.of_model(campaign.pricing_model)
+    if not pk.reserve_at_decision(package):
+        return Decimal(0)
+    rate = _campaign_rate(campaign, package)
+    return pk.unit_charge(package, rate) if rate is not None else Decimal(0)
+
+
+def _booked_today(db: Session, campaign: AdvCampaign, package, city_id: Optional[int], today: date) -> bool:
+    from app.models.advertising_v2 import AdvBooking
+
+    if package.booking != "CITY" or not city_id:
+        return False                              # Daily Local has no verified areas yet (NOT READY)
+    return db.query(AdvBooking.id).filter(AdvBooking.campaign_id == campaign.id, AdvBooking.scope == "CITY",
+                                          AdvBooking.area_id == city_id, AdvBooking.day == today,
+                                          AdvBooking.status == "BOOKED").first() is not None
+
+
 def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contestant_id: Optional[int],
            viewer: str, country: Optional[str] = None, now: Optional[datetime] = None,
-           allowed_sources: Optional[set] = None) -> dict:
+           allowed_sources: Optional[set] = None, viewer_user_id: Optional[int] = None) -> dict:
     """allowed_sources: the viewer's ad eligibility (interaction_safety.ad_eligibility) - 'myhigh5_ads'
     and/or 'adsense'. A source the viewer may not receive is never chosen."""
     now = now or datetime.utcnow()
@@ -196,6 +247,9 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
     cfg = camp.get_settings(db)
     ttl = timedelta(seconds=max(60, int(cfg.reservation_ttl_seconds or 900)))
     decision_id = str(uuid.uuid4())
+    # The viewer's verified city, recorded on every decision (any source): the evidence a Daily City booking
+    # and a city's measured inventory rely on. Signed-in, address-verified members only; never geo-IP.
+    city_id = verified_city(db, viewer_user_id)
     if "myhigh5_ads" in allowed_sources and cfg.campaigns_enabled and camp.pricing_state(cfg) == "CONFIGURED":
         candidates = (db.query(AdvCampaign)
                       .filter(AdvCampaign.status == "ACTIVE", AdvCampaign.start_at <= now, AdvCampaign.end_at > now,
@@ -206,9 +260,17 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
         for campaign in candidates:
             if not _targets(campaign, page_type=page_type, slot_kind=slot_kind, country=country):
                 continue
-            unit = camp.unit_price(campaign.cpm_rate_usd)
-            if unit <= 0:
-                continue
+            package = pk.of_model(campaign.pricing_model)
+            if package.not_ready:
+                continue                          # cannot be delivered or measured: never served
+            if package.booking:
+                if not _booked_today(db, campaign, package, city_id, today):
+                    continue
+                unit = Decimal(0)
+            else:
+                unit = campaign_unit(campaign)
+                if unit <= 0:
+                    continue
             seen = (db.query(func.count(AdvServeDecision.id))
                     .filter(AdvServeDecision.campaign_id == campaign.id, AdvServeDecision.viewer_hash == viewer,
                             AdvServeDecision.created_at >= datetime.combine(today, time.min)).scalar())
@@ -218,26 +280,38 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
                                                       AdvCampaignDay.day == today).first()
             if not _paced(campaign, day_row, unit, now):
                 continue
-            creative = (db.query(AdvCreative).filter(AdvCreative.campaign_id == campaign.id,
-                                                     AdvCreative.review_status == "APPROVED")
-                        .order_by(func.random()).first())
-            if creative is None or not _reserve(db, campaign, unit, today):
+            creative_q = db.query(AdvCreative).filter(AdvCreative.campaign_id == campaign.id,
+                                                      AdvCreative.review_status == "APPROVED")
+            if package.billable_event in (pk.VIDEO_2S, pk.VIDEO_VIEW):
+                creative_q = creative_q.filter(AdvCreative.creative_format == "VIDEO")
+            creative = creative_q.order_by(func.random()).first()
+            if creative is None:
                 continue
+            if unit > 0 and not _reserve(db, campaign, unit, today):
+                continue
+            legacy = package.code == pk.LEGACY_CODE
             db.add(AdvServeDecision(id=decision_id, slot_kind=slot_kind, page_type=page_type, slot_key=slot_key[:80],
                                     contestant_id=contestant_id, source="MYHIGH5", product="ORDINARY",
                                     campaign_id=campaign.id, creative_id=creative.id, reserved_amount=unit,
-                                    reserved_day=today, state="RESERVED", viewer_hash=viewer, expires_at=now + ttl,
-                                    created_at=now, updated_at=now))
+                                    reserved_day=today, state="RESERVED" if unit > 0 else "UNPAID",
+                                    viewer_hash=viewer, expires_at=now + ttl, created_at=now, updated_at=now,
+                                    package=None if legacy else package.code,
+                                    viewer_user_id=int(viewer_user_id) if viewer_user_id else None,
+                                    viewer_city_id=city_id))
             db.flush()
             return {"fill": True, "decision_id": decision_id, "source": "MYHIGH5", "sponsored_label": "Sponsored",
                     "creative": {"headline": creative.headline, "body": creative.body, "image_url": creative.image_url,
-                                 "destination_url": creative.destination_url}}
+                                 "destination_url": creative.destination_url,
+                                 # Clicks go through MyHigh5 (counted, then redirected to the reviewed URL).
+                                 "click_url": f"/api/v1/ads/click/{decision_id}"}}
     slot = adsense_slot_for(slot_kind) if (cfg.adsense_fallback_enabled and "adsense" in allowed_sources) else None
     if slot:
         db.add(AdvServeDecision(id=decision_id, slot_kind=slot_kind, page_type=page_type, slot_key=slot_key[:80],
                                 contestant_id=contestant_id, source="ADSENSE", product="ADSENSE", adsense_slot=slot,
                                 reserved_amount=0, state="UNPAID", viewer_hash=viewer, expires_at=now + ttl,
-                                created_at=now, updated_at=now))
+                                created_at=now, updated_at=now,
+                                viewer_user_id=int(viewer_user_id) if viewer_user_id else None,
+                                viewer_city_id=city_id))
         db.flush()
         return {"fill": True, "decision_id": decision_id, "source": "ADSENSE", "sponsored_label": "Sponsored",
                 "adsense": {"client": adsense_client(), "slot": slot}}
@@ -248,11 +322,15 @@ def decide(db: Session, *, page_type: str, slot_kind: str, slot_key: str, contes
 
 def record_event(db: Session, *, decision_id: str, event_id: str, event_type: str, visible_ms: Optional[int],
                  visible_ratio, page_visible: Optional[bool], user_agent: Optional[str], viewer: str,
-                 now: Optional[datetime] = None) -> str:
-    """Durable capture only (validated later). Returns RECORDED, DUPLICATE or UNKNOWN_DECISION."""
+                 now: Optional[datetime] = None, played_ms: Optional[int] = None, action: Optional[str] = None,
+                 allow_click: bool = False) -> str:
+    """Durable capture only (validated later). Returns RECORDED, DUPLICATE or UNKNOWN_DECISION. A CLICK is
+    recorded only by the MyHigh5 click redirect (allow_click), never by a client beacon."""
     now = now or datetime.utcnow()
-    if event_type not in ("SERVED", "VIEWABLE"):
+    if event_type not in pk.EVENT_TYPES or (event_type == pk.CLICK and not allow_click):
         return "INVALID_TYPE"
+    if event_type == pk.CLICK and (action or "CTA_CLICK") not in pk.ENGAGEMENT_ACTIONS:
+        return "UNSUPPORTED_ACTION"
     try:
         uuid.UUID(event_id)
         uuid.UUID(decision_id)
@@ -268,7 +346,9 @@ def record_event(db: Session, *, decision_id: str, event_id: str, event_type: st
             db.add(AdvImpressionEvent(event_id=event_id, decision_id=decision_id, event_type=event_type,
                                       received_at=now, visible_ms=max(0, int(visible_ms or 0)), visible_ratio=ratio,
                                       page_visible=page_visible, ua_hash=ua_hash(user_agent), viewer_hash=viewer,
-                                      is_bot_ua=is_bot(user_agent), validation_status="PENDING"))
+                                      is_bot_ua=is_bot(user_agent), validation_status="PENDING",
+                                      played_ms=max(0, int(played_ms)) if played_ms is not None else None,
+                                      action=(action or "CTA_CLICK") if event_type == pk.CLICK else None))
             db.flush()
     except IntegrityError:
         return "DUPLICATE"                        # same event id, or a second VIEWABLE for the decision
@@ -340,6 +420,47 @@ def _self_view(db: Session, event: AdvImpressionEvent, decision: AdvServeDecisio
     return False
 
 
+def _quality_problem(db: Session, event: AdvImpressionEvent, decision: AdvServeDecision, now: datetime) -> Optional[str]:
+    """The event-type qualification contract (server-side; the client only reports measurements, and every
+    duration is bounded by server time: a client cannot claim more playback than time has passed)."""
+    ratio = Decimal(str(event.visible_ratio or 0))
+    since_decision_ms = int((event.received_at - decision.created_at).total_seconds() * 1000) \
+        if decision.created_at else 0
+    if event.event_type == pk.VIEWABLE:
+        if (event.visible_ms or 0) < VIEWABLE_MIN_MS or ratio < VIEWABLE_MIN_RATIO:
+            return "NOT_VIEWABLE"
+        return None
+    if event.event_type in (pk.VIDEO_2S, pk.VIDEO_VIEW):
+        creative = db.query(AdvCreative).filter(AdvCreative.id == decision.creative_id).first() \
+            if decision.creative_id else None
+        if creative is None or creative.creative_format != "VIDEO" or not creative.video_duration_ms:
+            return "NOT_A_VIDEO"
+        played = int(event.played_ms or 0)
+        if event.event_type == pk.VIDEO_2S:
+            need = pk.VIDEO_IMPRESSION_MIN_MS
+        else:
+            from app.services.ad_video import cpv_threshold_ms
+
+            need = cpv_threshold_ms(creative.video_duration_ms) or 10**9
+        if ratio < VIEWABLE_MIN_RATIO or played < need:
+            return "NOT_PLAYED"
+        if played > since_decision_ms + 1000 or played > int(creative.video_duration_ms) + 1000:
+            return "IMPOSSIBLE_PLAYBACK"           # more playback than wall-clock time or than the video
+        return None
+    if event.event_type == pk.CLICK:
+        if (event.action or "CTA_CLICK") not in pk.ENGAGEMENT_ACTIONS:
+            return "UNSUPPORTED_ACTION"
+        if since_decision_ms < pk.CLICK_MIN_DELAY_MS:
+            return "TOO_FAST"
+        rendered = (db.query(AdvImpressionEvent.id)
+                    .filter(AdvImpressionEvent.decision_id == decision.id,
+                            AdvImpressionEvent.event_type.in_((pk.SERVED, pk.VIEWABLE))).first())
+        if rendered is None:
+            return "NOT_RENDERED"                  # a click on an ad that was never shown
+        return None
+    return "INVALID_TYPE"
+
+
 def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] = None) -> dict:
     """Validate captured events once each. Safe to run concurrently (SKIP LOCKED on PostgreSQL)."""
     now = now or datetime.utcnow()
@@ -355,8 +476,13 @@ def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] =
             continue
         decision = (db.query(AdvServeDecision).filter(AdvServeDecision.id == event.decision_id)
                     .with_for_update().one())
+        package = pk.of_model(None) if decision.source != "MYHIGH5" else pk.get(decision.package or pk.LEGACY_CODE)
+        # Only the package's billable event type can charge (or release) the decision's reservation;
+        # every other event is evidence. Standard CPM (and AdSense): VIEWABLE, exactly as before.
+        billable = decision.source == "MYHIGH5" and event.event_type == package.billable_event \
+            and decision.state != "UNPAID"
         reason = None
-        if decision.state in ("CHARGED", "RELEASED") and decision.source == "MYHIGH5":
+        if billable and decision.state in ("CHARGED", "RELEASED"):
             reason = "EXPIRED" if decision.state == "RELEASED" else "DUPLICATE"
         elif event.received_at > decision.expires_at + LATE_EVENT_GRACE:
             reason = "EXPIRED"
@@ -364,11 +490,11 @@ def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] =
             reason = "BOT"
         elif event.page_visible is False:
             reason = "HIDDEN"
-        elif (event.visible_ms or 0) < VIEWABLE_MIN_MS or Decimal(str(event.visible_ratio or 0)) < VIEWABLE_MIN_RATIO:
-            reason = "NOT_VIEWABLE"
-        elif event.viewer_hash != decision.viewer_hash:
-            reason = "VIEWER_MISMATCH"
         else:
+            reason = _quality_problem(db, event, decision, now)
+            if reason is None and event.viewer_hash != decision.viewer_hash:
+                reason = "VIEWER_MISMATCH"
+        if reason is None and event.event_type == pk.VIEWABLE:
             recent = (db.query(func.count(AdvImpressionEvent.id))
                       .filter(AdvImpressionEvent.viewer_hash == event.viewer_hash,
                               AdvImpressionEvent.event_type == "VIEWABLE",
@@ -376,19 +502,21 @@ def validate_pending(db: Session, *, limit: int = 500, now: Optional[datetime] =
                               AdvImpressionEvent.validated_at >= now - timedelta(hours=1)).scalar())
             if int(recent or 0) >= int(cfg.max_viewable_per_viewer_hour or 120):
                 reason = "RATE_LIMIT"
-            elif _self_view(db, event, decision):
-                reason = "SELF_VIEW"
+        if reason is None and _self_view(db, event, decision):
+            reason = "SELF_VIEW"
         if reason is None and decision.campaign_id:
             campaign = db.query(AdvCampaign).filter(AdvCampaign.id == decision.campaign_id).first()
             if campaign is None or (campaign.end_at and event.received_at > campaign.end_at + LATE_EVENT_GRACE):
                 reason = "CAMPAIGN_ENDED"
         if reason is not None:
             _invalid(event, reason, now)
-            _release(db, decision)
+            if billable:
+                _release(db, decision)
             counts["invalid"] += 1
             continue
-        charged = _charge(db, decision) if decision.source == "MYHIGH5" else Decimal(0)
+        charged = _charge(db, decision) if billable else Decimal(0)
         event.validation_status, event.validated_at = "VALID", now
+        event.package = package.code if decision.source == "MYHIGH5" else None
         event.source, event.product = decision.source, decision.product
         event.campaign_id, event.adsense_slot, event.charged_amount = decision.campaign_id, decision.adsense_slot, charged
         event.earning_day = _earning_day(event.received_at, decision.source)
@@ -422,8 +550,9 @@ def expire_reservations(db: Session, *, now: Optional[datetime] = None) -> int:
             .limit(2000).all())
     released = 0
     for decision in rows:
+        billable = pk.get(decision.package or pk.LEGACY_CODE).billable_event or "VIEWABLE"
         waiting = (db.query(AdvImpressionEvent.id)
-                   .filter(AdvImpressionEvent.decision_id == decision.id, AdvImpressionEvent.event_type == "VIEWABLE",
+                   .filter(AdvImpressionEvent.decision_id == decision.id, AdvImpressionEvent.event_type == billable,
                            AdvImpressionEvent.validation_status == "PENDING").first())
         if waiting:
             continue
@@ -440,7 +569,7 @@ def complete_due_campaigns(db: Session, *, now: Optional[datetime] = None) -> in
     done = 0
     for c in db.query(AdvCampaign).filter(AdvCampaign.status.in_(("ACTIVE", "PAUSED"))).with_for_update().all():
         remaining = Decimal(str(c.budget_total)) - Decimal(str(c.spent))
-        unit = camp.unit_price(c.cpm_rate_usd) if c.cpm_rate_usd else Decimal(0)
+        unit = campaign_unit(c)
         if c.end_at and c.end_at <= now:
             camp.complete_campaign(db, c, reason="ENDED")
             done += 1
@@ -504,7 +633,8 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
     now = datetime.utcnow()
     events = (db.query(AdvImpressionEvent).filter(AdvImpressionEvent.id.in_([int(i) for i in event_ids]),
                                                   AdvImpressionEvent.validation_status == "VALID",
-                                                  AdvImpressionEvent.event_type == "VIEWABLE",
+                                                  AdvImpressionEvent.event_type.in_(
+                                                      (pk.VIEWABLE, pk.VIDEO_2S, pk.VIDEO_VIEW, pk.CLICK)),
                                                   AdvImpressionEvent.reversed_at.is_(None))
               .with_for_update().all())
     per_campaign_day: dict = {}
@@ -546,8 +676,12 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
 def run_cycle(session_factory) -> dict:
     """One worker pass: validate, expire, complete/settle, recognize. Each step commits on its own."""
     result = {}
+    from app.services.ad_leads import expire_unanswered
+
     for name, fn in (("validated", validate_pending), ("expired", expire_reservations),
-                     ("completed", complete_due_campaigns), ("recognized", recognize_closed_days)):
+                     ("leads_expired", expire_unanswered),
+                     ("bookings", settle_bookings), ("completed", complete_due_campaigns),
+                     ("recognized", recognize_closed_days)):
         db = session_factory()
         try:
             result[name] = fn(db)
@@ -561,3 +695,104 @@ def run_cycle(session_factory) -> dict:
         finally:
             db.close()
     return result
+
+
+# ---------------------------------------------------------------- direct charges (leads, booked days)
+
+def charge_direct(db: Session, campaign_id: int, amount: Decimal, day: date) -> bool:
+    """Charge an amount that was not reserved at a serving decision (an accepted lead, an earned booked
+    day): atomic against the remaining budget, so concurrent charges can never exceed it. False = refused."""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        return False
+    _day_row(db, campaign_id, day)
+    try:
+        with db.begin_nested():
+            res = db.execute(update(AdvCampaign)
+                             .where(AdvCampaign.id == campaign_id,
+                                    AdvCampaign.spent + AdvCampaign.reserved + amount <= AdvCampaign.budget_total)
+                             .values(spent=AdvCampaign.spent + amount)
+                             .execution_options(synchronize_session="fetch"))
+            if res.rowcount != 1:
+                raise _NoReservation()
+            db.execute(update(AdvCampaignDay).where(AdvCampaignDay.campaign_id == campaign_id,
+                                                    AdvCampaignDay.day == day)
+                       .values(spent=AdvCampaignDay.spent + amount).execution_options(synchronize_session="fetch"))
+    except _NoReservation:
+        return False
+    return True
+
+
+BOOKING_SETTLE_GRACE = timedelta(hours=2)    # late beacons of the day are validated first
+
+
+def settle_bookings(db: Session, *, now: Optional[datetime] = None) -> int:
+    """Settle every booked day that is over, once (row lock + status). EARNED: at least the booking's
+    min_impressions valid, unreversed viewable impressions of the campaign that day in the booked area (the
+    decision's verified city) -> the fixed fee is charged, never more. RETURNED: fewer -> the fee leaves the
+    campaign budget and
+    returns to the advertiser's credit (idempotent movement booking:<id>:return). No earning of any kind is
+    created here; the impression counts (all placements, and contest-entry ones apart) are kept for Phase B."""
+    from app.models.advertising_v2 import AdvBooking
+
+    now = now or datetime.utcnow()
+    settled = 0
+    due = (db.query(AdvBooking).filter(AdvBooking.status == "BOOKED",
+                                       AdvBooking.day < (now - BOOKING_SETTLE_GRACE).date())
+           .order_by(AdvBooking.campaign_id.asc(), AdvBooking.day.asc(), AdvBooking.id.asc()).limit(500).all())
+    for row in due:
+        campaign = db.query(AdvCampaign).filter(AdvCampaign.id == row.campaign_id).with_for_update().one()
+        booking = db.query(AdvBooking).filter(AdvBooking.id == row.id).with_for_update().one()
+        if booking.status != "BOOKED":
+            continue
+        if campaign.status in ("DRAFT", "PENDING_REVIEW", "CHANGES_REQUESTED", "REJECTED", "CANCELLED") \
+                or not db.query(camp.AdvCreditMovement.id).filter(
+                    camp.AdvCreditMovement.idempotency_key == f"campaign:{campaign.id}:allocate").first():
+            # Never funded or never served: no fee is owed; the unspent budget returns through settle_campaign.
+            booking.status, booking.settled_at = "CANCELLED", now
+            settled += 1
+            continue
+        pending = (db.query(AdvImpressionEvent.id).join(AdvServeDecision,
+                                                        AdvServeDecision.id == AdvImpressionEvent.decision_id)
+                   .filter(AdvServeDecision.campaign_id == campaign.id, AdvServeDecision.reserved_day == booking.day,
+                           AdvImpressionEvent.validation_status == "PENDING").first())
+        if pending is not None:
+            continue                                  # validate the day's events first
+        valid = (db.query(AdvServeDecision.page_type, func.count(AdvImpressionEvent.id))
+                 .join(AdvImpressionEvent, AdvImpressionEvent.decision_id == AdvServeDecision.id)
+                 .filter(AdvServeDecision.campaign_id == campaign.id, AdvServeDecision.reserved_day == booking.day,
+                         AdvServeDecision.viewer_city_id == booking.area_id,
+                         AdvImpressionEvent.event_type == pk.VIEWABLE, AdvImpressionEvent.validation_status == "VALID",
+                         AdvImpressionEvent.reversed_at.is_(None))
+                 .group_by(AdvServeDecision.page_type).all())
+        by_page = {str(k): int(v) for k, v in valid}
+        total = sum(by_page.values())
+        booking.valid_impressions = total
+        booking.entry_impressions = by_page.get(ATTRIBUTABLE_PAGE, 0)
+        need = max(1, int(booking.min_impressions or 1))
+        booking.evidence = {"impressions_by_page_type": by_page, "area": {"scope": booking.scope, "id": booking.area_id},
+                            "min_impressions": need,
+                            "settled_rule": "fee charged when the day reached the minimum valid viewable impressions "
+                                            "from verified residents of the area"}
+        price = Decimal(str(booking.price))
+        if total >= need and charge_direct(db, campaign.id, price, booking.day):
+            booking.status, booking.charged_amount = "EARNED", price
+        else:
+            # Zero delivery (or nothing left to charge): the whole fee goes back to reusable credit, once.
+            res = db.execute(update(AdvCampaign)
+                             .where(AdvCampaign.id == campaign.id,
+                                    AdvCampaign.budget_total - price >= AdvCampaign.spent + AdvCampaign.reserved)
+                             .values(budget_total=AdvCampaign.budget_total - price)
+                             .execution_options(synchronize_session="fetch"))
+            if res.rowcount != 1:
+                logger.error("Booking %s could not be returned: campaign %s budget is inconsistent", booking.id,
+                             campaign.id)
+                continue
+            camp._movement(db, advertiser_id=campaign.advertiser_user_id, kind="RELEASE", amount=money(price),
+                           key=f"booking:{booking.id}:return", campaign_id=campaign.id,
+                           note=f"Booked day {booking.day.isoformat()} had no valid delivery: fee returned")
+            booking.status = "RETURNED"
+        booking.settled_at = now
+        settled += 1
+    db.flush()
+    return settled

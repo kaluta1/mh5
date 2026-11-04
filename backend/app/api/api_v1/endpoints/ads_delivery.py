@@ -43,10 +43,12 @@ class DecideRequest(BaseModel):
 class EventRequest(BaseModel):
     decision_id: str = Field(min_length=36, max_length=36)
     event_id: str = Field(min_length=36, max_length=36)
-    event_type: Literal["SERVED", "VIEWABLE"]
+    # CLICK is never a beacon: it is recorded only by the MyHigh5 click redirect (GET /ads/click/{id}).
+    event_type: Literal["SERVED", "VIEWABLE", "VIDEO_2S", "VIDEO_VIEW"]
     visible_ms: Optional[int] = Field(default=None, ge=0, le=3_600_000)
     visible_ratio: Optional[float] = Field(default=None, ge=0, le=1)
     page_visible: Optional[bool] = None
+    played_ms: Optional[int] = Field(default=None, ge=0, le=3_600_000)
 
 
 def _viewer(request: Request, user: Optional[User]) -> str:
@@ -70,7 +72,8 @@ def decide(body: DecideRequest, request: Request, response: Response, db: Sessio
     country = (request.headers.get("cf-ipcountry") or request.headers.get("x-country") or "").strip()[:2] or None
     result = ad_delivery.decide(db, page_type=body.page_type, slot_kind=body.slot_kind, slot_key=body.slot_key,
                                 contestant_id=body.contestant_id, viewer=_viewer(request, current_user),
-                                country=country, allowed_sources=allowed)
+                                country=country, allowed_sources=allowed,
+                                viewer_user_id=current_user.id if current_user else None)
     db.commit()
     camp.send_pending(db)
     return result
@@ -86,10 +89,47 @@ def events(body: EventRequest, request: Request, response: Response, db: Session
                                       event_type=body.event_type, visible_ms=body.visible_ms,
                                       visible_ratio=body.visible_ratio, page_visible=body.page_visible,
                                       user_agent=request.headers.get("user-agent"),
-                                      viewer=_viewer(request, current_user))
+                                      viewer=_viewer(request, current_user), played_ms=body.played_ms)
     db.commit()
     camp.send_pending(db)
     return {"status": status}
+
+
+@public_router.get("/click/{decision_id}")
+def click(decision_id: str, request: Request, db: Session = Depends(deps.get_db),
+          current_user: Optional[User] = Depends(deps.get_current_active_user_optional)):
+    """Count a click on a MyHigh5 ad, then send the browser to the creative's REVIEWED destination. The
+    target is never taken from the request (no open redirect) and is validated again here. An unknown
+    decision, or one that is not a MyHigh5 ad, answers 404 and redirects nowhere. Billing happens later,
+    in validation (one click per decision, not a bot, not the advertiser, not within 1 s of serving)."""
+    import uuid as _uuid
+
+    from fastapi.responses import RedirectResponse
+
+    from app.models.advertising_v2 import AdvCreative, AdvServeDecision
+    from app.services.advertising_integrity import AdvertisingIntegrityError, normalize_destination_url
+
+    try:
+        _uuid.UUID(decision_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="Not found") from None
+    decision = db.query(AdvServeDecision).filter(AdvServeDecision.id == decision_id).first()
+    creative = (db.query(AdvCreative).filter(AdvCreative.id == decision.creative_id).first()
+                if decision is not None and decision.source == "MYHIGH5" and decision.creative_id else None)
+    if creative is None or creative.review_status != "APPROVED":
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        target = normalize_destination_url(creative.destination_url)
+    except AdvertisingIntegrityError:
+        raise HTTPException(status_code=404, detail="Not found") from None
+    if not _is_rate_limited(f"ad-click:{client_ip(request)}", 60, 60):
+        ad_delivery.record_event(db, decision_id=decision_id, event_id=str(_uuid.uuid4()), event_type="CLICK",
+                                 visible_ms=None, visible_ratio=None, page_visible=None,
+                                 user_agent=request.headers.get("user-agent"), viewer=_viewer(request, current_user),
+                                 action="CTA_CLICK", allow_click=True)
+        db.commit()
+    return RedirectResponse(target, status_code=302, headers={"Cache-Control": "private, no-store",
+                                                              "Referrer-Policy": "strict-origin-when-cross-origin"})
 
 
 @public_router.get("/config")
@@ -107,13 +147,18 @@ def public_config(response: Response, db: Session = Depends(deps.get_db)):
 
 class CampaignCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    budget: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    # Standard CPM (the default) keeps its fields; Daily City derives budget and dates from the booked days.
+    budget: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
     daily_cap: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
-    start_at: datetime
-    end_at: datetime
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
     placements: List[Literal["SIDEBAR", "IN_FEED", "IN_CONTENT"]]
     countries: List[str] = []
     page_types: List[str] = []
+    package: str = Field(default="cpm", max_length=20)
+    unit_rate: Optional[Decimal] = Field(default=None, gt=0, max_digits=18, decimal_places=6)
+    city_id: Optional[int] = None
+    booked_days: List[date] = []
 
 
 class CampaignUpdate(BaseModel):
@@ -168,9 +213,13 @@ def create_campaign(body: CampaignCreate, db: Session = Depends(deps.get_db),
                     user: User = Depends(deps.get_current_active_user)):
     try:
         c = camp.create_campaign(db, user, name=body.name, budget=body.budget, daily_cap=body.daily_cap,
-                                 start_at=body.start_at.replace(tzinfo=None), end_at=body.end_at.replace(tzinfo=None),
+                                 start_at=body.start_at.replace(tzinfo=None) if body.start_at else None,
+                                 end_at=body.end_at.replace(tzinfo=None) if body.end_at else None,
                                  placements=list(body.placements),
-                                 targeting={"countries": body.countries, "page_types": body.page_types})
+                                 targeting={"countries": body.countries, "page_types": body.page_types},
+                                 package=body.package, unit_rate=body.unit_rate,
+                                 bookings={"city_id": body.city_id, "days": body.booked_days}
+                                 if body.city_id or body.booked_days else None)
     except camp.AdError as exc:
         db.rollback()
         camp.discard_pending(db)
