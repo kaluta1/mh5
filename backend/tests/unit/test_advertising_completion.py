@@ -219,7 +219,7 @@ def test_campaign_emails_only_while_campaigns_are_switched_on(world):
 def test_creative_image_rules_and_ownership():
     ok = {"media_type": "image", "content_type": "image/png", "file_size": 50_000, "width": 600, "height": 300}
     camp.check_creative_image(ok)
-    for bad in ({**ok, "media_type": "video", "content_type": "video/mp4"}, {**ok, "file_size": 3 * 1024 * 1024},
+    for bad in ({**ok, "media_type": "video", "content_type": "video/mp4"}, {**ok, "file_size": 6 * 1024 * 1024},
                 {**ok, "width": 50}, {**ok, "height": 5000}, {**ok, "content_type": "image/svg+xml"}):
         with pytest.raises(camp.AdError):
             camp.check_creative_image(bad)

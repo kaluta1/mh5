@@ -54,8 +54,19 @@ describe('AdminAdvertising', () => {
     fireEvent.change(screen.getByLabelText('Note for campaign 5'), { target: { value: 'Use a clearer headline' } })
     fireEvent.click(screen.getByText('Request changes'))
     await waitFor(() => expect(requestMock).toHaveBeenCalledWith({ method: 'post',
-      url: '/api/v1/admin/advertising/campaigns/5/request-changes', data: { note: 'Use a clearer headline' } }))
+      url: '/api/v1/admin/advertising/campaigns/5/request-changes', data: { note: 'Use a clearer headline', issues: [] } }))
     expect(screen.getByText('Reject')).toBeDisabled()                 // creative rejection needs a reason too
+  })
+
+  it('flags review issues by category (copy, media, destination, placement)', async () => {
+    render(<AdminAdvertising />)
+    await screen.findByText('Reject campaign')
+    fireEvent.click(screen.getByLabelText('Destination issue for campaign 5'))
+    expect(screen.getByText('Request changes')).not.toBeDisabled()   // a category alone is enough
+    fireEvent.click(screen.getByText('Request changes'))
+    await waitFor(() => expect(requestMock).toHaveBeenCalledWith({ method: 'post',
+      url: '/api/v1/admin/advertising/campaigns/5/request-changes',
+      data: { note: '', issues: [{ category: 'DESTINATION', note: '' }] } }))
   })
 
   it('resolves an origin only with evidence and the password', async () => {

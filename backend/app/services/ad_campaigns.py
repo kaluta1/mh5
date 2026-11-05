@@ -45,6 +45,7 @@ SETTINGS_FIELDS = {
     "adsense_sharing_enabled": "bool", "contest_sharing_enabled": "bool",
     "reservation_ttl_seconds": "int", "frequency_cap_per_day": "int", "max_viewable_per_viewer_hour": "int",
     "enabled_packages": "packages", "daily_city_min_impressions": "threshold",
+    "advertiser_sponsor_commission_enabled": "bool",
 }
 INVENTORY_WINDOW_DAYS = 30
 MAX_BOOKED_DAYS = 366
@@ -59,9 +60,10 @@ EDITABLE_STATUSES = ("DRAFT", "CHANGES_REQUESTED")
 CLOSED_STATUSES = ("COMPLETED", "REJECTED", "CANCELLED")
 # Uploaded creative images (existing media storage, images only; no video, no new format).
 UPLOAD_PREFIX = "/api/v1/media/file/"
-CREATIVE_IMAGE_MAX_BYTES = 2 * 1024 * 1024
-CREATIVE_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
-CREATIVE_MIN_SIDE, CREATIVE_MAX_SIDE = 100, 4000
+# Workflow (2026-11-05): JPG / PNG / WebP up to 5 MB; ratio fit per placement is reported, not enforced.
+CREATIVE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+CREATIVE_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
+CREATIVE_MIN_SIDE, CREATIVE_MAX_SIDE = 300, 4000
 
 
 class AdError(Exception):
@@ -259,12 +261,42 @@ def _audit(db: Session, actor_id: Optional[int], campaign: AdvCampaign, action: 
 
 
 def _validate_terms(cfg: AdvSettings, *, budget: Decimal, daily_cap: Optional[Decimal], start_at, end_at,
-                    placements: Iterable[str], targeting: Optional[dict], package=None, unit: Decimal = None) -> None:
+                    placements: Iterable[str], targeting: Optional[dict], package=None, unit: Decimal = None,
+                    complete: bool = True) -> None:
+    """complete=False (a draft being saved): what is given is checked, what is missing is allowed.
+    Submission always checks complete terms. No start = delivery starts at approval."""
     from app.services import ad_packages as pk
+    from app.services.ad_workflow import check_combinations
 
     package = package or pk.PACKAGES[pk.LEGACY_CODE]
+    if placements and any(p not in SLOT_KINDS for p in placements):
+        raise AdError("INVALID_PLACEMENTS", f"Placements must be chosen from {', '.join(SLOT_KINDS)}", 400)
+    if placements:
+        check_combinations(list(placements), targeting or {})
+    if not complete:
+        if budget > 0:
+            _check_budget(cfg, package, budget, daily_cap, unit)
+        if start_at and end_at and end_at <= start_at:
+            raise AdError("INVALID_SCHEDULE", "The end date must be after the start date", 400)
+        return
     if budget <= 0:
         raise AdError("INVALID_BUDGET", "The campaign budget must be greater than zero", 400)
+    _check_budget(cfg, package, budget, daily_cap, unit)
+    if not end_at or (start_at and end_at <= start_at):
+        raise AdError("INVALID_SCHEDULE", "The end date must be after the start date", 400)
+    if not placements:
+        raise AdError("INVALID_PLACEMENTS", f"Placements must be chosen from {', '.join(SLOT_KINDS)}", 400)
+    pages = (targeting or {}).get("page_types") or []
+    if any(p not in PAGE_TYPES for p in pages):
+        raise AdError("INVALID_TARGETING", f"Page types must be chosen from {', '.join(PAGE_TYPES)}", 400)
+    countries = (targeting or {}).get("countries") or []
+    if any(not isinstance(c, str) or len(c) != 2 for c in countries):
+        raise AdError("INVALID_TARGETING", "Countries must be two-letter codes", 400)
+
+
+def _check_budget(cfg: AdvSettings, package, budget: Decimal, daily_cap: Optional[Decimal], unit) -> None:
+    from app.services import ad_packages as pk
+
     if package.code == pk.LEGACY_CODE:
         # Standard CPM keeps its approved $10 minimum prepaid budget.
         if cfg.min_campaign_budget_usd is not None and budget < Decimal(str(cfg.min_campaign_budget_usd)):
@@ -277,17 +309,6 @@ def _validate_terms(cfg: AdvSettings, *, budget: Decimal, daily_cap: Optional[De
             raise AdError("INVALID_DAILY_CAP", "The daily limit must be positive and not above the budget", 400)
         if cfg.min_daily_cap_usd is not None and daily_cap < Decimal(str(cfg.min_daily_cap_usd)):
             raise AdError("DAILY_CAP_BELOW_MINIMUM", f"The minimum daily limit is {cfg.min_daily_cap_usd} USD", 400)
-    if not start_at or not end_at or end_at <= start_at:
-        raise AdError("INVALID_SCHEDULE", "The end date must be after the start date", 400)
-    bad = [p for p in (placements or []) if p not in SLOT_KINDS]
-    if bad or not placements:
-        raise AdError("INVALID_PLACEMENTS", f"Placements must be chosen from {', '.join(SLOT_KINDS)}", 400)
-    pages = (targeting or {}).get("page_types") or []
-    if any(p not in PAGE_TYPES for p in pages):
-        raise AdError("INVALID_TARGETING", f"Page types must be chosen from {', '.join(PAGE_TYPES)}", 400)
-    countries = (targeting or {}).get("countries") or []
-    if any(not isinstance(c, str) or len(c) != 2 for c in countries):
-        raise AdError("INVALID_TARGETING", "Countries must be two-letter codes", 400)
 
 
 def _package_terms(cfg: AdvSettings, package_code: Optional[str], unit_rate):
@@ -409,7 +430,8 @@ def _booking_days(package, bookings: Optional[dict]) -> tuple:
 
 def create_campaign(db: Session, advertiser, *, name: str, budget=None, daily_cap=None, start_at: datetime = None,
                     end_at: datetime = None, placements: list = (), targeting: Optional[dict] = None,
-                    package: Optional[str] = None, unit_rate=None, bookings: Optional[dict] = None) -> AdvCampaign:
+                    package: Optional[str] = None, unit_rate=None, bookings: Optional[dict] = None,
+                    timezone: Optional[str] = None, complete: bool = True) -> AdvCampaign:
     """A draft campaign of one package. Daily City: the budget IS the booked days x the daily rate and the
     schedule is the booked days (UTC); nothing is charged or reserved here, and no earning is created."""
     from app.models.advertising_v2 import AdvBooking
@@ -430,15 +452,18 @@ def create_campaign(db: Session, advertiser, *, name: str, budget=None, daily_ca
         start_at = datetime.combine(days[0], datetime.min.time())
         end_at = datetime.combine(days[-1], datetime.min.time()) + timedelta(days=1)
         daily_cap = None
+    from app.services import ad_workflow as wf
+
     budget_d, cap_d = money(budget if budget not in (None, "") else 0), (
         money(daily_cap) if daily_cap not in (None, "") else None)
+    tz = wf.check_timezone(timezone)
+    targeting = wf.normalize_targeting(db, targeting or {})
     _validate_terms(cfg, budget=budget_d, daily_cap=cap_d, start_at=start_at, end_at=end_at,
-                    placements=placements, targeting=targeting, package=pkg, unit=unit)
+                    placements=placements, targeting=targeting, package=pkg, unit=unit, complete=complete)
     campaign = AdvCampaign(advertiser_user_id=advertiser.id, name=(name or "").strip()[:160] or "Campaign",
                            status="DRAFT", budget_total=budget_d, daily_cap=cap_d, start_at=start_at, end_at=end_at,
                            placements=list(placements), pricing_model=pkg.pricing_model, unit_rate_usd=rate,
-                           targeting={"countries": [c.upper() for c in (targeting or {}).get("countries") or []],
-                                      "page_types": list((targeting or {}).get("page_types") or [])})
+                           targeting=targeting, timezone=tz)
     db.add(campaign)
     db.flush()
     for day in days:
@@ -492,8 +517,11 @@ def submit_campaign(db: Session, advertiser, campaign: AdvCampaign) -> AdvCampai
     if campaign.status not in EDITABLE_STATUSES:
         raise AdError("INVALID_STATE", "Only a draft campaign or one with requested changes can be submitted")
     if not db.query(AdvCreative.id).filter(AdvCreative.campaign_id == campaign.id,
-                                           AdvCreative.review_status != "REJECTED").first():
+                                           AdvCreative.review_status.notin_(("REJECTED", "ARCHIVED"))).first():
         raise AdError("NO_CREATIVE", "Add at least one creative before submitting")
+    from app.services.ad_workflow import submit_campaign_creatives
+
+    submit_campaign_creatives(db, campaign)        # complete drafts go to review; an incomplete one blocks
     if campaign.status == "CHANGES_REQUESTED":
         # The budget is already in the campaign (allocated at the first submission) at the price fixed then.
         _require_deliverable(cfg, campaign)
@@ -533,14 +561,23 @@ def submit_campaign(db: Session, advertiser, campaign: AdvCampaign) -> AdvCampai
     return campaign
 
 
-def review_creative(db: Session, actor, creative: AdvCreative, *, approve: bool, note: str) -> AdvCreative:
-    if not (note or "").strip() and not approve:
+def review_creative(db: Session, actor, creative: AdvCreative, *, approve: bool, note: str,
+                    issues: Optional[list] = None) -> AdvCreative:
+    from app.services import ad_workflow as wf
+
+    issues = wf.normalize_issues(issues)
+    if not (note or "").strip() and not approve and not issues:
         raise AdError("NOTE_REQUIRED", "A reason is required to reject a creative", 400)
+    if creative.review_status not in ("PENDING", "APPROVED", "REJECTED"):
+        raise AdError("INVALID_STATE", "Only a creative submitted for review can be reviewed")
     creative.review_status = "APPROVED" if approve else "REJECTED"
     creative.review_note, creative.reviewed_by_user_id, creative.reviewed_at = (note or "")[:500], actor.id, datetime.utcnow()
+    creative.review_issues = None if approve else issues
     db.add(AuditTrail(table_name="adv_creatives", record_id=creative.id, action="REVIEW", old_values=None,
-                      new_values={"review_status": creative.review_status, "note": creative.review_note}, user_id=actor.id))
+                      new_values={"review_status": creative.review_status, "note": creative.review_note,
+                                  "issues": [i["category"] for i in issues or []]}, user_id=actor.id))
     db.flush()
+    wf.on_creative_reviewed(db, creative, approved=approve)
     return creative
 
 
@@ -553,7 +590,10 @@ def review_campaign(db: Session, actor, campaign: AdvCampaign, *, approve: bool,
                                                AdvCreative.review_status == "APPROVED").first():
             raise AdError("NO_APPROVED_CREATIVE", "Approve at least one creative first")
         _require_deliverable(get_settings(db), campaign)   # a switched-off package is never approved
+        if campaign.start_at is None:
+            campaign.start_at = datetime.utcnow()           # "start after approval": launch is automatic
         campaign.status = "ACTIVE"
+        campaign.review_issues = None
     else:
         if not (note or "").strip():
             raise AdError("NOTE_REQUIRED", "A reason is required to reject a campaign", 400)
@@ -566,16 +606,20 @@ def review_campaign(db: Session, actor, campaign: AdvCampaign, *, approve: bool,
     return campaign
 
 
-def request_changes(db: Session, actor, campaign: AdvCampaign, *, note: str) -> AdvCampaign:
+def request_changes(db: Session, actor, campaign: AdvCampaign, *, note: str, issues: Optional[list] = None) -> AdvCampaign:
     """Administrator: send a campaign under review back to the advertiser. The budget stays in the campaign
     at its fixed price; the advertiser edits and resubmits, or cancels (which returns the budget)."""
     campaign = db.query(AdvCampaign).filter(AdvCampaign.id == campaign.id).with_for_update().one()
     if campaign.status != "PENDING_REVIEW":
         raise AdError("INVALID_STATE", "Changes can be requested only for a campaign pending review")
-    if not (note or "").strip():
+    from app.services.ad_workflow import normalize_issues
+
+    issues = normalize_issues(issues)
+    if not (note or "").strip() and not issues:
         raise AdError("NOTE_REQUIRED", "Describe the changes that are needed", 400)
     campaign.status = "CHANGES_REQUESTED"
-    campaign.review_note, campaign.reviewed_by_user_id = note.strip()[:500], actor.id
+    campaign.review_note, campaign.reviewed_by_user_id = (note or "").strip()[:500], actor.id
+    campaign.review_issues = issues
     _audit(db, actor.id, campaign, "REQUEST_CHANGES", {"status": campaign.status, "note": campaign.review_note})
     db.flush()
     notify(db, campaign, "CHANGES_REQUESTED")
@@ -599,17 +643,22 @@ def update_campaign(db: Session, advertiser, campaign: AdvCampaign, changes: dic
     budget = money(changes.get("budget", campaign.budget_total))
     cap = changes.get("daily_cap", campaign.daily_cap)
     cap = money(cap) if cap not in (None, "") else None
-    targeting = dict(campaign.targeting or {})
-    if "countries" in changes:
-        targeting["countries"] = [str(c).upper() for c in changes["countries"] or []]
-    if "page_types" in changes:
-        targeting["page_types"] = list(changes["page_types"] or [])
+    from app.services import ad_workflow as wf
+
+    targeting = wf.normalize_targeting(db, {k: changes[k] for k in ("countries", "countries_mode", "page_types",
+                                                                     "page_types_mode") if k in changes},
+                                       campaign.targeting or {})
+    if "timezone" in changes:
+        campaign.timezone = wf.check_timezone(changes["timezone"])
     start_at, end_at = changes.get("start_at", campaign.start_at), changes.get("end_at", campaign.end_at)
+    if changes.get("start_after_approval"):
+        start_at = None
     placements = list(changes.get("placements", campaign.placements) or [])
     from app.services.ad_delivery import campaign_unit
 
     _validate_terms(cfg, budget=budget, daily_cap=cap, start_at=start_at, end_at=end_at, placements=placements,
-                    targeting=targeting, package=pkg, unit=campaign_unit(campaign))
+                    targeting=targeting, package=pkg, unit=campaign_unit(campaign),
+                    complete=campaign.status != "DRAFT")
     if "name" in changes:
         campaign.name = str(changes["name"]).strip()[:160] or campaign.name
     campaign.budget_total, campaign.daily_cap = budget, cap
@@ -886,9 +935,9 @@ def own_upload_url(advertiser_id: int, url: str) -> str:
 def check_creative_image(metadata: dict) -> None:
     """Advertising limits on top of the media storage validation (signature, MIME, extension, pixels)."""
     if metadata.get("media_type") != "image" or metadata.get("content_type") not in CREATIVE_IMAGE_TYPES:
-        raise AdError("INVALID_IMAGE", "Upload a JPEG, PNG, WebP or GIF image", 400)
+        raise AdError("INVALID_IMAGE", "Upload a JPG, PNG or WebP image", 400)
     if int(metadata.get("file_size") or 0) > CREATIVE_IMAGE_MAX_BYTES:
-        raise AdError("INVALID_IMAGE", "The image must be at most 2 MB", 400)
+        raise AdError("INVALID_IMAGE", "The image must be at most 5 MB", 400)
     w, h = int(metadata.get("width") or 0), int(metadata.get("height") or 0)
     if not (CREATIVE_MIN_SIDE <= w <= CREATIVE_MAX_SIDE and CREATIVE_MIN_SIDE <= h <= CREATIVE_MAX_SIDE):
         raise AdError("INVALID_IMAGE", f"Image sides must be between {CREATIVE_MIN_SIDE} and {CREATIVE_MAX_SIDE} pixels", 400)
