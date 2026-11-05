@@ -641,6 +641,7 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
                                                   AdvImpressionEvent.reversed_at.is_(None))
               .with_for_update().all())
     per_campaign_day: dict = {}
+    per_day_events: dict = {}
     booking_keys: set = set()
     for e in events:
         e.reversed_at, e.reversal_reason = now, reason.strip()[:40]
@@ -651,6 +652,7 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
         if e.campaign_id and Decimal(str(e.charged_amount)) > 0:
             per_campaign_day.setdefault((e.campaign_id, e.earning_day), Decimal(0))
             per_campaign_day[(e.campaign_id, e.earning_day)] += Decimal(str(e.charged_amount))
+            per_day_events.setdefault((e.campaign_id, e.earning_day), []).append(int(e.id))
     credited = Decimal(0)
     for (campaign_id, day), amount in per_campaign_day.items():
         campaign = db.query(AdvCampaign).filter(AdvCampaign.id == campaign_id).with_for_update().one()
@@ -676,7 +678,9 @@ def reverse_invalid_activity(db: Session, *, event_ids: list, reason: str, actor
             from app.services.ad_workflow import after_charge_reversed
 
             db.flush()
-            after_charge_reversed(db, campaign_id, day, reason=reason)
+            ids = sorted(per_day_events.get((campaign_id, day), []))
+            digest = hashlib.sha256(",".join(map(str, ids)).encode()).hexdigest()[:24]
+            after_charge_reversed(db, campaign_id, day, reason=reason, amount=money(amount), key=f"invalid:{digest}")
         credited += amount
     db.flush()                                    # the reversed events must be visible to the recount
     bookings_reversed = reassess_bookings(db, booking_keys, reason=reason, actor_id=actor_id, now=now) \
@@ -820,7 +824,7 @@ def _credit_back(db: Session, campaign: AdvCampaign, day: date, amount: Decimal,
     if recognized:
         from app.services.ad_workflow import after_charge_reversed
 
-        after_charge_reversed(db, campaign.id, day, reason=note)
+        after_charge_reversed(db, campaign.id, day, reason=note, amount=money(amount), key=journal_suffix)
         db.flush()
 
 
@@ -845,8 +849,11 @@ def reassess_bookings(db: Session, keys: set, *, reason: str, actor_id: Optional
                              AdvServeDecision.viewer_city_id == city_id, AdvImpressionEvent.event_type == pk.VIEWABLE,
                              AdvImpressionEvent.validation_status == "VALID", AdvImpressionEvent.reversed_at.is_(None))
                      .scalar()) or 0
+            from app.services import ad_fixed_allocation
+
             if int(valid) >= max(1, int(booking.min_impressions or 1)):
                 booking.valid_impressions = int(valid)
+                ad_fixed_allocation.allocate(db, booking, now=now)    # re-weighted over the remaining events
                 continue
             _credit_back(db, campaign, booking.day, Decimal(str(booking.charged_amount)),
                          journal_suffix=f"booking-reversal:{booking.id}", movement_key=f"booking:{booking.id}:reversal",
@@ -854,6 +861,7 @@ def reassess_bookings(db: Session, keys: set, *, reason: str, actor_id: Optional
                               f"activity: fee returned ({reason[:150]})", actor_id=actor_id, release_budget=True)
             booking.status, booking.valid_impressions = "REVERSED", int(valid)
             booking.reversed_at, booking.reversal_reason = now, (reason or "")[:200]
+            ad_fixed_allocation.reverse(db, booking, now=now)
             reversed_count += 1
     db.flush()
     return reversed_count
@@ -862,10 +870,10 @@ def reassess_bookings(db: Session, keys: set, *, reason: str, actor_id: Optional
 def run_cycle(session_factory) -> dict:
     """One worker pass: validate, expire, complete/settle, recognize. Each step commits on its own."""
     result = {}
-    from app.services.ad_leads import expire_unanswered
+    from app.services.ad_leads import expire_unanswered, purge_expired
 
     for name, fn in (("validated", validate_pending), ("expired", expire_reservations),
-                     ("leads_expired", expire_unanswered),
+                     ("leads_expired", expire_unanswered), ("leads_purged", purge_expired),
                      ("bookings", settle_bookings), ("completed", complete_due_campaigns),
                      ("recognized", recognize_closed_days)):
         db = session_factory()
@@ -963,6 +971,9 @@ def settle_bookings(db: Session, *, now: Optional[datetime] = None) -> int:
         price = Decimal(str(booking.price))
         if total >= need and charge_direct(db, campaign.id, price, booking.day):
             booking.status, booking.charged_amount = "EARNED", price
+            from app.services import ad_fixed_allocation
+
+            ad_fixed_allocation.allocate(db, booking, now=now)     # placement-level earned revenue
         else:
             # Zero delivery (or nothing left to charge): the whole fee goes back to reusable credit, once.
             res = db.execute(update(AdvCampaign)

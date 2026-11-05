@@ -1078,6 +1078,25 @@ def reconciliation(db: Session) -> dict:
         {"check": "budgets_within_limits", "expected": "[]", "actual": str(over), "ok": not over,
          "detail": "No campaign spent + reserved above its budget, nothing negative"},
     ]
+    # Final integration (a2c4e6f8b0d3): sponsor-commission recovery and fixed-price allocations.
+    from app.models.advertising_v2 import AdvBooking
+    from app.services import ad_fixed_allocation, ad_sponsor_recovery
+
+    recovery = ad_sponsor_recovery.reconciliation(db)
+    over_reversed = [d.id for d in db.query(AdvCampaignDay).filter(AdvCampaignDay.sponsor_base_amount.isnot(None),
+                                                                   AdvCampaignDay.sponsor_reversed_amount
+                                                                   > AdvCampaignDay.sponsor_base_amount).all()]
+    bad_alloc = [b.id for b in db.query(AdvBooking).filter(AdvBooking.status.in_(("EARNED", "REVERSED"))).all()
+                 if not ad_fixed_allocation.check(db, b)["ok"]]
+    checks += [
+        {"check": "sponsor_recovery", "expected": "ok", "actual": str(recovery["outstanding_by_status"]),
+         "ok": recovery["ok"],
+         "detail": "Receivables never over-recovered; offsets add up to what each receivable recovered"},
+        {"check": "sponsor_reversal_within_base", "expected": "[]", "actual": str(over_reversed),
+         "ok": not over_reversed, "detail": "No campaign day reversed more sponsor-commission base than it had"},
+        {"check": "fixed_price_allocation", "expected": "[]", "actual": str(bad_alloc), "ok": not bad_alloc,
+         "detail": "Earned fixed-price days are allocated exactly (lines = event shares = earned fee)"},
+    ]
     return {"ok": all(c["ok"] for c in checks), "checks": checks, "unallocated_credit": str(credit),
             "funded_open_budgets": str(open_budgets), "read_only": True}
 

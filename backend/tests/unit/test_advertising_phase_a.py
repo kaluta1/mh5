@@ -24,6 +24,14 @@ pytestmark = pytest.mark.unit
 D = Decimal
 
 
+@pytest.fixture(autouse=True)
+def _lead_encryption_key(monkeypatch):
+    """Lead contact details are stored only encrypted (synthetic test key)."""
+    from tests.conftest import TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY
+
+    monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY)
+
+
 def _settings(db, *packages, threshold=None, **kw):
     cfg = _configure(db, cpm="0.50", **kw)
     cfg.min_campaign_budget_usd = D("10.00")
@@ -353,7 +361,7 @@ def test_12_lead_collection_is_closed_and_only_an_accepted_lead_is_billed_once(w
     assert e.value.code == "NOT_READY"
     assert db.query(ad_leads.AdvLead).count() == 0                                            # nothing stored
     rec = lambda contact, **kw: ad_leads._record(db, campaign_id=c.id, name="N", contact=contact, consent=True,  # noqa: E731
-                                                 consent_version="v1", decision_id=None, now=T0, **kw)
+                                                 consent_version="v1", privacy_notice_version="pn-v1", advertiser_identity="Acme", decision_id=None, now=T0, **kw)
     lead = rec("Person@Example.com ")
     assert lead.contact_hash != "person@example.com" and len(lead.contact_hash) == 64        # no personal data
     with pytest.raises(ad_leads.LeadError) as e:

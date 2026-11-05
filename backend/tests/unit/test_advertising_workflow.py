@@ -515,7 +515,7 @@ def test_qualified_sponsor_earns_40_and_unverified_sponsor_misses(world):
     assert nobody.id
 
 
-def test_reversed_charges_reverse_an_unpaid_commission_or_go_to_finance_review(world):
+def test_reversed_charges_reduce_or_reverse_an_unpaid_commission(world):
     db = world
     cfg = _configure(db, "1000.00")
     cfg.frequency_cap_per_day = 100
@@ -528,7 +528,10 @@ def test_reversed_charges_reverse_an_unpaid_commission_or_go_to_finance_review(w
     admin = _admin(db)
     dl.reverse_invalid_activity(db, event_ids=[events[0].id], reason="partial", actor_id=admin.id)
     day = db.query(AdvCampaignDay).filter(AdvCampaignDay.campaign_id == c.id).one()
-    assert day.sponsor_commission_status == "FINANCE_REVIEW"                 # partial: finance decides
+    assert day.sponsor_commission_status == "ADJUSTED"                       # partial: reduced proportionally
+    live = db.query(AffiliateCommission).filter(AffiliateCommission.user_id == sponsor.id,
+                                                AffiliateCommission.status == CommissionStatus.APPROVED).one()
+    assert live.commission_amount == D("0.20") and day.sponsor_commission_id == live.id
     sponsor2 = _user(db, "sc4-s@t.com")
     _, c2 = _charged_day(db, "sc4@t.com", sponsor2, n=1)
     dl.recognize_closed_days(db, now=T0 + timedelta(days=1))

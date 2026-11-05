@@ -968,6 +968,79 @@ def admin_reverse_lead(lead_id: int, body: LeadReverseBody, db: Session = Depend
     return {"id": lead.id, "status": lead.status, "reversed_amount": str(lead.charged_amount)}
 
 
+class GeoReviewBody(BaseModel):
+    decision: str = Field(pattern="^(VERIFIED|REJECTED)$")
+    note: str = Field(min_length=3, max_length=300)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.get("/geo-attestations")
+def admin_geo_attestations(status: str = "ATTESTED", skip: int = 0, limit: int = 50,
+                           db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    """Location evidence awaiting (or after) administrator review. Read-only."""
+    from app.models.advertising_v2 import AdvGeoAttestation
+    from app.services import ad_geo
+
+    rows = (db.query(AdvGeoAttestation).filter(AdvGeoAttestation.status == status.upper(),
+                                               AdvGeoAttestation.revoked_at.is_(None))
+            .order_by(AdvGeoAttestation.id.asc()).offset(max(skip, 0)).limit(min(max(limit, 1), 200)).all())
+    return {"items": [ad_geo.view(r) for r in rows]}
+
+
+@admin_router.post("/geo-attestations/{attestation_id}/review")
+def admin_review_geo(attestation_id: int, body: GeoReviewBody, db: Session = Depends(deps.get_db),
+                     admin: User = Depends(require_ad_admin)):
+    from app.services import ad_geo
+
+    _reauth(admin, body.current_password)
+    try:
+        row = ad_geo.review(db, attestation_id, actor=admin, decision=body.decision, note=body.note)
+    except ad_geo.GeoError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail={"code": exc.code, "message": exc.message}) from None
+    db.commit()
+    return ad_geo.view(row)
+
+
+class ReceivableBody(BaseModel):
+    action: str = Field(pattern="^(OPEN|WRITTEN_OFF)$")
+    note: str = Field(min_length=3, max_length=300)
+    current_password: str = Field(default="", max_length=256)
+
+
+@admin_router.get("/sponsor-recovery")
+def admin_sponsor_recovery(db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
+    """Advertiser-sponsor commission recovery: receivables, finance-review cases and the reconciliation check."""
+    from app.models.advertising_v2 import AdvSponsorAdjustment, AdvSponsorReceivable
+    from app.services import ad_sponsor_recovery as rec
+
+    rows = db.query(AdvSponsorReceivable).order_by(AdvSponsorReceivable.id.desc()).limit(200).all()
+    review = (db.query(AdvSponsorAdjustment).filter(AdvSponsorAdjustment.method == "FINANCE_REVIEW")
+              .order_by(AdvSponsorAdjustment.id.desc()).limit(200).all())
+    return {"reconciliation": rec.reconciliation(db),
+            "receivables": [{"id": r.id, "sponsor_user_id": r.sponsor_user_id, "campaign_day_id": r.campaign_day_id,
+                             "original_commission_id": r.original_commission_id, "amount": str(r.amount),
+                             "recovered": str(r.recovered), "status": r.status, "note": r.note} for r in rows],
+            "finance_review": [{"adjustment_id": a.id, "campaign_day_id": a.campaign_day_id,
+                                "sponsor_user_id": a.sponsor_user_id, "reversed_revenue": str(a.reversed_revenue),
+                                "reduction": str(a.reduction), "reason": a.reason} for a in review]}
+
+
+@admin_router.post("/sponsor-recovery/receivables/{receivable_id}")
+def admin_resolve_receivable(receivable_id: int, body: ReceivableBody, db: Session = Depends(deps.get_db),
+                             admin: User = Depends(require_ad_admin)):
+    from app.services import ad_sponsor_recovery as rec
+
+    _reauth(admin, body.current_password)
+    try:
+        r = rec.resolve_receivable(db, receivable_id, action=body.action, actor_id=admin.id, note=body.note)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    db.commit()
+    return {"id": r.id, "status": r.status, "recovered": str(r.recovered), "amount": str(r.amount)}
+
+
 @admin_router.post("/invalid-activity")
 def admin_reverse_invalid(body: ReverseBody, db: Session = Depends(deps.get_db), admin: User = Depends(require_ad_admin)):
     _reauth(admin, body.current_password)

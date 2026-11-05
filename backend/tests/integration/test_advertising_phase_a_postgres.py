@@ -26,8 +26,17 @@ pytestmark = [
                        reason="Set RUN_POSTGRES_TESTS=1 to run against a local PostgreSQL server"),
 ]
 D = Decimal
+
+
+@pytest.fixture(autouse=True)
+def _lead_encryption_key(monkeypatch):
+    """Lead contact details are stored only encrypted (synthetic test key)."""
+    from tests.conftest import TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY
+
+    monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY)
 MIGRATION = "d4f6a8b0c2e5_advertising_phase_a_packages.py"
 REMEDIATION = "e7b9d1f3a5c8_advertising_phase_a_remediation.py"
+FINAL = "a2c4e6f8b0d3_advertising_final_integration.py"     # later revision: undone first, as Alembic does
 
 
 def _setup(Session, *packages):
@@ -204,7 +213,7 @@ def test_concurrent_lead_acceptance_charges_once_and_never_beyond_budget(pg, mon
         db.add(c)
         db.flush()
         leads = [ad_leads._record(db, campaign_id=c.id, name="N", contact=f"p{i}@example.com", consent=True,
-                                  consent_version="v1", decision_id=None, now=T0).id for i in range(2)]
+                                  consent_version="v1", privacy_notice_version="pn-v1", advertiser_identity="Acme", decision_id=None, now=T0).id for i in range(2)]
         db.commit()
         cid = c.id
 
@@ -236,6 +245,7 @@ def test_migration_upgrade_downgrade_upgrade_and_refusal_over_phase_a_data(pg):
     engine, Session = pg
     _setup(Session)
     built = _adv_columns(engine)
+    migrate(engine, FINAL, "downgrade")
     migrate(engine, REMEDIATION, "downgrade")
     migrate(engine, MIGRATION, "downgrade")
     with engine.connect() as c:
@@ -244,16 +254,19 @@ def test_migration_upgrade_downgrade_upgrade_and_refusal_over_phase_a_data(pg):
                               "and column_name = 'unit_rate_usd'")).scalar() == 0
     migrate(engine, MIGRATION, "upgrade")
     migrate(engine, REMEDIATION, "upgrade")
+    migrate(engine, FINAL, "upgrade")
     assert _adv_columns(engine) == built                             # the migration builds what the models describe
     with Session() as db:
         adv = _user(db, "m@t.com")
         db.add(AdvCampaign(advertiser_user_id=adv.id, name="X", status="DRAFT", pricing_model="CPC",
                            unit_rate_usd=D("0.05"), budget_total=D("1"), spent=0, reserved=0, placements=["IN_FEED"]))
         db.commit()
+    migrate(engine, FINAL, "downgrade")
     migrate(engine, REMEDIATION, "downgrade")                        # holds no remediation data: allowed
     with pytest.raises(Exception, match="Advertising Phase A data exists"):
         migrate(engine, MIGRATION, "downgrade")
     migrate(engine, REMEDIATION, "upgrade")
+    migrate(engine, FINAL, "upgrade")
     with Session() as db:
         assert db.query(AdvCampaign).filter_by(pricing_model="CPC").count() == 1   # nothing lost
         assert db.query(AdvLead).count() == 0 and db.query(AdvImpressionEvent).count() == 0
@@ -329,7 +342,7 @@ def test_d3_concurrent_lead_reversals_credit_back_once(pg, monkeypatch):
         db.add(c)
         db.flush()
         lead = ad_leads._record(db, campaign_id=c.id, name="N", contact="q@example.com", consent=True,
-                                consent_version="v1", decision_id=None, now=T0)
+                                consent_version="v1", privacy_notice_version="pn-v1", advertiser_identity="Acme", decision_id=None, now=T0)
         ad_leads.accept(db, lead.id, now=T0 + timedelta(hours=1))
         db.commit()
         cid, lead_id, admin_id = c.id, lead.id, admin.id

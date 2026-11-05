@@ -130,6 +130,11 @@ class AdvCampaignDay(Base):
     sponsor_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sponsor_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
     sponsor_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4), nullable=True)
+    # a2c4e6f8b0d3: the recognized revenue the commission was decided on, how much of it was reversed since,
+    # and how much of this day's commission recovered older receivables of the same sponsor.
+    sponsor_base_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    sponsor_reversed_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
+    sponsor_offset_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
 
 
 class AdvCreative(Base):
@@ -271,6 +276,8 @@ class AdvImpressionEvent(Base):
     # None = no identifiable member at the event, or an event recorded before the rule.
     creative_kyc_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     sponsor_kyc_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # a2c4e6f8b0d3: this event's share of a fixed-price day's earned fee (adv_fixed_allocations); 0 otherwise.
+    allocated_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0, nullable=False)
     # Invalid activity found after charging: credited back once.
     reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reversal_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
@@ -472,6 +479,14 @@ class AdvLead(Base):
     reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reversal_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     reversed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    # a2c4e6f8b0d3 privacy foundation: the contact details are stored ONLY encrypted (payment_crypto, purpose
+    # mh5-ads:lead-pii), with the advertiser identity and privacy notice the member saw. Retention purge and
+    # deletion requests erase the ciphertext (pii_purged_at); status, charge and audit rows are kept.
+    pii_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    advertiser_identity: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    privacy_notice_version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    deletion_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    pii_purged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class AdvGeoAttestation(Base):
@@ -481,10 +496,128 @@ class AdvGeoAttestation(Base):
     verified; a changed city needs a new verification. No attestation exists for verifications made before
     this table (nothing is backfilled)."""
     __tablename__ = "adv_geo_attestations"
-    __table_args__ = (Index("ix_adv_geo_attestation_user", "user_id", "revoked_at"),)
+    __table_args__ = (Index("ix_adv_geo_attestation_user", "user_id", "revoked_at"),
+                      CheckConstraint("status IN ('ATTESTED', 'VERIFIED', 'REJECTED')",
+                                      name="ck_adv_geo_attestation_status"))
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     city_id: Mapped[int] = mapped_column(Integer, nullable=False)
     kyc_verification_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     attested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     revoke_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # a2c4e6f8b0d3 verified-location foundation. status: ATTESTED (declared city at an approved proof of
+    # address: usable as inventory evidence, not proven) -> VERIFIED / REJECTED by an administrator who checked
+    # the evidence. country_id is the attested city's country; local_area_id stays NULL until verified local
+    # areas exist (never inferred). Any profile city change revokes the row (ad_geo.on_profile_city_change).
+    country_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    local_area_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    evidence_source: Mapped[str] = mapped_column(String(40), default="KYC_ADDRESS_DECLARED_CITY", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="ATTESTED", nullable=False)
+    reviewed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    review_note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+
+
+# ---------------------------------------------------------------- final integration (a2c4e6f8b0d3)
+
+class AdvSponsorAdjustment(Base):
+    """One immutable record per reversal that reduced a recognized campaign day's revenue: the advertiser's
+    direct-sponsor entitlement before and after, and how the difference was handled. Never updated."""
+    __tablename__ = "adv_sponsor_adjustments"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_adv_sponsor_adjustment_key"),
+        CheckConstraint("method IN ('NONE', 'CANCELLED', 'REISSUED', 'RECEIVABLE', 'MISSED_ADJUSTED', "
+                        "'FINANCE_REVIEW')", name="ck_adv_sponsor_adjustment_method"),
+        CheckConstraint("reduction >= 0 AND reversed_revenue >= 0", name="ck_adv_sponsor_adjustment_amounts"),
+        Index("ix_adv_sponsor_adjustment_day", "campaign_day_id"),
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    campaign_day_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaign_days.id"), nullable=False)
+    campaign_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sponsor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    original_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    replacement_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reversed_revenue: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    base_before: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    base_after: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 4), nullable=True)
+    entitlement_before: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    entitlement_after: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    reduction: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+
+class AdvSponsorReceivable(Base):
+    """What a sponsor owes back because the commission was already paid (or held by a payout, or partly spent)
+    when its revenue was reversed. Recovered only by offsetting the SAME sponsor's later advertiser-sponsor
+    commissions; never debited from an external wallet; the paid commission and its payout are untouched."""
+    __tablename__ = "adv_sponsor_receivables"
+    __table_args__ = (
+        UniqueConstraint("adjustment_id", name="uq_adv_sponsor_receivable_adjustment"),
+        CheckConstraint("amount > 0 AND recovered >= 0 AND recovered <= amount",
+                        name="ck_adv_sponsor_receivable_amounts"),
+        CheckConstraint("status IN ('OPEN', 'RECOVERED', 'FINANCE_REVIEW', 'WRITTEN_OFF')",
+                        name="ck_adv_sponsor_receivable_status"),
+        Index("ix_adv_sponsor_receivable_open", "sponsor_user_id", "status"),
+    )
+    sponsor_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    adjustment_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_sponsor_adjustments.id"), nullable=False)
+    campaign_day_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    original_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    recovered: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="OPEN", nullable=False)
+    journal_entry_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+
+
+class AdvSponsorOffset(Base):
+    """Part of a receivable recovered from ONE later campaign day's commission (unique per pair)."""
+    __tablename__ = "adv_sponsor_offsets"
+    __table_args__ = (
+        UniqueConstraint("receivable_id", "campaign_day_id", name="uq_adv_sponsor_offset"),
+        CheckConstraint("amount > 0", name="ck_adv_sponsor_offset_amount"),
+    )
+    receivable_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_sponsor_receivables.id"), nullable=False)
+    campaign_day_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_campaign_days.id"), nullable=False)
+    sponsor_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    gross_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    net_commission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    journal_entry_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class AdvFixedAllocation(Base):
+    """Fixed-price (Daily Local / Daily City) earned revenue of one booked day, allocated to the placements that
+    delivered it, weighted by valid, unreversed viewable impressions. The ACTIVE lines of a booking sum exactly
+    to its earned amount. REVERSED lines are kept, never deleted."""
+    __tablename__ = "adv_fixed_allocations"
+    __table_args__ = (
+        UniqueConstraint("booking_id", "version", "slot_kind", "page_type", "contestant_key",
+                         name="uq_adv_fixed_allocation"),
+        CheckConstraint("status IN ('ACTIVE', 'REVERSED')", name="ck_adv_fixed_allocation_status"),
+        CheckConstraint("weight > 0 AND amount >= 0", name="ck_adv_fixed_allocation_amounts"),
+        Index("ix_adv_fixed_allocation_day", "campaign_id", "day"),
+    )
+    booking_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_bookings.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)    # a re-allocation is a new version
+    campaign_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    slot_kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    page_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    contestant_key: Mapped[int] = mapped_column(Integer, nullable=False)       # 0 = general inventory
+    weight: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), default="ACTIVE", nullable=False)
+    reversed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class AdvLeadAccess(Base):
+    """Every read, export, deletion or purge of a lead's personal data (who, when, what)."""
+    __tablename__ = "adv_lead_access_log"
+    __table_args__ = (Index("ix_adv_lead_access_lead", "lead_id"),)
+    lead_id: Mapped[int] = mapped_column(Integer, ForeignKey("adv_leads.id"), nullable=False)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)          # VIEW | EXPORT | DELETE | PURGE
+    detail: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

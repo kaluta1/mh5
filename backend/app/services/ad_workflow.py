@@ -677,19 +677,24 @@ def member_daily(db: Session, user_id: int, *, days: int = 31) -> dict:
     unreversed MyHigh5 charges on the entry's page, at the entry's preserved original rate. AdSense days
     show activity only: no amount until Google finalizes the month. Never withdrawable: the monthly
     allocation remains the only payable record."""
+    from sqlalchemy import case
+
     from app.models.advertising_v2 import AdvEntryOrigin, AdvImpressionEvent
     from app.services import ad_attribution
     from app.services.ad_revenue_policy import CONTEST_PAGE_SPONSOR_RATE
+    from app.services.ad_revenue_sharing import earning_events_clause
 
     since = datetime.utcnow().date() - timedelta(days=days)
     out = []
     for role, column in (("CREATIVE", AdvImpressionEvent.creative_user_id),
                          ("SPONSOR", AdvImpressionEvent.sponsor_user_id)):
         rows = (db.query(AdvImpressionEvent.earning_day, AdvImpressionEvent.source, AdvImpressionEvent.contestant_id,
-                         func.count(AdvImpressionEvent.id),
-                         func.coalesce(func.sum(AdvImpressionEvent.charged_amount), 0))
+                         func.sum(case((AdvImpressionEvent.event_type == "VIEWABLE", 1), else_=0)),
+                         func.coalesce(func.sum(AdvImpressionEvent.charged_amount
+                                                + AdvImpressionEvent.allocated_amount), 0))
                 .filter(column == user_id, AdvImpressionEvent.validation_status == "VALID",
-                        AdvImpressionEvent.event_type == "VIEWABLE", AdvImpressionEvent.reversed_at.is_(None),
+                        earning_events_clause("MYHIGH5"),       # viewables (all sources) + charged clicks
+                        AdvImpressionEvent.reversed_at.is_(None),
                         AdvImpressionEvent.contestant_id.isnot(None), AdvImpressionEvent.earning_day >= since)
                 .group_by(AdvImpressionEvent.earning_day, AdvImpressionEvent.source, AdvImpressionEvent.contestant_id)
                 .all())
@@ -750,41 +755,33 @@ def decide_sponsor_commission(db: Session, day: AdvCampaignDay, campaign: AdvCam
                                  policy=policy)
     commission = accrue_direct_commission(db, source_type=SPONSOR_SOURCE, source_id=day.id,
                                           payer_user_id=campaign.advertiser_user_id, breakdown=breakdown)
-    day.sponsor_rate = rate
+    day.sponsor_rate, day.sponsor_base_amount = rate, amount
     if commission is not None:
         day.sponsor_commission_status = SPONSOR_RECORDED
         day.sponsor_commission_id, day.sponsor_commission_amount = commission.id, money(commission.commission_amount)
+        # Approved recovery policy: open receivables of this sponsor are recovered from this new commission.
+        from app.services.ad_sponsor_recovery import offset_new_commission
+
+        offset_new_commission(db, day, commission)
     else:
         day.sponsor_commission_status = SPONSOR_MISSED_KYC
         day.sponsor_commission_amount = money(split.sponsor_commission)
     return day.sponsor_commission_status
 
 
-def after_charge_reversed(db: Session, campaign_id: int, day_value, *, reason: str) -> Optional[str]:
-    """A recognized day's charge was reduced. A decided commission is reversed through the existing engine
-    when the whole day was reversed and it is unpaid; any other case (partial, paid, in a payout) goes to
-    finance review - no automatic clawback without an approved recovery policy (Annual Ads precedent)."""
-    from app.models.affiliate import AffiliateCommission, CommissionStatus
-    from app.services.financial_integrity import FinancialIntegrityError
-    from app.services.new_model_revenue import reverse_direct_commissions
+def after_charge_reversed(db: Session, campaign_id: int, day_value, *, reason: str, amount=None,
+                          key: Optional[str] = None) -> Optional[str]:
+    """A recognized day's charge was reduced by `amount`: the sponsor entitlement is recalculated on the remaining
+    revenue and the difference recovered automatically (ad_sponsor_recovery: cancel/reissue an untouched
+    commission, or a receivable offset against the same sponsor's later commissions). Idempotent per `key`."""
+    from app.services.ad_sponsor_recovery import on_revenue_reversed
 
     day = (db.query(AdvCampaignDay).filter(AdvCampaignDay.campaign_id == campaign_id, AdvCampaignDay.day == day_value)
            .with_for_update().first())
-    if day is None or day.sponsor_commission_status not in (SPONSOR_RECORDED, SPONSOR_MISSED_KYC):
+    if day is None or day.sponsor_commission_status is None:
         return None
-    whole = camp.floor_cents(day.spent) <= 0
-    commission = db.get(AffiliateCommission, day.sponsor_commission_id) if day.sponsor_commission_id else None
-    in_payout = commission is not None and (commission.status == CommissionStatus.PAID
-                                            or commission.payout_reference is not None)
-    if not whole or in_payout:
-        day.sponsor_commission_status = SPONSOR_REVIEW
-        return SPONSOR_REVIEW
-    try:
-        with db.begin_nested():
-            reverse_direct_commissions(db, source_type=SPONSOR_SOURCE, source_id=day.id,
-                                       reason=f"Advertising charge reversed: {reason[:120]}")
-    except FinancialIntegrityError:
-        day.sponsor_commission_status = SPONSOR_REVIEW
-        return SPONSOR_REVIEW
-    day.sponsor_commission_status = SPONSOR_REVERSED
-    return SPONSOR_REVERSED
+    if amount is None:                                   # legacy callers: whatever left the day since recognition
+        base = Decimal(str(day.sponsor_base_amount or 0))
+        amount = max(base - Decimal(str(day.sponsor_reversed_amount or 0)) - camp.floor_cents(day.spent),
+                     Decimal("0"))
+    return on_revenue_reversed(db, day, reversed_amount=amount, key=key or f"legacy:{reason[:60]}", reason=reason)
