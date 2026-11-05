@@ -596,6 +596,11 @@ def recognize_closed_days(db: Session, *, now: Optional[datetime] = None) -> int
     for day in days:
         if Decimal(str(day.reserved)) > 0:
             continue                                  # a late reservation of that day is still open
+        from app.models.advertising_v2 import AdvBooking
+
+        if db.query(AdvBooking.id).filter(AdvBooking.campaign_id == day.campaign_id, AdvBooking.day == day.day,
+                                          AdvBooking.status == "BOOKED").first() is not None:
+            continue                                  # its booked fee is settled first (charged to this day)
         cumulative = (db.query(func.coalesce(func.sum(AdvCampaignDay.spent), 0))
                       .filter(AdvCampaignDay.campaign_id == day.campaign_id, AdvCampaignDay.day <= day.day).scalar())
         before = (db.query(func.coalesce(func.sum(AdvCampaignDay.spent), 0))

@@ -62,6 +62,16 @@ def _valid_events(db: Session, booking: AdvBooking) -> list:
     return q.order_by(AdvImpressionEvent.id.asc()).all()
 
 
+def _booking_decisions(db: Session, booking: AdvBooking):
+    """The decisions THIS booking covers (same campaign and day, and its own verified area): another booking of the
+    same campaign and day in another area is never touched."""
+    q = db.query(AdvServeDecision.id).filter(AdvServeDecision.campaign_id == booking.campaign_id,
+                                             AdvServeDecision.reserved_day == booking.day)
+    if booking.scope == "CITY":
+        return q.filter(AdvServeDecision.viewer_city_id == booking.area_id)
+    return q.filter(AdvServeDecision.id.is_(None))          # no verified local areas: covers nothing
+
+
 def _active(db: Session, booking_id: int) -> list:
     return (db.query(AdvFixedAllocation).filter(AdvFixedAllocation.booking_id == booking_id,
                                                 AdvFixedAllocation.status == "ACTIVE").all())
@@ -73,8 +83,7 @@ def reverse(db: Session, booking: AdvBooking, *, now: Optional[datetime] = None)
     lines = _active(db, booking.id)
     for line in lines:
         line.status, line.reversed_at = "REVERSED", now
-    decisions = db.query(AdvServeDecision.id).filter(AdvServeDecision.campaign_id == booking.campaign_id,
-                                                     AdvServeDecision.reserved_day == booking.day)
+    decisions = _booking_decisions(db, booking)
     (db.query(AdvImpressionEvent).filter(AdvImpressionEvent.allocated_amount != 0,
                                          AdvImpressionEvent.decision_id.in_(decisions))
      .update({AdvImpressionEvent.allocated_amount: 0}, synchronize_session="fetch"))
@@ -126,8 +135,7 @@ def check(db: Session, booking: AdvBooking) -> dict:
     any other booking has neither."""
     earned = Decimal(str(booking.charged_amount or 0)).quantize(SIX) if booking.status == "EARNED" else Decimal("0")
     lines = sum((Decimal(str(l.amount)) for l in _active(db, booking.id)), Decimal("0")).quantize(SIX)
-    decisions = db.query(AdvServeDecision.id).filter(AdvServeDecision.campaign_id == booking.campaign_id,
-                                                     AdvServeDecision.reserved_day == booking.day)
+    decisions = _booking_decisions(db, booking)
     shares = Decimal(str(db.query(func.coalesce(func.sum(AdvImpressionEvent.allocated_amount), 0))
                          .filter(AdvImpressionEvent.decision_id.in_(decisions)).scalar() or 0)).quantize(SIX)
     return {"booking_id": booking.id, "earned": str(earned), "allocated": str(lines), "event_shares": str(shares),

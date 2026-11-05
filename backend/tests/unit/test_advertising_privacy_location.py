@@ -98,7 +98,7 @@ def test_retention_purge_and_deletion_keep_financial_evidence(world):
     assert pending.pii_ciphertext is not None                                     # undecided: never purged
     assert ad_leads.purge_expired(db, now=T0 + timedelta(days=91)) == 2           # accepted (90) + expired (30)
     assert (accepted.status, accepted.charged_amount, accepted.charge_day) == ("ACCEPTED", D("0.25"), T0.date())
-    assert accepted.contact_hash == f"erased:{accepted.id}"
+    assert accepted.contact_hash != f"erased:{accepted.id}" and len(accepted.contact_hash) == 64   # kept: no resale
     assert ad_leads.purge_expired(db, now=T0 + timedelta(days=200)) == 0          # idempotent
     ad_leads.request_deletion(db, pending.id, actor_id=adv.id)
     assert pending.pii_ciphertext is None and pending.deletion_requested_at is not None
@@ -174,3 +174,17 @@ def test_geo_review_api_requires_permission_and_reauthentication(world, client):
     assert r.json()["status"] == "VERIFIED"
     listed = client.get("/api/v1/admin/advertising/geo-attestations?status=VERIFIED", headers=bearer(reviewer))
     assert [i["id"] for i in listed.json()["items"]] == [row.id]
+
+
+def test_an_erased_lead_can_never_be_accepted_or_charged(world):
+    db = world
+    adv = _user(db, "lp4@t.com")
+    c = _lead_campaign(db, adv)
+    lead = _lead(db, c)
+    ad_leads.request_deletion(db, lead.id, actor_id=None)
+    with pytest.raises(ad_leads.LeadError) as e:
+        ad_leads.accept(db, lead.id, actor_id=adv.id, now=T0 + timedelta(hours=1))
+    assert e.value.code == "ERASED" and lead.charged_amount == 0
+    with pytest.raises(ad_leads.LeadError) as e:                   # the same contact cannot come back
+        _lead(db, c)
+    assert e.value.code == "DUPLICATE"

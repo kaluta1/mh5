@@ -110,6 +110,8 @@ def accept(db: Session, lead_id: int, *, actor_id: Optional[int] = None, now: Op
         raise LeadError("ALREADY_DECIDED", f"This lead is already {lead.status.lower()}")
     if now > lead.decision_deadline:
         raise LeadError("WINDOW_CLOSED", "The 7-day decision window has passed")
+    if lead.pii_purged_at is not None:
+        raise LeadError("ERASED", "The member asked for this lead to be deleted: it cannot be accepted or charged")
     campaign = db.query(AdvCampaign).filter(AdvCampaign.id == lead.campaign_id).with_for_update().one()
     from app.services.ad_campaigns import get_settings
 
@@ -230,8 +232,9 @@ def read_details(db: Session, lead_id: int, actor, *, export: bool = False) -> d
 
 
 def _erase(lead: AdvLead, now: datetime) -> None:
+    # The readable details go. The keyed hash (HMAC with a server secret, not reversible) stays so the same
+    # contact cannot be sold to the same campaign twice; whether it may be kept is a legal-readiness item.
     lead.pii_ciphertext = None
-    lead.contact_hash = f"erased:{lead.id}"                        # keeps the unique key, identifies nobody
     lead.pii_purged_at = now
 
 

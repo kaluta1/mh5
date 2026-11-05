@@ -164,3 +164,36 @@ def test_earned_booked_day_is_allocated_exactly_once_reweighted_and_reversed(wor
     assert db.query(AdvFixedAllocation).filter_by(booking_id=booking.id).count() == 2   # history kept
     assert fa.check(db, booking)["ok"]
     _ledger_balanced(db)
+
+
+def test_a_day_is_recognized_only_after_its_booked_fee_is_settled(world, city_ready):
+    """Review finding: a fee charged after its day was recognized was never recognized (nor in the sponsor base)."""
+    from app.models.advertising_v2 import AdvBooking
+    from tests.unit.test_advertising_phase_a import _city, _event, _inventory, _resident, _serve
+    from tests.unit.test_advertising_phase_a_remediation import _book
+    from tests.unit.test_advertising_program import _balance
+
+    db = world
+    _settings(db, "daily_city", threshold=1)
+    city = _city(db)
+    _inventory(db, city, 30)
+    adv = _user(db, "rb-a@t.com")
+    _fund(db, adv, "10.00")
+    day1 = datetime.utcnow().date() + timedelta(days=1)
+    c = _book(db, adv, city, [day1])
+    at = datetime.combine(day1, datetime.min.time()) + timedelta(hours=10)
+    m = _resident(db, city)
+    v = dl.viewer_hash_for_user(m.id)
+    d = _serve(db, v, at=at, user_id=m.id)
+    _event(db, d, v, "VIEWABLE", at=at + timedelta(seconds=2))
+    dl.validate_pending(db, now=at + timedelta(seconds=5))
+    just_after_midnight = datetime.combine(day1 + timedelta(days=1), datetime.min.time()) + timedelta(minutes=5)
+    dl._day_row(db, c.id, day1)                                    # the day already has a row (other spend)
+    dl.recognize_closed_days(db, now=just_after_midnight)
+    assert db.query(AdvCampaignDay).filter_by(campaign_id=c.id, day=day1).one().recognized_at is None
+    dl.settle_bookings(db, now=just_after_midnight + timedelta(hours=3))
+    assert db.query(AdvBooking).filter_by(campaign_id=c.id).one().status == "EARNED"
+    dl.recognize_closed_days(db, now=just_after_midnight + timedelta(hours=3))
+    assert db.query(AdvCampaignDay).filter_by(campaign_id=c.id, day=day1).one().recognized_at is not None
+    assert -_balance(db, "4020") == D("5.00")                      # the whole fee is recognized revenue
+    _ledger_balanced(db)

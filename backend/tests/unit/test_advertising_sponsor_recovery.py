@@ -234,3 +234,22 @@ def test_switch_off_by_default_and_no_commission_before_recognition(world):
     _view(db, page_type="FEED", slot_kind="IN_FEED")              # reserved, not validated: still none
     _validate(db)
     assert db.query(AffiliateCommission).count() == 0
+
+
+def test_reversal_after_a_fully_offset_commission_names_the_sponsor(world):
+    """Review finding: the day's commission pointer is cleared by a full offset; the receivable must still be
+    owed by the sponsor the commission was decided for."""
+    db = world
+    _on(db)
+    sponsor = _user(db, "r12-s@t.com")
+    _, c = _recognized(db, "r12@t.com", sponsor, 4)
+    _pay(db, db.query(AffiliateCommission).one())
+    dl.reverse_invalid_activity(db, event_ids=[e.id for e in _events(db, c)], reason="bot", actor_id=_admin(db).id)
+    _, c2 = _recognized(db, "r12b@t.com", sponsor, 2)              # 0.40 gross, all offset: net 0, no live row
+    day2 = _day(db, c2)
+    assert day2.sponsor_commission_id is None and day2.sponsor_offset_amount == D("0.40")
+    dl.reverse_invalid_activity(db, event_ids=[_events(db, c2)[0].id], reason="bot", actor_id=_admin(db).id)
+    newest = db.query(AdvSponsorReceivable).order_by(AdvSponsorReceivable.id.desc()).first()
+    assert (newest.sponsor_user_id, newest.amount, newest.status) == (sponsor.id, D("0.20"), "OPEN")
+    assert _day(db, c2).sponsor_commission_status == "ADJUSTED"
+    _ledger_balanced(db)

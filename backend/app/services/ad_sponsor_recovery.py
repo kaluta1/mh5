@@ -111,6 +111,18 @@ def _issue(db: Session, like: AffiliateCommission, amount: Decimal, *, source_ty
 
 # ---------------------------------------------------------------- reversal -> adjustment
 
+def _day_sponsor(db: Session, day: AdvCampaignDay) -> Optional[int]:
+    """The sponsor the day's commission was decided for: its original row (source ADV_CAMPAIGN_DAY / day id) is
+    never deleted, even when it was cancelled by an offset or a reversal and the day's pointer was cleared."""
+    from app.services.ad_workflow import SPONSOR_SOURCE
+
+    row = (db.query(AffiliateCommission.user_id)
+           .filter(AffiliateCommission.source_type == SPONSOR_SOURCE, AffiliateCommission.source_id == day.id)
+           .order_by(AffiliateCommission.id.asc()).first())
+    return int(row[0]) if row is not None else None
+
+
+
 def on_revenue_reversed(db: Session, day: AdvCampaignDay, *, reversed_amount, key: str, reason: str) -> Optional[str]:
     """The caller holds the campaign and day locks. Returns the adjustment method (or None when the day has
     no sponsor commission decision). Idempotent per `key`."""
@@ -129,7 +141,7 @@ def on_revenue_reversed(db: Session, day: AdvCampaignDay, *, reversed_amount, ke
     base = day.sponsor_base_amount
     if base is None and commission is not None and commission.base_amount is not None:
         base = commission.base_amount                       # decided before a2c4e6f8b0d3
-    sponsor_id = commission.user_id if commission is not None else None
+    sponsor_id = commission.user_id if commission is not None else _day_sponsor(db, day)
     if sponsor_id is None and status == MISSED:
         from app.models.missed_earning import CATEGORY_REFERRAL, MissedEarning
         from app.services.ad_workflow import SPONSOR_SOURCE
