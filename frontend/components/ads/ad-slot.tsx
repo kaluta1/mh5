@@ -7,8 +7,8 @@ import { isAdRoute, type AdPageType, type AdSlotKind } from '@/lib/ads/placement
 import { useAdEligibility } from '@/hooks/use-ad-eligibility'
 import { COOKIE_CONSENT_EVENT } from '@/components/ui/cookie-consent'
 import { hasAdvertisingConsent } from '@/components/ads/adsense-loader'
-import { normalizeMediaUrl } from '@/lib/media-url'
 import { getEffectiveApiUrl } from '@/lib/config'
+import { AdCreativeCard, type Placement } from '@/components/ads/ad-creative-card'
 
 type Decision =
   | { fill: false; reason?: string }
@@ -177,26 +177,14 @@ export function AdSlot({ pageType, slotKind, slotKey, contestantId, className }:
         {filled.sponsored_label || 'Sponsored'}
       </p>
       {filled.source === 'MYHIGH5' && filled.creative ? (
-        <a
+        <AdCreativeCard
+          creative={filled.creative}
+          placement={slotKind as Placement}
           // Clicks go through MyHigh5 (counted, then redirected to the reviewed destination) when offered.
           href={filled.creative.click_url
             ? `${getEffectiveApiUrl().replace(/\/+$/, '')}${filled.creative.click_url}`
             : filled.creative.destination_url}
-          target="_blank"
-          rel="sponsored noopener noreferrer"
-          className="flex gap-3 items-start"
-        >
-          {filled.creative.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={normalizeMediaUrl(filled.creative.image_url)} alt="" className="h-16 w-16 rounded object-cover flex-shrink-0" />
-          ) : null}
-          <span>
-            <span className="block font-semibold text-gray-900 dark:text-white">{filled.creative.headline}</span>
-            {filled.creative.body ? (
-              <span className="block text-sm text-gray-600 dark:text-gray-300">{filled.creative.body}</span>
-            ) : null}
-          </span>
-        </a>
+        />
       ) : null}
       {filled.source === 'ADSENSE' && filled.adsense ? (
         <ins

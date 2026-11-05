@@ -39,7 +39,7 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.accounting import AuditTrail
@@ -91,10 +91,22 @@ class _Group:
     impressions: int = 0
 
 
+def earning_events_clause(source: str):
+    """The events that carry shareable revenue. AdSense: valid viewable impressions (Google's earnings are
+    spread over them). MyHigh5: viewable impressions (CPM, and fixed-price days through allocated_amount) and
+    every other CHARGED billable event - CPC and Engagement clicks, video events - each charged once per
+    decision (unique decision x event type)."""
+    if source == "ADSENSE":
+        return AdvImpressionEvent.event_type == "VIEWABLE"
+    return or_(AdvImpressionEvent.event_type == "VIEWABLE",
+               and_(AdvImpressionEvent.event_type.in_(("CLICK", "VIDEO_2S", "VIDEO_VIEW")),
+                    AdvImpressionEvent.charged_amount > 0))
+
+
 def _events(db: Session, period: str, source: str):
     start, end = period_bounds(period)
     return (db.query(AdvImpressionEvent)
-            .filter(AdvImpressionEvent.event_type == "VIEWABLE", AdvImpressionEvent.validation_status == "VALID",
+            .filter(earning_events_clause(source), AdvImpressionEvent.validation_status == "VALID",
                     AdvImpressionEvent.reversed_at.is_(None), AdvImpressionEvent.source == source,
                     AdvImpressionEvent.earning_day >= start, AdvImpressionEvent.earning_day < end))
 
@@ -136,14 +148,15 @@ def compute_groups(db: Session, period: str, source: str, *, finalized: bool) ->
                            AdvImpressionEvent.sponsor_user_id, AdvImpressionEvent.sponsor_status,
                            AdvImpressionEvent.rule_version, AdvImpressionEvent.earning_day,
                            AdvImpressionEvent.adsense_slot, AdvImpressionEvent.charged_amount,
-                           AdvImpressionEvent.creative_kyc_approved, AdvImpressionEvent.sponsor_kyc_approved).all())
-    for cid, season, level, creative, sponsor, sstatus, rule, day, slot, charged, ckyc, skyc in rows:
+                           AdvImpressionEvent.creative_kyc_approved, AdvImpressionEvent.sponsor_kyc_approved,
+                           AdvImpressionEvent.allocated_amount).all())
+    for cid, season, level, creative, sponsor, sstatus, rule, day, slot, charged, ckyc, skyc, allocated in rows:
         if source == "ADSENSE":
             amount = rates.get((day, slot))
             if amount is None:
                 continue                 # no Google figure for this bucket (yet): nothing to share
         else:
-            amount = Decimal(str(charged or 0))
+            amount = Decimal(str(charged or 0)) + Decimal(str(allocated or 0))
         key = (cid, season or 0, creative, sponsor, sstatus, ckyc, skyc)
         g = groups.get(key)
         if g is None:
@@ -768,7 +781,7 @@ def member_summary(db: Session, user_id: int, *, now: Optional[datetime] = None)
         for source in ("MYHIGH5", "ADSENSE"):
             q = (db.query(AdvImpressionEvent).filter(column == user_id, AdvImpressionEvent.source == source,
                                                      AdvImpressionEvent.validation_status == "VALID",
-                                                     AdvImpressionEvent.event_type == "VIEWABLE",
+                                                     earning_events_clause(source),
                                                      AdvImpressionEvent.reversed_at.is_(None)))
             periods = {period_of(d) for (d,) in q.with_entities(AdvImpressionEvent.earning_day).distinct().all() if d}
             for p in periods - {fp for fp, s in finalized_periods if s == source}:

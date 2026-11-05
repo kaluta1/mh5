@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -26,6 +27,11 @@ from app.models.advertising_v2 import AdvCampaign, AdvLead
 from app.services import ad_packages as pk
 
 ACCEPTANCE_WINDOW = timedelta(days=7)
+# Retention (owner-approved defaults): identifiable data of rejected / expired leads is erased 30 days after the
+# decision, of accepted (and later reversed) leads after 90 days. Status, charge and audit rows are kept.
+RETENTION_UNACCEPTED = timedelta(days=30)
+RETENTION_ACCEPTED = timedelta(days=90)
+PII_PURPOSE = "mh5-ads:lead-pii"
 REJECTION_REASONS = ("DUPLICATE", "INVALID_CONTACT", "OUT_OF_TARGET", "TEST_OR_FAKE")
 
 
@@ -45,29 +51,45 @@ def contact_hash(contact: str) -> str:
 
 
 def submit(db: Session, *, campaign_id: int, name: str, contact: str, consent: bool, consent_version: str,
-           decision_id: Optional[str] = None, now: Optional[datetime] = None) -> AdvLead:
-    """Refused while the Lead package is not ready (no approved retention policy): nothing is stored."""
+           decision_id: Optional[str] = None, privacy_notice_version: Optional[str] = None,
+           advertiser_identity: Optional[str] = None, now: Optional[datetime] = None) -> AdvLead:
+    """Refused while the Lead package is not ready (final legal/privacy readiness not verified): nothing is
+    stored."""
     package = pk.PACKAGES["lead"]
     if package.not_ready:
         raise LeadError("NOT_READY", f"Lead collection is closed: {package.not_ready}")
     return _record(db, campaign_id=campaign_id, name=name, contact=contact, consent=consent,
-                   consent_version=consent_version, decision_id=decision_id, now=now)
+                   consent_version=consent_version, decision_id=decision_id,
+                   privacy_notice_version=privacy_notice_version, advertiser_identity=advertiser_identity, now=now)
 
 
 def _record(db: Session, *, campaign_id: int, name: str, contact: str, consent: bool, consent_version: str,
-            decision_id: Optional[str], now: Optional[datetime]) -> AdvLead:
+            decision_id: Optional[str], now: Optional[datetime], privacy_notice_version: Optional[str] = None,
+            advertiser_identity: Optional[str] = None) -> AdvLead:
+    from app.services import payment_crypto
+
     now = now or datetime.utcnow()
     if not (name or "").strip():
         raise LeadError("NAME_REQUIRED", "A name is required", 400)
     if not consent or not (consent_version or "").strip():
         raise LeadError("CONSENT_REQUIRED", "Explicit consent to share the details with the advertiser is required",
                         400)
+    if not (privacy_notice_version or "").strip() or not (advertiser_identity or "").strip():
+        raise LeadError("PRIVACY_NOTICE_REQUIRED", "The member must be shown the privacy notice and the advertiser "
+                                                   "identity before sharing details", 400)
+    if not payment_crypto.key_configured():
+        raise LeadError("ENCRYPTION_UNAVAILABLE", "Lead details cannot be stored securely: encryption is not "
+                                                  "configured", 503)
     campaign = db.query(AdvCampaign).filter(AdvCampaign.id == campaign_id).first()
     if campaign is None or pk.of_model(campaign.pricing_model).code != "lead":
         raise LeadError("NOT_A_LEAD_CAMPAIGN", "This campaign does not collect leads", 400)
+    pii = json.dumps({"name": name.strip()[:120], "contact": str(contact).strip()[:200]})   # nothing else is kept
     lead = AdvLead(campaign_id=campaign_id, decision_id=decision_id, contact_hash=contact_hash(contact),
                    consent_version=consent_version.strip()[:40], consented_at=now, status="SUBMITTED",
-                   decision_deadline=now + ACCEPTANCE_WINDOW)
+                   decision_deadline=now + ACCEPTANCE_WINDOW,
+                   pii_ciphertext=payment_crypto.encrypt(pii, PII_PURPOSE),
+                   privacy_notice_version=privacy_notice_version.strip()[:40],
+                   advertiser_identity=advertiser_identity.strip()[:120])
     try:
         with db.begin_nested():
             db.add(lead)
@@ -88,6 +110,8 @@ def accept(db: Session, lead_id: int, *, actor_id: Optional[int] = None, now: Op
         raise LeadError("ALREADY_DECIDED", f"This lead is already {lead.status.lower()}")
     if now > lead.decision_deadline:
         raise LeadError("WINDOW_CLOSED", "The 7-day decision window has passed")
+    if lead.pii_purged_at is not None:
+        raise LeadError("ERASED", "The member asked for this lead to be deleted: it cannot be accepted or charged")
     campaign = db.query(AdvCampaign).filter(AdvCampaign.id == lead.campaign_id).with_for_update().one()
     from app.services.ad_campaigns import get_settings
 
@@ -165,3 +189,86 @@ def reject(db: Session, lead_id: int, *, reason: str, actor_id: Optional[int] = 
 def _lead_price(campaign: AdvCampaign) -> Decimal:
     package = pk.PACKAGES["lead"]
     return pk.unit_charge(package, pk.validate_rate(package, campaign.unit_rate_usd))
+
+
+# ---------------------------------------------------------------- privacy: access, export, deletion, retention
+
+def _log(db: Session, lead: AdvLead, actor_id: Optional[int], action: str, detail: str = "") -> None:
+    from app.models.advertising_v2 import AdvLeadAccess
+
+    db.add(AdvLeadAccess(lead_id=lead.id, actor_user_id=actor_id, action=action, detail=detail[:200] or None))
+
+
+def _may_read(db: Session, lead: AdvLead, actor) -> bool:
+    """The campaign's advertiser for an ACCEPTED lead only; an administrator with manage_advertising always."""
+    from app.services.ad_campaigns import PERMISSION_MANAGE
+    from app.services.admin_security import has_permission
+
+    if actor is None:
+        return False
+    if has_permission(actor, PERMISSION_MANAGE):
+        return True
+    campaign = db.query(AdvCampaign).filter(AdvCampaign.id == lead.campaign_id).first()
+    return campaign is not None and int(campaign.advertiser_user_id) == int(actor.id) and lead.status == "ACCEPTED"
+
+
+def read_details(db: Session, lead_id: int, actor, *, export: bool = False) -> dict:
+    """Decrypt a lead's contact details for an authorised reader; every read or export is logged."""
+    from app.services import payment_crypto
+
+    lead = db.query(AdvLead).filter(AdvLead.id == lead_id).first()
+    if lead is None:
+        raise LeadError("NOT_FOUND", "Lead not found", 404)
+    if not _may_read(db, lead, actor):
+        raise LeadError("FORBIDDEN", "You may not access this lead", 403)
+    if lead.pii_ciphertext is None:
+        raise LeadError("ERASED", "This lead's personal data was erased", 410)
+    details = json.loads(payment_crypto.decrypt(lead.pii_ciphertext, PII_PURPOSE))
+    _log(db, lead, actor.id, "EXPORT" if export else "VIEW")
+    db.flush()
+    return {"lead_id": lead.id, "advertiser_identity": lead.advertiser_identity,
+            "privacy_notice_version": lead.privacy_notice_version, "consent_version": lead.consent_version,
+            "consented_at": lead.consented_at.isoformat(), **details}
+
+
+def _erase(lead: AdvLead, now: datetime) -> None:
+    # The readable details go. The keyed hash (HMAC with a server secret, not reversible) stays so the same
+    # contact cannot be sold to the same campaign twice; whether it may be kept is a legal-readiness item.
+    lead.pii_ciphertext = None
+    lead.pii_purged_at = now
+
+
+def request_deletion(db: Session, lead_id: int, *, actor_id: Optional[int], now: Optional[datetime] = None) -> AdvLead:
+    """A deletion request erases the identifiable data at once; the lead's status, charge and audit stay
+    (financial evidence is never deleted)."""
+    now = now or datetime.utcnow()
+    lead = db.query(AdvLead).filter(AdvLead.id == lead_id).with_for_update().first()
+    if lead is None:
+        raise LeadError("NOT_FOUND", "Lead not found", 404)
+    if lead.deletion_requested_at is None:
+        lead.deletion_requested_at = now
+    if lead.pii_purged_at is None:
+        _erase(lead, now)
+        _log(db, lead, actor_id, "DELETE", "deletion request")
+    db.flush()
+    return lead
+
+
+def purge_expired(db: Session, *, now: Optional[datetime] = None, limit: int = 500) -> int:
+    """Retention: erase identifiable data past its period. Only the personal-data columns change; status,
+    charged_amount, charge_day, reversal and audit rows are untouched. Idempotent."""
+    from sqlalchemy import and_, or_
+
+    now = now or datetime.utcnow()
+    rows = (db.query(AdvLead)
+            .filter(AdvLead.pii_purged_at.is_(None), AdvLead.decided_at.isnot(None),
+                    or_(and_(AdvLead.status.in_(("REJECTED", "EXPIRED")),
+                             AdvLead.decided_at < now - RETENTION_UNACCEPTED),
+                        and_(AdvLead.status.in_(("ACCEPTED", "REVERSED")),
+                             AdvLead.decided_at < now - RETENTION_ACCEPTED)))
+            .order_by(AdvLead.id.asc()).limit(limit).with_for_update(skip_locked=True).all())
+    for lead in rows:
+        _erase(lead, now)
+        _log(db, lead, None, "PURGE", f"retention ({lead.status})")
+    db.flush()
+    return len(rows)

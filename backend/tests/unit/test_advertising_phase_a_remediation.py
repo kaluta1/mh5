@@ -25,6 +25,14 @@ pytestmark = pytest.mark.unit
 D = Decimal
 
 
+@pytest.fixture(autouse=True)
+def _lead_encryption_key(monkeypatch):
+    """Lead contact details are stored only encrypted (synthetic test key)."""
+    from tests.conftest import TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY
+
+    monkeypatch.setenv("PAYMENT_SETTINGS_ENCRYPTION_KEY", TEST_PAYMENT_SETTINGS_ENCRYPTION_KEY)
+
+
 def _book(db, adv, city, days, *, approve=True):
     c = camp.create_campaign(db, adv, name="D", package="daily_city", placements=["IN_FEED"],
                              bookings={"city_id": city.id, "days": days})
@@ -137,7 +145,7 @@ def _lead_campaign(db, monkeypatch, adv, budget="1.00"):
 
 def _accepted(db, c, contact):
     lead = ad_leads._record(db, campaign_id=c.id, name="N", contact=contact, consent=True, consent_version="v1",
-                            decision_id=None, now=T0)
+                            privacy_notice_version="pn-v1", advertiser_identity="Acme", decision_id=None, now=T0)
     return ad_leads.accept(db, lead.id, actor_id=None, now=T0 + timedelta(hours=1))
 
 
@@ -158,7 +166,7 @@ def test_d3_an_accepted_lead_is_reversed_once_and_audited(world, monkeypatch):
         ad_leads.reverse(db, lead.id, actor_id=admin.id, reason="again")
     assert e.value.code == "NOT_REVERSIBLE"                                    # never twice
     pending = ad_leads._record(db, campaign_id=c.id, name="N", contact="b@example.com", consent=True,
-                               consent_version="v1", decision_id=None, now=T0)
+                               consent_version="v1", privacy_notice_version="pn-v1", advertiser_identity="Acme", decision_id=None, now=T0)
     with pytest.raises(ad_leads.LeadError) as e:
         ad_leads.reverse(db, pending.id, actor_id=admin.id, reason="not charged")
     assert e.value.code == "NOT_REVERSIBLE"                                    # nothing was charged

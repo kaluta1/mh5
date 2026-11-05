@@ -1,30 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import api from '@/lib/api'
-import { normalizeMediaUrl } from '@/lib/media-url'
+import { AdPlacementPreviews } from '@/components/ads/ad-creative-card'
 import { MissedEarnings } from '@/components/dashboard/missed-earnings'
 import { PayWithEarnings } from '@/components/wallet/pay-with-earnings'
+import { call, errorDetail, type Json } from './ad-api'
+import { CampaignForm } from './ad-campaign-form'
+import { CreativeEditor } from './ad-creative-editor'
 
-type Json = Record<string, any>
-
-function errorDetail(e: unknown): string {
-  if (e && typeof e === 'object' && 'response' in e) {
-    const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-    if (detail) return typeof detail === 'string' ? detail : (detail as Json).message || JSON.stringify(detail)
-  }
-  return e instanceof Error ? e.message : 'Request failed'
-}
-
-async function call(method: 'get' | 'post' | 'patch', url: string, body?: unknown) {
-  const res = await api.request({ method, url: `/api/v1/advertising${url}`, data: body })
-  if (res.status >= 400) throw { response: res }
-  return res.data
-}
-
-const PLACEMENTS: [string, string][] = [['IN_FEED', 'In-feed'], ['IN_CONTENT', 'Contest-entry pages'], ['SIDEBAR', 'Desktop sidebar']]
-const PAGE_TYPES: [string, string][] = [['CONTEST_LISTING', 'Contest listings'], ['CONTEST_ENTRY', 'Contest-entry pages'],
-  ['FEED', 'Feeds'], ['DISCOVERY', 'Discovery']]
 const STATUS_TEXT: Record<string, string> = {
   DRAFT: 'Draft', PENDING_REVIEW: 'Pending review', CHANGES_REQUESTED: 'Changes requested', ACTIVE: 'Active',
   PAUSED: 'Paused', COMPLETED: 'Completed', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
@@ -43,22 +26,9 @@ export function estimateImpressions(budget: string | number, cpm: string | numbe
   return Math.floor((Math.round(b * 100) * 100000) / Math.round(c * 10000))
 }
 
-export function AdPreview({ creative }: { creative: Json }) {
-  const image = normalizeMediaUrl(creative.image_url)
-  return (
-    <div data-testid="ad-preview" className="max-w-sm rounded-lg border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Sponsored</p>
-      <div className="flex items-start gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {image ? <img src={image} alt="" className="h-16 w-16 flex-shrink-0 rounded object-cover" /> : null}
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{creative.headline || 'Headline'}</p>
-          {creative.body ? <p className="line-clamp-2 text-gray-600 dark:text-gray-300">{creative.body}</p> : null}
-          <p className="truncate text-xs text-blue-600">{creative.destination_url || 'https://'}</p>
-        </div>
-      </div>
-    </div>
-  )
+/** Placement previews of a creative (same markup as the live slot; renders only, never records an event). */
+export function AdPreview({ creative, placements }: { creative: Json; placements?: string[] }) {
+  return <AdPlacementPreviews creative={creative} placements={placements} />
 }
 
 function Packages({ packages }: { packages: Json[] }) {
@@ -113,18 +83,65 @@ function Analytics({ c }: { c: Json }) {
   )
 }
 
+const DISPLAY_TEXT: Record<string, string> = {
+  DRAFT: 'Draft', SUBMITTED: 'Submitted for review', CHANGES_REQUIRED: 'Changes required', SCHEDULED: 'Approved — scheduled',
+  ACTIVE: 'Active', PAUSED: 'Paused', ENDED: 'Ended', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
+}
+
+function DailyReport({ campaignId }: { campaignId: number }) {
+  const [report, setReport] = useState<Json | null>(null)
+  const [error, setError] = useState('')
+  const load = () => call('get', `/advertiser/campaigns/${campaignId}/daily-report`).then(setReport).catch((e) => setError(errorDetail(e)))
+  if (!report) {
+    return (<div className="text-xs">
+      <button type="button" className="rounded border px-2 py-1" onClick={load}>Show daily report</button>
+      {error ? <span className="ml-2 text-red-600">{error}</span> : null}
+    </div>)
+  }
+  return (
+    <div data-testid={`daily-report-${campaignId}`} className="space-y-2 overflow-x-auto text-xs">
+      <table className="w-full">
+        <thead className="text-left text-gray-500"><tr>{['Day (UTC)', 'Spend', 'Charged events', 'Other charges', 'Recognized']
+          .map((h) => <th key={h} className="pr-3">{h}</th>)}</tr></thead>
+        <tbody>{(report.daily || []).map((d: Json) => (
+          <tr key={d.day} className="border-t border-gray-100 dark:border-gray-700">
+            <td className="pr-3">{d.day}</td><td className="pr-3">{d.spend} USD</td><td className="pr-3">{d.charged_events}</td>
+            <td className="pr-3">{d.direct_charges}</td><td className="pr-3">{d.recognized ? 'Yes' : 'Pending'}</td>
+          </tr>))}</tbody>
+      </table>
+      <table className="w-full">
+        <thead className="text-left text-gray-500"><tr>{['Day', 'Creative', 'Placement', 'Billing metric', 'Events', 'Charged']
+          .map((h) => <th key={h} className="pr-3">{h}</th>)}</tr></thead>
+        <tbody>{(report.activity || []).map((a: Json, i: number) => (
+          <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
+            <td className="pr-3">{a.day}</td><td className="pr-3">#{a.creative_id}</td><td className="pr-3">{a.placement}</td>
+            <td className="pr-3">{a.billing_metric}</td><td className="pr-3">{a.events}</td><td className="pr-3">{a.charged}</td>
+          </tr>))}</tbody>
+      </table>
+      {(report.adjustments || []).length ? (
+        <p>Adjustments (reversed invalid activity): {(report.adjustments || []).map((a: Json) =>
+          `${a.day} ${a.billing_metric} ×${a.events} (−${a.reversed})`).join(' · ')}</p>
+      ) : null}
+      <p data-testid={`reconciliation-${campaignId}`} className={report.reconciliation?.ok ? 'text-green-700' : 'text-red-600'}>
+        {report.reconciliation?.ok ? 'Reconciled' : 'Does not reconcile'}: campaign spend {report.reconciliation?.campaign_spent} =
+        sum of days {report.reconciliation?.sum_of_days}. Remaining budget {report.remaining_budget} USD.</p>
+    </div>
+  )
+}
+
 export function AdvertiserDashboard() {
   const [data, setData] = useState<Json | null>(null)
+  const [catalog, setCatalog] = useState<Json | null>(null)
   const [message, setMessage] = useState('')
-  const [form, setForm] = useState({ name: '', budget: '', daily_cap: '', start_at: '', end_at: '', countries: '',
-    placements: ['IN_FEED'] as string[], page_types: [] as string[] })
-  const [creative, setCreative] = useState<Record<number, Json>>({})
   const [rename, setRename] = useState<Record<number, string>>({})
   const [creditUnits, setCreditUnits] = useState('10')
+  const [formKey, setFormKey] = useState(0)
 
   const load = useCallback(async () => {
     try {
-      setData(await call('get', '/advertiser/overview'))
+      const [overview, cat] = await Promise.all([call('get', '/advertiser/overview'), call('get', '/advertiser/catalog')])
+      setData(overview)
+      setCatalog(cat)
     } catch (e) {
       setMessage(errorDetail(e))
     }
@@ -143,19 +160,13 @@ export function AdvertiserDashboard() {
       setMessage(errorDetail(e))
     }
   }
-
-  const upload = (campaignId: number, creativeId: number, file: File | undefined) => {
-    if (!file) return
-    const fd = new FormData()
-    fd.append('file', file)
-    run(() => call('post', `/advertiser/campaigns/${campaignId}/creatives/${creativeId}/image`, fd), 'Image uploaded; the creative goes back to review')
+  const saved = (msg: string) => {
+    setMessage(msg)
+    load()
   }
 
-  if (!data) return <p className="text-sm text-gray-500">{message || 'Loading…'}</p>
+  if (!data || !catalog) return <p className="text-sm text-gray-500">{message || 'Loading…'}</p>
   const pending = data.pricing_state !== 'CONFIGURED'
-  const estimate = estimateImpressions(form.budget, data.cpm_rate_usd)
-  const belowMinimum = Boolean(data.min_campaign_budget_usd && form.budget
-    && Number(form.budget) < Number(data.min_campaign_budget_usd))
   return (
     <div className="space-y-6">
       {message ? <p role="status" className="rounded bg-gray-100 p-2 text-sm dark:bg-gray-700">{message}</p> : null}
@@ -164,12 +175,7 @@ export function AdvertiserDashboard() {
           MyHigh5 advertising prices are pending approval. You can prepare draft campaigns; they can be funded and
           submitted once prices are published.
         </p>
-      ) : (
-        <p data-testid="ad-price" className="text-sm text-gray-600 dark:text-gray-300">
-          Price: {data.cpm_rate_usd} USD per 1,000 valid, viewable impressions (at least half of the ad visible for one
-          second). Minimum campaign budget: {data.min_campaign_budget_usd ?? '—'} USD. You are charged only for validated impressions.
-        </p>
-      )}
+      ) : null}
       {!data.campaigns_enabled ? (
         <p data-testid="ad-not-open" className="rounded border border-gray-300 bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300">
           MyHigh5 campaigns are not open yet: drafts can be prepared, but nothing can be bought, submitted or shown.
@@ -193,115 +199,61 @@ export function AdvertiserDashboard() {
         </div>
       ) : null}
 
-      <Packages packages={data.packages || []} />
+      <CampaignForm key={formKey} catalog={catalog} onCreated={(msg) => { setFormKey(formKey + 1); saved(msg) }} />
 
-      <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h2 className="font-semibold">New campaign</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {([['name', 'Name', 'text'], ['budget', 'Total budget (USD)', 'number'], ['daily_cap', 'Daily limit (USD, optional)', 'number'],
-            ['start_at', 'Start', 'datetime-local'], ['end_at', 'End', 'datetime-local'],
-            ['countries', 'Countries (two-letter codes, optional)', 'text']] as const).map(([key, label, type]) => (
-            <label key={key} className="text-sm">{label}
-              <input type={type} value={(form as Json)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                aria-label={label} className="mt-1 block w-full rounded border px-2 py-1 dark:bg-gray-900" />
-            </label>
-          ))}
-        </div>
-        <p data-testid="ad-estimate" className="text-sm text-gray-600 dark:text-gray-300">
-          {estimate != null
-            ? `Up to ${estimate.toLocaleString('en-US')} billable impressions at ${data.cpm_rate_usd} USD CPM (an estimate, not a delivery promise).`
-            : 'Enter a budget to see the estimated number of billable impressions.'}
-          {belowMinimum ? <span className="ml-1 text-red-600">The minimum campaign budget is {data.min_campaign_budget_usd} USD.</span> : null}
-        </p>
-        <fieldset className="flex flex-wrap gap-4 text-sm"><legend className="mb-1 w-full text-xs text-gray-500">Placements</legend>
-          {PLACEMENTS.map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2">
-              <input type="checkbox" checked={form.placements.includes(key)}
-                onChange={(e) => setForm({ ...form, placements: e.target.checked ? [...form.placements, key]
-                  : form.placements.filter((p) => p !== key) })} />{label}
-            </label>
-          ))}
-        </fieldset>
-        <fieldset className="flex flex-wrap gap-4 text-sm"><legend className="mb-1 w-full text-xs text-gray-500">Pages (none = every eligible page)</legend>
-          {PAGE_TYPES.map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2">
-              <input type="checkbox" checked={form.page_types.includes(key)}
-                onChange={(e) => setForm({ ...form, page_types: e.target.checked ? [...form.page_types, key]
-                  : form.page_types.filter((p) => p !== key) })} />{label}
-            </label>
-          ))}
-        </fieldset>
-        <button className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white disabled:opacity-50" disabled={belowMinimum}
-          onClick={() => run(() => call('post', '/advertiser/campaigns', {
-            name: form.name, budget: form.budget, daily_cap: form.daily_cap || null,
-            start_at: form.start_at ? new Date(form.start_at).toISOString() : null,
-            end_at: form.end_at ? new Date(form.end_at).toISOString() : null,
-            placements: form.placements, page_types: form.page_types,
-            countries: form.countries.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean),
-          }), 'Draft campaign created')}>Create draft</button>
-      </section>
+      <Packages packages={(data.packages || []).filter((p: Json) => !p.package_code || p.code === 'MYHIGH5_CPM_CAMPAIGN')} />
 
       <h2 className="font-semibold">Your campaigns</h2>
       {(data.campaigns || []).length === 0 ? <p className="text-sm text-gray-500">No campaigns yet.</p> : null}
       {(data.campaigns || []).map((c: Json) => {
         const editable = ['DRAFT', 'CHANGES_REQUESTED'].includes(c.status)
-        const draftCreative = creative[c.id] || {}
+        const closed = ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(c.status)
+        const schedule: Json = c.schedule || {}
         return (
           <section key={c.id} data-testid={`campaign-${c.id}`}
             className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">{c.name}</h3>
               <span data-testid={`campaign-status-${c.id}`} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-700">
-                {STATUS_TEXT[c.status] || c.status}</span>
+                {DISPLAY_TEXT[c.display_status] || STATUS_TEXT[c.status] || c.status}</span>
               <span className="text-xs text-gray-500">{FUNDING_TEXT[c.funding] || ''}</span>
             </div>
-            <p>Budget {c.budget_total} USD · daily limit {c.daily_cap ?? '—'}{c.cpm_rate_usd ? ` · CPM ${c.cpm_rate_usd} USD (fixed at submission)` : ''}
-              {c.estimated_impressions != null ? ` · up to ${c.estimated_impressions.toLocaleString('en-US')} impressions` : ''}</p>
-            {c.review_note ? <p data-testid={`campaign-note-${c.id}`} className={c.status === 'CHANGES_REQUESTED' || c.status === 'REJECTED'
-              ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500'}>Review: {c.review_note}</p> : null}
+            <p>{c.package ? `${(catalog.packages || []).find((p: Json) => p.code === c.package)?.name || c.package} · ` : ''}
+              Budget {c.budget_total} USD · daily limit {c.daily_cap ?? '—'}{c.cpm_rate_usd ? ` · CPM ${c.cpm_rate_usd} USD (fixed at submission)` : ''}
+              {c.unit_rate_usd ? ` · rate ${c.unit_rate_usd} USD` : ''}</p>
+            <p data-testid={`campaign-schedule-${c.id}`} className="text-xs text-gray-500">
+              {schedule.starts_after_approval ? 'Starts after approval' : `Starts ${schedule.start_at_local || '—'}`}
+              {' · '}Ends {schedule.end_at_local || '—'} ({schedule.timezone || 'UTC'})</p>
+            {c.review_note || (c.review_issues || []).length ? (
+              <div data-testid={`campaign-note-${c.id}`} className={c.status === 'CHANGES_REQUESTED' || c.status === 'REJECTED'
+                ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500'}>
+                {c.review_note ? <p>Review: {c.review_note}</p> : null}
+                {(c.review_issues || []).map((i: Json, n: number) => <p key={n}>{i.category}: {i.note || 'needs changes'}</p>)}
+              </div>
+            ) : null}
+            {(c.non_delivery_reasons || []).length ? (
+              <ul data-testid={`not-serving-${c.id}`} className="list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
+                {(c.non_delivery_reasons || []).map((r: Json) => <li key={r.code}>Not serving: {r.message}</li>)}
+              </ul>
+            ) : null}
             <Analytics c={c} />
+            <DailyReport campaignId={c.id} />
 
             <div className="space-y-2">
-              {(c.creatives || []).map((cr: Json) => (
-                <div key={cr.id} className="flex flex-wrap items-start gap-3 rounded border border-gray-100 p-2 dark:border-gray-700">
-                  <AdPreview creative={cr} />
-                  <div className="space-y-1 text-xs">
-                    <p>Review: {cr.review_status}{cr.review_note && cr.review_status === 'REJECTED' ? ` — ${cr.review_note}` : ''}</p>
-                    {cr.image ? <p>Image {cr.image.width}×{cr.image.height}, {Math.round((cr.image.bytes || 0) / 1024)} KB</p> : null}
-                    {!['COMPLETED', 'REJECTED', 'CANCELLED'].includes(c.status) ? (
-                      <label className="block">Upload image (JPEG, PNG, WebP or GIF, up to 2 MB, 100–4000 px)
-                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label={`Upload image for creative ${cr.id}`}
-                          onChange={(e) => upload(c.id, cr.id, e.target.files?.[0])} className="mt-1 block text-xs" />
-                      </label>
-                    ) : null}
-                  </div>
-                </div>
+              {(c.creatives || []).filter((cr: Json) => cr.review_status !== 'ARCHIVED').map((cr: Json) => (
+                <CreativeEditor key={`${cr.id}-${cr.review_status}`} campaignId={c.id} creative={cr} placements={c.placements}
+                  closed={closed} onSaved={saved} />
               ))}
+              {!closed ? <CreativeEditor key={`new-${c.id}-${(c.creatives || []).length}`} campaignId={c.id}
+                placements={c.placements} onSaved={saved} /> : null}
             </div>
 
             {editable ? (
-              <div className="space-y-2 rounded border border-dashed border-gray-300 p-2 dark:border-gray-600">
-                <p className="text-xs font-medium">Add a creative</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {([['headline', 'Headline'], ['body', 'Text (optional)'], ['destination_url', 'Destination URL (https://…)'],
-                    ['image_url', 'Image URL (https, optional — or upload after adding)']] as const).map(([k, label]) => (
-                    <input key={k} placeholder={label} aria-label={label} value={draftCreative[k] || ''}
-                      onChange={(e) => setCreative({ ...creative, [c.id]: { ...draftCreative, [k]: e.target.value } })}
-                      className="rounded border px-2 py-1 dark:bg-gray-900" />
-                  ))}
-                </div>
-                {draftCreative.headline || draftCreative.destination_url ? <AdPreview creative={draftCreative} /> : null}
-                <button className="rounded border px-2 py-1"
-                  onClick={() => run(() => call('post', `/advertiser/campaigns/${c.id}/creatives`, {
-                    headline: draftCreative.headline || '', body: draftCreative.body || null,
-                    image_url: draftCreative.image_url || null, destination_url: draftCreative.destination_url || '',
-                  }), 'Creative added')}>Add creative</button>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input placeholder="New campaign name" aria-label="New campaign name" value={rename[c.id] || ''}
-                    onChange={(e) => setRename({ ...rename, [c.id]: e.target.value })} className="rounded border px-2 py-1 dark:bg-gray-900" />
-                  <button className="rounded border px-2 py-1" disabled={!rename[c.id]}
-                    onClick={() => run(() => call('patch', `/advertiser/campaigns/${c.id}`, { name: rename[c.id] }), 'Campaign updated')}>Rename</button>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input placeholder="New campaign name" aria-label="New campaign name" value={rename[c.id] || ''}
+                  onChange={(e) => setRename({ ...rename, [c.id]: e.target.value })} className="rounded border px-2 py-1 dark:bg-gray-900" />
+                <button className="rounded border px-2 py-1" disabled={!rename[c.id]}
+                  onClick={() => run(() => call('patch', `/advertiser/campaigns/${c.id}`, { name: rename[c.id] }), 'Campaign updated')}>Rename</button>
               </div>
             ) : null}
 
@@ -316,12 +268,46 @@ export function AdvertiserDashboard() {
               {c.status === 'PAUSED' ? <button className="rounded border px-2 py-1"
                 onClick={() => run(() => call('post', `/advertiser/campaigns/${c.id}/resume`), 'Resumed')}>Resume</button> : null}
               {['ACTIVE', 'PAUSED'].includes(c.status) ? <button className="rounded border px-2 py-1"
-                onClick={() => run(() => call('post', `/advertiser/campaigns/${c.id}/complete`), 'Campaign stopped')}>Stop campaign</button> : null}
+                onClick={() => run(() => call('post', `/advertiser/campaigns/${c.id}/complete`), 'Campaign ended')}>End campaign</button> : null}
             </div>
+            {editable ? <p className="text-xs text-gray-500">{catalog.launch}</p> : null}
           </section>
         )
       })}
     </div>
+  )
+}
+
+function DailyEarnings() {
+  const [rows, setRows] = useState<Json[] | null>(null)
+  useEffect(() => {
+    call('get', '/earnings/daily').then((r) => setRows(r.days || [])).catch(() => setRows([]))
+  }, [])
+  if (rows == null) return null
+  return (
+    <section data-testid="daily-earnings" className="overflow-x-auto rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+      <h2 className="mb-1 font-semibold">Daily estimates (not withdrawable)</h2>
+      <p className="mb-2 text-xs text-gray-500">Estimated from valid MyHigh5 ads on your contest-entry pages at the entry&apos;s
+        original rate. Google AdSense days show activity only until Google finalizes and pays the month.</p>
+      {rows.length === 0 ? <p className="text-sm text-gray-500">No advertising activity in the last 31 days.</p> : (
+        <table className="w-full text-xs sm:text-sm">
+          <thead className="text-left text-gray-500"><tr>
+            {['Day (UTC)', 'Role', 'Entry', 'Source', 'Rate', 'Valid impressions', 'Estimate', 'Status'].map((h) =>
+              <th key={h} className="whitespace-nowrap py-1 pr-3">{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
+                <td className="pr-3">{r.day}</td><td className="pr-3">{r.role === 'CREATIVE' ? 'Creative' : 'Direct sponsor'}</td>
+                <td className="pr-3">#{r.contest_entry_id}</td><td className="pr-3">{r.source === 'MYHIGH5' ? 'MyHigh5 ads' : 'Google AdSense'}</td>
+                <td className="pr-3">{r.rate ? `${(Number(r.rate) * 100).toFixed(0)}%` : '—'}</td><td className="pr-3">{r.valid_impressions}</td>
+                <td className="pr-3">{r.estimated_amount ? `${r.estimated_amount} USD` : '—'}</td>
+                <td className="pr-3">{r.status === 'ESTIMATED' ? 'Estimated' : r.status === 'AWAITING_GOOGLE' ? 'Awaiting Google' : 'Origin under review'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   )
 }
 
@@ -363,6 +349,7 @@ export function AdEarnings() {
         <Card title="As the creative (20% personal submission / 10% nomination)" v={summary.creative} />
         <Card title="As the direct sponsor (1%)" v={summary.sponsor} />
       </div>
+      <DailyEarnings />
       <MissedEarnings
         endpoint="/api/v1/advertising/earnings/missed"
         title="Missed advertising earnings — KYC Verification Required"
